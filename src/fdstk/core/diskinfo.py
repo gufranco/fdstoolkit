@@ -75,6 +75,16 @@ CONTENT_PROFILE: Final = MaskProfile(
     masked=frozenset(field.name for field in DISK_INFO_FIELDS if field.provenance),
 )
 
+STAMPED_BY_THE_WRITER: Final[frozenset[str]] = frozenset(
+    {"country", "unknown_23", "unknown_24", "unknown_25"}
+)
+
+RELEASE_PROFILE: Final = MaskProfile(
+    name="release",
+    version=1,
+    masked=CONTENT_PROFILE.masked | STAMPED_BY_THE_WRITER,
+)
+
 DATA_PROFILE: Final = MaskProfile(
     name="data",
     version=1,
@@ -84,6 +94,7 @@ DATA_PROFILE: Final = MaskProfile(
 PROFILES: Final[dict[str, MaskProfile]] = {
     RAW_PROFILE.name: RAW_PROFILE,
     CONTENT_PROFILE.name: CONTENT_PROFILE,
+    RELEASE_PROFILE.name: RELEASE_PROFILE,
     DATA_PROFILE.name: DATA_PROFILE,
 }
 

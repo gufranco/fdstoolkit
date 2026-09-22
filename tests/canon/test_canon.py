@@ -15,16 +15,27 @@ from fdstk.core.canon import (
     profile_by_name,
     restore,
 )
-from fdstk.core.diskinfo import CONTENT_PROFILE, DATA_PROFILE, RAW_PROFILE
+from fdstk.core.diskinfo import (
+    CONTENT_PROFILE,
+    DATA_PROFILE,
+    RAW_PROFILE,
+    RELEASE_PROFILE,
+)
 
 
-def disk_info(*, rewrite_count: int = 0, serial: int = 0, name: bytes = b"SMB") -> bytes:
+def disk_info(
+    *,
+    rewrite_count: int = 0,
+    serial: int = 0,
+    name: bytes = b"SMB",
+    country: int = 0x49,
+) -> bytes:
     payload = bytearray(56)
     payload[0] = 0x01
     payload[1:15] = b"*NINTENDO-HVC*"
     payload[0x10:0x13] = name
     payload[0x1F:0x22] = bytes([0x61, 0x02, 0x15])
-    payload[0x22] = 0x49
+    payload[0x22] = country
     payload[0x2C:0x2F] = bytes([0x63, 0x08, 0x01])
     payload[0x31:0x33] = serial.to_bytes(2, "little")
     payload[0x34] = rewrite_count
@@ -37,8 +48,11 @@ def side_bytes(
     serial: int = 0,
     name: bytes = b"SMB",
     tail: bytes = b"",
+    country: int = 0x49,
 ) -> bytes:
-    out = bytearray(disk_info(rewrite_count=rewrite_count, serial=serial, name=name))
+    out = bytearray(
+        disk_info(rewrite_count=rewrite_count, serial=serial, name=name, country=country)
+    )
     out += bytes([0x02, 0x01])
     out += (
         bytes([0x03, 0x00, 0x00])
@@ -239,3 +253,76 @@ def test_restoring_a_side_whose_content_fills_it_keeps_every_byte() -> None:
     result = canonicalise(disk.__class__(sides=(crowded,)), CONTENT_PROFILE)
 
     assert len(restore(result)) == sum(block.size for block in side.blocks)
+
+
+def test_release_profile_ignores_a_country_byte_a_rebuild_never_wrote() -> None:
+    stamped, _ = decode(side_bytes(country=0x49))
+    unset, _ = decode(side_bytes(country=0x00))
+
+    assert canonicalise(stamped, RELEASE_PROFILE).data == canonicalise(unset, RELEASE_PROFILE).data
+
+
+def test_content_profile_still_separates_them() -> None:
+    stamped, _ = decode(side_bytes(country=0x49))
+    unset, _ = decode(side_bytes(country=0x00))
+
+    assert canonicalise(stamped, CONTENT_PROFILE).data != canonicalise(unset, CONTENT_PROFILE).data
+
+
+def test_release_profile_keeps_two_different_games_apart() -> None:
+    one, _ = decode(side_bytes(name=b"SMB"))
+    other, _ = decode(side_bytes(name=b"ZEL"))
+
+    assert canonicalise(one, RELEASE_PROFILE).data != canonicalise(other, RELEASE_PROFILE).data
+
+
+def test_release_profile_masks_everything_content_masks() -> None:
+    assert CONTENT_PROFILE.masked < RELEASE_PROFILE.masked
+    assert RELEASE_PROFILE.masked - CONTENT_PROFILE.masked == {
+        "country",
+        "unknown_23",
+        "unknown_24",
+        "unknown_25",
+    }
+
+
+def test_release_profile_is_reachable_by_name() -> None:
+    assert profile_by_name("release") is RELEASE_PROFILE
+
+
+def test_a_release_digest_names_its_profile() -> None:
+    disk, _ = decode(side_bytes())
+
+    text = digest_string(canonicalise(disk, RELEASE_PROFILE))
+
+    assert ":release/v1:" in text
+    assert parse_digest_string(text).profile == "release/v1"
+
+
+def test_a_release_canonical_image_restores_to_the_original() -> None:
+    original = side_bytes(country=0x00, rewrite_count=7)
+    disk, _ = decode(original)
+    result = canonicalise(disk, RELEASE_PROFILE)
+
+    assert restore(result) == original
+
+
+def test_release_profile_ignores_the_whole_region_a_rebuild_leaves_blank() -> None:
+    stamped, _ = decode(side_bytes(country=0x49))
+    raw = bytearray(side_bytes(country=0x00))
+    raw[0x23:0x27] = bytes(4)
+    blanked, _ = decode(bytes(raw))
+
+    assert canonicalise(stamped, RELEASE_PROFILE).data == (
+        canonicalise(blanked, RELEASE_PROFILE).data
+    )
+
+
+def test_release_profile_still_separates_two_game_versions() -> None:
+    one = bytearray(side_bytes())
+    other = bytearray(side_bytes())
+    other[0x14] = 0x02
+    first, _ = decode(bytes(one))
+    second, _ = decode(bytes(other))
+
+    assert canonicalise(first, RELEASE_PROFILE).data != canonicalise(second, RELEASE_PROFILE).data

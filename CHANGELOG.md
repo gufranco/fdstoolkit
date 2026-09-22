@@ -24,7 +24,7 @@ Checksums are the reflected-0x8408 CRC-16 the hardware computes, confirmed again
 
 ### Identity and determinism
 
-Three identity levels, so a digest can never be read without knowing what produced it: `raw` for the exact bytes, `content` for the same software from any physical disk, `data` for the program alone. A canonical digest prints as `fdscanon:v1:<profile>/v1:<sha256>`, and canonicalisation is reversible through a sidecar that holds everything the projection removed.
+Four identity levels, so a digest can never be read without knowing what produced it: `raw` for the exact bytes, `content` for the same software from any physical disk, `release` for the same release whether it came off a factory disk or was rebuilt, `data` for the program alone. A canonical digest prints as `fdscanon:v1:<profile>/v1:<sha256>`, and canonicalisation is reversible through a sidecar that holds everything the projection removed.
 
 The masking profile was derived from measurement, not assumption. Across 1,513 corpus sides, 484 groups share identical file data while 352 still differ as whole sides, and every one of those differences sits in a disk-information provenance field.
 
