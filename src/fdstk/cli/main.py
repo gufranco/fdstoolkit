@@ -13,6 +13,7 @@ from fdstk.core.canon import canonicalise, digest_string, profile_by_name
 from fdstk.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstk.core.disk import Disk, Side
 from fdstk.edit.files import FileSpec, extract_files, insert_file
+from fdstk.edit.saves import find_save_candidates
 from fdstk.fdskey.lint import lint_card_image
 from fdstk.hardware.ports import HardwareFaultError
 from fdstk.hardware.session import Grade, WriteRefusedError, dump_repeated, write_verified
@@ -21,6 +22,7 @@ from fdstk.hardware.simulation import SimulatedDrive
 from fdstk.identify.dat import MatchKind, load_dat
 from fdstk.identify.dat import identify as identify_image
 from fdstk.identify.hashes import digests_of, side_digests
+from fdstk.identify.provenance import provenance_of
 from fdstk.patch.apply import apply_patch
 from fdstk.patch.formats import PatchError
 from fdstk.report import as_json, diagnostics_as_data
@@ -585,3 +587,74 @@ def patch_command(
         f"applied {outcome.format} patch to the {outcome.applied_to}, "
         f"wrote {output} ({len(outcome.data)} bytes)"
     )
+
+
+@app.command()
+def provenance(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+) -> None:
+    """Report where each side came from: factory, kiosk rewrite, or unknown."""
+    disk, _, _, _ = _decode(image)
+    report = provenance_of(disk)
+
+    if json_output:
+        typer.echo(
+            as_json({"path": str(image), "sides": [side.as_dict() for side in report.sides]})
+        )
+        return
+
+    for side in report.sides:
+        typer.echo(
+            f"side {side.index}: {side.origin} "
+            f"made {side.manufacturing_date} rewritten {side.rewritten_date} "
+            f"count {side.rewrite_count} writer {side.writer_serial}"
+        )
+        for note in side.notes:
+            typer.echo(f"  {note}")
+
+
+@app.command()
+def saves(
+    images: Annotated[list[Path], typer.Argument(help="two or more dumps of the same release")],
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+) -> None:
+    """Compare dumps of one release and report which file looks like the save."""
+    disks = [_decode(path)[0] for path in images]
+    try:
+        candidates = find_save_candidates(disks)
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "images": [str(path) for path in images],
+                    "candidates": [
+                        {
+                            "side": candidate.side,
+                            "position": candidate.position,
+                            "name": candidate.name,
+                            "size": candidate.size,
+                            "differing_bytes": candidate.differing_bytes,
+                            "name_matches_pattern": candidate.name_matches_pattern,
+                        }
+                        for candidate in candidates
+                    ],
+                }
+            )
+        )
+        return
+
+    if not candidates:
+        typer.echo("no save candidate: every file agrees across the dumps")
+        return
+    for candidate in candidates:
+        marker = ", name reads like a save" if candidate.name_matches_pattern else ""
+        typer.echo(
+            f"side {candidate.side} file {candidate.position} {candidate.name}: "
+            f"{candidate.differing_bytes} of {candidate.size} bytes differ{marker}"
+        )

@@ -445,3 +445,31 @@ def test_patch_reports_an_unknown_format(single_side: Path, tmp_path: Path) -> N
 
     assert result.exit_code == 1
     assert "unknown patch format" in result.stdout
+
+
+def test_provenance_reports_each_side(image: Path) -> None:
+    result = runner.invoke(app, ["provenance", str(image)])
+
+    assert result.exit_code == 0
+    assert "factory" in result.stdout
+
+
+def test_provenance_as_json_lists_every_side(image: Path) -> None:
+    payload = json.loads(runner.invoke(app, ["provenance", str(image), "--json"]).stdout)
+
+    assert len(payload["sides"]) == 2
+    assert payload["sides"][0]["origin"] == "factory"
+
+
+def test_saves_reports_no_candidate_for_identical_dumps(single_side: Path) -> None:
+    result = runner.invoke(app, ["saves", str(single_side), str(single_side)])
+
+    assert result.exit_code == 0
+    assert "no save candidate" in result.stdout
+
+
+def test_saves_needs_two_dumps(single_side: Path) -> None:
+    result = runner.invoke(app, ["saves", str(single_side)])
+
+    assert result.exit_code == 1
+    assert "at least two" in result.stdout
