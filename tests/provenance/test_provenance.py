@@ -99,3 +99,24 @@ def test_a_disk_with_a_serial_but_no_rewrite_count_is_flagged() -> None:
 
     assert report.sides[0].origin is Origin.REWRITTEN
     assert "rewrite count is zero" in " ".join(report.sides[0].notes)
+
+
+def test_a_signature_written_over_the_provenance_region_is_reported() -> None:
+    report = provenance_of(disk_with_info(x20=b"hCON by hal9999"))
+
+    assert report.sides[0].signature == "hCON by hal9999"
+    assert any("readable text" in note for note in report.sides[0].notes)
+
+
+def test_a_clean_provenance_region_carries_no_signature() -> None:
+    assert provenance_of(disk_with_info()).sides[0].signature is None
+
+
+def test_a_short_run_of_text_is_not_a_signature() -> None:
+    assert provenance_of(disk_with_info(x20=b"ab")).sides[0].signature is None
+
+
+def test_an_unformatted_side_carries_no_signature() -> None:
+    blank, _ = decode(blank_image(sides=1, headered=False, formatted=False))
+
+    assert provenance_of(blank).sides[0].signature is None

@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Final
 
 from fdstk.core.disk import Disk
 from fdstk.core.diskinfo import DiskInfo
+
+PROVENANCE_START: Final = 0x1F
+PROVENANCE_END: Final = 0x38
+MIN_SIGNATURE_RUN: Final = 4
+PRINTABLE_LOW: Final = 0x20
+PRINTABLE_HIGH: Final = 0x7E
 
 
 class Origin(StrEnum):
@@ -23,6 +30,7 @@ class SideProvenance:
     rewrite_count: int | None
     disk_type: int | None
     disk_version: int | None
+    signature: str | None
     notes: tuple[str, ...]
 
     def as_dict(self) -> dict[str, object]:
@@ -37,6 +45,7 @@ class SideProvenance:
             "origin": str(self.origin),
             "rewrite_count": self.rewrite_count,
             "rewritten_date": list(self.rewritten_date) if self.rewritten_date else None,
+            "signature": self.signature,
             "writer_serial": self.writer_serial,
         }
 
@@ -57,6 +66,19 @@ def _origin_of(info: DiskInfo) -> Origin:
     return Origin.FACTORY
 
 
+def signature_in(info: DiskInfo) -> str | None:
+    region = info.payload[PROVENANCE_START:PROVENANCE_END]
+    best = ""
+    run = ""
+    for byte in region:
+        if PRINTABLE_LOW <= byte <= PRINTABLE_HIGH:
+            run += chr(byte)
+            best = max(best, run, key=len)
+        else:
+            run = ""
+    return best.strip() if len(best.strip()) >= MIN_SIGNATURE_RUN else None
+
+
 def _notes_for(info: DiskInfo, origin: Origin) -> tuple[str, ...]:
     notes: list[str] = []
     if info.manufacturing_date is None:
@@ -69,6 +91,12 @@ def _notes_for(info: DiskInfo, origin: Origin) -> tuple[str, ...]:
         notes.append("rewritten but carries no Disk Writer serial")
     if info.rewrite_count == 0 and origin is Origin.REWRITTEN:
         notes.append("rewritten but the rewrite count is zero")
+    signature = signature_in(info)
+    if signature is not None:
+        notes.append(
+            f"the provenance region carries readable text, {signature!r}, "
+            "so somebody wrote over it and the dates it reports are not dates"
+        )
     return tuple(notes)
 
 
@@ -87,6 +115,7 @@ def provenance_of(disk: Disk) -> ProvenanceReport:
                     rewrite_count=None,
                     disk_type=None,
                     disk_version=None,
+                    signature=None,
                     notes=("the side carries no disk information block",),
                 )
             )
@@ -103,6 +132,7 @@ def provenance_of(disk: Disk) -> ProvenanceReport:
                 rewrite_count=info.rewrite_count,
                 disk_type=info.disk_type,
                 disk_version=info.disk_version,
+                signature=signature_in(info),
                 notes=_notes_for(info, origin),
             )
         )
