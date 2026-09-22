@@ -17,6 +17,7 @@ from fdstk.edit.files import ExtractedFile, extract_files
 DATE_FIELDS: Final[frozenset[str]] = frozenset({"manufacturing_date", "rewritten_date"})
 TEXT_FIELDS: Final[frozenset[str]] = frozenset({"game_name", "verification"})
 DATE_LENGTH: Final = 3
+DATE_TEXT_LENGTH: Final = 10
 
 
 class FileChange(StrEnum):
@@ -161,6 +162,10 @@ def _file_differences(left: Disk, right: Disk) -> tuple[FileDifference, ...]:
     return tuple(sorted(found, key=lambda entry: (entry.side, entry.position)))
 
 
+def _reads_as_a_date(rendered: str) -> bool:
+    return len(rendered) == DATE_TEXT_LENGTH and rendered[4] == "-"
+
+
 def _headline(
     *,
     same_software: bool,
@@ -174,8 +179,9 @@ def _headline(
 
     parts: list[str] = ["same software"]
     by_name = {difference.field: difference for difference in fields}
-    if "rewritten_date" in by_name:
-        parts.append(f"rewritten {by_name['rewritten_date'].right}")
+    rewritten = by_name.get("rewritten_date")
+    if rewritten is not None and _reads_as_a_date(rewritten.right):
+        parts.append(f"rewritten {rewritten.right}")
     if "writer_serial" in by_name:
         parts.append(f"writer serial {by_name['writer_serial'].right}")
     if "rewrite_count" in by_name:

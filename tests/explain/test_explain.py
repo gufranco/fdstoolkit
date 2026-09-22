@@ -190,3 +190,12 @@ def test_an_unchanged_file_produces_no_difference() -> None:
 
     assert result.files == ()
     assert result.identical
+
+
+def test_an_unreadable_rewritten_date_stays_out_of_the_headline() -> None:
+    payload = bytearray(sample().sides[0].blocks[0].payload)
+    payload[0x2C:0x2F] = b"\xff\xff\xff"
+
+    result = explain(sample(), replace_info(sample(), bytes(payload)))
+
+    assert result.headline == "same software, 1 provenance field(s) differ"

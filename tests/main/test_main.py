@@ -1699,3 +1699,75 @@ def test_diff_explains_a_file_difference(single_side: Path, tmp_path: Path) -> N
 
     assert result.exit_code == 1
     assert "file 0 MAIN: added, 8 bytes" in result.stdout
+
+
+def test_layout_reports_the_stream_and_the_files(tmp_path: Path) -> None:
+    payload = tmp_path / "main.prg"
+    payload.write_bytes(bytes([0xAA]) * 4096)
+    source = tmp_path / "one.fds"
+    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
+    built = tmp_path / "built.fds"
+    runner.invoke(
+        app,
+        ["insert", str(source), "-o", str(built), "--file", str(payload), "--name", "MAIN"],
+    )
+
+    result = runner.invoke(app, ["layout", str(built)])
+
+    assert result.exit_code == 0
+    assert "s to read end to end" in result.stdout
+    assert "MAIN" in result.stdout
+
+
+def test_layout_reports_dead_weight(tmp_path: Path) -> None:
+    raw = bytearray(blank_image(sides=1, headered=False, formatted=True))
+    raw[-4:] = b"junk"
+    source = tmp_path / "tail.fds"
+    source.write_bytes(bytes(raw))
+
+    result = runner.invoke(app, ["layout", str(source)])
+
+    assert "dead weight" in result.stdout
+
+
+def test_layout_can_emit_json(tmp_path: Path) -> None:
+    payload = tmp_path / "a.prg"
+    payload.write_bytes(bytes([0xAA]) * 8192)
+    small = tmp_path / "b.prg"
+    small.write_bytes(bytes([0xBB]) * 16)
+    source = tmp_path / "one.fds"
+    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
+    first = tmp_path / "first.fds"
+    second = tmp_path / "second.fds"
+    runner.invoke(
+        app, ["insert", str(source), "-o", str(first), "--file", str(payload), "--name", "BIG"]
+    )
+    runner.invoke(
+        app, ["insert", str(first), "-o", str(second), "--file", str(small), "--name", "SMALL"]
+    )
+
+    data = json.loads(runner.invoke(app, ["layout", str(second), "--json"]).stdout)
+
+    assert data["sides"][0]["reorder_saving_bytes"] > 0
+    assert [entry["name"] for entry in data["sides"][0]["files"]] == ["BIG", "SMALL"]
+
+
+def test_layout_prints_the_reorder_note(tmp_path: Path) -> None:
+    big = tmp_path / "a.prg"
+    big.write_bytes(bytes([0xAA]) * 8192)
+    small = tmp_path / "b.prg"
+    small.write_bytes(bytes([0xBB]) * 16)
+    source = tmp_path / "one.fds"
+    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
+    first = tmp_path / "first.fds"
+    second = tmp_path / "second.fds"
+    runner.invoke(
+        app, ["insert", str(source), "-o", str(first), "--file", str(big), "--name", "BIG"]
+    )
+    runner.invoke(
+        app, ["insert", str(first), "-o", str(second), "--file", str(small), "--name", "SMALL"]
+    )
+
+    result = runner.invoke(app, ["layout", str(second)])
+
+    assert "measurement rather than a recommendation" in result.stdout

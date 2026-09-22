@@ -40,6 +40,7 @@ from fdstk.patch.apply import apply_patch
 from fdstk.patch.formats import PatchError
 from fdstk.quality.consensus import build_consensus, compare_images
 from fdstk.quality.explain import Explanation, explain
+from fdstk.quality.layout import layout_of
 from fdstk.quality.surface import SurfaceTestRefusedError, surface_test
 from fdstk.report import as_json, diagnostics_as_data
 
@@ -952,6 +953,67 @@ def dat_cache(
         return
     entries = list(cache.entries())
     typer.echo(f"{cache.root}: {len(entries)} cached catalogue(s)")
+
+
+@app.command()
+def layout(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+) -> None:
+    """Show where each file sits on the side, and what it costs to reach it."""
+    disk, _, _, _ = decode_image(image)
+    report = layout_of(disk)
+
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "path": str(image),
+                    "dead_bytes": report.dead_bytes,
+                    "sides": [
+                        {
+                            "side": side.side,
+                            "stream_bytes": side.stream_bytes,
+                            "seconds_to_read": round(side.seconds_to_read, 4),
+                            "dead_bytes": side.dead_bytes,
+                            "reorder_saving_bytes": side.reorder_saving_bytes,
+                            "note": side.note,
+                            "files": [
+                                {
+                                    "position": entry.position,
+                                    "file_id": entry.file_id,
+                                    "name": entry.name,
+                                    "size": entry.size,
+                                    "offset": entry.offset,
+                                    "seconds_to_reach": round(entry.seconds_to_reach, 4),
+                                    "hidden": entry.hidden,
+                                }
+                                for entry in side.placements
+                            ],
+                        }
+                        for side in report.sides
+                    ],
+                }
+            )
+        )
+        raise typer.Exit(code=0)
+
+    for side in report.sides:
+        typer.echo(
+            f"side {side.side}: {side.stream_bytes} bytes of stream, "
+            f"{side.seconds_to_read:.2f}s to read end to end"
+        )
+        for entry in side.placements:
+            marker = " (hidden)" if entry.hidden else ""
+            typer.echo(
+                f"  {entry.position:2d} {entry.name:<8} id {entry.file_id:3d}  "
+                f"{entry.size:6d} bytes  reached at {entry.seconds_to_reach:5.2f}s{marker}"
+            )
+        if side.dead_bytes:
+            typer.echo(f"  {side.dead_bytes} byte(s) of dead weight after the last block")
+        if side.note:
+            typer.echo(f"  {side.note}")
 
 
 @app.command()
