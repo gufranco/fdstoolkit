@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from fdstk.build.blank import blank_image
@@ -211,3 +213,33 @@ def test_a_fault_during_the_write_stops_the_run() -> None:
 
     with pytest.raises(WriteRefusedError, match="the write stopped at side 0"):
         write_verified(drive, drive, sample_disk(), confirm=lambda _: True, backup=None)
+
+
+def test_a_read_that_overruns_its_deadline_is_a_timeout() -> None:
+    class SlowDrive(SimulatedDrive):
+        def read_side(self, side: int):  # noqa: ANN202
+            blocks = list(super().read_side(side))
+            time.sleep(0.02)
+            return iter(blocks)
+
+    with pytest.raises(HardwareFaultError) as caught:
+        dump(SlowDrive(sample_disk()), sides=1, timeout=0.001)
+
+    assert caught.value.kind is FaultKind.TIMEOUT
+
+
+def test_a_write_refuses_an_image_that_cannot_fit_a_disk() -> None:
+    drive = SimulatedDrive(sample_disk())
+    crowded = sample_disk().sides[0]
+    stuffed = Disk(
+        sides=(
+            crowded.__class__(
+                blocks=crowded.blocks * 400,
+                tail=b"",
+                capacity=crowded.capacity,
+            ),
+        )
+    )
+
+    with pytest.raises(WriteRefusedError, match="does not fit a disk"):
+        write_verified(drive, drive, stuffed, confirm=lambda _: True, backup=None)

@@ -5,12 +5,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from fdstk.codecs import fds
+from fdstk.core.bitstream import emulated_side_size
 from fdstk.core.blocks import Block, BlockKind
 from fdstk.core.disk import Disk, Side
+from fdstk.hardware.deadline import Deadline, guard
 from fdstk.hardware.ports import BlockRead, DiskReader, DiskWriter, HardwareFaultError
 
 DEFAULT_RETRIES = 3
 MIN_PASSES = 2
+DEFAULT_TIMEOUT = 120.0
+EMULATED_CAPACITY = 66560
 
 
 class Grade(StrEnum):
@@ -132,11 +136,20 @@ def _read_block_with_retries(
     )
 
 
-def dump(reader: DiskReader, *, sides: int, retries: int = DEFAULT_RETRIES) -> DumpResult:
+def dump(
+    reader: DiskReader,
+    *,
+    sides: int,
+    retries: int = DEFAULT_RETRIES,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> DumpResult:
     _require_readable(reader)
     dumped: list[SideDump] = []
     for side in range(sides):
-        first_pass = list(reader.read_side(side))
+        deadline = Deadline(seconds=timeout)
+        first_pass = guard(
+            deadline, f"reading side {side}", lambda side=side: list(reader.read_side(side))
+        )
         blocks = tuple(
             _read_block_with_retries(reader, side, index, block, retries)
             for index, block in enumerate(first_pass)
@@ -213,6 +226,19 @@ def write_verified(
     status = writer.status()
     if not status.can_write:
         message = f"cannot write: {', '.join(status.blockers)}"
+        raise WriteRefusedError(message)
+
+    oversized = [
+        index
+        for index, side in enumerate(disk.sides)
+        if emulated_side_size(side) > EMULATED_CAPACITY
+    ]
+    if oversized:
+        message = (
+            f"side {oversized[0]} does not fit a disk: its gapped size is "
+            f"{emulated_side_size(disk.sides[oversized[0]])} bytes against a capacity of "
+            f"{EMULATED_CAPACITY}"
+        )
         raise WriteRefusedError(message)
 
     present = dump(reader, sides=1, retries=retries)

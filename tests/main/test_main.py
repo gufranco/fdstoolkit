@@ -1399,3 +1399,51 @@ def test_the_help_lists_the_commands() -> None:
 
     assert result.exit_code == 0
     assert "verify" in result.stdout
+
+
+def test_dump_reports_that_the_dumper_backend_needs_a_link(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["dump", "-o", str(tmp_path / "d.fds"), "--backend", "dumper"],
+    )
+
+    assert result.exit_code == 1
+    assert "serial link" in result.stdout
+
+
+def test_dump_stops_cleanly_on_an_interrupt(single_side: Path, tmp_path: Path) -> None:
+    original = cli.dump_disk
+
+    def interrupt(*_: object, **__: object) -> object:
+        raise KeyboardInterrupt
+
+    cli.dump_disk = interrupt
+    try:
+        result = runner.invoke(
+            app,
+            ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(single_side)],
+        )
+    finally:
+        cli.dump_disk = original
+
+    assert result.exit_code == 1
+    assert "nothing was written" in result.stdout
+
+
+def test_write_warns_when_an_interrupt_lands_mid_write(single_side: Path) -> None:
+    original = cli.write_verified
+
+    def interrupt(*_: object, **__: object) -> object:
+        raise KeyboardInterrupt
+
+    cli.write_verified = interrupt
+    try:
+        result = runner.invoke(
+            app,
+            ["write", str(single_side), "--source", str(single_side), "--yes"],
+        )
+    finally:
+        cli.write_verified = original
+
+    assert result.exit_code == 1
+    assert "half written" in result.stdout

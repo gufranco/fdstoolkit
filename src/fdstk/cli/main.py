@@ -408,9 +408,16 @@ def lint(
 class Backend(StrEnum):
     SIMULATION = "simulation"
     FDSSTICK = "fdsstick"
+    DUMPER = "dumper"
 
 
 def open_drive(backend: Backend, source: Path | None) -> SimulatedDrive | FdsStick:
+    if backend is Backend.DUMPER:
+        message = (
+            "the Famicom Dumper backend needs a serial link, which this build does not open yet. "
+            "Use --backend fdsstick, or drive it from the library with your own link"
+        )
+        raise _fail(message)
     if backend is Backend.FDSSTICK:
         try:
             return open_fdsstick()
@@ -453,6 +460,9 @@ def dump(
         else:
             result = dump_disk(drive, sides=sides, retries=retries)
             grade = result.grade
+    except KeyboardInterrupt:
+        message = "stopped on interrupt, nothing was written"
+        raise _fail(message) from None
     except (HardwareFaultError, WriteRefusedError) as error:
         raise _fail(str(error)) from error
 
@@ -498,6 +508,9 @@ def write(
             backup=None if backup is None else _writer_for(backup),
             retries=retries,
         )
+    except KeyboardInterrupt:
+        message = "stopped on interrupt, the disk may be half written, dump it before using it"
+        raise _fail(message) from None
     except (HardwareFaultError, WriteRefusedError) as error:
         raise _fail(str(error)) from error
 
