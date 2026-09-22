@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from fdstk.codecs import fds, qd
 from fdstk.core.canon import canonicalise, restore
-from fdstk.core.diskinfo import CONTENT_PROFILE, RAW_PROFILE
+from fdstk.core.disk import Disk
+from fdstk.core.diskinfo import CONTENT_PROFILE, DISK_INFO_FIELDS, RAW_PROFILE, mask_disk_info
 
 pytestmark = pytest.mark.corpus
 
@@ -112,3 +115,72 @@ def test_two_runs_over_the_corpus_produce_the_same_digests(fds_images: list[Path
         ]
 
     assert digests() == digests()
+
+
+def test_masking_touches_only_the_fields_it_declares(fds_images: list[Path]) -> None:
+    masked_ranges = [
+        (field.offset, field.offset + field.length)
+        for field in DISK_INFO_FIELDS
+        if field.provenance
+    ]
+    offenders: list[str] = []
+
+    for path in fds_images[:200]:
+        disk, _ = fds.decode(path.read_bytes())
+        for index, side in enumerate(disk.sides):
+            if not side.is_formatted:
+                continue
+            original = side.blocks[0].payload
+            masked = mask_disk_info(original, CONTENT_PROFILE)
+            for offset, (left, right) in enumerate(zip(original, masked, strict=True)):
+                if left == right:
+                    continue
+                if not any(start <= offset < stop for start, stop in masked_ranges):
+                    offenders.append(f"{path.name} side {index} offset {offset:#04x}")
+
+    assert offenders == []
+
+
+def test_the_content_profile_merges_dumps_the_raw_bytes_keep_apart(
+    fds_images: list[Path],
+) -> None:
+    raw_digests: set[bytes] = set()
+    content_digests: set[bytes] = set()
+
+    for path in fds_images[:400]:
+        disk, _ = fds.decode(path.read_bytes())
+        for side in disk.sides:
+            if not side.is_formatted:
+                continue
+            one_side = Disk(sides=(side,))
+            raw_digests.add(canonicalise(one_side, RAW_PROFILE).data)
+            content_digests.add(canonicalise(one_side, CONTENT_PROFILE).data)
+
+    assert len(content_digests) < len(raw_digests)
+
+
+def test_the_canonical_digest_does_not_depend_on_the_environment(fds_images: list[Path]) -> None:
+    sample = [str(path) for path in fds_images[:25]]
+    script = (
+        "import sys;"
+        "from fdstk.codecs import fds;"
+        "from fdstk.core.canon import canonicalise;"
+        "from fdstk.core.diskinfo import CONTENT_PROFILE;"
+        "print('\\n'.join("
+        "canonicalise(fds.decode(open(path,'rb').read())[0], CONTENT_PROFILE).sha256"
+        " for path in sys.argv[1:]))"
+    )
+
+    def run(env: dict[str, str]) -> str:
+        return subprocess.run(  # noqa: S603
+            [sys.executable, "-c", script, *sample],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, **env},
+        ).stdout
+
+    first = run({"TZ": "UTC", "LANG": "C", "PYTHONHASHSEED": "0"})
+    second = run({"TZ": "Pacific/Kiritimati", "LANG": "pt_BR.UTF-8", "PYTHONHASHSEED": "12345"})
+
+    assert first == second
