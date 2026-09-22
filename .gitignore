@@ -17,3 +17,6 @@ htmlcov/
 *.bin
 *.dat
 .DS_Store
+
+!specs/
+!specs/**
