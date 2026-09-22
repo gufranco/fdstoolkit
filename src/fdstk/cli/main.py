@@ -36,6 +36,7 @@ from fdstk.hardware.simulation import SimulatedDrive
 from fdstk.identify.cache import DatCache
 from fdstk.identify.dat import Catalogue, Identification, MatchKind, load_dat
 from fdstk.identify.dat import identify as identify_image
+from fdstk.identify.firmware import emulator_notes, extract_bios, identify_bios
 from fdstk.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstk.identify.near import NearMatch, nearest_match, reference_images
 from fdstk.identify.provenance import provenance_of
@@ -1141,6 +1142,63 @@ def boot(
 
     failed = any(side.verdict is BootVerdict.FAILS for side in report.sides[:1])
     raise typer.Exit(code=1 if failed else 0)
+
+
+@app.command()
+def bios(
+    file: Annotated[Path, typer.Argument(help="a BIOS file, 8 KB or wrapped in a larger dump")],
+    *,
+    extract: Annotated[
+        Path | None, typer.Option("--extract", help="write the 8 KB BIOS found inside")
+    ] = None,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+) -> None:
+    """Identify a Famicom Disk System BIOS, and say which emulators accept it."""
+    if not file.is_file():
+        message = f"file not found: {file}"
+        raise _fail(message)
+    data = file.read_bytes()
+    report = identify_bios(data)
+    notes = emulator_notes(report.revision, exact_size=report.exact_size)
+
+    if extract is not None:
+        _guard_output(extract, force=force)
+        try:
+            extract.write_bytes(extract_bios(data))
+        except ValueError as error:
+            raise _fail(str(error)) from error
+
+    revision = report.revision
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "path": str(file),
+                    "size": report.size,
+                    "offset": report.offset,
+                    "crc32": report.crc32,
+                    "sha1": report.sha1,
+                    "revision": revision.name if revision else None,
+                    "mame_name": revision.mame_name if revision else None,
+                    "source": revision.source if revision else None,
+                    "emulators": notes,
+                }
+            )
+        )
+    else:
+        name = revision.name if revision else "unknown"
+        typer.echo(f"{file.name}: {name}, {report.size} bytes")
+        if report.offset:
+            typer.echo(f"  the BIOS sits at offset {report.offset:#x} inside a larger dump")
+        if report.crc32:
+            typer.echo(f"  crc32 {report.crc32}  sha1 {report.sha1}")
+        for emulator, verdict in notes.items():
+            typer.echo(f"  {emulator:<8} {verdict}")
+        if extract is not None:
+            typer.echo(f"wrote {extract}")
+
+    raise typer.Exit(code=0 if revision is not None else 1)
 
 
 @app.command()

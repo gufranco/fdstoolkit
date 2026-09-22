@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zlib
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ from fdstk.codecs.qd import encode as encode_qd
 from fdstk.core.blocks import Block, BlockKind
 from fdstk.core.disk import Disk, Side
 from fdstk.hardware.simulation import FaultPlan, SimulatedDrive
+from fdstk.identify import firmware
 
 runner = CliRunner()
 
@@ -1950,3 +1952,84 @@ def test_insert_accepts_a_kind_by_name(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "character" in runner.invoke(app, ["ls", str(built)]).stdout
+
+
+def _known_bios(monkeypatch: pytest.MonkeyPatch) -> bytes:
+    data = bytes([0x5A]) * firmware.BIOS_SIZE
+    crc = f"{zlib.crc32(data):08x}"
+    monkeypatch.setattr(
+        firmware,
+        "KNOWN_REVISIONS",
+        {crc: firmware.Revision(name="Rev 01A", crc32=crc, sha1="0" * 40, mame_name="x.bin")},
+    )
+    return data
+
+
+def test_bios_identifies_a_known_revision(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = tmp_path / "disksys.rom"
+    source.write_bytes(_known_bios(monkeypatch))
+
+    result = runner.invoke(app, ["bios", str(source)])
+
+    assert result.exit_code == 0
+    assert "Rev 01A" in result.stdout
+    assert "fceux    accepts it" in result.stdout
+
+
+def test_bios_extracts_from_a_wrapped_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    known = _known_bios(monkeypatch)
+    source = tmp_path / "bios.nes"
+    source.write_bytes(bytes(0x6000) + known + bytes(0x2000))
+    output = tmp_path / "disksys.rom"
+
+    result = runner.invoke(app, ["bios", str(source), "--extract", str(output)])
+
+    assert result.exit_code == 0
+    assert "offset 0x6000" in result.stdout
+    assert output.read_bytes() == known
+
+
+def test_bios_reports_an_unknown_file(tmp_path: Path) -> None:
+    source = tmp_path / "odd.rom"
+    source.write_bytes(bytes(0x2000))
+
+    result = runner.invoke(app, ["bios", str(source)])
+
+    assert result.exit_code == 1
+    assert "unknown" in result.stdout
+
+
+def test_bios_refuses_to_extract_nothing(tmp_path: Path) -> None:
+    source = tmp_path / "odd.rom"
+    source.write_bytes(bytes(0xA000))
+
+    result = runner.invoke(app, ["bios", str(source), "--extract", str(tmp_path / "out.rom")])
+
+    assert result.exit_code == 1
+    assert "no known BIOS" in result.stdout
+
+
+def test_bios_reports_a_missing_file(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["bios", str(tmp_path / "nope.rom")])
+
+    assert result.exit_code == 1
+
+
+def test_bios_can_emit_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = tmp_path / "disksys.rom"
+    source.write_bytes(_known_bios(monkeypatch))
+
+    payload = json.loads(runner.invoke(app, ["bios", str(source), "--json"]).stdout)
+
+    assert payload["revision"] == "Rev 01A"
+    assert payload["emulators"]["mesen2"] == "accepts it"
+
+
+def test_bios_reports_a_file_too_small_to_be_one(tmp_path: Path) -> None:
+    source = tmp_path / "tiny.rom"
+    source.write_bytes(bytes(100))
+
+    result = runner.invoke(app, ["bios", str(source)])
+
+    assert "crc32" not in result.stdout
+    assert "rejects it" in result.stdout
