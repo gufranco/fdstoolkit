@@ -154,6 +154,8 @@ Speed on its own does not separate a stretched belt from a misadjusted trimmer. 
 
 `tune-sweep` takes one capture per trimmer position and finds the range that reads clean. Set the trimmer to the centre of that range rather than to the first setting that works, because the width of the window is itself the measurement: a healthy drive reads over a wide span of speeds, a tired one only at a single point.
 
+Tuning needs pulse timing, so a capture of pulse classes is refused rather than measured. A device that has already rounded every pulse to one of three nominal lengths has thrown away the thing being measured, and a speed derived from it would describe the rounding rather than the drive.
+
 Speed and wobble say whether the drive is set up. They do not say whether a failed read was the drive or the disk, and that needs more than one disk. A failure at the same place on every disk is the drive; a failure on one disk alone is that disk. A drive that stops answering is neither, and the right response is to stop rather than to feed it another disk.
 
 ### Building masters

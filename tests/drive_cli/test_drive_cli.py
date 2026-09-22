@@ -7,6 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from fdstoolkit.cli.main import app
+from fdstoolkit.codecs.raw import pack_raw03
 from fdstoolkit.drive.spec import NOMINAL_BIT_RATE_HZ, cell_from_bit_rate
 from fdstoolkit.flux.counts import write_counts
 from fdstoolkit.flux.model import FluxCapture, FluxTrack, Revolution, Source
@@ -117,3 +118,24 @@ def test_a_sweep_where_nothing_reads_clean_says_so(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "no setting" in result.stdout
+
+
+def test_a_quantised_capture_is_refused_for_tuning(tmp_path: Path) -> None:
+    path = tmp_path / "classes.raw"
+    path.write_bytes(pack_raw03(bytes((0, 1, 2)) * 400))
+
+    result = runner.invoke(app, ["tune", str(path), "--format", "raw03"])
+
+    assert result.exit_code == 1
+    assert "pulse classes" in result.stdout
+    assert "interval counts" in result.stdout
+
+
+def test_a_quantised_capture_is_refused_for_a_sweep(tmp_path: Path) -> None:
+    path = tmp_path / "classes.raw"
+    path.write_bytes(pack_raw03(bytes((0, 1, 2)) * 400))
+
+    result = runner.invoke(app, ["tune-sweep", str(path), "--format", "raw03"])
+
+    assert result.exit_code == 1
+    assert "pulse classes" in result.stdout

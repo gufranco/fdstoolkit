@@ -74,6 +74,7 @@ class FluxCapture:
     source: Source
     tracks: tuple[FluxTrack, ...]
     sample_ns: float = 25.0
+    quantised: bool = False
 
     def __post_init__(self) -> None:
         if not self.tracks:

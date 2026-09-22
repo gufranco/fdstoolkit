@@ -27,6 +27,14 @@ def _capture(path: Path, fmt: CaptureFormat | None) -> FluxCapture:
 
 def _intervals(path: Path, fmt: CaptureFormat | None) -> tuple[int, ...]:
     capture = _capture(path, fmt)
+    if capture.quantised:
+        message = (
+            f"{path.name} carries pulse classes, not pulse timing. "
+            "The device already rounded every pulse to one of three nominal lengths, "
+            "so a speed measured from it would describe the rounding rather than the drive. "
+            "Capture interval counts instead."
+        )
+        raise fail(message)
     return tuple(value for track in capture.tracks for value in track.intervals(0))
 
 

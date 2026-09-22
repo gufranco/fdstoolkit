@@ -24,7 +24,12 @@ def counts_to_ns(count: int) -> int:
     return round(count * TICK_NS)
 
 
-def _capture(intervals: tuple[int, ...], track: int) -> FluxCapture:
+def _capture(
+    intervals: tuple[int, ...],
+    track: int,
+    *,
+    quantised: bool = False,
+) -> FluxCapture:
     if not intervals:
         message = "the capture carries no pulse"
         raise ValueError(message)
@@ -32,6 +37,7 @@ def _capture(intervals: tuple[int, ...], track: int) -> FluxCapture:
         source=Source.FDSSTICK,
         tracks=(FluxTrack(index=track, revolutions=(Revolution(intervals=intervals),)),),
         sample_ns=TICK_NS,
+        quantised=quantised,
     )
 
 
@@ -40,7 +46,11 @@ def read_counts(data: bytes, *, track: int = 0) -> FluxCapture:
 
 
 def read_raw03(data: bytes, *, track: int = 0) -> FluxCapture:
-    return _capture(tuple(CLASS_NS[value] for value in unpack_raw03(data)), track)
+    return _capture(
+        tuple(CLASS_NS[value] for value in unpack_raw03(data)),
+        track,
+        quantised=True,
+    )
 
 
 def write_counts(capture: FluxCapture) -> bytes:
