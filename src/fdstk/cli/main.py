@@ -11,6 +11,11 @@ from fdstk.codecs import fds, qd
 from fdstk.core.canon import canonicalise, digest_string, profile_by_name
 from fdstk.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstk.core.disk import Disk, Side
+from fdstk.fdskey.lint import lint_card_image
+from fdstk.hardware.ports import HardwareFaultError
+from fdstk.hardware.session import Grade, WriteRefusedError, dump_repeated, write_verified
+from fdstk.hardware.session import dump as dump_disk
+from fdstk.hardware.simulation import SimulatedDrive
 from fdstk.identify.hashes import digests_of, side_digests
 from fdstk.report import as_json, diagnostics_as_data
 
@@ -314,3 +319,130 @@ def blank(
         raise _fail(str(error)) from error
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes)")
+
+
+@app.command()
+def lint(
+    image: Annotated[Path, typer.Argument(help="a .fds image destined for an FDSKey card")],
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+) -> None:
+    """Predict whether FDSKey will load an image, before it reaches the card."""
+    data, _ = _read(image)
+    findings = lint_card_image(data, name=image)
+
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "path": str(image),
+                    "ok": not findings,
+                    "findings": [
+                        {
+                            "code": finding.code,
+                            "message": finding.message,
+                            "side": finding.side,
+                            "detail": dict(sorted(finding.detail.items())),
+                        }
+                        for finding in findings
+                    ],
+                }
+            )
+        )
+    else:
+        for finding in findings:
+            where = "" if finding.side is None else f"side {finding.side}: "
+            typer.echo(f"{where}[{finding.code}] {finding.message}")
+        typer.echo("ok" if not findings else "would not load")
+
+    raise typer.Exit(code=0 if not findings else 1)
+
+
+def _simulated_drive(source: Path | None) -> SimulatedDrive:
+    if source is None:
+        message = "the simulated backend needs --source naming an image to stand in for the disk"
+        raise _fail(message)
+    disk, _, _, _ = _decode(source)
+    return SimulatedDrive(disk)
+
+
+@app.command()
+def dump(
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the dump")],
+    *,
+    source: Annotated[
+        Path | None,
+        typer.Option("--source", help="image the simulated drive holds"),
+    ] = None,
+    sides: Annotated[int, typer.Option("--sides", min=1, max=8, help="sides to read")] = 1,
+    passes: Annotated[int, typer.Option("--passes", min=1, help="read each side this often")] = 1,
+    retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Dump a disk through a drive backend."""
+    _guard_output(output, force=force)
+    drive = _simulated_drive(source)
+
+    try:
+        if passes > 1:
+            report = dump_repeated(drive, sides=sides, passes=passes, retries=retries)
+            result = report.passes[0]
+            grade = report.grade
+            for side_index, block_index in report.unstable_blocks:
+                typer.echo(f"side {side_index}: block {block_index} differs between passes")
+        else:
+            result = dump_disk(drive, sides=sides, retries=retries)
+            grade = result.grade
+    except (HardwareFaultError, WriteRefusedError) as error:
+        raise _fail(str(error)) from error
+
+    data, _ = fds.encode(result.as_disk(), headered=False)
+    output.write_bytes(data)
+    typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
+    raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
+
+
+@app.command()
+def write(
+    image: Annotated[Path, typer.Argument(help="the image to write to a disk")],
+    *,
+    source: Annotated[
+        Path | None,
+        typer.Option("--source", help="image the simulated drive holds"),
+    ] = None,
+    backup: Annotated[
+        Path | None,
+        typer.Option("--backup", help="where to save the disk's current contents"),
+    ] = None,
+    yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
+    retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
+) -> None:
+    """Write an image to a disk, then read it back and compare."""
+    disk, _, _, _ = _decode(image)
+    drive = _simulated_drive(source)
+
+    def confirm(message: str) -> bool:
+        if yes:
+            return True
+        return typer.confirm(message)
+
+    def save(data: bytes) -> None:
+        if backup is not None:
+            backup.write_bytes(data)
+
+    try:
+        report = write_verified(
+            drive,
+            drive,
+            disk,
+            confirm=confirm,
+            backup=save,
+            retries=retries,
+        )
+    except (HardwareFaultError, WriteRefusedError) as error:
+        raise _fail(str(error)) from error
+
+    for side_index, block_index in report.mismatched_blocks:
+        typer.echo(f"side {side_index}: block {block_index} did not read back as written")
+    typer.echo(f"verified {report.verified}, grade {report.grade}")
+    raise typer.Exit(code=0 if report.verified else 1)

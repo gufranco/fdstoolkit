@@ -21,6 +21,13 @@ def image(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def single_side(tmp_path: Path) -> Path:
+    path = tmp_path / "one-side.fds"
+    path.write_bytes(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    return path
+
+
+@pytest.fixture
 def damaged(tmp_path: Path) -> Path:
     raw = bytearray(blank_image(sides=1, headered=False, formatted=True))
     raw[1:15] = b"*NOT-NINTENDO*"
@@ -197,3 +204,87 @@ def test_an_unknown_extension_is_reported(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "format" in result.stdout
+
+
+def test_lint_passes_a_plain_image(image: Path) -> None:
+    result = runner.invoke(app, ["lint", str(image)])
+
+    assert result.exit_code == 0
+    assert "ok" in result.stdout
+
+
+def test_lint_rejects_an_all_zero_image(tmp_path: Path) -> None:
+    path = tmp_path / "blank.fds"
+    path.write_bytes(bytes(SIDE_SIZE))
+
+    result = runner.invoke(app, ["lint", str(path)])
+
+    assert result.exit_code == 1
+    assert "FK002" in result.stdout
+
+
+def test_dump_reads_the_simulated_drive(image: Path, tmp_path: Path) -> None:
+    out = tmp_path / "dump.fds"
+
+    result = runner.invoke(app, ["dump", "-o", str(out), "--source", str(image)])
+
+    assert result.exit_code == 0
+    assert "grade clean" in result.stdout
+    assert out.stat().st_size == SIDE_SIZE
+
+
+def test_dump_needs_a_source_for_the_simulated_backend(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.fds")])
+
+    assert result.exit_code == 1
+    assert "--source" in result.stdout
+
+
+def test_dump_can_repeat_a_read_to_check_stability(image: Path, tmp_path: Path) -> None:
+    out = tmp_path / "dump.fds"
+
+    result = runner.invoke(
+        app,
+        ["dump", "-o", str(out), "--source", str(image), "--passes", "3"],
+    )
+
+    assert result.exit_code == 0
+
+
+def test_write_verifies_by_reading_back(single_side: Path, tmp_path: Path) -> None:
+    backup = tmp_path / "before.fds"
+
+    result = runner.invoke(
+        app,
+        [
+            "write",
+            str(single_side),
+            "--source",
+            str(single_side),
+            "--backup",
+            str(backup),
+            "--yes",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "verified True" in result.stdout
+    assert backup.exists()
+
+
+def test_write_stops_when_the_confirmation_is_declined(single_side: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["write", str(single_side), "--source", str(single_side)],
+        input="n\n",
+    )
+
+    assert result.exit_code == 1
+    assert "declined" in result.stdout
+
+
+def test_write_refuses_a_multi_side_image_in_one_pass(image: Path) -> None:
+    result = runner.invoke(app, ["write", str(image), "--source", str(image), "--yes"])
+
+    assert result.exit_code == 1
+    assert "one side at a time" in result.stdout
