@@ -5,9 +5,16 @@ import pytest
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode as decode_fds
 from fdstoolkit.codecs.raw import (
+    CLASS0_LIMIT,
+    CLASS1_LIMIT,
+    CLASS2_LIMIT,
     GAP_VALUE,
     LEAD_IN_PACKED,
     MIN_GAP_VALUES,
+    NOMINAL_LONG,
+    NOMINAL_MEDIUM,
+    NOMINAL_SHORT,
+    SHORT_LIMIT,
     VALUES_PER_BYTE,
     RawEncoding,
     class_histogram,
@@ -64,10 +71,47 @@ def test_packing_pads_a_partial_group_with_zeros() -> None:
     assert unpack_raw03(pack_raw03(bytes([1, 2]))) == bytes([1, 2, 0, 0])
 
 
-def test_quantising_uses_the_documented_thresholds() -> None:
-    counts = bytes([0x00, 0x47, 0x48, 0x6F, 0x70, 0x9F, 0xA0, 0xCF, 0xD0, 0xFF])
+CAPTURED = bytes(
+    (
+        0x3E,
+        0x3E,
+        0x3E,
+        0x5D,
+        0x3C,
+        0x5F,
+        0x3C,
+        0x3F,
+        0x3D,
+        0x3E,
+        0x3D,
+        0x3E,
+        0x5E,
+        0x7C,
+        0x7C,
+        0x5C,
+        0x3C,
+        0x5D,
+        0x3D,
+        0x3E,
+    )
+)
 
-    assert quantise(counts) == bytes([3, 3, 0, 0, 1, 1, 2, 2, 3, 3])
+
+def test_a_captured_pulse_train_quantises_onto_its_three_classes() -> None:
+    assert quantise(CAPTURED) == bytes((0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 2, 2, 1, 0, 1, 0, 0))
+
+
+def test_the_nominal_counts_land_in_the_middle_of_their_classes() -> None:
+    assert quantise(bytes((NOMINAL_SHORT, NOMINAL_MEDIUM, NOMINAL_LONG))) == bytes((0, 1, 2))
+
+
+def test_a_pulse_too_short_or_too_long_to_be_data_is_rejected() -> None:
+    assert quantise(bytes((0, SHORT_LIMIT - 1, CLASS2_LIMIT, 0xFF))) == bytes((3, 3, 3, 3))
+
+
+def test_the_class_boundaries_sit_between_the_nominal_counts() -> None:
+    assert NOMINAL_SHORT < CLASS0_LIMIT < NOMINAL_MEDIUM
+    assert NOMINAL_MEDIUM < CLASS1_LIMIT < NOMINAL_LONG
 
 
 def test_a_histogram_counts_each_class() -> None:

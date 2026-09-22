@@ -120,6 +120,40 @@ A revolution is only whole when it spans one rotation, so a capture that stops p
 
 The readers have been run against real captures from public preservation dumps, a KryoFlux stream and a 16 MB SuperCard Pro image. Point `FDSTOOLKIT_FLUX_CORPUS` at a directory of your own and `pytest -m corpus` will check every capture in it: that it loads, that its speed is plausible and consistent across revolutions, that it fits a known pulse family, and that it separates cleanly.
 
+### Tuning the drive
+
+| Command | Output |
+|---|---|
+| `fdstoolkit tune CAPTURE` | What to adjust, coarse actions first, then the fine ones |
+| `fdstoolkit tune-sweep CAPTURES...` | The speed window that reads clean, and the centre to settle on |
+
+The drive is measured against the bit rate, not against a rotation speed. The RAM adapter expects 96.4 kbit/s and tolerates ten percent either side, which is the only figure the hardware actually enforces; published rotation speeds for this mechanism disagree with each other by a factor of two, so the toolkit does not use them.
+
+`tune` reports in two stages. Coarse names anything outside the band the adapter accepts, which the disk will refuse to read. Fine names what is inside the band and still off centre, because a drive that merely passes is not a drive that is set up. A settled drive reports that nothing is left to adjust.
+
+```console
+$ fdstoolkit tune capture.raw
+96.40 kbit/s, cell 10373 ns (62.2 counts), +0.00% of nominal, fine, hold
+steady, wow and flutter 0.00%, drift +0.00%, spread 0.00%
+score 100%
+settled, nothing left to adjust
+```
+
+```console
+$ fdstoolkit tune slow.raw
+81.79 kbit/s, cell 12226 ns (73.4 counts), -15.15% of nominal, out of spec, run faster
+periodic, wow and flutter 3.42%, drift +0.26%, spread 9.69%
+score 6%
+  [coarse] motor speed: -15.15% of nominal, outside the band the adapter tolerates.
+           turn the motor trimmer counter-clockwise to run faster, then measure again
+  [coarse] belt and spindle: wow and flutter 3.42%, spread 9.69%.
+           replace or reseat the belt and check the spindle runs true, then measure again
+```
+
+Speed on its own does not separate a stretched belt from a misadjusted trimmer. The cell length is tracked across the capture, so a drive that wanders is named periodic, one that walks in one direction is named drifting, and only one that holds is called steady.
+
+`tune-sweep` takes one capture per trimmer position and finds the range that reads clean. Set the trimmer to the centre of that range rather than to the first setting that works, because the width of the window is itself the measurement: a healthy drive reads over a wide span of speeds, a tired one only at a single point.
+
 ### Building masters
 
 | Command | Output |

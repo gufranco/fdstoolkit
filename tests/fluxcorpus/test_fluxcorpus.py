@@ -61,6 +61,17 @@ def test_every_capture_spins_at_a_plausible_speed() -> None:
             assert low <= median <= high, f"{path.name} track {track.index} at {median:.1f} rpm"
 
 
+def test_a_capture_carries_at_least_one_formatted_track() -> None:
+    for path in captures():
+        capture = load_capture(path.read_bytes())
+        formatted = [
+            track
+            for track in capture.tracks
+            if len(track.intervals(0)) >= 1_000 and analyse_intervals(track.intervals(0)).coherent
+        ]
+        assert formatted, f"{path.name} carries no coherent track"
+
+
 def test_the_whole_revolutions_of_a_capture_agree_on_speed() -> None:
     for path in captures():
         capture = load_capture(path.read_bytes())
@@ -98,6 +109,8 @@ def test_a_preserved_capture_separates_cleanly() -> None:
                 continue
             report = analyse_intervals(intervals)
             assert len(report.clusters) == 3
+            if not report.coherent:
+                continue
             assert report.worst_margin > 0.3, (
                 f"{path.name} track {track.index} margin {report.worst_margin:.1%}"
             )

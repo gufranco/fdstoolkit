@@ -90,6 +90,8 @@ def flux(
             typer.echo(f"  speed       {first.rpm:.2f} rpm")
         if first.outliers:
             typer.echo(f"  outliers    {first.outliers}")
+    if report.blank:
+        typer.echo(f"blank tracks  {len(report.blank)} carry no coherent data")
     typer.echo(f"worst margin  {report.worst_margin:.1%} on track {report.worst_track}")
     typer.echo("verdict       " + ("healthy" if report.healthy else "degraded"))
     raise typer.Exit(code=0 if report.healthy else 1)

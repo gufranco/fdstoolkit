@@ -18,12 +18,15 @@ GCR_RATIOS: Final = (1.0, 2.0, 3.0)
 FAMILIES: Final[dict[str, tuple[float, ...]]] = {"mfm": RATIOS, "gcr": GCR_RATIOS}
 STRAY_MARGIN: Final = 0.25
 MARGIN_PERCENTILE: Final = 0.01
+COHERENT_SPREAD: Final = 0.15
+MIN_CLUSTER: Final = 10
 SEEDS: Final = (float(SHORT_NS), float(MEDIUM_NS), float(LONG_NS))
 OUTLIER_FACTOR: Final = 2.0
 HEALTHY_MARGIN: Final = 0.35
 DEFAULT_BUCKET_NS: Final = 250
-FIT_SAMPLES: Final = 4096
-FIT_STEPS: Final = 160
+FIT_SAMPLES: Final = 2048
+COARSE_STEPS: Final = 32
+FINE_STEPS: Final = 24
 FIT_LOW: Final = 0.75
 FIT_HIGH: Final = 1.60
 MIN_FOR_SPREAD: Final = 2
@@ -80,7 +83,20 @@ class IntervalReport:
         return min(item.margin for item in self.separations)
 
     @property
+    def relative_spread(self) -> float:
+        populated = [item for item in self.clusters if item.count >= MIN_CLUSTER]
+        if not populated:
+            return 0.0
+        return max(item.spread_ns / item.centre_ns for item in populated if item.centre_ns)
+
+    @property
+    def coherent(self) -> bool:
+        return self.relative_spread <= COHERENT_SPREAD
+
+    @property
     def healthy(self) -> bool:
+        if not self.coherent:
+            return False
         return self.worst_margin >= HEALTHY_MARGIN and not self.outliers
 
 
@@ -92,6 +108,10 @@ class TrackReport:
     @property
     def worst_margin(self) -> float:
         return min(report.worst_margin for report in self.revolutions)
+
+    @property
+    def coherent(self) -> bool:
+        return any(report.coherent for report in self.revolutions)
 
     @property
     def healthy(self) -> bool:
@@ -111,21 +131,31 @@ class CaptureReport:
 
     @property
     def worst_margin(self) -> float:
-        return min(track.worst_margin for track in self.tracks)
+        readable = self.formatted or self.tracks
+        return min(track.worst_margin for track in readable)
 
     @property
     def worst_track(self) -> int:
-        return min(self.tracks, key=lambda track: track.worst_margin).index
+        return min(self.formatted or self.tracks, key=lambda item: item.worst_margin).index
+
+    @property
+    def formatted(self) -> tuple[TrackReport, ...]:
+        return tuple(track for track in self.tracks if track.coherent)
+
+    @property
+    def blank(self) -> tuple[TrackReport, ...]:
+        return tuple(track for track in self.tracks if not track.coherent)
 
     @property
     def healthy(self) -> bool:
-        return all(track.healthy for track in self.tracks)
+        readable = self.formatted
+        return bool(readable) and all(track.healthy for track in readable)
 
 
 def _sample(intervals: Sequence[int]) -> Sequence[int]:
     if len(intervals) <= FIT_SAMPLES:
         return intervals
-    stride = len(intervals) // FIT_SAMPLES
+    stride = -(-len(intervals) // FIT_SAMPLES)
     return intervals[::stride]
 
 
@@ -142,14 +172,52 @@ def estimate_base_ns(intervals: Sequence[int]) -> float:
     return fit_family(intervals)[0]
 
 
-def _best_base(sample: Sequence[int], anchor: float, ratios: Sequence[float]) -> float:
+def scan_bases(
+    sample: Sequence[int],
+    low: float,
+    high: float,
+    steps: int,
+    ratios: Sequence[float],
+) -> tuple[float, float]:
+    step = (high - low) / steps
+    if step <= 0:
+        return low, _residual(sample, low, ratios)
+    best = low
+    best_error = _residual(sample, low, ratios)
+    for index in range(1, steps + 1):
+        base = low + step * index
+        error = _residual(sample, base, ratios)
+        if error < best_error:
+            best, best_error = base, error
+    return best, best_error
+
+
+def refine_base(sample: Sequence[int], base: float, ratios: Sequence[float]) -> float:
+    numerator = 0.0
+    denominator = 0.0
+    for value in sample:
+        ratio = min(ratios, key=lambda item: abs(value - base * item))
+        numerator += value * ratio
+        denominator += ratio * ratio
+    if denominator <= 0:
+        return base
+    return numerator / denominator
+
+
+def _best_base(
+    sample: Sequence[int],
+    anchor: float,
+    ratios: Sequence[float],
+) -> tuple[float, float]:
     low = anchor * FIT_LOW / ratios[-1]
     high = anchor * FIT_HIGH
-    step = (high - low) / FIT_STEPS
-    if step <= 0:
-        return float(anchor)
-    candidates = [low + step * index for index in range(FIT_STEPS + 1)]
-    return min(candidates, key=lambda value: _residual(sample, value, ratios))
+    if high <= low:
+        return float(anchor), _residual(sample, float(anchor), ratios)
+    coarse, _ = scan_bases(sample, low, high, COARSE_STEPS, ratios)
+    span = (high - low) / COARSE_STEPS
+    fine, _ = scan_bases(sample, coarse - span, coarse + span, FINE_STEPS, ratios)
+    base = refine_base(sample, refine_base(sample, fine, ratios), ratios)
+    return base, _residual(sample, base, ratios)
 
 
 def fit_family(intervals: Sequence[int]) -> tuple[float, tuple[float, ...], str]:
@@ -161,8 +229,8 @@ def fit_family(intervals: Sequence[int]) -> tuple[float, tuple[float, ...], str]
 
     fits: list[tuple[float, float, tuple[float, ...], str]] = []
     for name, ratios in FAMILIES.items():
-        base = _best_base(sample, anchor, ratios)
-        fits.append((_residual(sample, base, ratios), base, ratios, name))
+        base, error = _best_base(sample, anchor, ratios)
+        fits.append((error, base, ratios, name))
 
     _, base, ratios, name = min(fits, key=lambda fit: fit[0])
     return base, ratios, name
