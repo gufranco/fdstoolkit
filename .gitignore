@@ -3,6 +3,10 @@ __pycache__/
 .venv/
 /dist/
 /build/
+!src/fdstk/build/
+!src/fdstk/build/*.py
+!tests/build/
+!tests/build/*.py
 *.egg-info/
 .coverage
 coverage.xml
