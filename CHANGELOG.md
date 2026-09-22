@@ -18,6 +18,10 @@ Checksums are the reflected-0x8408 CRC-16 the hardware computes, confirmed again
 
 `fds rebuild` re-emits an image from its parsed model, recomputing a checksum that is null or wrong, correcting a file header whose declared size disagrees with its data, and dropping bytes after the last block. Hidden files survive unless `--drop-hidden` or `--reveal-hidden` says otherwise.
 
+### Layout
+
+`fds layout` reports where each file sits on a side and what the drive costs to reach it. An FDS side is one sequential stream with no allocation table, so fragmentation in the floppy sense cannot occur; the cost is distance, and the report names it in bytes and in seconds, along with dead weight after the last block and what ordering files smallest first would save.
+
 ### Identity and determinism
 
 Three identity levels, so a digest can never be read without knowing what produced it: `raw` for the exact bytes, `content` for the same software from any physical disk, `data` for the program alone. A canonical digest prints as `fdscanon:v1:<profile>/v1:<sha256>`, and canonicalisation is reversible through a sidecar that holds everything the projection removed.
