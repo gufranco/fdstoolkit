@@ -1,3 +1,5 @@
 from __future__ import annotations
 
-__version__ = "0.1.0"
+from fdstk.version import VERSION
+
+__version__ = VERSION

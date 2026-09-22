@@ -172,7 +172,7 @@ def test_the_canonical_digest_does_not_depend_on_the_environment(fds_images: lis
     )
 
     def run(env: dict[str, str]) -> str:
-        return subprocess.run(  # noqa: S603
+        return subprocess.run(
             [sys.executable, "-c", script, *sample],
             capture_output=True,
             text=True,

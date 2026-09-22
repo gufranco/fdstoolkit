@@ -20,6 +20,7 @@ from fdstk.core.blocks import FileKind
 from fdstk.core.canon import canonicalise, digest_string, profile_by_name
 from fdstk.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstk.core.disk import Disk, Side
+from fdstk.doctor import CheckStatus, diagnose
 from fdstk.edit.clean import clean_trailing_data
 from fdstk.edit.diskinfo import apply_edits, parse_edit
 from fdstk.edit.emulator import SaveFormat, extract_save, merge_save
@@ -1304,6 +1305,32 @@ def import_ares(
         data, _ = qd.encode(disk)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(sides)} side(s), {len(data)} bytes)")
+
+
+@app.command()
+def doctor(
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+) -> None:
+    """Check the installation: version, Python, hardware support and caches."""
+    report = diagnose()
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "healthy": report.healthy,
+                    "checks": [
+                        {"name": check.name, "status": str(check.status), "detail": check.detail}
+                        for check in report.checks
+                    ],
+                }
+            )
+        )
+    else:
+        for check in report.checks:
+            marker = "" if check.status is CheckStatus.OK else f" [{check.status}]"
+            typer.echo(f"{check.name:<17} {check.detail}{marker}")
+    raise typer.Exit(code=0 if report.healthy else 1)
 
 
 @app.command()

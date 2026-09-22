@@ -15,6 +15,7 @@ from fdstk.codecs.fds import SIDE_SIZE
 from fdstk.codecs.qd import encode as encode_qd
 from fdstk.core.blocks import Block, BlockKind
 from fdstk.core.disk import Disk, Side
+from fdstk.doctor import Check, CheckStatus, DoctorReport
 from fdstk.hardware.simulation import FaultPlan, SimulatedDrive
 from fdstk.identify import firmware
 
@@ -2261,3 +2262,28 @@ def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.Mo
 
     assert (tmp_path / "raw" / "dump.read01.raw03").read_bytes() == b"\\x55" * 8
     assert "packed pulse classes" in result.stdout
+
+
+def test_doctor_reports_the_installation() -> None:
+    result = runner.invoke(app, ["doctor"])
+
+    assert result.exit_code == 0
+    assert "fdstk" in result.stdout
+    assert "dat cache" in result.stdout
+
+
+def test_doctor_can_emit_json() -> None:
+    payload = json.loads(runner.invoke(app, ["doctor", "--json"]).stdout)
+
+    assert payload["healthy"] is True
+    assert {check["name"] for check in payload["checks"]} >= {"fdstk", "python", "dat cache"}
+
+
+def test_doctor_fails_on_an_unhealthy_installation(monkeypatch: pytest.MonkeyPatch) -> None:
+    unhealthy = DoctorReport(checks=(Check("python", CheckStatus.FAILED, "3.10.0"),))
+    monkeypatch.setattr(cli, "diagnose", lambda: unhealthy)
+
+    result = runner.invoke(app, ["doctor"])
+
+    assert result.exit_code == 1
+    assert "[failed]" in result.stdout

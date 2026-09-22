@@ -1,6 +1,6 @@
 [project]
 name = "fdstk"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Famicom Disk System preservation toolkit: convert, verify, identify, create, dump and write disk images"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,8 +28,8 @@ dependencies = [
 hardware = ["hidapi>=0.14.0"]
 
 [project.urls]
-Homepage = "https://github.com/gufranco/fdstk"
-Issues = "https://github.com/gufranco/fdstk/issues"
+Homepage = "https://github.com/gufranco/famicom-disk-system-python"
+Issues = "https://github.com/gufranco/famicom-disk-system-python/issues"
 
 [project.scripts]
 fds = "fdstk.cli.main:app"
@@ -46,6 +46,10 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/fdstk/version.py"
+pattern = "^VERSION = \"(?P<version>[^\"]+)\"$"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fdstk"]
@@ -67,7 +71,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "PLR2004", "SLF001", "INP001", "ANN401"]
+"tests/**" = ["S101", "S603", "PLR2004", "SLF001", "INP001", "ANN401"]
 "src/fdstk/cli/*.py" = ["PLR0913", "FBT001", "FBT002"]
 
 [tool.ruff.lint.pylint]

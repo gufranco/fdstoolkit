@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import builtins
 from collections import deque
 
 import pytest
@@ -8,6 +7,7 @@ import pytest
 from fdstk.build.blank import blank_image
 from fdstk.codecs.fds import decode as decode_fds
 from fdstk.codecs.raw import encode_raw03
+from fdstk.hardware import fdsstick as fdsstick_module
 from fdstk.hardware.fdsstick import (
     BULK_READ_PAYLOAD,
     BULK_WRITE_PAYLOAD,
@@ -263,15 +263,11 @@ def test_the_transport_closes_the_device() -> None:
 
 
 def test_opening_without_hidapi_explains_the_extra(monkeypatch: pytest.MonkeyPatch) -> None:
-    real_import = builtins.__import__
+    def refuse() -> object:
+        message = "no module named hid"
+        raise ImportError(message)
 
-    def refuse(name: str, *args: object, **kwargs: object) -> object:
-        if name == "hid":
-            message = "no module named hid"
-            raise ImportError(message)
-        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(builtins, "__import__", refuse)
+    monkeypatch.setattr(fdsstick_module, "_load_hid", refuse)
 
     with pytest.raises(HardwareFaultError, match="hardware extra"):
         open_fdsstick()
