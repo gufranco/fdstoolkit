@@ -117,7 +117,7 @@ ILLEGAL_OPCODES: Final[frozenset[int]] = frozenset(
     }
 )
 
-ILLEGAL_SHARE: Final = 0.25
+ILLEGAL_SHARE: Final = 0.90
 MIN_CODE_BYTES: Final = 64
 
 
@@ -181,7 +181,7 @@ def _file_finding(header: FileHeader, body: bytes, side: int) -> Finding | None:
     return Finding(
         kind=Suspicion.IMPLAUSIBLE_CODE,
         side=side,
-        detail=f"{header.name} is {report.share:.0%} undocumented opcodes",
+        detail=f"{header.name} is {report.share:.0%} undocumented opcodes, so it is not code",
     )
 
 

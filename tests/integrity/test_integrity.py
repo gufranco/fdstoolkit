@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.identify.integrity import (
@@ -135,3 +137,12 @@ def test_a_report_says_whether_the_image_looks_sound() -> None:
     assert not inspect_disk(
         _disk((_info(), _header(size=len(ILLEGAL_CODE)), _data(ILLEGAL_CODE)))
     ).sound
+
+
+def test_a_program_file_that_is_mostly_data_is_not_flagged() -> None:
+    mixed = bytes((0xA9, 0x00, 0x85, 0x02, 0x12)) * 40
+
+    report = code_sanity(mixed)
+
+    assert report.share == pytest.approx(0.4)
+    assert report.plausible

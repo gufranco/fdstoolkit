@@ -110,6 +110,8 @@ Every command that produces a report accepts `--json`. The exit code is 0 when n
 | `fdstoolkit calibrate REF --read R` | The drive's own error rate, so a disk is not blamed for it |
 | `fdstoolkit integrity IMAGE` | An image that passes its checksums and is still wrong |
 
+The opcode check is calibrated against 10,105 program files: a real one is around a third undocumented opcodes, because these files routinely carry data as well as code, so only a file that is almost entirely non-code is reported. Names like `SAVEDATA` and `JMP-TBL.` turn up that way and are working as intended.
+
 `flux` reads SuperCard Pro `.scp`, KryoFlux streams, HxC `.hfe`, and the interval captures an FDSStick produces. The format is detected from the file; `--format` overrides it.
 
 ### Building masters
