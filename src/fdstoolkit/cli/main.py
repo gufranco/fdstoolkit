@@ -11,6 +11,7 @@ from fdstoolkit import __version__
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.manifest import build_from_manifest, load_manifest
 from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
+from fdstoolkit.cli import archive_cli, flux_cli, master_cli, quality_cli
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.ares import decode_side
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
@@ -57,6 +58,11 @@ app = typer.Typer(
     no_args_is_help=True,
     help="Famicom Disk System preservation toolkit.",
 )
+
+flux_cli.register(app)
+quality_cli.register(app)
+master_cli.register(app)
+archive_cli.register(app)
 
 
 def _version_callback(value: bool) -> None:

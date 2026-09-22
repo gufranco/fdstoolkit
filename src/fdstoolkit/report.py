@@ -20,5 +20,5 @@ def diagnostics_as_data(findings: Sequence[Diagnostic]) -> list[dict[str, object
     ]
 
 
-def as_json(payload: dict[str, object]) -> str:
+def as_json(payload: object) -> str:
     return json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=False)
