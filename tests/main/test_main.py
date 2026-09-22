@@ -327,3 +327,71 @@ def test_identify_reports_a_missing_dat(image: Path, tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "not found" in result.stdout
+
+
+def test_extract_writes_every_file(tmp_path: Path) -> None:
+    content = bytearray(blank_image(sides=1, headered=False, formatted=True))
+    content[56:58] = bytes([0x02, 0x01])
+    header = (
+        bytes([0x03, 0x00, 0x00])
+        + b"HELLO   "
+        + (0x6000).to_bytes(2, "little")
+        + (4).to_bytes(2, "little")
+        + bytes([0x00])
+    )
+    content[58:74] = header
+    content[74:79] = bytes([0x04]) + bytes([0xAB]) * 4
+    source = tmp_path / "with-file.fds"
+    source.write_bytes(bytes(content))
+    out = tmp_path / "files"
+
+    result = runner.invoke(app, ["extract", str(source), "-d", str(out)])
+
+    assert result.exit_code == 0
+    assert (out / "side0-00-HELLO.bin").read_bytes() == bytes([0xAB]) * 4
+
+
+def test_insert_adds_a_file(single_side: Path, tmp_path: Path) -> None:
+    payload = tmp_path / "payload.bin"
+    payload.write_bytes(bytes([0x42]) * 32)
+    out = tmp_path / "with-new.fds"
+
+    result = runner.invoke(
+        app,
+        [
+            "insert",
+            str(single_side),
+            "-o",
+            str(out),
+            "--file",
+            str(payload),
+            "--name",
+            "NEW",
+        ],
+    )
+
+    assert result.exit_code == 0
+    listing = runner.invoke(app, ["ls", str(out)])
+    assert "NEW" in listing.stdout
+
+
+def test_insert_reports_a_name_that_is_too_long(single_side: Path, tmp_path: Path) -> None:
+    payload = tmp_path / "payload.bin"
+    payload.write_bytes(b"\x01")
+
+    result = runner.invoke(
+        app,
+        [
+            "insert",
+            str(single_side),
+            "-o",
+            str(tmp_path / "out.fds"),
+            "--file",
+            str(payload),
+            "--name",
+            "WAYTOOLONG",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "eight characters" in result.stdout

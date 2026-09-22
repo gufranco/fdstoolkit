@@ -8,9 +8,11 @@ import typer
 
 from fdstk.build.blank import blank_image
 from fdstk.codecs import fds, qd
+from fdstk.core.blocks import FileKind
 from fdstk.core.canon import canonicalise, digest_string, profile_by_name
 from fdstk.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstk.core.disk import Disk, Side
+from fdstk.edit.files import FileSpec, extract_files, insert_file
 from fdstk.fdskey.lint import lint_card_image
 from fdstk.hardware.ports import HardwareFaultError
 from fdstk.hardware.session import Grade, WriteRefusedError, dump_repeated, write_verified
@@ -488,3 +490,69 @@ def identify(
             typer.echo(f"  same size: {entry.name}")
 
     raise typer.Exit(code=0 if result.kind is MatchKind.EXACT else 1)
+
+
+@app.command()
+def extract(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    directory: Annotated[Path, typer.Option("-d", "--directory", help="where to write the files")],
+    *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
+) -> None:
+    """Write every file on the disk to a directory."""
+    disk, _, _, _ = _decode(image)
+    directory.mkdir(parents=True, exist_ok=True)
+
+    for entry in extract_files(disk):
+        stem = entry.name.strip() or f"file{entry.position}"
+        target = directory / f"side{entry.side}-{entry.position:02d}-{stem}.bin"
+        if target.exists() and not force:
+            message = f"{target} exists, pass --force to overwrite"
+            raise _fail(message)
+        target.write_bytes(entry.data)
+        marker = " (hidden)" if entry.hidden else ""
+        typer.echo(f"{target.name}  {entry.size} bytes{marker}")
+
+
+@app.command(name="insert")
+def insert_command(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
+    *,
+    file: Annotated[Path, typer.Option("--file", help="the file to add")],
+    name: Annotated[str, typer.Option("--name", help="eight characters at most")],
+    address: Annotated[str, typer.Option("--address", help="load address, hex")] = "6000",
+    kind: Annotated[
+        FileKind, typer.Option("--kind", help="program, character or nametable")
+    ] = FileKind.PROGRAM,
+    side: Annotated[int, typer.Option("--side", min=0, help="which side")] = 0,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Add a file to a side and write the result."""
+    disk, _, _, _ = _decode(image)
+    _guard_output(output, force=force)
+    if not file.is_file():
+        message = f"file not found: {file}"
+        raise _fail(message)
+
+    try:
+        spec = FileSpec(
+            name=name,
+            address=int(address, 16),
+            kind=kind,
+            data=file.read_bytes(),
+        )
+        updated = insert_file(disk, side=side, spec=spec)
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    target = _container_of(output)
+    if target is Container.FDS:
+        data, findings = fds.encode(updated, headered=False)
+    else:
+        data, findings = qd.encode(updated)
+
+    output.write_bytes(data)
+    typer.echo(f"wrote {output} ({len(data)} bytes)")
+    for finding in findings:
+        typer.echo(f"  {finding.render()}")
