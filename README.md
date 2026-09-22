@@ -10,13 +10,14 @@ It exists because the tools in circulation answer the easy half of the question.
 |---|---|
 | Convert | `.fds` headered or headerless, `.qd`, raw pulse streams, per-side copier files |
 | Verify | CRC per block, structure, hidden files, leftover data, and the error code a console would show |
-| Identify | Match against a No-Intro style DAT on any digest the DAT carries, with the headerless form tried automatically |
+| Identify | Match against a No-Intro style DAT on any digest the DAT carries, with the headerless form tried automatically, and report the nearest known image when nothing matches |
 | Determinism | Three identity levels, so the same software compares equal whatever disk it came from |
 | Create | Blank disks, formatted or not, 1 to 8 sides, byte-reproducible |
 | Edit | List, extract, insert and remove files, including the hidden ones |
+| Repair | Rebuild an image from its parsed model: checksums, declared sizes, leftover data |
 | Patch | IPS, UPS and BPS, applied correctly whether the patch was built against the headered or headerless image |
 | Saves | Merge or extract emulator saves, and find which file is the save by comparing dumps |
-| Hardware | Dump and write real disks through FDSStick, with retries, stability passes and read-back verification |
+| Hardware | Dump and write real disks through FDSStick, with retries, stability passes and read-back verification, plus the Famicom Dumper protocol as a library |
 | FDSKey | Predict whether the firmware will load an image before it reaches the card |
 
 ## Install
@@ -40,6 +41,8 @@ fds hash game.fds                      # digests, including the canonical one
 fds identify game.fds --dat fds.dat    # what is it
 fds convert game.fds -o game.qd        # convert, losslessly
 fds blank -o blank64.fds --sides 1     # a blank disk
+fds diff a.fds b.fds --explain         # which field differs, not which block
+fds rebuild game.fds -o fixed.fds      # repair what can be repaired
 ```
 
 Every command takes `--json` where a report makes sense, with sorted keys and no timestamp, so output is diffable and scriptable. The exit code follows the worst finding.
@@ -59,6 +62,7 @@ Every command takes `--json` where a report makes sense, with sorted keys and no
 | Device | What it can do |
 |---|---|
 | FDSStick with an adapter cable | Dump and write real disks from the PC |
+| Famicom Dumper over USB | The protocol is implemented and tested, including the status codes that name a missing disk, a flat battery or a write-protected disk. The CLI does not open the serial link yet, so it is driven from the library |
 | FDSKey | Emulates a drive, so the PC only prepares and checks the SD card; real disks go through DupliFDS on the Famicom |
 
 The write path assumes the worst, because the hardware gives it no choice. The drive reports no error codes, and a write refused by an FD3206 controller is invisible to the host. So a write dumps and verifies a backup first, asks before overwriting, retries per block, then re-reads the whole disk and compares. The result is graded clean, marginal, unstable or failed.
@@ -72,6 +76,7 @@ This repository contains no disk image, no BIOS, and no link to either. Tests ru
 - [Formats](docs/formats.md), the layouts and what each container can carry
 - [Commands](docs/commands.md), every command and its options
 - [Workflow](docs/workflow.md), preserving a disk from dump to verified copy
+- [Changelog](CHANGELOG.md), what each release added
 
 ## Licence
 
