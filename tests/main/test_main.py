@@ -1129,3 +1129,109 @@ def test_join_reports_a_file_without_a_side_letter(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "side letter" in result.stdout
+
+
+def test_build_writes_a_disk_from_a_manifest(tmp_path: Path) -> None:
+    payload = tmp_path / "main.prg"
+    payload.write_bytes(bytes([0x11]) * 32)
+    manifest = tmp_path / "disk.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "game_name": "SMB",
+                "sides": [
+                    {
+                        "side": 0,
+                        "files": [{"name": "MAIN", "address": "0x6000", "path": "main.prg"}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "built.fds"
+
+    result = runner.invoke(app, ["build", str(manifest), "-o", str(out)])
+
+    assert result.exit_code == 0
+    assert runner.invoke(app, ["verify", str(out), "--strict"]).exit_code == 0
+    assert "MAIN" in runner.invoke(app, ["ls", str(out)]).stdout
+
+
+def test_build_reports_a_missing_manifest(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["build", str(tmp_path / "nope.json"), "-o", str(tmp_path / "out.fds")],
+    )
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+
+def test_build_reports_a_manifest_that_does_not_parse(tmp_path: Path) -> None:
+    manifest = tmp_path / "bad.json"
+    manifest.write_text(json.dumps({"game_name": "SMB", "sides": []}), encoding="utf-8")
+
+    result = runner.invoke(app, ["build", str(manifest), "-o", str(tmp_path / "out.fds")])
+
+    assert result.exit_code == 1
+    assert "at least one side" in result.stdout
+
+
+def test_set_changes_a_field(single_side: Path, tmp_path: Path) -> None:
+    out = tmp_path / "renamed.fds"
+
+    result = runner.invoke(
+        app,
+        ["set", str(single_side), "-o", str(out), "--set", "game_name=ZEL"],
+    )
+
+    assert result.exit_code == 0
+    assert "game_name: SMB -> ZEL" in result.stdout
+    payload = json.loads(runner.invoke(app, ["info", str(out), "--json"]).stdout)
+    assert payload["sides"][0]["game_name"] == "ZEL"
+
+
+def test_set_can_write_a_qd(single_side: Path, tmp_path: Path) -> None:
+    out = tmp_path / "renamed.qd"
+
+    result = runner.invoke(
+        app,
+        ["set", str(single_side), "-o", str(out), "--set", "game_version=2"],
+    )
+
+    assert result.exit_code == 0
+    assert out.stat().st_size == 65536
+
+
+def test_set_reports_an_unknown_field(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["set", str(single_side), "-o", str(tmp_path / "o.fds"), "--set", "colour=blue"],
+    )
+
+    assert result.exit_code == 1
+    assert "unknown field" in result.stdout
+
+
+def test_surface_grades_a_healthy_disk(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["surface", "--source", str(single_side), "--yes", "--backup", str(tmp_path / "b.fds")],
+    )
+
+    assert result.exit_code == 0
+    assert "grade clean" in result.stdout
+
+
+def test_surface_stops_when_declined(single_side: Path) -> None:
+    result = runner.invoke(app, ["surface", "--source", str(single_side)], input="n\n")
+
+    assert result.exit_code == 1
+    assert "declined" in result.stdout
+
+
+def test_surface_runs_without_a_backup(single_side: Path) -> None:
+    result = runner.invoke(app, ["surface", "--source", str(single_side), "--yes"])
+
+    assert result.exit_code == 0

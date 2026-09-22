@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -7,6 +8,7 @@ from typing import Annotated
 import typer
 
 from fdstk.build.blank import blank_image
+from fdstk.build.manifest import build_from_manifest, load_manifest
 from fdstk.codecs import fds, qd
 from fdstk.codecs.mgd1 import SideFile, join_side_files, split_into_side_files
 from fdstk.core.blocks import FileKind
@@ -14,6 +16,7 @@ from fdstk.core.canon import canonicalise, digest_string, profile_by_name
 from fdstk.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstk.core.disk import Disk, Side
 from fdstk.edit.clean import clean_trailing_data
+from fdstk.edit.diskinfo import apply_edits, parse_edit
 from fdstk.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstk.edit.files import FileSpec, extract_files, insert_file
 from fdstk.edit.saves import find_save_candidates
@@ -31,6 +34,7 @@ from fdstk.identify.provenance import provenance_of
 from fdstk.patch.apply import apply_patch
 from fdstk.patch.formats import PatchError
 from fdstk.quality.consensus import build_consensus, compare_images
+from fdstk.quality.surface import SurfaceTestRefusedError, surface_test
 from fdstk.report import as_json, diagnostics_as_data
 
 app = typer.Typer(
@@ -106,6 +110,13 @@ def _exit_code(findings: tuple[Diagnostic, ...], *, strict: bool) -> int:
     if strict and worst is Severity.WARNING:
         return 1
     return 0
+
+
+def _writer_for(path: Path) -> Callable[[bytes], None]:
+    def write(data: bytes) -> None:
+        path.write_bytes(data)
+
+    return write
 
 
 def _guard_output(output: Path, *, force: bool) -> None:
@@ -456,17 +467,13 @@ def write(
             return True
         return typer.confirm(message)
 
-    def save(data: bytes) -> None:
-        if backup is not None:
-            backup.write_bytes(data)
-
     try:
         report = write_verified(
             drive,
             drive,
             disk,
             confirm=confirm,
-            backup=save,
+            backup=None if backup is None else _writer_for(backup),
             retries=retries,
         )
     except (HardwareFaultError, WriteRefusedError) as error:
@@ -874,3 +881,102 @@ def join(
 
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes)")
+
+
+@app.command()
+def build(
+    manifest: Annotated[Path, typer.Argument(help="a JSON manifest describing the disk")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the image")],
+    *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Build a disk image from a manifest."""
+    if not manifest.is_file():
+        message = f"file not found: {manifest}"
+        raise _fail(message)
+    _guard_output(output, force=force)
+
+    try:
+        data = build_from_manifest(load_manifest(manifest))
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    output.write_bytes(data)
+    typer.echo(f"wrote {output} ({len(data)} bytes)")
+
+
+@app.command(name="set")
+def set_command(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
+    *,
+    edit: Annotated[list[str], typer.Option("--set", help="field=value, repeatable")],
+    side: Annotated[int, typer.Option("--side", min=0, help="which side")] = 0,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Change fields of a disk information block."""
+    disk, _, _, _ = decode_image(image)
+    _guard_output(output, force=force)
+
+    try:
+        edits = dict(parse_edit(item) for item in edit)
+        updated, changes = apply_edits(disk, side=side, edits=edits)
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    target = _container_of(output)
+    if target is Container.FDS:
+        data, _ = fds.encode(updated, headered=False)
+    else:
+        data, _ = qd.encode(updated)
+    output.write_bytes(data)
+
+    for change in changes:
+        typer.echo(f"{change.field}: {change.before} -> {change.after}")
+    typer.echo(f"wrote {output} ({len(data)} bytes)")
+
+
+@app.command()
+def surface(
+    *,
+    source: Annotated[
+        Path | None,
+        typer.Option("--source", help="image the simulated drive holds"),
+    ] = None,
+    backend: Annotated[
+        Backend,
+        typer.Option("--backend", help="which drive to use"),
+    ] = Backend.SIMULATION,
+    sides: Annotated[int, typer.Option("--sides", min=1, max=8, help="sides to test")] = 1,
+    backup: Annotated[
+        Path | None,
+        typer.Option("--backup", help="where to save the disk's current contents"),
+    ] = None,
+    yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
+) -> None:
+    """Write and read back complementary patterns to grade a scratch disk."""
+    drive = open_drive(backend, source)
+
+    def confirm(message: str) -> bool:
+        if yes:
+            return True
+        return typer.confirm(message)
+
+    sink = None if backup is None else _writer_for(backup)
+
+    try:
+        report = surface_test(
+            drive,
+            drive,
+            sides=sides,
+            confirm=confirm,
+            backup=sink,
+        )
+    except (HardwareFaultError, WriteRefusedError, SurfaceTestRefusedError) as error:
+        raise _fail(str(error)) from error
+
+    for entry in report.passes:
+        state = "held" if entry.verified else "did not hold"
+        typer.echo(f"pattern {entry.pattern:#04x}: {state}")
+    typer.echo(f"grade {report.grade}")
+    raise typer.Exit(code=0 if report.grade is Grade.CLEAN else 1)
