@@ -71,18 +71,15 @@ jobs:
           import tomllib
           from pathlib import Path
 
-          project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
-          declared = {
-              requirement.split(">")[0].split("=")[0].split("[")[0].strip().lower()
-              for requirement in project["dependencies"]
-          }
-          seeded = {"pip", "setuptools", "fdstoolkit"}
+          locked = tomllib.loads(Path("uv.lock").read_text())
+          declared = {package["name"].lower() for package in locked["package"]}
+          seeded = {"pip", "setuptools"}
           held = json.loads(Path("sbom.json").read_text())
           named = sorted(one["name"].lower() for one in held.get("components", ()))
           extra = [one for one in named if one not in declared | seeded]
           print(f"components: {', '.join(named) or 'none'}")
           if extra:
-              print(f"::error title=Undeclared runtime dependency::{', '.join(extra)}")
+              print(f"::error title=Not in uv.lock::{', '.join(extra)}")
               sys.exit(1)
           CHECK
         shell: bash
