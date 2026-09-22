@@ -540,3 +540,59 @@ def test_consensus_needs_two_dumps(single_side: Path, tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "at least two" in result.stdout
+
+
+def test_save_extract_then_apply_round_trips(single_side: Path, tmp_path: Path) -> None:
+    played = tmp_path / "played.fds"
+    data = bytearray(single_side.read_bytes())
+    data[70:78] = bytes([0x22]) * 8
+    played.write_bytes(bytes(data))
+    save = tmp_path / "save.ips"
+    merged = tmp_path / "merged.fds"
+
+    extracted = runner.invoke(
+        app,
+        ["save-extract", str(single_side), "--played", str(played), "-o", str(save)],
+    )
+    applied = runner.invoke(
+        app,
+        ["save-apply", str(single_side), "--save", str(save), "-o", str(merged)],
+    )
+
+    assert extracted.exit_code == 0
+    assert applied.exit_code == 0
+    assert merged.read_bytes() == played.read_bytes()
+
+
+def test_save_apply_reports_a_missing_save(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "save-apply",
+            str(single_side),
+            "--save",
+            str(tmp_path / "nope.ips"),
+            "-o",
+            str(tmp_path / "out.fds"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+
+def test_save_extract_reports_a_missing_played_image(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "save-extract",
+            str(single_side),
+            "--played",
+            str(tmp_path / "nope.fds"),
+            "-o",
+            str(tmp_path / "out.ips"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout

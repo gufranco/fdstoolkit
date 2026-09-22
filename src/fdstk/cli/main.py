@@ -13,6 +13,7 @@ from fdstk.core.canon import canonicalise, digest_string, profile_by_name
 from fdstk.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstk.core.disk import Disk, Side
 from fdstk.edit.clean import clean_trailing_data
+from fdstk.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstk.edit.files import FileSpec, extract_files, insert_file
 from fdstk.edit.saves import find_save_candidates
 from fdstk.fdskey.lint import lint_card_image
@@ -758,3 +759,52 @@ def consensus(
         typer.echo(f"side {side_index} block {block_index}: the dumps disagree")
     typer.echo(f"wrote {output} ({len(data)} bytes)")
     raise typer.Exit(code=0 if not result.disagreements else 1)
+
+
+@app.command(name="save-apply")
+def save_apply(
+    image: Annotated[Path, typer.Argument(help="the original image")],
+    save: Annotated[Path, typer.Option("--save", help="an emulator save, IPS or whole image")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
+    *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Merge an emulator save back into a disk image."""
+    data, _ = _read(image)
+    if not save.is_file():
+        message = f"file not found: {save}"
+        raise _fail(message)
+    _guard_output(output, force=force)
+
+    try:
+        merged = merge_save(data, save.read_bytes())
+    except PatchError as error:
+        raise _fail(str(error)) from error
+
+    output.write_bytes(merged)
+    typer.echo(f"wrote {output} ({len(merged)} bytes)")
+
+
+@app.command(name="save-extract")
+def save_extract(
+    original_image: Annotated[Path, typer.Argument(help="the pristine image")],
+    played: Annotated[Path, typer.Option("--played", help="the image a game wrote to")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the save")],
+    *,
+    fmt: Annotated[SaveFormat, typer.Option("--format", help="ips or image")] = SaveFormat.IPS,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Write the difference between a pristine disk and a played one as a save."""
+    pristine, _ = _read(original_image)
+    if not played.is_file():
+        message = f"file not found: {played}"
+        raise _fail(message)
+    _guard_output(output, force=force)
+
+    try:
+        save = extract_save(pristine, played.read_bytes(), fmt=fmt)
+    except PatchError as error:
+        raise _fail(str(error)) from error
+
+    output.write_bytes(save)
+    typer.echo(f"wrote {output} ({len(save)} bytes, {fmt})")
