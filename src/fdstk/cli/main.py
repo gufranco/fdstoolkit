@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Final
 
 import typer
 
@@ -12,6 +12,7 @@ from fdstk.build.blank import blank_image
 from fdstk.build.manifest import build_from_manifest, load_manifest
 from fdstk.codecs import fds, qd
 from fdstk.codecs.mgd1 import SideFile, join_side_files, split_into_side_files
+from fdstk.core.bios import BootVerdict, predict_boot
 from fdstk.core.blocks import FileKind
 from fdstk.core.canon import canonicalise, digest_string, profile_by_name
 from fdstk.core.diagnostics import Diagnostic, Severity, worst_severity
@@ -79,6 +80,19 @@ QD_SUFFIX = ".qd"
 class Container(StrEnum):
     FDS = "fds"
     QD = "qd"
+
+
+class KindChoice(StrEnum):
+    PROGRAM = "program"
+    CHARACTER = "character"
+    NAMETABLE = "nametable"
+
+
+KIND_FOR_CHOICE: Final[dict[KindChoice, FileKind]] = {
+    KindChoice.PROGRAM: FileKind.PROGRAM,
+    KindChoice.CHARACTER: FileKind.CHARACTER,
+    KindChoice.NAMETABLE: FileKind.NAMETABLE,
+}
 
 
 def _fail(message: str) -> typer.Exit:
@@ -647,8 +661,8 @@ def insert_command(
     name: Annotated[str, typer.Option("--name", help="eight characters at most")],
     address: Annotated[str, typer.Option("--address", help="load address, hex")] = "6000",
     kind: Annotated[
-        FileKind, typer.Option("--kind", help="program, character or nametable")
-    ] = FileKind.PROGRAM,
+        KindChoice, typer.Option("--kind", help="what the BIOS does with the file")
+    ] = KindChoice.PROGRAM,
     side: Annotated[int, typer.Option("--side", min=0, help="which side")] = 0,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
@@ -663,7 +677,7 @@ def insert_command(
         spec = FileSpec(
             name=name,
             address=int(address, 16),
-            kind=kind,
+            kind=KIND_FOR_CHOICE[kind],
             data=file.read_bytes(),
         )
         updated = insert_file(disk, side=side, spec=spec)
@@ -1075,6 +1089,56 @@ def unmerge(
             data, _ = qd.encode(part)
         target.write_bytes(data)
         typer.echo(f"{target.name}  {part.side_count} side(s), {len(data)} bytes")
+
+
+@app.command()
+def boot(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+) -> None:
+    """Predict what the console does when it boots each side."""
+    disk, _, _, _ = decode_image(image)
+    report = predict_boot(disk)
+
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "path": str(image),
+                    "sides": [
+                        {
+                            "side": side.side,
+                            "verdict": str(side.verdict),
+                            "error": side.error,
+                            "message": side.message,
+                            "boot_files": [
+                                {
+                                    "position": entry.position,
+                                    "file_id": entry.file_id,
+                                    "name": entry.name,
+                                    "address": entry.address,
+                                    "size": entry.size,
+                                }
+                                for entry in side.boot_files
+                            ],
+                        }
+                        for side in report.sides
+                    ],
+                }
+            )
+        )
+    else:
+        for side in report.sides:
+            typer.echo(f"side {side.side}: {side.message}")
+            for entry in side.boot_files:
+                typer.echo(
+                    f"  loads #{entry.position} id {entry.file_id} {entry.name!r} "
+                    f"{entry.size} bytes at ${entry.address:04X}"
+                )
+
+    failed = any(side.verdict is BootVerdict.FAILS for side in report.sides[:1])
+    raise typer.Exit(code=1 if failed else 0)
 
 
 @app.command()

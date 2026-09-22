@@ -1867,3 +1867,86 @@ def test_merge_keeps_a_header_when_asked(tmp_path: Path) -> None:
     runner.invoke(app, ["merge", str(source), "-o", str(output), "--header"])
 
     assert output.read_bytes()[:4] == b"FDS\x1a"
+
+
+def test_boot_reports_a_side_that_needs_a_bypass(single_side: Path) -> None:
+    result = runner.invoke(app, ["boot", str(single_side)])
+
+    assert result.exit_code == 0
+    assert "BIOS error 20" in result.stdout
+
+
+def test_boot_fails_an_unformatted_first_side(tmp_path: Path) -> None:
+    source = tmp_path / "blank.fds"
+    source.write_bytes(blank_image(sides=1, headered=False, formatted=False))
+
+    result = runner.invoke(app, ["boot", str(source)])
+
+    assert result.exit_code == 1
+    assert "block 1 expected" in result.stdout
+
+
+def test_boot_lists_the_files_it_loads(tmp_path: Path) -> None:
+    payload = tmp_path / "approval.bin"
+    payload.write_bytes(bytes(224))
+    source = tmp_path / "one.fds"
+    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
+    built = tmp_path / "built.fds"
+    runner.invoke(
+        app,
+        [
+            "insert",
+            str(source),
+            "-o",
+            str(built),
+            "--file",
+            str(payload),
+            "--name",
+            "KYODAKU-",
+            "--address",
+            "2800",
+            "--kind",
+            "nametable",
+        ],
+    )
+
+    result = runner.invoke(app, ["boot", str(built)])
+
+    assert "boots" in result.stdout
+    assert "at $2800" in result.stdout
+
+
+def test_boot_can_emit_json(single_side: Path) -> None:
+    payload = json.loads(runner.invoke(app, ["boot", str(single_side), "--json"]).stdout)
+
+    assert payload["sides"][0]["verdict"] == "needs_bypass"
+    assert payload["sides"][0]["error"] == 0x20
+
+
+def test_insert_accepts_a_kind_by_name(tmp_path: Path) -> None:
+    payload = tmp_path / "chr.bin"
+    payload.write_bytes(bytes(16))
+    source = tmp_path / "one.fds"
+    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
+    built = tmp_path / "built.fds"
+
+    result = runner.invoke(
+        app,
+        [
+            "insert",
+            str(source),
+            "-o",
+            str(built),
+            "--file",
+            str(payload),
+            "--name",
+            "CHR",
+            "--address",
+            "0000",
+            "--kind",
+            "character",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "character" in runner.invoke(app, ["ls", str(built)]).stdout
