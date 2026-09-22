@@ -19,7 +19,8 @@ from fdstk.edit.clean import clean_trailing_data
 from fdstk.edit.diskinfo import apply_edits, parse_edit
 from fdstk.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstk.edit.files import FileSpec, extract_files, insert_file
-from fdstk.edit.saves import find_save_candidates
+from fdstk.edit.recipes import load_recipes
+from fdstk.edit.saves import find_save_candidates, normalise_saves
 from fdstk.fdskey.card import FirmwareVariant, card_blank
 from fdstk.fdskey.lint import lint_card_image
 from fdstk.hardware.fdsstick import FdsStick, open_fdsstick
@@ -980,3 +981,40 @@ def surface(
         typer.echo(f"pattern {entry.pattern:#04x}: {state}")
     typer.echo(f"grade {report.grade}")
     raise typer.Exit(code=0 if report.grade is Grade.CLEAN else 1)
+
+
+@app.command(name="normalise-saves")
+def normalise_saves_command(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
+    *,
+    recipes: Annotated[Path, typer.Option("--recipes", help="a recipe file")],
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Fill a declared save region so two played copies compare equal."""
+    disk, _, _, _ = decode_image(image)
+    if not recipes.is_file():
+        message = f"file not found: {recipes}"
+        raise _fail(message)
+    _guard_output(output, force=force)
+
+    try:
+        updated, applied = normalise_saves(disk, load_recipes(recipes))
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    target = _container_of(output)
+    if target is Container.FDS:
+        data, _ = fds.encode(updated, headered=False)
+    else:
+        data, _ = qd.encode(updated)
+    output.write_bytes(data)
+
+    for entry in applied:
+        typer.echo(
+            f"side {entry.side} file {entry.position} {entry.name}: "
+            f"{entry.size} bytes filled with {entry.fill:#04x}"
+        )
+    if not applied:
+        typer.echo("no recipe matched this disk, so nothing changed")
+    typer.echo(f"wrote {output} ({len(data)} bytes)")
