@@ -1385,3 +1385,17 @@ def test_normalise_saves_can_write_a_qd(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert out.stat().st_size == 65536
+
+
+def test_the_version_flag_prints_the_version() -> None:
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.stdout.startswith("fdstk ")
+
+
+def test_the_help_lists_the_commands() -> None:
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "verify" in result.stdout

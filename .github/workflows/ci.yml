@@ -42,6 +42,12 @@ jobs:
       - name: Tests
         run: uv run pytest --cov --cov-report=term-missing
 
+      - name: Build
+        run: uv build
+
+      - name: The built wheel runs
+        run: uv run --with dist/fdstk-*.whl --no-project -- fds --version
+
   determinism:
     runs-on: ubuntu-latest
     steps:

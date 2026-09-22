@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from fdstk import __version__
 from fdstk.build.blank import blank_image
 from fdstk.build.manifest import build_from_manifest, load_manifest
 from fdstk.codecs import fds, qd
@@ -43,6 +44,26 @@ app = typer.Typer(
     no_args_is_help=True,
     help="Famicom Disk System preservation toolkit.",
 )
+
+
+def _version_callback(value: bool) -> None:
+    if not value:
+        return
+    typer.echo(f"fdstk {__version__}")
+    raise typer.Exit(code=0)
+
+
+@app.callback()
+def main(
+    *,
+    version: Annotated[
+        bool,
+        typer.Option("--version", callback=_version_callback, help="print the version and exit"),
+    ] = False,
+) -> None:
+    """Famicom Disk System preservation toolkit."""
+    del version
+
 
 FDS_SUFFIX = ".fds"
 QD_SUFFIX = ".qd"
