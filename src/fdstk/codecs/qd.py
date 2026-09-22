@@ -10,6 +10,7 @@ from fdstk.core.disk import Disk, Side
 from fdstk.core.parse import parse_side
 
 SIDE_SIZE: Final = 65536
+STANDARD_SIDE_SIZES: Final = (65500, 65536)
 
 
 class CrcMode(StrEnum):
@@ -75,7 +76,7 @@ def encode_side(side: Side, mode: CrcMode) -> bytes:
         out += block.payload
         out += encode_crc(_crc_for(block, mode))
     out += side.tail
-    target = min(SIDE_SIZE, side.capacity)
+    target = SIDE_SIZE if side.capacity in STANDARD_SIDE_SIZES else side.capacity
     if len(out) >= target:
         return bytes(out)
     return bytes(out).ljust(target, b"\0")

@@ -92,7 +92,8 @@ def test_an_unformatted_side_is_kept_whole_and_reported() -> None:
     side, findings = parse_side(bytes(FDS_SIDE), has_crc=False)
 
     assert side.blocks == ()
-    assert len(side.tail) == FDS_SIDE
+    assert side.tail == b""
+    assert side.capacity == FDS_SIDE
     assert [finding.code for finding in findings] == ["FDS001"]
 
 

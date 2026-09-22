@@ -142,7 +142,7 @@ def parse_side(
     walk = _walk(data, has_crc=has_crc, side_index=side_index)
     side = Side(
         blocks=tuple(walk.blocks),
-        tail=data[walk.position :],
+        tail=data[walk.position :].rstrip(b"\0"),
         capacity=len(data) if capacity is None else capacity,
     )
     findings = list(walk.findings)
