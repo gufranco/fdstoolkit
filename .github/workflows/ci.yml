@@ -13,15 +13,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --all-extras --dev
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check --output-format=github .
+
+      - name: Types
+        run: uv run pyright
+
+      - name: Lint the workflows
+        uses: raven-actions/actionlint@v2
+
+      - name: Lint the shell scripts
+        run: shellcheck scripts/*.sh
+
+      - name: Format the JSON and YAML
+        run: npx --yes prettier@3.9.6 --check "**/*.{json,yml,yaml}"
+
+  test:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.12", "3.13"]
+        include:
+          - os: ubuntu-24.04-arm
+            python: "3.13"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -30,28 +65,14 @@ jobs:
       - name: Install
         run: uv sync --all-extras --dev --python ${{ matrix.python }}
 
-      - name: Format
-        run: uv run ruff format --check .
-
-      - name: Lint
-        run: uv run ruff check .
-
-      - name: Types
-        run: uv run pyright
-
       - name: Tests
         run: uv run pytest --cov --cov-report=term-missing
 
-      - name: Build
-        run: uv build
-
-      - name: The built wheel runs
-        run: uv run --with dist/fdstk-*.whl --no-project -- fds --version
-
   determinism:
+    name: Determinism under a different environment
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -66,3 +87,91 @@ jobs:
           LANG: pt_BR.UTF-8
           PYTHONHASHSEED: "12345"
         run: uv run pytest -q
+
+  distribution:
+    name: What a clone actually carries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Build the wheel and the source distribution
+        run: uv build
+
+      - name: The wheel carries every module and no test
+        run: |
+          python - <<'CHECK'
+          import sys
+          import zipfile
+          from pathlib import Path
+
+          wheel = next(Path("dist").glob("*.whl"))
+          held = zipfile.ZipFile(wheel).namelist()
+          modules = {name for name in held if name.endswith(".py")}
+          missing = [
+              str(path)
+              for path in Path("src").rglob("*.py")
+              if str(path.relative_to("src")) not in modules
+          ]
+          tests = [name for name in held if "test" in name.lower()]
+          print(f"{len(modules)} modules in {wheel.name}")
+          if missing:
+              print(f"::error title=Missing from the wheel::{', '.join(missing)}")
+          if tests:
+              print(f"::error title=Test files in the wheel::{', '.join(tests)}")
+          sys.exit(1 if missing or tests else 0)
+          CHECK
+
+      - name: A tarball built out of git runs
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz --prefix=fdstk/ -o /tmp/source.tar.gz HEAD
+          mkdir -p /tmp/from-git
+          tar -xzf /tmp/source.tar.gz -C /tmp/from-git
+          python -m venv /tmp/from-git/.venv
+          /tmp/from-git/.venv/bin/pip install --quiet /tmp/from-git/fdstk
+          /tmp/from-git/.venv/bin/fds --version
+          /tmp/from-git/.venv/bin/fds doctor
+          /tmp/from-git/.venv/bin/fds blank -o /tmp/blank.fds --sides 1 --formatted
+          /tmp/from-git/.venv/bin/fds verify /tmp/blank.fds
+
+  formula:
+    name: Homebrew formula
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Style
+        run: brew style Formula/fdstk.rb
+
+      - name: Install it from a tarball built out of git, and run its test
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          git archive --format=tar.gz --prefix=fdstk/ -o "${work}/src.tar.gz" HEAD
+          checksum=$(shasum -a 256 "${work}/src.tar.gz" | awk '{print $1}')
+          brew tap-new gufranco/fdstk-ci --no-git
+          tap=$(brew --repository gufranco/fdstk-ci)
+          mkdir -p "${tap}/Formula"
+          python3 - "${work}" "${checksum}" "${tap}/Formula/fdstk.rb" <<'PATCH'
+          import re
+          import sys
+          from pathlib import Path
+
+          work, checksum, target = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+          text = Path("Formula/fdstk.rb").read_text()
+          text = re.sub(
+              r'url "https://github\.com/[^"]+/archive/[^"]+"',
+              f'url "file://{work}/src.tar.gz"',
+              text,
+              count=1,
+          )
+          text = re.sub(r'sha256 "[0-9a-f]{64}"', f'sha256 "{checksum}"', text, count=1)
+          text = text.replace('  license "MIT"', '  version "0.0.0"\n  license "MIT"', 1)
+          target.write_text(text)
+          PATCH
+          brew install --build-from-source gufranco/fdstk-ci/fdstk
+          brew test gufranco/fdstk-ci/fdstk
