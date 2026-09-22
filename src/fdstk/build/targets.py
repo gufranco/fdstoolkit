@@ -27,7 +27,9 @@ class Target:
 TARGETS: Final[Mapping[str, Target]] = {
     "nt-mini": Target(
         name="nt-mini",
-        description="Analogue Nt Mini Noir jailbreak: headerless, a whole number of 65500-byte sides",
+        description=(
+            "Analogue Nt Mini Noir jailbreak: headerless, a whole number of 65500-byte sides"
+        ),
         per_side_files=False,
         bios_path="BIOS/fds.bin",
         source="https://github.com/SmokeMonsterPacks/Nt-Mini-Noir-Jailbreak",
@@ -107,8 +109,7 @@ def export_for(
     if chosen.per_side_files:
         folder = directory / stem
         written.extend(
-            _write(folder / name, data, force=force)
-            for name, data in split_for_ares(disk).items()
+            _write(folder / name, data, force=force) for name, data in split_for_ares(disk).items()
         )
     else:
         data, _ = encode(disk, headered=False)

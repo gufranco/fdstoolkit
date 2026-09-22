@@ -5,3 +5,4 @@ sbom.json
 .ruff_cache/
 .venv/
 uv.lock
+pnpm-lock.yaml
