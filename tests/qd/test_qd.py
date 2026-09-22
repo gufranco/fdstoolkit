@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import pytest
 
+from fdstk.build.blank import blank_image
 from fdstk.codecs.fds import decode as decode_fds
 from fdstk.codecs.qd import SIDE_SIZE, CrcMode, decode, encode
 from fdstk.core.blocks import CrcStatus
 from fdstk.core.crc import block_crc, encode_crc
+from fdstk.core.diagnostics import Severity
 from fdstk.core.disk import Disk
 
 
@@ -154,3 +156,24 @@ def test_a_side_longer_than_the_nominal_size_is_written_whole() -> None:
 
     assert len(data) > SIDE_SIZE
     assert "FDS011" in [finding.code for finding in findings]
+
+
+def test_a_single_side_shorter_than_a_full_side_is_only_noted() -> None:
+    disk, _ = decode_fds(blank_image(sides=1, headered=False, formatted=True))
+    data, _ = encode(disk)
+
+    _, findings = decode(data[:57344])
+
+    finding = next(entry for entry in findings if entry.code == "FDS010")
+    assert finding.severity is Severity.INFO
+    assert finding.detail["short_single_side"] is True
+
+
+def test_a_partial_second_side_is_still_a_warning() -> None:
+    disk, _ = decode_fds(blank_image(sides=2, headered=False, formatted=True))
+    data, _ = encode(disk)
+
+    _, findings = decode(data[: 65536 + 100])
+
+    finding = next(entry for entry in findings if entry.code == "FDS010")
+    assert finding.severity is Severity.WARNING

@@ -37,11 +37,16 @@ def _diagnostic(
 def decode(data: bytes) -> tuple[Disk, tuple[Diagnostic, ...]]:
     findings: list[Diagnostic] = []
     if data and len(data) % SIDE_SIZE:
+        short_single_side = len(data) < SIDE_SIZE
         findings.append(
             _diagnostic(
                 "FDS010",
-                Severity.WARNING,
-                detail={"size": len(data), "side_size": SIDE_SIZE},
+                Severity.INFO if short_single_side else Severity.WARNING,
+                detail={
+                    "size": len(data),
+                    "side_size": SIDE_SIZE,
+                    "short_single_side": short_single_side,
+                },
             )
         )
 
