@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -10,6 +11,8 @@ SHORT_NS: Final = NOMINAL_BIT_NS
 MEDIUM_NS: Final = NOMINAL_BIT_NS * 3 // 2
 LONG_NS: Final = NOMINAL_BIT_NS * 2
 NOMINAL_RPM: Final = 96.0
+WHOLE_SHARE: Final = 0.90
+MIN_TO_COMPARE: Final = 3
 REVOLUTION_NS: Final = int(NS_PER_SECOND * 60 / NOMINAL_RPM)
 
 
@@ -24,6 +27,7 @@ class Source(StrEnum):
 @dataclass(frozen=True, slots=True)
 class Revolution:
     intervals: tuple[int, ...]
+    complete: bool = True
 
     @property
     def pulse_count(self) -> int:
@@ -92,3 +96,19 @@ class FluxCapture:
         return sum(
             revolution.pulse_count for track in self.tracks for revolution in track.revolutions
         )
+
+
+def flag_partial(revolutions: Sequence[Revolution]) -> tuple[Revolution, ...]:
+    if len(revolutions) < MIN_TO_COMPARE:
+        return tuple(revolutions)
+    durations = sorted(item.duration_ns for item in revolutions)
+    middle = durations[len(durations) // 2]
+    if not middle:
+        return tuple(revolutions)
+    return tuple(
+        Revolution(
+            intervals=item.intervals,
+            complete=item.complete and item.duration_ns >= middle * WHOLE_SHARE,
+        )
+        for item in revolutions
+    )

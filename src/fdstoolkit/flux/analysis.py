@@ -265,7 +265,11 @@ def analyse_capture(capture: FluxCapture) -> CaptureReport:
                 revolutions=tuple(
                     analyse_intervals(
                         revolution.intervals,
-                        revolution_ns=revolution.duration_ns or None,
+                        revolution_ns=(
+                            revolution.duration_ns
+                            if revolution.complete and revolution.duration_ns
+                            else None
+                        ),
                     )
                     for revolution in track.revolutions
                 ),

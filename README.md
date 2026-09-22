@@ -116,6 +116,10 @@ The opcode check is calibrated against 10,105 program files: a real one is aroun
 
 The pulse family is detected too. A Disk System or MFM stream runs on intervals of 1, 1.5 and 2 cells; a group-coded stream runs on 1, 2 and 3. Fitting the wrong one makes clean media look broken, so the analyser tries both and keeps whichever explains the data. Separation is measured at the first percentile rather than at the single closest pulse, because a real capture always carries a few strays and one of them should not decide the verdict; the stray count is reported on its own.
 
+A revolution is only whole when it spans one rotation, so a capture that stops part-way through leaves a trailing segment that is marked partial and kept out of the speed figures.
+
+The readers have been run against real captures from public preservation dumps, a KryoFlux stream and a 16 MB SuperCard Pro image. Point `FDSTOOLKIT_FLUX_CORPUS` at a directory of your own and `pytest -m corpus` will check every capture in it: that it loads, that its speed is plausible and consistent across revolutions, that it fits a known pulse family, and that it separates cleanly.
+
 ### Building masters
 
 | Command | Output |

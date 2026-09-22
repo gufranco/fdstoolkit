@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from typing import Final
 
-from fdstoolkit.flux.model import NS_PER_SECOND, FluxCapture, FluxTrack, Revolution, Source
+from fdstoolkit.flux.model import (
+    NS_PER_SECOND,
+    FluxCapture,
+    FluxTrack,
+    Revolution,
+    Source,
+    flag_partial,
+)
 
 MASTER_CLOCK_HZ: Final = ((18_432_000 * 73) / 14) / 2
 SAMPLE_CLOCK_HZ: Final = MASTER_CLOCK_HZ / 2
@@ -59,7 +66,8 @@ def _wide(data: bytes, cursor: int, width: int, high: int, low: int) -> tuple[in
 
 
 def read_stream(data: bytes, *, track: int = 0) -> FluxCapture:
-    revolutions: list[list[int]] = [[]]
+    closed: list[list[int]] = []
+    current: list[int] = []
     carry = 0
     cursor = 0
 
@@ -72,8 +80,9 @@ def read_stream(data: bytes, *, track: int = 0) -> FluxCapture:
             if kind == OOB_EOF:
                 break
             size = int.from_bytes(data[cursor + 2 : cursor + 4], "little")
-            if kind == OOB_INDEX and revolutions[-1]:
-                revolutions.append([])
+            if kind == OOB_INDEX and current:
+                closed.append(current)
+                current = []
             cursor += OOB_HEADER_SIZE + size
             continue
 
@@ -83,16 +92,18 @@ def read_stream(data: bytes, *, track: int = 0) -> FluxCapture:
             continue
         if value is None:
             continue
-        revolutions[-1].append(ticks_to_ns(carry + value))
+        current.append(ticks_to_ns(carry + value))
         carry = 0
 
-    spins = [Revolution(intervals=tuple(values)) for values in revolutions if values]
+    spins = [Revolution(intervals=tuple(values)) for values in closed]
+    if current:
+        spins.append(Revolution(intervals=tuple(current), complete=False))
     if not spins:
         message = "the stream carries no flux cell"
         raise ValueError(message)
 
     return FluxCapture(
         source=Source.KRYOFLUX,
-        tracks=(FluxTrack(index=track, revolutions=tuple(spins)),),
+        tracks=(FluxTrack(index=track, revolutions=flag_partial(spins)),),
         sample_ns=NS_PER_SECOND / SAMPLE_CLOCK_HZ,
     )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from fdstoolkit.flux.analysis import analyse_capture
 from fdstoolkit.flux.kryoflux import (
     OOB,
     OOB_EOF,
@@ -132,3 +133,29 @@ def test_the_track_index_can_be_named() -> None:
     capture = read_stream(_flux1(0x40) + EOF_BLOCK, track=12)
 
     assert capture.track(12).index == 12
+
+
+def test_a_revolution_closed_by_an_index_is_complete() -> None:
+    stream = _flux1(0x40) + _index(1) + _flux1(0x50) + EOF_BLOCK
+
+    track = read_stream(stream).track(0)
+
+    assert track.revolutions[0].complete
+    assert not track.revolutions[1].complete
+
+
+def test_a_stream_ending_on_an_index_has_only_whole_revolutions() -> None:
+    stream = _flux1(0x40) + _index(1) + EOF_BLOCK
+
+    track = read_stream(stream).track(0)
+
+    assert track.revolution_count == 1
+    assert track.revolutions[0].complete
+
+
+def test_a_partial_revolution_reports_no_speed() -> None:
+    capture = read_stream(_flux1(0x40) * 40 + EOF_BLOCK)
+
+    report = analyse_capture(capture)
+
+    assert report.tracks[0].revolutions[0].rpm is None

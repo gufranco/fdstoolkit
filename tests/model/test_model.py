@@ -8,6 +8,7 @@ from fdstoolkit.flux.model import (
     FluxTrack,
     Revolution,
     Source,
+    flag_partial,
 )
 
 
@@ -77,3 +78,31 @@ def test_asking_a_capture_for_a_missing_track_is_refused() -> None:
 
     with pytest.raises(ValueError, match="no track 3"):
         capture.track(3)
+
+
+def test_a_revolution_far_shorter_than_its_neighbours_is_partial() -> None:
+    whole = Revolution(intervals=(1_000,) * 100)
+    short = Revolution(intervals=(1_000,) * 50)
+
+    flagged = flag_partial((whole, whole, whole, short))
+
+    assert [item.complete for item in flagged] == [True, True, True, False]
+
+
+def test_a_revolution_barely_shorter_stays_whole() -> None:
+    whole = Revolution(intervals=(1_000,) * 100)
+    nearly = Revolution(intervals=(1_000,) * 96)
+
+    assert all(item.complete for item in flag_partial((whole, whole, whole, nearly)))
+
+
+def test_too_few_revolutions_to_compare_are_left_alone() -> None:
+    pair = (Revolution(intervals=(1_000,) * 100), Revolution(intervals=(1_000,)))
+
+    assert all(item.complete for item in flag_partial(pair))
+
+
+def test_revolutions_of_no_duration_are_left_alone() -> None:
+    empty = (Revolution(intervals=()),) * 3
+
+    assert all(item.complete for item in flag_partial(empty))
