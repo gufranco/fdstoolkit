@@ -8,6 +8,7 @@ import typer
 
 from fdstk.build.blank import blank_image
 from fdstk.codecs import fds, qd
+from fdstk.codecs.mgd1 import SideFile, join_side_files, split_into_side_files
 from fdstk.core.blocks import FileKind
 from fdstk.core.canon import canonicalise, digest_string, profile_by_name
 from fdstk.core.diagnostics import Diagnostic, Severity, worst_severity
@@ -16,6 +17,7 @@ from fdstk.edit.clean import clean_trailing_data
 from fdstk.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstk.edit.files import FileSpec, extract_files, insert_file
 from fdstk.edit.saves import find_save_candidates
+from fdstk.fdskey.card import FirmwareVariant, card_blank
 from fdstk.fdskey.lint import lint_card_image
 from fdstk.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstk.hardware.ports import HardwareFaultError
@@ -808,3 +810,67 @@ def save_extract(
 
     output.write_bytes(save)
     typer.echo(f"wrote {output} ({len(save)} bytes, {fmt})")
+
+
+@app.command()
+def card(
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the blank")],
+    *,
+    sides: Annotated[int, typer.Option("--sides", min=1, max=8, help="side count")] = 1,
+    variant: Annotated[
+        FirmwareVariant,
+        typer.Option("--firmware", help="released accepts an all-zero blank, master does not"),
+    ] = FirmwareVariant.MASTER,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Write a blank image an FDSKey card will accept."""
+    _guard_output(output, force=force)
+    data = card_blank(sides=sides, variant=variant)
+    output.write_bytes(data)
+    typer.echo(f"wrote {output} ({len(data)} bytes, for {variant} firmware)")
+
+
+@app.command()
+def split(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    directory: Annotated[Path, typer.Option("-d", "--directory", help="where to write the sides")],
+    *,
+    stem: Annotated[str, typer.Option("--stem", help="base name for the side files")] = "fc1234",
+    force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
+) -> None:
+    """Split an image into one file per side, the way a Game Doctor stores it."""
+    data, _ = _read(image)
+    directory.mkdir(parents=True, exist_ok=True)
+
+    for entry in split_into_side_files(data, stem=stem):
+        target = directory / entry.name
+        if target.exists() and not force:
+            message = f"{target} exists, pass --force to overwrite"
+            raise _fail(message)
+        target.write_bytes(entry.data)
+        typer.echo(f"{entry.name}  {len(entry.data)} bytes")
+
+
+@app.command()
+def join(
+    files: Annotated[list[Path], typer.Argument(help="the side files, in any order")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the image")],
+    *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Join per-side files back into one image."""
+    _guard_output(output, force=force)
+    sides: list[SideFile] = []
+    for path in files:
+        if not path.is_file():
+            message = f"file not found: {path}"
+            raise _fail(message)
+        sides.append(SideFile(name=path.name, data=path.read_bytes()))
+
+    try:
+        data = join_side_files(sides)
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    output.write_bytes(data)
+    typer.echo(f"wrote {output} ({len(data)} bytes)")

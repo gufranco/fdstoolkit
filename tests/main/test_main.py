@@ -1057,3 +1057,75 @@ def test_lint_can_emit_json(image: Path) -> None:
 
     assert payload["ok"] is True
     assert payload["findings"] == []
+
+
+def test_card_writes_a_blank_the_firmware_accepts(tmp_path: Path) -> None:
+    out = tmp_path / "blank.fds"
+
+    result = runner.invoke(app, ["card", "-o", str(out), "--sides", "2"])
+
+    assert result.exit_code == 0
+    assert runner.invoke(app, ["lint", str(out)]).exit_code == 0
+
+
+def test_card_can_write_the_released_firmware_variant(tmp_path: Path) -> None:
+    out = tmp_path / "zeros.fds"
+
+    result = runner.invoke(app, ["card", "-o", str(out), "--firmware", "released"])
+
+    assert result.exit_code == 0
+    assert out.read_bytes() == bytes(SIDE_SIZE)
+
+
+def test_card_refuses_to_overwrite(tmp_path: Path) -> None:
+    out = tmp_path / "blank.fds"
+    out.write_bytes(b"old")
+
+    result = runner.invoke(app, ["card", "-o", str(out)])
+
+    assert result.exit_code == 1
+    assert "--force" in result.stdout
+
+
+def test_split_then_join_round_trips(image: Path, tmp_path: Path) -> None:
+    sides = tmp_path / "sides"
+    rebuilt = tmp_path / "rebuilt.fds"
+
+    split_result = runner.invoke(app, ["split", str(image), "-d", str(sides), "--stem", "game"])
+    files = sorted(str(path) for path in sides.iterdir())
+    join_result = runner.invoke(app, ["join", *files, "-o", str(rebuilt)])
+
+    assert split_result.exit_code == 0
+    assert join_result.exit_code == 0
+    assert rebuilt.read_bytes() == image.read_bytes()
+
+
+def test_split_refuses_to_overwrite(image: Path, tmp_path: Path) -> None:
+    sides = tmp_path / "sides"
+    sides.mkdir()
+    (sides / "game.A").write_bytes(b"old")
+
+    result = runner.invoke(app, ["split", str(image), "-d", str(sides), "--stem", "game"])
+
+    assert result.exit_code == 1
+    assert "--force" in result.stdout
+
+
+def test_join_reports_a_missing_file(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["join", str(tmp_path / "nope.A"), "-o", str(tmp_path / "out.fds")],
+    )
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+
+def test_join_reports_a_file_without_a_side_letter(tmp_path: Path) -> None:
+    odd = tmp_path / "game.zzz"
+    odd.write_bytes(bytes(SIDE_SIZE))
+
+    result = runner.invoke(app, ["join", str(odd), "-o", str(tmp_path / "out.fds")])
+
+    assert result.exit_code == 1
+    assert "side letter" in result.stdout
