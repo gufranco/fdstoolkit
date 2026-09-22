@@ -13,6 +13,7 @@ from fdstk.build.manifest import build_from_manifest, load_manifest
 from fdstk.build.targets import TARGETS, export_for, swap_warnings
 from fdstk.codecs import fds, qd
 from fdstk.codecs.ares import decode_side
+from fdstk.codecs.foreign import ForeignImageError, reject_foreign
 from fdstk.codecs.mgd1 import SideFile, join_side_files, split_into_side_files
 from fdstk.core.bios import BootVerdict, predict_boot
 from fdstk.core.blocks import FileKind
@@ -122,6 +123,10 @@ def _read(path: Path) -> tuple[bytes, Container]:
 
 def decode_image(path: Path) -> tuple[Disk, tuple[Diagnostic, ...], bytes, Container]:
     data, container = _read(path)
+    try:
+        reject_foreign(data)
+    except ForeignImageError as error:
+        raise _fail(str(error)) from error
     decoder = fds.decode if container is Container.FDS else qd.decode
     disk, findings = decoder(data)
     return disk, findings, data, container

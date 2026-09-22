@@ -2202,3 +2202,13 @@ def test_import_ares_refuses_a_file_of_the_wrong_size(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "73728" in result.stdout
+
+
+def test_a_sharp_mz_disk_is_refused_by_name(tmp_path: Path) -> None:
+    source = tmp_path / "mz.qd"
+    source.write_bytes(b"-QD format-" + b"\xff" * 5 + bytes(81920))
+
+    result = runner.invoke(app, ["info", str(source)])
+
+    assert result.exit_code == 1
+    assert "Sharp MZ Quick Disk image in QDF form, not a Famicom" in result.stdout
