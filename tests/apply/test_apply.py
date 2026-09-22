@@ -103,3 +103,16 @@ def test_the_outcome_names_the_patch_format() -> None:
 
     assert isinstance(outcome, PatchOutcome)
     assert str(outcome.format) == "ips"
+
+
+def test_a_ups_patch_for_the_headerless_image_is_retried_without_the_header() -> None:
+    from tests.formats.test_formats import build_ups
+
+    target = bytearray(headerless())
+    target[0x11:0x14] = b"ZEL"
+    patch = build_ups(headerless(), bytes(target))
+
+    outcome = apply_patch(patch, headered())
+
+    assert outcome.applied_to == "headerless image"
+    assert outcome.format is PatchFormat.UPS

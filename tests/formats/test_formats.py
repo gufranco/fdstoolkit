@@ -178,3 +178,89 @@ def build_bps(source: bytes, target: bytes) -> bytes:
     out += zlib.crc32(target).to_bytes(4, "little")
     out += zlib.crc32(bytes(out)).to_bytes(4, "little")
     return bytes(out)
+
+
+def test_a_truncated_varint_is_rejected() -> None:
+    from fdstk.patch.formats import PatchError
+
+    with pytest.raises(PatchError, match="ended in the middle"):
+        read_varint(bytes([0x01, 0x02]), 0)
+
+
+def test_a_ups_patch_without_its_magic_is_rejected() -> None:
+    from fdstk.patch.formats import PatchError
+
+    with pytest.raises(PatchError, match="not a UPS patch"):
+        apply_ups(b"nope" + bytes(20), b"")
+
+
+def test_a_bps_patch_without_its_magic_is_rejected() -> None:
+    from fdstk.patch.formats import PatchError
+
+    with pytest.raises(PatchError, match="not a BPS patch"):
+        apply_bps(b"nope" + bytes(20), b"")
+
+
+def test_a_bps_source_copy_reads_from_a_moved_offset() -> None:
+    source = bytes([0x10, 0x20, 0x30, 0x40])
+    body = bytearray()
+    body += write_varint(len(source))
+    body += write_varint(2)
+    body += write_varint(0)
+    body += write_varint(((2 - 1) << 2) | 2)
+    body += write_varint(2 << 1)
+
+    patch = bytearray(b"BPS1")
+    patch += body
+    patch += zlib.crc32(source).to_bytes(4, "little")
+    patch += zlib.crc32(bytes([0x30, 0x40])).to_bytes(4, "little")
+    patch += zlib.crc32(bytes(patch)).to_bytes(4, "little")
+
+    assert apply_bps(bytes(patch), source) == bytes([0x30, 0x40])
+
+
+def test_a_bps_target_copy_repeats_what_was_written() -> None:
+    source = bytes([0xAA])
+    body = bytearray()
+    body += write_varint(len(source))
+    body += write_varint(4)
+    body += write_varint(0)
+    body += write_varint(((2 - 1) << 2) | 1)
+    body += bytes([0x01, 0x02])
+    body += write_varint(((2 - 1) << 2) | 3)
+    body += write_varint(0)
+
+    patch = bytearray(b"BPS1")
+    patch += body
+    patch += zlib.crc32(source).to_bytes(4, "little")
+    patch += zlib.crc32(bytes([0x01, 0x02, 0x01, 0x02])).to_bytes(4, "little")
+    patch += zlib.crc32(bytes(patch)).to_bytes(4, "little")
+
+    assert apply_bps(bytes(patch), source) == bytes([0x01, 0x02, 0x01, 0x02])
+
+
+def test_a_bps_patch_can_carry_metadata() -> None:
+    source = bytes([0x01, 0x02])
+    metadata = b"<note/>"
+    body = bytearray()
+    body += write_varint(len(source))
+    body += write_varint(2)
+    body += write_varint(len(metadata))
+    body += metadata
+    body += write_varint(((2 - 1) << 2) | 0)
+
+    patch = bytearray(b"BPS1")
+    patch += body
+    patch += zlib.crc32(source).to_bytes(4, "little")
+    patch += zlib.crc32(source).to_bytes(4, "little")
+    patch += zlib.crc32(bytes(patch)).to_bytes(4, "little")
+
+    assert apply_bps(bytes(patch), source) == source
+
+
+def test_a_ups_patch_can_extend_the_target() -> None:
+    source = bytes([0x01])
+    target = bytes([0x01, 0x55])
+    patch = build_ups(source, target)
+
+    assert apply_ups(patch, source) == target
