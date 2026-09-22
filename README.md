@@ -99,6 +99,38 @@ Every command that produces a report accepts `--json`. The exit code is 0 when n
 | `fdstoolkit save-extract IMAGE --played P -o OUT` | Writes the difference as a save. `--format ips\|ups\|image` |
 | `fdstoolkit normalise-saves IMAGE -o OUT` | Blanks a save area from a declared recipe |
 
+### Measuring quality
+
+| Command | Output |
+|---|---|
+| `fdstoolkit flux CAPTURE` | Bit cell, cluster separation, jitter, speed and outliers from a flux capture |
+| `fdstoolkit flux-decode CAPTURE -o OUT` | An image decoded from a capture, fitting its thresholds to the data |
+| `fdstoolkit reads A B ...` | Which blocks move across repeated dumps of one disk, and in which direction |
+| `fdstoolkit grade IMAGE` | A grade with the measurement behind it. `--read`, `--margin`, `--map` |
+| `fdstoolkit calibrate REF --read R` | The drive's own error rate, so a disk is not blamed for it |
+| `fdstoolkit integrity IMAGE` | An image that passes its checksums and is still wrong |
+
+`flux` reads SuperCard Pro `.scp`, KryoFlux streams, HxC `.hfe`, and the interval captures an FDSStick produces. The format is detected from the file; `--format` overrides it.
+
+### Building masters
+
+| Command | Output |
+|---|---|
+| `fdstoolkit masters DIR` | One master per game, by agreement across every dump in a directory |
+| `fdstoolkit splice IMAGE --donor D -o OUT` | A bad block repaired from another dump of the same disk |
+| `fdstoolkit reference-build DIR -o SET --set-version V` | A reference digest set others can check a dump against |
+| `fdstoolkit reference-verify IMAGE --set SET` | Whether an image matches the reference for its game |
+| `fdstoolkit dat-build DIR -o OUT --name N --set-version V` | A DAT for the tools the community already uses |
+
+### Watching a disk over time
+
+| Command | Output |
+|---|---|
+| `fdstoolkit archive-add IMAGE` | Records a dump against the physical disk it came from |
+| `fdstoolkit archive-trend` | Whether a disk is holding, degrading or reading better, and how fast |
+
+A disk is identified by what a kiosk stamped into it, so two copies of the same game are tracked apart. `--db` chooses where the record lives.
+
 ### Identifying
 
 | Command | Output |
@@ -155,6 +187,92 @@ fdstoolkit write copy.fds --backend fdsstick --backup before.fds
 
 Keep the original image as dumped, with hidden files, leftover data and bad checksums intact. Canonical and cleaned copies are derived from it, and each one reverses back with its sidecar.
 
+## Measuring a disk
+
+A checksum answers one bit about a 65,500-byte side: it matched or it did not. Three things say more.
+
+**Repeated reads.** Dump the same disk several times and compare. Blocks that move are the disk or the drive failing, and the direction of the bit flips tells you which: magnetic decay loses transitions, so ones fall to zeros.
+
+```console
+$ fdstoolkit reads pass1.fds pass2.fds pass3.fds
+passes        3
+stability     99.88%
+decay         loss
+bits lost     14
+bits gained   0
+```
+
+**The drive first.** A drive with a stretched belt misreads good disks. Measure it against a disk you trust before grading anything else.
+
+```console
+$ fdstoolkit calibrate known-good.fds --read r1.fds --read r2.fds
+error rate    0.0000%
+verdict       good
+```
+
+**Flux, when you have it.** Below the checksum is the layer where disk health actually lives: how tightly the pulse intervals cluster, and how close the closest one comes to the decision boundary. A disk at 90% margin is far from failing. One at 10% is about to.
+
+```console
+$ fdstoolkit flux capture.scp
+track 0       27429 pulses, bit cell 10400 ns (96154 Hz)
+  class 0     centre    10400 ns  jitter    412 ns  9143 pulses
+  class 1     centre    15600 ns  jitter    398 ns  9143 pulses
+  class 2     centre    20800 ns  jitter    405 ns  9143 pulses
+  0 to 1      margin 68.4% at boundary 13000 ns
+  speed       96.02 rpm
+worst margin  68.4% on track 0
+verdict       healthy
+```
+
+The thresholds are fitted to the capture rather than assumed, so a disk read at a different speed still decodes and the measured bit rate is reported rather than taken on faith.
+
+A grade then carries the measurement that produced it:
+
+```console
+$ fdstoolkit grade disk.fds --read pass2.fds --margin 0.68
+clean, confidence 0.97
+  ok   errors 0 within 0
+  ok   confidence 0.97 within 0.6
+  ok   read stability 1 within 1
+```
+
+## Masters
+
+No Nintendo master image exists. Disks were sold blank and written at a kiosk, and the kiosk stamped each one with its own serial, the date and a rewrite count, so two copies of the same game differ in bytes. The closest thing to a master is what every surviving dump agrees on once that stamp is set aside.
+
+```console
+$ fdstoolkit masters ~/dumps
+profile       release
+dumps         2597
+games         1142
+unanimous     1139 of 1142
+```
+
+Publish the result so anyone can check a dump without installing anything:
+
+```console
+$ fdstoolkit reference-build ~/dumps -o fds-reference.json --set-version 2026-09-22
+$ fdstoolkit reference-verify mine.fds --set fds-reference.json
+verdict       match
+```
+
+When one dump has a block no other dump has trouble with, take it:
+
+```console
+$ fdstoolkit splice broken.qd --donor other.qd -o repaired.fds
+side 0 block  47  file_data    taken from other.qd
+```
+
+## Watching a disk age
+
+Nothing in the ecosystem records how a disk changes. Dump it now, dump it again next year, and the archive answers whether it is worth re-dumping ahead of the others.
+
+```console
+$ fdstoolkit archive-add disk.fds --drive AN-500B
+$ fdstoolkit archive-trend
+4f2a...c19b: degrading, +10.0 blocks a year, unreadable in about 8 years
+```
+
 ## Identity
 
 Two dumps of one game are rarely byte-identical, because a kiosk rewrite changes the manufacturing date, the rewritten date, the Disk Writer serial and the rewrite count. Across 1,513 sides measured here, 352 groups hold identical file data and still differ in those fields.
@@ -194,6 +312,9 @@ A side is a sequence of blocks:
 | Copier per-side files | One file per side, lettered from A | Depends | A side may exceed the nominal length |
 | ares side files | 73728 | Yes | Gaps and sync marks included |
 | Raw pulse stream | Variable | Yes | What the drive reads |
+| SuperCard Pro `.scp` | Variable | Yes | Flux intervals, 25 ns resolution |
+| KryoFlux stream | Variable | Yes | Flux intervals, index blocks split revolutions |
+| HxC `.hfe` | Variable | Yes | Bitcells rather than intervals |
 
 What each conversion costs:
 
