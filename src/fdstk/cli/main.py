@@ -16,6 +16,8 @@ from fdstk.hardware.ports import HardwareFaultError
 from fdstk.hardware.session import Grade, WriteRefusedError, dump_repeated, write_verified
 from fdstk.hardware.session import dump as dump_disk
 from fdstk.hardware.simulation import SimulatedDrive
+from fdstk.identify.dat import MatchKind, load_dat
+from fdstk.identify.dat import identify as identify_image
 from fdstk.identify.hashes import digests_of, side_digests
 from fdstk.report import as_json, diagnostics_as_data
 
@@ -446,3 +448,43 @@ def write(
         typer.echo(f"side {side_index}: block {block_index} did not read back as written")
     typer.echo(f"verified {report.verified}, grade {report.grade}")
     raise typer.Exit(code=0 if report.verified else 1)
+
+
+@app.command()
+def identify(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    dat: Annotated[Path, typer.Option("--dat", help="a No-Intro style DAT file")],
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+) -> None:
+    """Match an image against a DAT, and say what it matched on."""
+    data, _ = _read(image)
+    if not dat.is_file():
+        message = f"file not found: {dat}"
+        raise _fail(message)
+    try:
+        catalogue = load_dat(dat)
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    result = identify_image(data, catalogue)
+    payload: dict[str, object] = {
+        "path": str(image),
+        "dat": catalogue.name,
+        "dat_version": catalogue.version,
+        "kind": str(result.kind),
+        "name": result.entry.name if result.entry else None,
+        "matched_on": result.matched_on,
+        "same_size": [entry.name for entry in result.same_size],
+    }
+
+    if json_output:
+        typer.echo(as_json(payload))
+    elif result.entry is not None:
+        typer.echo(f"{result.entry.name}  (matched on {result.matched_on})")
+    else:
+        typer.echo("no match")
+        for entry in result.same_size:
+            typer.echo(f"  same size: {entry.name}")
+
+    raise typer.Exit(code=0 if result.kind is MatchKind.EXACT else 1)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -288,3 +289,41 @@ def test_write_refuses_a_multi_side_image_in_one_pass(image: Path) -> None:
 
     assert result.exit_code == 1
     assert "one side at a time" in result.stdout
+
+
+def _dat_for(path: Path, image: Path) -> Path:
+    data = image.read_bytes()
+    path.write_text(
+        "<?xml version='1.0'?>\n<datafile>\n"
+        "<header><name>Test DAT</name><version>1</version></header>\n"
+        '<game name="Known (Japan)"><rom name="Known (Japan).fds" '
+        f'size="{len(data)}" sha1="{hashlib.sha1(data, usedforsecurity=False).hexdigest()}"/>'
+        "</game>\n</datafile>\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_identify_matches_a_known_image(image: Path, tmp_path: Path) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+
+    result = runner.invoke(app, ["identify", str(image), "--dat", str(dat)])
+
+    assert result.exit_code == 0
+    assert "Known (Japan)" in result.stdout
+
+
+def test_identify_reports_an_unknown_image(single_side: Path, image: Path, tmp_path: Path) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+
+    result = runner.invoke(app, ["identify", str(single_side), "--dat", str(dat)])
+
+    assert result.exit_code == 1
+    assert "no match" in result.stdout
+
+
+def test_identify_reports_a_missing_dat(image: Path, tmp_path: Path) -> None:
+    result = runner.invoke(app, ["identify", str(image), "--dat", str(tmp_path / "nope.dat")])
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
