@@ -8,6 +8,7 @@ from fdstoolkit.flux.analysis import (
     analyse_capture,
     analyse_intervals,
     estimate_base_ns,
+    fit_family,
     histogram,
 )
 from fdstoolkit.flux.model import (
@@ -166,3 +167,46 @@ def test_a_report_without_a_base_cell_has_no_bit_rate() -> None:
     empty = IntervalReport(pulses=0, clusters=(), separations=(), outliers=0, rpm=None)
 
     assert empty.bit_rate_hz == 0.0
+
+
+def _stream(ratios: tuple[float, ...], base: int, repeats: int = 400) -> tuple[int, ...]:
+    return tuple(round(base * ratio) for ratio in ratios for _ in range(repeats))
+
+
+def test_a_disk_system_stream_fits_the_one_and_a_half_family() -> None:
+    base, ratios, name = fit_family(_stream((1.0, 1.5, 2.0), 10_400))
+
+    assert name == "mfm"
+    assert ratios == (1.0, 1.5, 2.0)
+    assert base == pytest.approx(10_400, rel=0.02)
+
+
+def test_a_group_coded_stream_fits_the_one_two_three_family() -> None:
+    base, ratios, name = fit_family(_stream((1.0, 2.0, 3.0), 2_825))
+
+    assert name == "gcr"
+    assert ratios == (1.0, 2.0, 3.0)
+    assert base == pytest.approx(2_825, rel=0.03)
+
+
+def test_a_group_coded_stream_reports_clean_separation() -> None:
+    report = analyse_intervals(_stream((1.0, 2.0, 3.0), 2_825))
+
+    assert report.worst_margin == pytest.approx(1.0)
+    assert report.healthy
+
+
+def test_a_handful_of_strays_does_not_sink_the_margin() -> None:
+    clean = list(intervals_from_classes(CLEAN))
+    between = round((SHORT_NS + MEDIUM_NS) / 2)
+
+    report = analyse_intervals((*clean, *([between] * 3)))
+
+    assert report.worst_margin > HEALTHY_MARGIN
+    assert sum(item.strays for item in report.separations) == 3
+
+
+def test_strays_are_counted_even_when_the_margin_holds() -> None:
+    report = analyse_intervals(intervals_from_classes(CLEAN))
+
+    assert all(item.strays == 0 for item in report.separations)

@@ -14,6 +14,10 @@ from fdstoolkit.flux.model import (
 )
 
 RATIOS: Final = (1.0, 1.5, 2.0)
+GCR_RATIOS: Final = (1.0, 2.0, 3.0)
+FAMILIES: Final[dict[str, tuple[float, ...]]] = {"mfm": RATIOS, "gcr": GCR_RATIOS}
+STRAY_MARGIN: Final = 0.25
+MARGIN_PERCENTILE: Final = 0.01
 SEEDS: Final = (float(SHORT_NS), float(MEDIUM_NS), float(LONG_NS))
 OUTLIER_FACTOR: Final = 2.0
 HEALTHY_MARGIN: Final = 0.35
@@ -51,6 +55,7 @@ class Separation:
     boundary_ns: float
     closest_ns: float
     margin: float
+    strays: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,8 +129,8 @@ def _sample(intervals: Sequence[int]) -> Sequence[int]:
     return intervals[::stride]
 
 
-def _residual(intervals: Sequence[int], base: float) -> float:
-    centres = [base * ratio for ratio in RATIOS]
+def _residual(intervals: Sequence[int], base: float, ratios: Sequence[float]) -> float:
+    centres = [base * ratio for ratio in ratios]
     total = 0.0
     for interval in intervals:
         nearest = min(centres, key=lambda centre: abs(interval - centre))
@@ -134,18 +139,33 @@ def _residual(intervals: Sequence[int], base: float) -> float:
 
 
 def estimate_base_ns(intervals: Sequence[int]) -> float:
-    if not intervals:
-        message = "a flux stream with no interval cannot be analysed"
-        raise ValueError(message)
-    sample = _sample(intervals)
-    anchor = statistics.median(sample)
-    low = anchor * FIT_LOW / RATIOS[-1]
+    return fit_family(intervals)[0]
+
+
+def _best_base(sample: Sequence[int], anchor: float, ratios: Sequence[float]) -> float:
+    low = anchor * FIT_LOW / ratios[-1]
     high = anchor * FIT_HIGH
     step = (high - low) / FIT_STEPS
     if step <= 0:
         return float(anchor)
     candidates = [low + step * index for index in range(FIT_STEPS + 1)]
-    return min(candidates, key=lambda base: _residual(sample, base))
+    return min(candidates, key=lambda value: _residual(sample, value, ratios))
+
+
+def fit_family(intervals: Sequence[int]) -> tuple[float, tuple[float, ...], str]:
+    if not intervals:
+        message = "a flux stream with no interval cannot be analysed"
+        raise ValueError(message)
+    sample = _sample(intervals)
+    anchor = statistics.median(sample)
+
+    fits: list[tuple[float, float, tuple[float, ...], str]] = []
+    for name, ratios in FAMILIES.items():
+        base = _best_base(sample, anchor, ratios)
+        fits.append((_residual(sample, base, ratios), base, ratios, name))
+
+    _, base, ratios, name = min(fits, key=lambda fit: fit[0])
+    return base, ratios, name
 
 
 def _assign(intervals: Sequence[int], centres: Sequence[float]) -> list[list[int]]:
@@ -157,14 +177,24 @@ def _assign(intervals: Sequence[int], centres: Sequence[float]) -> list[list[int
 
 
 def _fit(intervals: Sequence[int]) -> tuple[list[float], list[list[int]]]:
-    base = estimate_base_ns(intervals)
-    centres = [base * ratio for ratio in RATIOS]
+    base, ratios, _ = fit_family(intervals)
+    centres = [base * ratio for ratio in ratios]
     groups = _assign(intervals, centres)
     centres = [
         statistics.fmean(group) if group else centres[index] for index, group in enumerate(groups)
     ]
     groups = _assign(intervals, centres)
     return centres, groups
+
+
+def _margin(samples: Sequence[int], boundary: float, half: float) -> tuple[float, int, float]:
+    if half <= 0 or not samples:
+        return 0.0, 0, boundary
+    distances = sorted(min(1.0, abs(value - boundary) / half) for value in samples)
+    index = min(len(distances) - 1, int(MARGIN_PERCENTILE * len(distances)))
+    strays = sum(1 for value in distances if value < STRAY_MARGIN)
+    closest = min(samples, key=lambda value: abs(value - boundary))
+    return distances[index], strays, float(closest)
 
 
 def _separations(clusters: Sequence[Cluster], groups: Sequence[Sequence[int]]) -> list[Separation]:
@@ -174,15 +204,15 @@ def _separations(clusters: Sequence[Cluster], groups: Sequence[Sequence[int]]) -
         boundary = (low.centre_ns + high.centre_ns) / 2
         half = (high.centre_ns - low.centre_ns) / 2
         samples = [*groups[index], *groups[index + 1]]
-        closest = min(samples, key=lambda value: abs(value - boundary)) if samples else boundary
-        margin = 0.0 if half <= 0 else min(1.0, abs(closest - boundary) / half)
+        margin, strays, closest = _margin(samples, boundary, half)
         out.append(
             Separation(
                 lower=low.label,
                 upper=high.label,
                 boundary_ns=boundary,
-                closest_ns=float(closest),
+                closest_ns=closest,
                 margin=margin,
+                strays=strays,
             )
         )
     return out

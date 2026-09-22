@@ -114,6 +114,8 @@ The opcode check is calibrated against 10,105 program files: a real one is aroun
 
 `flux` reads SuperCard Pro `.scp`, KryoFlux streams, HxC `.hfe`, and the interval captures an FDSStick produces. The format is detected from the file; `--format` overrides it.
 
+The pulse family is detected too. A Disk System or MFM stream runs on intervals of 1, 1.5 and 2 cells; a group-coded stream runs on 1, 2 and 3. Fitting the wrong one makes clean media look broken, so the analyser tries both and keeps whichever explains the data. Separation is measured at the first percentile rather than at the single closest pulse, because a real capture always carries a few strays and one of them should not decide the verdict; the stray count is reported on its own.
+
 ### Building masters
 
 | Command | Output |
