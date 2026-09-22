@@ -395,3 +395,53 @@ def test_insert_reports_a_name_that_is_too_long(single_side: Path, tmp_path: Pat
 
     assert result.exit_code == 1
     assert "eight characters" in result.stdout
+
+
+def test_patch_applies_an_ips(single_side: Path, tmp_path: Path) -> None:
+    patch = tmp_path / "rename.ips"
+    patch.write_bytes(
+        b"PATCH" + (0x10).to_bytes(3, "big") + (3).to_bytes(2, "big") + b"ZEL" + b"EOF"
+    )
+    out = tmp_path / "patched.fds"
+
+    result = runner.invoke(
+        app,
+        ["patch", str(single_side), "--patch", str(patch), "-o", str(out)],
+    )
+
+    assert result.exit_code == 0
+    assert "applied ips" in result.stdout
+    assert (
+        json.loads(runner.invoke(app, ["info", str(out), "--json"]).stdout)["sides"][0]["game_name"]
+        == "ZEL"
+    )
+
+
+def test_patch_reports_a_missing_patch_file(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "patch",
+            str(single_side),
+            "--patch",
+            str(tmp_path / "nope.ips"),
+            "-o",
+            str(tmp_path / "o.fds"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+
+def test_patch_reports_an_unknown_format(single_side: Path, tmp_path: Path) -> None:
+    patch = tmp_path / "bad.ips"
+    patch.write_bytes(b"nonsense")
+
+    result = runner.invoke(
+        app,
+        ["patch", str(single_side), "--patch", str(patch), "-o", str(tmp_path / "o.fds")],
+    )
+
+    assert result.exit_code == 1
+    assert "unknown patch format" in result.stdout

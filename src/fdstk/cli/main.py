@@ -21,6 +21,8 @@ from fdstk.hardware.simulation import SimulatedDrive
 from fdstk.identify.dat import MatchKind, load_dat
 from fdstk.identify.dat import identify as identify_image
 from fdstk.identify.hashes import digests_of, side_digests
+from fdstk.patch.apply import apply_patch
+from fdstk.patch.formats import PatchError
 from fdstk.report import as_json, diagnostics_as_data
 
 app = typer.Typer(
@@ -556,3 +558,30 @@ def insert_command(
     typer.echo(f"wrote {output} ({len(data)} bytes)")
     for finding in findings:
         typer.echo(f"  {finding.render()}")
+
+
+@app.command(name="patch")
+def patch_command(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    patch_file: Annotated[Path, typer.Option("--patch", help="an IPS, UPS or BPS patch")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
+    *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Apply a patch, whether it was made for the headered or headerless image."""
+    data, _ = _read(image)
+    if not patch_file.is_file():
+        message = f"file not found: {patch_file}"
+        raise _fail(message)
+    _guard_output(output, force=force)
+
+    try:
+        outcome = apply_patch(patch_file.read_bytes(), data)
+    except PatchError as error:
+        raise _fail(str(error)) from error
+
+    output.write_bytes(outcome.data)
+    typer.echo(
+        f"applied {outcome.format} patch to the {outcome.applied_to}, "
+        f"wrote {output} ({len(outcome.data)} bytes)"
+    )
