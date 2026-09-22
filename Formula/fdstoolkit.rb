@@ -1,4 +1,4 @@
-class Fdstk < Formula
+class Fdstoolkit < Formula
   include Language::Python::Virtualenv
 
   desc "Convert, verify, identify, dump and write Famicom Disk System images"
