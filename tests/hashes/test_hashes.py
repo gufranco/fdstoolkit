@@ -4,7 +4,7 @@ import hashlib
 import zlib
 
 from fdstk.codecs.fds import SIDE_SIZE
-from fdstk.identify.hashes import Digests, digests_of, side_digests
+from fdstk.identify.hashes import Digests, digests_of, retroachievements_hash, side_digests
 
 
 def headered(sides: int = 1) -> bytes:
@@ -73,3 +73,16 @@ def test_digests_are_a_value_type() -> None:
     other = Digests(size=1, crc32="a", md5="b", sha1="c", sha256="d")
 
     assert one == other
+
+
+def test_the_retroachievements_hash_skips_an_fwnes_header() -> None:
+    body = bytes(range(256)) * 4
+    headered = b"FDS\x1a" + bytes(12) + body
+
+    assert retroachievements_hash(headered) == hashlib.md5(body, usedforsecurity=False).hexdigest()
+
+
+def test_the_retroachievements_hash_covers_a_headerless_file_whole() -> None:
+    body = bytes(range(256)) * 4
+
+    assert retroachievements_hash(body) == hashlib.md5(body, usedforsecurity=False).hexdigest()

@@ -12,6 +12,12 @@ PROVENANCE_END: Final = 0x38
 MIN_SIGNATURE_RUN: Final = 4
 PRINTABLE_LOW: Final = 0x20
 PRINTABLE_HIGH: Final = 0x7E
+KIOSK_SERVICE_ENDED: Final = (2003, 9, 30)
+DISK_COLOURS: Final[dict[int, str]] = {
+    0x00: "yellow",
+    0xFF: "blue",
+    0xFE: "prototype, sample or internal",
+}
 
 
 class Origin(StrEnum):
@@ -33,8 +39,15 @@ class SideProvenance:
     signature: str | None
     notes: tuple[str, ...]
 
+    @property
+    def disk_colour(self) -> str | None:
+        if self.disk_type is None:
+            return None
+        return DISK_COLOURS.get(self.disk_type, "unknown")
+
     def as_dict(self) -> dict[str, object]:
         return {
+            "disk_colour": self.disk_colour,
             "disk_type": self.disk_type,
             "disk_version": self.disk_version,
             "index": self.index,
@@ -91,6 +104,12 @@ def _notes_for(info: DiskInfo, origin: Origin) -> tuple[str, ...]:
         notes.append("rewritten but carries no Disk Writer serial")
     if info.rewrite_count == 0 and origin is Origin.REWRITTEN:
         notes.append("rewritten but the rewrite count is zero")
+    rewritten = info.rewritten_date
+    if origin is Origin.REWRITTEN and rewritten is not None and rewritten > KIOSK_SERVICE_ENDED:
+        notes.append(
+            f"rewritten {rewritten[0]:04d}-{rewritten[1]:02d}-{rewritten[2]:02d}, after the Disk "
+            "Writer service ended on 2003-09-30, so a modern tool wrote it rather than a kiosk"
+        )
     signature = signature_in(info)
     if signature is not None:
         notes.append(

@@ -120,3 +120,30 @@ def test_an_unformatted_side_carries_no_signature() -> None:
     blank, _ = decode(blank_image(sides=1, headered=False, formatted=False))
 
     assert provenance_of(blank).sides[0].signature is None
+
+
+def test_a_rewrite_dated_after_the_kiosk_service_ended_is_flagged() -> None:
+    report = provenance_of(disk_with_info(x2C=bytes([0x86, 0x05, 0x01]), x34=bytes([0x01])))
+
+    assert any("after the Disk Writer service ended" in note for note in report.sides[0].notes)
+
+
+def test_a_rewrite_dated_during_the_kiosk_era_is_not_flagged() -> None:
+    report = provenance_of(disk_with_info(x2C=bytes([0x63, 0x05, 0x01]), x34=bytes([0x01])))
+
+    assert not any("service ended" in note for note in report.sides[0].notes)
+
+
+def test_the_disk_colour_is_named() -> None:
+    assert provenance_of(disk_with_info(x36=bytes([0xFF]))).sides[0].disk_colour == "blue"
+    assert provenance_of(disk_with_info(x36=bytes([0x00]))).sides[0].disk_colour == "yellow"
+
+
+def test_an_unlisted_disk_type_is_unknown() -> None:
+    assert provenance_of(disk_with_info(x36=bytes([0x42]))).sides[0].disk_colour == "unknown"
+
+
+def test_an_unformatted_side_has_no_colour() -> None:
+    blank, _ = decode(blank_image(sides=1, headered=False, formatted=False))
+
+    assert provenance_of(blank).sides[0].disk_colour is None

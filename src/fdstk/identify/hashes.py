@@ -55,3 +55,12 @@ def side_digests(data: bytes, side_size: int) -> tuple[Digests, ...]:
     return tuple(
         _digests(body[start : start + side_size]) for start in range(0, len(body), side_size)
     )
+
+
+RETROACHIEVEMENTS_MAGIC = b"FDS\x1a"
+RETROACHIEVEMENTS_HEADER = 16
+
+
+def retroachievements_hash(data: bytes) -> str:
+    body = data[RETROACHIEVEMENTS_HEADER:] if data.startswith(RETROACHIEVEMENTS_MAGIC) else data
+    return hashlib.md5(body, usedforsecurity=False).hexdigest()

@@ -36,7 +36,7 @@ from fdstk.hardware.simulation import SimulatedDrive
 from fdstk.identify.cache import DatCache
 from fdstk.identify.dat import Catalogue, Identification, MatchKind, load_dat
 from fdstk.identify.dat import identify as identify_image
-from fdstk.identify.hashes import digests_of, side_digests
+from fdstk.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstk.identify.near import NearMatch, nearest_match, reference_images
 from fdstk.identify.provenance import provenance_of
 from fdstk.patch.apply import apply_patch
@@ -291,6 +291,7 @@ def hash_command(
         "headerless": whole.headerless.as_dict() if whole.headerless else None,
         "sides": [entry.as_dict() for entry in side_digests(data, side_size)],
         "canonical": digest_string(canonical),
+        "retroachievements": retroachievements_hash(data),
     }
 
     if json_output:
@@ -303,6 +304,7 @@ def hash_command(
     typer.echo(f"sha1      {whole.sha1}")
     typer.echo(f"sha256    {whole.sha256}")
     typer.echo(f"canonical {digest_string(canonical)}")
+    typer.echo(f"ra md5    {retroachievements_hash(data)}")
 
 
 @app.command()
