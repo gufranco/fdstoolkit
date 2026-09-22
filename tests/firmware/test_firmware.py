@@ -4,8 +4,8 @@ import zlib
 
 import pytest
 
-from fdstk.identify import firmware
-from fdstk.identify.firmware import (
+from fdstoolkit.identify import firmware
+from fdstoolkit.identify.firmware import (
     BIOS_SIZE,
     Revision,
     extract_bios,

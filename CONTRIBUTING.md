@@ -3,8 +3,8 @@
 ## Getting it running
 
 ```bash
-git clone https://github.com/gufranco/famicom-disk-system-python.git
-cd famicom-disk-system-python
+git clone https://github.com/gufranco/fdstoolkit.git
+cd fdstoolkit
 uv sync --all-extras --dev
 uv run pytest
 ```
@@ -12,7 +12,7 @@ uv run pytest
 The suite passes on a clean checkout with no disk images and no BIOS present.
 That is deliberate and CI enforces it: anybody has to be able to work on this
 without owning a collection. The tests that want real images read the directory
-named by `FDSTK_CORPUS` and skip when it is unset.
+named by `FDSTOOLKIT_CORPUS` and skip when it is unset.
 
 ## The gates
 

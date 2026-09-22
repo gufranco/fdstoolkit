@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import SIDE_SIZE, decode, encode
-from fdstk.core.disk import Disk, Side
-from fdstk.edit.clean import clean_trailing_data
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import SIDE_SIZE, decode, encode
+from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.edit.clean import clean_trailing_data
 
 
 def with_tail(tail: bytes) -> Disk:

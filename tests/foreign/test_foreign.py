@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.foreign import ForeignImageError, foreign_format, reject_foreign
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.foreign import ForeignImageError, foreign_format, reject_foreign
 
 
 def test_an_hxc_flux_image_is_recognised() -> None:

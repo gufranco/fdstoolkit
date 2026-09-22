@@ -4,10 +4,10 @@ import zlib
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import HEADER_SIZE, has_header
-from fdstk.patch.apply import PatchOutcome, apply_patch
-from fdstk.patch.formats import PatchError, PatchFormat, write_varint
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import HEADER_SIZE, has_header
+from fdstoolkit.patch.apply import PatchOutcome, apply_patch
+from fdstoolkit.patch.formats import PatchError, PatchFormat, write_varint
 
 
 def ips_setting(offset: int, payload: bytes) -> bytes:

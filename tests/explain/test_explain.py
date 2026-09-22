@@ -3,13 +3,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.blocks import FileKind
-from fdstk.core.disk import Disk
-from fdstk.edit.diskinfo import apply_edits
-from fdstk.edit.files import FileSpec, insert_file
-from fdstk.quality.explain import FileChange, explain
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.edit.diskinfo import apply_edits
+from fdstoolkit.edit.files import FileSpec, insert_file
+from fdstoolkit.quality.explain import FileChange, explain
 
 
 def sample(*, sides: int = 1) -> Disk:

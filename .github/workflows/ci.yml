@@ -128,15 +128,15 @@ jobs:
       - name: A tarball built out of git runs
         run: |
           set -euo pipefail
-          git archive --format=tar.gz --prefix=fdstk/ -o /tmp/source.tar.gz HEAD
+          git archive --format=tar.gz --prefix=fdstoolkit/ -o /tmp/source.tar.gz HEAD
           mkdir -p /tmp/from-git
           tar -xzf /tmp/source.tar.gz -C /tmp/from-git
           python -m venv /tmp/from-git/.venv
-          /tmp/from-git/.venv/bin/pip install --quiet /tmp/from-git/fdstk
-          /tmp/from-git/.venv/bin/fds --version
-          /tmp/from-git/.venv/bin/fds doctor
-          /tmp/from-git/.venv/bin/fds blank -o /tmp/blank.fds --sides 1 --formatted
-          /tmp/from-git/.venv/bin/fds verify /tmp/blank.fds
+          /tmp/from-git/.venv/bin/pip install --quiet /tmp/from-git/fdstoolkit
+          /tmp/from-git/.venv/bin/fdstoolkit --version
+          /tmp/from-git/.venv/bin/fdstoolkit doctor
+          /tmp/from-git/.venv/bin/fdstoolkit blank -o /tmp/blank.fds --sides 1 --formatted
+          /tmp/from-git/.venv/bin/fdstoolkit verify /tmp/blank.fds
 
   formula:
     name: Homebrew formula
@@ -145,24 +145,24 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Style
-        run: brew style Formula/fdstk.rb
+        run: brew style Formula/fdstoolkit.rb
 
       - name: Install it from a tarball built out of git, and run its test
         run: |
           set -euo pipefail
           work=$(mktemp -d)
-          git archive --format=tar.gz --prefix=fdstk/ -o "${work}/src.tar.gz" HEAD
+          git archive --format=tar.gz --prefix=fdstoolkit/ -o "${work}/src.tar.gz" HEAD
           checksum=$(shasum -a 256 "${work}/src.tar.gz" | awk '{print $1}')
-          brew tap-new gufranco/fdstk-ci --no-git
-          tap=$(brew --repository gufranco/fdstk-ci)
+          brew tap-new gufranco/fdstoolkit-ci --no-git
+          tap=$(brew --repository gufranco/fdstoolkit-ci)
           mkdir -p "${tap}/Formula"
-          python3 - "${work}" "${checksum}" "${tap}/Formula/fdstk.rb" <<'PATCH'
+          python3 - "${work}" "${checksum}" "${tap}/Formula/fdstoolkit.rb" <<'PATCH'
           import re
           import sys
           from pathlib import Path
 
           work, checksum, target = sys.argv[1], sys.argv[2], Path(sys.argv[3])
-          text = Path("Formula/fdstk.rb").read_text()
+          text = Path("Formula/fdstoolkit.rb").read_text()
           text = re.sub(
               r'url "https://github\.com/[^"]+/archive/[^"]+"',
               f'url "file://{work}/src.tar.gz"',
@@ -171,13 +171,13 @@ jobs:
           )
           text = re.sub(r'sha256 "[0-9a-f]{64}"', f'sha256 "{checksum}"', text, count=1)
           recorded = re.search(
-              r'^VERSION = "([^"]+)"$', Path("src/fdstk/version.py").read_text(), re.MULTILINE
+              r'^VERSION = "([^"]+)"$', Path("src/fdstoolkit/version.py").read_text(), re.MULTILINE
           )
-          assert recorded, "no VERSION in src/fdstk/version.py"
+          assert recorded, "no VERSION in src/fdstoolkit/version.py"
           text = text.replace(
               '  license "MIT"', f'  version "{recorded.group(1)}"\n  license "MIT"', 1
           )
           target.write_text(text)
           PATCH
-          brew install --build-from-source gufranco/fdstk-ci/fdstk
-          brew test gufranco/fdstk-ci/fdstk
+          brew install --build-from-source gufranco/fdstoolkit-ci/fdstoolkit
+          brew test gufranco/fdstoolkit-ci/fdstoolkit

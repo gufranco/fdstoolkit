@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.hardware.ports import (
+from fdstoolkit.hardware.ports import (
     BlockRead,
     DriveStatus,
     ErrorClass,

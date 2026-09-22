@@ -43,5 +43,5 @@ body:
   - type: textarea
     id: disk
     attributes:
-      label: Which disk, and what `fds info` says about it
-      description: Never attach the image. The report from `fds info` and `fds hash` identifies it.
+      label: Which disk, and what `fdstoolkit info` says about it
+      description: Never attach the image. The report from `fdstoolkit info` and `fdstoolkit hash` identifies it.

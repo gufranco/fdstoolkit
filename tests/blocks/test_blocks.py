@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.core.blocks import Block, BlockKind, CrcStatus, FileHeader, FileKind
-from fdstk.core.crc import block_crc
+from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus, FileHeader, FileKind
+from fdstoolkit.core.crc import block_crc
 
 
 def disk_info_payload() -> bytes:

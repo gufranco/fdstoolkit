@@ -1,5 +1,5 @@
 [project]
-name = "fdstk"
+name = "fdstoolkit"
 dynamic = ["version"]
 description = "Famicom Disk System preservation toolkit: convert, verify, identify, create, dump and write disk images"
 readme = "README.md"
@@ -28,11 +28,11 @@ dependencies = [
 hardware = ["hidapi>=0.14.0"]
 
 [project.urls]
-Homepage = "https://github.com/gufranco/famicom-disk-system-python"
-Issues = "https://github.com/gufranco/famicom-disk-system-python/issues"
+Homepage = "https://github.com/gufranco/fdstoolkit"
+Issues = "https://github.com/gufranco/fdstoolkit/issues"
 
 [project.scripts]
-fds = "fdstk.cli.main:app"
+fdstoolkit = "fdstoolkit.cli.main:app"
 
 [dependency-groups]
 dev = [
@@ -48,11 +48,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-path = "src/fdstk/version.py"
+path = "src/fdstoolkit/version.py"
 pattern = "^VERSION = \"(?P<version>[^\"]+)\"$"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/fdstk"]
+packages = ["src/fdstoolkit"]
 
 [tool.ruff]
 line-length = 100
@@ -72,7 +72,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S603", "PLR2004", "SLF001", "INP001", "ANN401"]
-"src/fdstk/cli/*.py" = ["PLR0913", "FBT001", "FBT002"]
+"src/fdstoolkit/cli/*.py" = ["PLR0913", "FBT001", "FBT002"]
 
 [tool.ruff.lint.pylint]
 max-args = 8
@@ -92,13 +92,13 @@ testpaths = ["tests"]
 norecursedirs = [".*", "node_modules", "dist"]
 addopts = "-q --strict-markers --strict-config"
 markers = [
-  "corpus: runs against the local image corpus named by FDSTK_CORPUS",
+  "corpus: runs against the local image corpus named by FDSTOOLKIT_CORPUS",
   "hardware: needs a real device attached",
 ]
 
 [tool.coverage.run]
 branch = true
-source = ["src/fdstk"]
+source = ["src/fdstoolkit"]
 
 [tool.coverage.report]
 fail_under = 100

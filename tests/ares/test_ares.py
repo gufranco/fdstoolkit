@@ -4,8 +4,8 @@ from dataclasses import replace
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.ares import (
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.ares import (
     ARES_SIDE_SIZE,
     BLOCK_GAP,
     PREGAP,
@@ -14,11 +14,11 @@ from fdstk.codecs.ares import (
     side_file_names,
     split_for_ares,
 )
-from fdstk.codecs.fds import decode
-from fdstk.core.blocks import Block, BlockKind, FileKind
-from fdstk.core.crc import block_crc
-from fdstk.core.disk import Disk
-from fdstk.edit.files import FileSpec, insert_file
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.blocks import Block, BlockKind, FileKind
+from fdstoolkit.core.crc import block_crc
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.edit.files import FileSpec, insert_file
 
 
 def game(*, sides: int = 1, files: int = 1) -> Disk:

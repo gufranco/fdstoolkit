@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.disk import Disk
-from fdstk.core.diskinfo import DiskInfo
-from fdstk.edit.diskinfo import EDITABLE_FIELDS, apply_edits, parse_edit
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.diskinfo import DiskInfo
+from fdstoolkit.edit.diskinfo import EDITABLE_FIELDS, apply_edits, parse_edit
 
 
 def sample() -> Disk:

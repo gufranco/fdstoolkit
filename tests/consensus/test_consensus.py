@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.blocks import Block, BlockKind
-from fdstk.core.disk import Disk, Side
-from fdstk.quality.consensus import BlockVerdict, build_consensus, compare_images
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.quality.consensus import BlockVerdict, build_consensus, compare_images
 
 
 def sample() -> Disk:

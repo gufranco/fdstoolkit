@@ -1,12 +1,12 @@
 cff-version: 1.2.0
-title: fdstk
+title: fdstoolkit
 message: If you use this software, please cite it as below.
 type: software
 authors:
   - given-names: Gustavo
     family-names: Franco
     alias: gufranco
-repository-code: https://github.com/gufranco/famicom-disk-system-python
+repository-code: https://github.com/gufranco/fdstoolkit
 abstract: >-
   A Famicom Disk System preservation toolkit: reads and writes every container
   in use, verifies checksums and structure, answers whether two dumps are the

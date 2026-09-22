@@ -13,7 +13,7 @@ fi
 
 bash scripts/update-formula.sh "$tag"
 
-if git diff --quiet Formula/fdstk.rb; then
+if git diff --quiet Formula/fdstoolkit.rb; then
   printf 'the formula already points at %s\n' "$tag"
   exit 0
 fi
@@ -24,7 +24,7 @@ token=${GITHUB_TOKEN:?token required}
 repository=${GITHUB_REPOSITORY:?repository required}
 
 git remote set-url origin "https://x-access-token:${token}@github.com/${repository}.git"
-git add Formula/fdstk.rb
+git add Formula/fdstoolkit.rb
 git -c "user.name=${bot_name}" -c "user.email=${bot_email}" \
   commit -m "chore(formula): point at ${tag} [skip ci]"
 git push origin HEAD:main

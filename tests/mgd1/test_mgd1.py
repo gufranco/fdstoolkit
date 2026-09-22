@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import SIDE_SIZE
-from fdstk.codecs.mgd1 import (
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import SIDE_SIZE
+from fdstoolkit.codecs.mgd1 import (
     MGD1_SUFFIXES,
     SideFile,
     join_side_files,

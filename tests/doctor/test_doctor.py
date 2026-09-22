@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fdstk.doctor import CheckStatus, diagnose, load_hid
-from fdstk.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
-from fdstk.identify.cache import DatCache
+from fdstoolkit.doctor import CheckStatus, diagnose, load_hid
+from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
+from fdstoolkit.identify.cache import DatCache
 
 
 class FakeHid:
@@ -35,7 +35,7 @@ def detail_of(report: Any, name: str) -> str:
 def test_the_version_and_the_interpreter_are_reported(tmp_path: Path) -> None:
     report = diagnose(load_hid=missing_hid, cache=DatCache(tmp_path))
 
-    assert status_of(report, "fdstk") is CheckStatus.OK
+    assert status_of(report, "fdstoolkit") is CheckStatus.OK
     assert status_of(report, "python") is CheckStatus.OK
 
 
@@ -43,7 +43,7 @@ def test_a_missing_hardware_extra_is_reported_with_the_fix(tmp_path: Path) -> No
     report = diagnose(load_hid=missing_hid, cache=DatCache(tmp_path))
 
     assert status_of(report, "hardware support") is CheckStatus.MISSING
-    assert "fdstk[hardware]" in detail_of(report, "hardware support")
+    assert "fdstoolkit[hardware]" in detail_of(report, "hardware support")
 
 
 def test_no_connected_fdsstick_is_a_warning_not_a_failure(tmp_path: Path) -> None:

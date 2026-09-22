@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from fdstk.core.diagnostics import Diagnostic, Severity
-from fdstk.report import as_json, diagnostics_as_data
+from fdstoolkit.core.diagnostics import Diagnostic, Severity
+from fdstoolkit.report import as_json, diagnostics_as_data
 
 
 def test_a_diagnostic_becomes_a_flat_record() -> None:

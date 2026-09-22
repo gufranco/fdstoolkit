@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.codecs.qd import decode as decode_qd
-from fdstk.codecs.qd import encode as encode_qd
-from fdstk.core.bitstream import (
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.codecs.qd import decode as decode_qd
+from fdstoolkit.codecs.qd import encode as encode_qd
+from fdstoolkit.core.bitstream import (
     GAP_BITS,
     GAP_TERMINATOR,
     LEAD_IN_BITS,

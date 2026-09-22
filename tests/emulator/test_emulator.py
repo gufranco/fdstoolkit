@@ -4,12 +4,12 @@ import zlib
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.diagnostics import Severity
-from fdstk.edit.emulator import SaveFormat, detect_save_format, extract_save, merge_save
-from fdstk.patch.build import build_ips, build_ups
-from fdstk.patch.formats import PatchError, write_varint
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.diagnostics import Severity
+from fdstoolkit.edit.emulator import SaveFormat, detect_save_format, extract_save, merge_save
+from fdstoolkit.patch.build import build_ips, build_ups
+from fdstoolkit.patch.formats import PatchError, write_varint
 
 
 def original() -> bytes:

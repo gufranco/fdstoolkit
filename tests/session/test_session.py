@@ -4,18 +4,18 @@ import time
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.disk import Disk
-from fdstk.hardware.ports import FaultKind, HardwareFaultError
-from fdstk.hardware.session import (
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.hardware.session import (
     Grade,
     WriteRefusedError,
     dump,
     dump_repeated,
     write_verified,
 )
-from fdstk.hardware.simulation import FaultPlan, SimulatedDrive
+from fdstoolkit.hardware.simulation import FaultPlan, SimulatedDrive
 
 
 def sample_disk(sides: int = 1) -> Disk:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.disk import Disk
-from fdstk.identify.provenance import Origin, provenance_of
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.identify.provenance import Origin, provenance_of
 
 
 def disk_with_info(**overrides: bytes) -> Disk:

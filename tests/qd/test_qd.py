@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode as decode_fds
-from fdstk.codecs.qd import SIDE_SIZE, CrcMode, decode, encode
-from fdstk.core.blocks import CrcStatus
-from fdstk.core.crc import block_crc, encode_crc
-from fdstk.core.diagnostics import Severity
-from fdstk.core.disk import Disk
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode as decode_fds
+from fdstoolkit.codecs.qd import SIDE_SIZE, CrcMode, decode, encode
+from fdstoolkit.core.blocks import CrcStatus
+from fdstoolkit.core.crc import block_crc, encode_crc
+from fdstoolkit.core.diagnostics import Severity
+from fdstoolkit.core.disk import Disk
 
 
 def disk_info() -> bytes:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from fdstk.identify.cache import DatCache, cache_root
+from fdstoolkit.identify.cache import DatCache, cache_root
 
 DAT = """<?xml version="1.0"?>
 <datafile>
@@ -26,7 +26,7 @@ def test_the_cache_root_follows_the_xdg_variable(
 ) -> None:
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
 
-    assert cache_root() == tmp_path / "fdstk" / "dat"
+    assert cache_root() == tmp_path / "fdstoolkit" / "dat"
 
 
 def test_the_cache_root_falls_back_to_the_home_directory(
@@ -35,7 +35,7 @@ def test_the_cache_root_falls_back_to_the_home_directory(
     monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-    assert cache_root() == tmp_path / ".cache" / "fdstk" / "dat"
+    assert cache_root() == tmp_path / ".cache" / "fdstoolkit" / "dat"
 
 
 def test_a_first_load_is_a_miss_and_writes_the_cache(tmp_path: Path) -> None:

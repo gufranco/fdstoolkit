@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.hardware.session import Grade
-from fdstk.hardware.simulation import FaultPlan, SimulatedDrive
-from fdstk.quality.surface import (
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.hardware.session import Grade
+from fdstoolkit.hardware.simulation import FaultPlan, SimulatedDrive
+from fdstoolkit.quality.surface import (
     PATTERNS,
     PatternPass,
     SurfaceReport,

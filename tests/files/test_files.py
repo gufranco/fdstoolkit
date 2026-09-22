@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode, encode
-from fdstk.core.blocks import FileKind
-from fdstk.core.disk import Disk
-from fdstk.edit.files import (
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode, encode
+from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.edit.files import (
     FileSpec,
     declared_file_count,
     extract_files,

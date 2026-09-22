@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.patch.build import IPS_MAX_OFFSET, build_ips
-from fdstk.patch.formats import PatchError, apply_ips
+from fdstoolkit.patch.build import IPS_MAX_OFFSET, build_ips
+from fdstoolkit.patch.formats import PatchError, apply_ips
 
 
 def test_a_patch_between_identical_files_changes_nothing() -> None:

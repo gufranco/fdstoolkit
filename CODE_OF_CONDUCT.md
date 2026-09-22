@@ -29,7 +29,7 @@ Issues, pull requests, discussions and commit messages on this repository.
 ## Enforcement
 
 Report it through
-[GitHub's private vulnerability reporting](https://github.com/gufranco/famicom-disk-system-python/security/advisories/new)
+[GitHub's private vulnerability reporting](https://github.com/gufranco/fdstoolkit/security/advisories/new)
 when it should stay private, and in the thread itself when it should not. This
 is a small project with one maintainer, so the realistic response is that a
 comment gets removed, or a person gets blocked, and that is the whole

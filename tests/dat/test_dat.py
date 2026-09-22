@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.identify.dat import Catalogue, DatEntry, MatchKind, identify, load_dat
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.identify.dat import Catalogue, DatEntry, MatchKind, identify, load_dat
 
 
 def entry_xml(name: str, data: bytes, *, sha256: bool = True) -> str:

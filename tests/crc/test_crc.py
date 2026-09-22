@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.core.crc import block_crc, decode_crc, encode_crc
+from fdstoolkit.core.crc import block_crc, decode_crc, encode_crc
 
 
 def test_crc_of_a_file_amount_block_matches_the_drive_algorithm() -> None:

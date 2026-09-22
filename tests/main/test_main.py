@@ -8,16 +8,16 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import fdstk.cli.main as cli
-from fdstk.build.blank import blank_image
-from fdstk.cli.main import app
-from fdstk.codecs.fds import SIDE_SIZE
-from fdstk.codecs.qd import encode as encode_qd
-from fdstk.core.blocks import Block, BlockKind
-from fdstk.core.disk import Disk, Side
-from fdstk.doctor import Check, CheckStatus, DoctorReport
-from fdstk.hardware.simulation import FaultPlan, SimulatedDrive
-from fdstk.identify import firmware
+import fdstoolkit.cli.main as cli
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.cli.main import app
+from fdstoolkit.codecs.fds import SIDE_SIZE
+from fdstoolkit.codecs.qd import encode as encode_qd
+from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.doctor import Check, CheckStatus, DoctorReport
+from fdstoolkit.hardware.simulation import FaultPlan, SimulatedDrive
+from fdstoolkit.identify import firmware
 
 runner = CliRunner()
 
@@ -115,7 +115,7 @@ def test_hash_reports_every_algorithm(image: Path) -> None:
 
     assert set(payload["image"]) == {"size", "crc32", "md5", "sha1", "sha256"}
     assert len(payload["sides"]) == 2
-    assert payload["canonical"].startswith("fdscanon:v1:content/v1:")
+    assert payload["canonical"].startswith("fdstoolkit:v1:content/v1:")
 
 
 def test_convert_writes_a_qd(image: Path, tmp_path: Path) -> None:
@@ -164,7 +164,7 @@ def test_canon_writes_the_canonical_image(image: Path, tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert out.stat().st_size == 2 * SIDE_SIZE
-    assert "fdscanon:v1:content/v1:" in result.stdout
+    assert "fdstoolkit:v1:content/v1:" in result.stdout
 
 
 def test_canon_accepts_a_profile(image: Path) -> None:
@@ -654,7 +654,7 @@ def test_hash_prints_a_human_report(image: Path) -> None:
     result = runner.invoke(app, ["hash", str(image)])
 
     assert "sha256" in result.stdout
-    assert "canonical fdscanon:v1:content/v1:" in result.stdout
+    assert "canonical fdstoolkit:v1:content/v1:" in result.stdout
 
 
 def test_hash_rejects_an_unknown_profile(image: Path) -> None:
@@ -1394,7 +1394,7 @@ def test_the_version_flag_prints_the_version() -> None:
     result = runner.invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.stdout.startswith("fdstk ")
+    assert result.stdout.startswith("fdstoolkit ")
 
 
 def test_the_help_lists_the_commands() -> None:
@@ -2268,7 +2268,7 @@ def test_doctor_reports_the_installation() -> None:
     result = runner.invoke(app, ["doctor"])
 
     assert result.exit_code == 0
-    assert "fdstk" in result.stdout
+    assert "fdstoolkit" in result.stdout
     assert "dat cache" in result.stdout
 
 
@@ -2276,7 +2276,7 @@ def test_doctor_can_emit_json() -> None:
     payload = json.loads(runner.invoke(app, ["doctor", "--json"]).stdout)
 
     assert payload["healthy"] is True
-    assert {check["name"] for check in payload["checks"]} >= {"fdstk", "python", "dat cache"}
+    assert {check["name"] for check in payload["checks"]} >= {"fdstoolkit", "python", "dat cache"}
 
 
 def test_doctor_fails_on_an_unhealthy_installation(monkeypatch: pytest.MonkeyPatch) -> None:

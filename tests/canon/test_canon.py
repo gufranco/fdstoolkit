@@ -4,10 +4,10 @@ import hashlib
 
 import pytest
 
-from fdstk.codecs.fds import SIDE_SIZE, decode
-from fdstk.codecs.qd import decode as decode_qd
-from fdstk.codecs.qd import encode as encode_qd
-from fdstk.core.canon import (
+from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.codecs.qd import decode as decode_qd
+from fdstoolkit.codecs.qd import encode as encode_qd
+from fdstoolkit.core.canon import (
     CANON_VERSION,
     canonicalise,
     digest_string,
@@ -15,7 +15,7 @@ from fdstk.core.canon import (
     profile_by_name,
     restore,
 )
-from fdstk.core.diskinfo import (
+from fdstoolkit.core.diskinfo import (
     CONTENT_PROFILE,
     DATA_PROFILE,
     RAW_PROFILE,
@@ -144,7 +144,7 @@ def test_the_digest_string_names_its_version_and_profile() -> None:
 
     text = digest_string(canonicalise(disk, CONTENT_PROFILE))
 
-    assert text.startswith(f"fdscanon:v{CANON_VERSION}:content/v1:")
+    assert text.startswith(f"fdstoolkit:v{CANON_VERSION}:content/v1:")
     assert parse_digest_string(text).profile == "content/v1"
 
 
@@ -207,7 +207,7 @@ def test_an_unknown_profile_name_is_rejected() -> None:
 
 def test_a_digest_string_with_a_bad_version_is_rejected() -> None:
     with pytest.raises(ValueError, match="not a canonical digest"):
-        parse_digest_string("fdscanon:vX:content/v1:abc")
+        parse_digest_string("fdstoolkit:vX:content/v1:abc")
 
 
 def test_a_canonical_side_longer_than_the_nominal_size_is_kept_whole() -> None:

@@ -4,13 +4,13 @@ import hashlib
 
 import pytest
 
-from fdstk.build.blank import (
+from fdstoolkit.build.blank import (
     REFERENCE_BLANK_64_SHA256,
     REFERENCE_BLANK_128_SHA256,
     blank_image,
 )
-from fdstk.codecs.fds import SIDE_SIZE, decode
-from fdstk.core.diskinfo import DiskInfo
+from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.core.diskinfo import DiskInfo
 
 
 def test_an_unformatted_single_side_matches_the_reference_blank() -> None:

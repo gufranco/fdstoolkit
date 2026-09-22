@@ -76,7 +76,7 @@ jobs:
               requirement.split(">")[0].split("=")[0].split("[")[0].strip().lower()
               for requirement in project["dependencies"]
           }
-          seeded = {"pip", "setuptools", "fdstk"}
+          seeded = {"pip", "setuptools", "fdstoolkit"}
           held = json.loads(Path("sbom.json").read_text())
           named = sorted(one["name"].lower() for one in held.get("components", ()))
           extra = [one for one in named if one not in declared | seeded]

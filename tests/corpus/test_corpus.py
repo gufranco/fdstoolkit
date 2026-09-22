@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from fdstk.codecs import fds, qd
-from fdstk.core.canon import canonicalise, restore
-from fdstk.core.disk import Disk
-from fdstk.core.diskinfo import CONTENT_PROFILE, DISK_INFO_FIELDS, RAW_PROFILE, mask_disk_info
+from fdstoolkit.codecs import fds, qd
+from fdstoolkit.core.canon import canonicalise, restore
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.diskinfo import CONTENT_PROFILE, DISK_INFO_FIELDS, RAW_PROFILE, mask_disk_info
 
 pytestmark = pytest.mark.corpus
 
-CORPUS_ENV = "FDSTK_CORPUS"
+CORPUS_ENV = "FDSTOOLKIT_CORPUS"
 
 
 def corpus_root() -> Path:
@@ -163,9 +163,9 @@ def test_the_canonical_digest_does_not_depend_on_the_environment(fds_images: lis
     sample = [str(path) for path in fds_images[:25]]
     script = (
         "import sys;"
-        "from fdstk.codecs import fds;"
-        "from fdstk.core.canon import canonicalise;"
-        "from fdstk.core.diskinfo import CONTENT_PROFILE;"
+        "from fdstoolkit.codecs import fds;"
+        "from fdstoolkit.core.canon import canonicalise;"
+        "from fdstoolkit.core.diskinfo import CONTENT_PROFILE;"
         "print('\\n'.join("
         "canonicalise(fds.decode(open(path,'rb').read())[0], CONTENT_PROFILE).sha256"
         " for path in sys.argv[1:]))"

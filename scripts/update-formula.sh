@@ -3,11 +3,11 @@ set -euo pipefail
 
 tag=${1:?tag required}
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-formula="${root}/Formula/fdstk.rb"
-repo=${FDSTK_REPO:-gufranco/famicom-disk-system-python}
+formula="${root}/Formula/fdstoolkit.rb"
+repo=${FDSTOOLKIT_REPO:-gufranco/fdstoolkit}
 url="https://github.com/${repo}/archive/refs/tags/${tag}.tar.gz"
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/fdstk-formula-XXXXXX")
+work=$(mktemp -d "${TMPDIR:-/tmp}/fdstoolkit-formula-XXXXXX")
 trap 'rm -rf "$work"' EXIT
 
 if ! curl -fsSL --retry 5 --retry-all-errors "$url" -o "${work}/source.tar.gz"; then

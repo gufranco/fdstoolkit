@@ -4,12 +4,12 @@ from dataclasses import replace
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.blocks import Block, BlockKind, FileKind
-from fdstk.core.disk import Disk
-from fdstk.edit.files import FileSpec, insert_file
-from fdstk.quality.layout import BIT_RATE_HZ, layout_of
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.blocks import Block, BlockKind, FileKind
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.edit.files import FileSpec, insert_file
+from fdstoolkit.quality.layout import BIT_RATE_HZ, layout_of
 
 
 def sample(*, files: int = 0, size: int = 1024) -> Disk:

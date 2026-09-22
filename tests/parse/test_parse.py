@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from fdstk.core.blocks import CrcStatus
-from fdstk.core.crc import block_crc, encode_crc
-from fdstk.core.parse import parse_side
+from fdstoolkit.core.blocks import CrcStatus
+from fdstoolkit.core.crc import block_crc, encode_crc
+from fdstoolkit.core.parse import parse_side
 
 FDS_SIDE = 65500
 

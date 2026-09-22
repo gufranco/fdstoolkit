@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.build.targets import TARGETS, export_for, swap_warnings
-from fdstk.codecs.fds import SIDE_SIZE, decode
-from fdstk.core.blocks import FileKind
-from fdstk.core.disk import Disk
-from fdstk.edit.files import FileSpec, insert_file
-from fdstk.identify import firmware
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
+from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.edit.files import FileSpec, insert_file
+from fdstoolkit.identify import firmware
 
 
 def game(*, sides: int = 2) -> Disk:

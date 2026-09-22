@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fdstk.core.diagnostics import CODES, Diagnostic, Severity, worst_severity
+from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity, worst_severity
 
 
 def test_a_diagnostic_carries_its_code_and_location() -> None:

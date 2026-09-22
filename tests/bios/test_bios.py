@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.bios import BIOS_ERRORS, BootVerdict, predict_boot
-from fdstk.core.blocks import FileKind
-from fdstk.core.disk import Disk
-from fdstk.edit.files import FileSpec, insert_file
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.bios import BIOS_ERRORS, BootVerdict, predict_boot
+from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.edit.files import FileSpec, insert_file
 
 KYODAKU_ADDRESS = 0x2800
 

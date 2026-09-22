@@ -4,14 +4,14 @@ from dataclasses import replace
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.codecs.qd import decode as decode_qd
-from fdstk.codecs.qd import encode as encode_qd
-from fdstk.core.blocks import Block, BlockKind, FileKind
-from fdstk.core.disk import Disk, Side
-from fdstk.edit.files import FileSpec, insert_file
-from fdstk.edit.rebuild import RebuildOptions, rebuild
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.codecs.qd import decode as decode_qd
+from fdstoolkit.codecs.qd import encode as encode_qd
+from fdstoolkit.core.blocks import Block, BlockKind, FileKind
+from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.edit.files import FileSpec, insert_file
+from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 
 
 def sample(*, files: int = 1) -> Disk:

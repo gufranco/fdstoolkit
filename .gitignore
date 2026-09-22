@@ -3,8 +3,8 @@ __pycache__/
 .venv/
 /dist/
 /build/
-!src/fdstk/build/
-!src/fdstk/build/*.py
+!src/fdstoolkit/build/
+!src/fdstoolkit/build/*.py
 !tests/build/
 !tests/build/*.py
 *.egg-info/

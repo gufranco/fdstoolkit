@@ -4,16 +4,16 @@ from collections import deque
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.disk import Disk
-from fdstk.hardware.dumper import (
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.hardware.dumper import (
     MIN_PROTOCOL_VERSION,
     Command,
     FamicomDumper,
     Packet,
 )
-from fdstk.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 
 
 class FakeLink:

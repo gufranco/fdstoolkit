@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.core.blocks import Block, BlockKind
-from fdstk.core.disk import Disk, Side
+from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.disk import Disk, Side
 
 
 def disk_info_block() -> Block:

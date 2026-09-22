@@ -1,11 +1,11 @@
 <div align="center">
 
-<h1>fdstk</h1>
+<h1>fdstoolkit</h1>
 
 <strong>Read, verify and identify Famicom Disk System images, and dump or write real disks.</strong>
 
-[![ci](https://github.com/gufranco/famicom-disk-system-python/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/famicom-disk-system-python/actions/workflows/ci.yml)
-[![analysis](https://github.com/gufranco/famicom-disk-system-python/actions/workflows/analysis.yml/badge.svg)](https://github.com/gufranco/famicom-disk-system-python/actions/workflows/analysis.yml)
+[![ci](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
+[![analysis](https://github.com/gufranco/fdstoolkit/actions/workflows/analysis.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/analysis.yml)
 [![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#development)
 [![tests](https://img.shields.io/badge/tests-898-brightgreen)](#development)
 [![types](https://img.shields.io/badge/types-pyright%20strict-blue)](#development)
@@ -30,19 +30,19 @@
 The tools in circulation answer the easy half of the question. They convert a good image into another good image. They do not tell you whether a dump is trustworthy, what a conversion threw away, why two dumps of the same game differ, what a console would do with the disk, or whether the disk you just overwrote was written correctly.
 
 ```console
-$ fds info "Falsion (Japan).fds"
+$ fdstoolkit info "Falsion (Japan).fds"
 Falsion (Japan).fds: fds container, 2 side(s), 131000 bytes
   side 0: FAL files=6 hidden=0 rewrites=0
   side 1: FAL files=10 hidden=0 rewrites=0
 
-$ fds diff "Falsion (Japan).fds" "Falsion (Japan).qd" --explain
+$ fdstoolkit diff "Falsion (Japan).fds" "Falsion (Japan).qd" --explain
 same software, 6 provenance field(s) differ
   side 0 manufacturing_date (provenance): 1987-10-09 against 1987-09-22
   side 0 unknown_27 (provenance): 0099032001 against 00ffffff00
   side 0 rewritten_date (provenance): 1987-10-09 against ffffff
 
-$ fds canon "Falsion (Japan).qd" --profile release
-fdscanon:v1:release/v1:826f23fad684f7acdb59b0132c4714e080f80e7a63e19cbce8a964e384fc1186
+$ fdstoolkit canon "Falsion (Japan).qd" --profile release
+fdstoolkit:v1:release/v1:826f23fad684f7acdb59b0132c4714e080f80e7a63e19cbce8a964e384fc1186
 ```
 
 Those are dumps of two different physical disks, in two different containers, and the last line is the same for both.
@@ -69,14 +69,14 @@ Those are dumps of two different physical disks, in two different containers, an
 ### Install
 
 ```bash
-brew tap gufranco/famicom-disk-system-python https://github.com/gufranco/famicom-disk-system-python
-brew install gufranco/famicom-disk-system-python/fdstk
+brew tap gufranco/fdstoolkit https://github.com/gufranco/fdstoolkit
+brew install gufranco/fdstoolkit/fdstoolkit
 ```
 
 Or straight from the repository, with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install git+https://github.com/gufranco/famicom-disk-system-python
+uv tool install git+https://github.com/gufranco/fdstoolkit
 ```
 
 This is not on PyPI, deliberately. The two lines above are the whole distribution.
@@ -84,20 +84,20 @@ This is not on PyPI, deliberately. The two lines above are the whole distributio
 ### Verify
 
 ```bash
-fds doctor
+fdstoolkit doctor
 ```
 
 ### Use it
 
 ```bash
-fds info game.fds                      # what is on the disk
-fds verify game.fds --strict           # does it hold together
-fds hash game.fds                      # every digest, including the canonical one
-fds boot game.fds                      # what the console would do with it
-fds identify game.fds --dat fds.dat    # what it is
-fds convert game.fds -o game.qd        # convert, losslessly
-fds layout game.fds                    # where each file sits, and what it costs to reach
-fds rebuild game.fds -o fixed.fds      # repair what can be repaired
+fdstoolkit info game.fds                      # what is on the disk
+fdstoolkit verify game.fds --strict           # does it hold together
+fdstoolkit hash game.fds                      # every digest, including the canonical one
+fdstoolkit boot game.fds                      # what the console would do with it
+fdstoolkit identify game.fds --dat fds.dat    # what it is
+fdstoolkit convert game.fds -o game.qd        # convert, losslessly
+fdstoolkit layout game.fds                    # where each file sits, and what it costs to reach
+fdstoolkit rebuild game.fds -o fixed.fds      # repair what can be repaired
 ```
 
 Every command takes `--json` where a report makes sense, with sorted keys and no timestamp, so the output is diffable and scriptable. The exit code follows the worst finding.
@@ -145,7 +145,7 @@ Nothing here has touched a real drive. Saying so is worth more than a claim that
 
 ## No game data
 
-This repository holds no disk image, no BIOS, and no link to either. Tests run on synthetic disks the toolkit generates. A test that needs a real dump is skipped unless `FDSTK_CORPUS` points at a directory of your own files.
+This repository holds no disk image, no BIOS, and no link to either. Tests run on synthetic disks the toolkit generates. A test that needs a real dump is skipped unless `FDSTOOLKIT_CORPUS` points at a directory of your own files.
 
 ## Development
 

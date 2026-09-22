@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode as decode_fds
-from fdstk.codecs.raw import (
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode as decode_fds
+from fdstoolkit.codecs.raw import (
     GAP_VALUE,
     LEAD_IN_PACKED,
     MIN_GAP_VALUES,
@@ -20,7 +20,7 @@ from fdstk.codecs.raw import (
     to_write_alphabet,
     unpack_raw03,
 )
-from fdstk.core.crc import encode_crc
+from fdstoolkit.core.crc import encode_crc
 
 
 def sample_disk(files: int = 1):  # noqa: ANN201

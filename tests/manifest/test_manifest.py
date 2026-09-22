@@ -6,11 +6,11 @@ from typing import Any
 
 import pytest
 
-from fdstk.build.manifest import DiskManifest, build_from_manifest, load_manifest
-from fdstk.codecs.fds import SIDE_SIZE, decode
-from fdstk.core.blocks import FileKind
-from fdstk.core.diskinfo import DiskInfo
-from fdstk.edit.files import extract_files
+from fdstoolkit.build.manifest import DiskManifest, build_from_manifest, load_manifest
+from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.diskinfo import DiskInfo
+from fdstoolkit.edit.files import extract_files
 
 
 def manifest_dict(tmp_path: Path) -> dict[str, Any]:

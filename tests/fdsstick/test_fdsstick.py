@@ -4,11 +4,11 @@ from collections import deque
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode as decode_fds
-from fdstk.codecs.raw import encode_raw03
-from fdstk.hardware import fdsstick as fdsstick_module
-from fdstk.hardware.fdsstick import (
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode as decode_fds
+from fdstoolkit.codecs.raw import encode_raw03
+from fdstoolkit.hardware import fdsstick as fdsstick_module
+from fdstoolkit.hardware.fdsstick import (
     BULK_READ_PAYLOAD,
     BULK_WRITE_PAYLOAD,
     MAX_PACKETS_PER_SIDE,
@@ -19,7 +19,7 @@ from fdstk.hardware.fdsstick import (
     ReportId,
     open_fdsstick,
 )
-from fdstk.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 
 
 class FakeTransport:
@@ -284,7 +284,7 @@ def test_opening_reports_a_device_that_does_not_answer(monkeypatch: pytest.Monke
         def device(self) -> FakeHidDevice:
             return RefusingDevice()
 
-    monkeypatch.setattr("fdstk.hardware.fdsstick._load_hid", FakeModule)
+    monkeypatch.setattr("fdstoolkit.hardware.fdsstick._load_hid", FakeModule)
 
     with pytest.raises(HardwareFaultError, match="no FDSStick answered"):
         open_fdsstick()
@@ -297,7 +297,7 @@ def test_opening_returns_a_device_that_has_shaken_hands(monkeypatch: pytest.Monk
         def device(self) -> FakeHidDevice:
             return device
 
-    monkeypatch.setattr("fdstk.hardware.fdsstick._load_hid", FakeModule)
+    monkeypatch.setattr("fdstoolkit.hardware.fdsstick._load_hid", FakeModule)
 
     stick = open_fdsstick()
 

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.codecs.fds import HEADER_SIZE, SIDE_SIZE, build_header, decode, encode, has_header
-from fdstk.core.blocks import Block, BlockKind
-from fdstk.core.disk import Disk, Side
+from fdstoolkit.codecs.fds import HEADER_SIZE, SIDE_SIZE, build_header, decode, encode, has_header
+from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.disk import Disk, Side
 
 
 def disk_info() -> bytes:

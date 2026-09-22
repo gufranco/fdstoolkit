@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import decode
-from fdstk.core.diagnostics import Diagnostic, Severity
-from fdstk.core.disk import Disk
-from fdstk.edit.multidisk import MAX_SIDES, merge, unmerge
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.diagnostics import Diagnostic, Severity
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.edit.multidisk import MAX_SIDES, merge, unmerge
 
 
 def game(*, name: str = "SMB", sides: int = 2) -> Disk:

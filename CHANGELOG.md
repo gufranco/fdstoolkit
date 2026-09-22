@@ -14,25 +14,25 @@ Checksums are the reflected-0x8408 CRC-16 the hardware computes, confirmed again
 
 ### Verifying
 
-`fds verify` reports every finding with a severity, and `--strict` fails on a warning too. `fds info` and `fds ls` answer what a side holds, hidden files included: a file past the declared count is usually the interesting part of a dump, so nothing here quietly normalises one away.
+`fdstoolkit verify` reports every finding with a severity, and `--strict` fails on a warning too. `fdstoolkit info` and `fdstoolkit ls` answer what a side holds, hidden files included: a file past the declared count is usually the interesting part of a dump, so nothing here quietly normalises one away.
 
-`fds rebuild` re-emits an image from its parsed model, recomputing a checksum that is null or wrong, correcting a file header whose declared size disagrees with its data, and dropping bytes after the last block. Hidden files survive unless `--drop-hidden` or `--reveal-hidden` says otherwise.
+`fdstoolkit rebuild` re-emits an image from its parsed model, recomputing a checksum that is null or wrong, correcting a file header whose declared size disagrees with its data, and dropping bytes after the last block. Hidden files survive unless `--drop-hidden` or `--reveal-hidden` says otherwise.
 
 ### Multi-disk sets
 
-`fds merge` joins the disks of a multi-disk game into one image and `fds unmerge` splits one back into a file per disk. The split reads the boundary from the disk information, since a set may label its disks by game code while leaving the disk number at zero.
+`fdstoolkit merge` joins the disks of a multi-disk game into one image and `fdstoolkit unmerge` splits one back into a file per disk. The split reads the boundary from the disk information, since a set may label its disks by game code while leaving the disk number at zero.
 
 ### Layout
 
-`fds layout` reports where each file sits on a side and what the drive costs to reach it. An FDS side is one sequential stream with no allocation table, so fragmentation in the floppy sense cannot occur; the cost is distance, and the report names it in bytes and in seconds, along with dead weight after the last block and what ordering files smallest first would save.
+`fdstoolkit layout` reports where each file sits on a side and what the drive costs to reach it. An FDS side is one sequential stream with no allocation table, so fragmentation in the floppy sense cannot occur; the cost is distance, and the report names it in bytes and in seconds, along with dead weight after the last block and what ordering files smallest first would save.
 
 ### Identity and determinism
 
-Four identity levels, so a digest can never be read without knowing what produced it: `raw` for the exact bytes, `content` for the same software from any physical disk, `release` for the same release whether it came off a factory disk or was rebuilt, `data` for the program alone. A canonical digest prints as `fdscanon:v1:<profile>/v1:<sha256>`, and canonicalisation is reversible through a sidecar that holds everything the projection removed.
+Four identity levels, so a digest can never be read without knowing what produced it: `raw` for the exact bytes, `content` for the same software from any physical disk, `release` for the same release whether it came off a factory disk or was rebuilt, `data` for the program alone. A canonical digest prints as `fdstoolkit:v1:<profile>/v1:<sha256>`, and canonicalisation is reversible through a sidecar that holds everything the projection removed.
 
 The masking profile was derived from measurement, not assumption. Across 1,513 corpus sides, 484 groups share identical file data while 352 still differ as whole sides, and every one of those differences sits in a disk-information provenance field.
 
-`fds identify` matches against a No-Intro style DAT, caches the parsed catalogue by content, and with `--reference` reports the nearest known image and the byte runs that separate it when nothing matches exactly. `fds diff --explain` answers with the field that moved rather than the block that differs.
+`fdstoolkit identify` matches against a No-Intro style DAT, caches the parsed catalogue by content, and with `--reference` reports the nearest known image and the byte runs that separate it when nothing matches exactly. `fdstoolkit diff --explain` answers with the field that moved rather than the block that differs.
 
 ### Creating and editing
 
@@ -40,10 +40,10 @@ Blank images from one to eight sides, formatted or not, headered or not, reprodu
 
 ### Hardware
 
-An FDSStick backend and a simulated drive that exercises the whole flow without a cable. The Famicom Dumper protocol is implemented and tested as a library, including the status codes for a missing disk, a flat battery and a write-protected disk; the CLI does not open its serial link yet. A dump can run several passes and merge them by per-block majority, with `fds consensus --map` printing where the passes disagreed. A write reads the disk back and compares, which is the only verification available: an FD3206 controller refuses a write without being able to say so.
+An FDSStick backend and a simulated drive that exercises the whole flow without a cable. The Famicom Dumper protocol is implemented and tested as a library, including the status codes for a missing disk, a flat battery and a write-protected disk; the CLI does not open its serial link yet. A dump can run several passes and merge them by per-block majority, with `fdstoolkit consensus --map` printing where the passes disagreed. A write reads the disk back and compares, which is the only verification available: an FD3206 controller refuses a write without being able to say so.
 
 Every hardware path is tested against a fake transport. None of it has touched a real drive. The hardware verification steps under `docs/` list what to run when the cable exists, and what a failure at each step would mean.
 
 ### FDSKey
 
-Card images for both firmware variants, and `fds lint` predicting whether FDSKey will load an image before the card goes back in the machine.
+Card images for both firmware variants, and `fdstoolkit lint` predicting whether FDSKey will load an image before the card goes back in the machine.

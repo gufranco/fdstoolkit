@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Please do not attach a disk image or a BIOS. If a specific file is
-        involved, `fds hash` prints the digests that identify it without
+        involved, `fdstoolkit hash` prints the digests that identify it without
         sending it anywhere.
 
   - type: textarea
@@ -29,7 +29,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: The output of `fds doctor`, or the release tag you installed.
+      description: The output of `fdstoolkit doctor`, or the release tag you installed.
     validations:
       required: true
 

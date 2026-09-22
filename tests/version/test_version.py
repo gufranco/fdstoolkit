@@ -5,8 +5,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import fdstk
-from fdstk.version import VERSION
+import fdstoolkit
+from fdstoolkit.version import VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
 BASH = shutil.which("bash") or "/bin/bash"
@@ -18,11 +18,11 @@ def test_the_version_is_a_semantic_version() -> None:
 
 
 def test_the_package_exposes_the_same_version() -> None:
-    assert fdstk.__version__ == VERSION
+    assert fdstoolkit.__version__ == VERSION
 
 
 def test_the_version_script_rewrites_the_one_place_it_lives(tmp_path: Path) -> None:
-    source = tmp_path / "src" / "fdstk"
+    source = tmp_path / "src" / "fdstoolkit"
     source.mkdir(parents=True)
     (source / "version.py").write_text('VERSION = "0.1.0"\n', encoding="utf-8")
     scripts = tmp_path / "scripts"

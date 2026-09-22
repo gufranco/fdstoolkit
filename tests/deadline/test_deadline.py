@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.hardware.deadline import Deadline, DeadlineExceededError, guard
-from fdstk.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.hardware.deadline import Deadline, DeadlineExceededError, guard
+from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 
 
 def test_a_deadline_that_has_not_passed_is_alive() -> None:

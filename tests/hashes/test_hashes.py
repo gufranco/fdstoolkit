@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import zlib
 
-from fdstk.codecs.fds import SIDE_SIZE
-from fdstk.identify.hashes import Digests, digests_of, retroachievements_hash, side_digests
+from fdstoolkit.codecs.fds import SIDE_SIZE
+from fdstoolkit.identify.hashes import Digests, digests_of, retroachievements_hash, side_digests
 
 
 def headered(sides: int = 1) -> bytes:

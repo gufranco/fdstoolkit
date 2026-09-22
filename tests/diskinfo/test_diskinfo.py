@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from fdstk.core.diskinfo import (
+from fdstoolkit.core.diskinfo import (
     CONTENT_PROFILE,
     DATA_PROFILE,
     DISK_INFO_FIELDS,

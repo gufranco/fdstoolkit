@@ -3,15 +3,15 @@ from __future__ import annotations
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from fdstk.codecs import fds, qd
-from fdstk.codecs.raw import RawEncoding, decode_raw03, encode_block_stream, unpack_raw03
-from fdstk.core.blocks import Block, BlockKind
-from fdstk.core.canon import canonicalise, restore
-from fdstk.core.crc import block_crc, decode_crc, encode_crc
-from fdstk.core.disk import Disk, Side
-from fdstk.core.diskinfo import CONTENT_PROFILE, VERIFICATION_STRING
-from fdstk.patch.build import build_ips
-from fdstk.patch.formats import apply_ips
+from fdstoolkit.codecs import fds, qd
+from fdstoolkit.codecs.raw import RawEncoding, decode_raw03, encode_block_stream, unpack_raw03
+from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.canon import canonicalise, restore
+from fdstoolkit.core.crc import block_crc, decode_crc, encode_crc
+from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.diskinfo import CONTENT_PROFILE, VERIFICATION_STRING
+from fdstoolkit.patch.build import build_ips
+from fdstoolkit.patch.formats import apply_ips
 
 SETTINGS = settings(max_examples=60, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 

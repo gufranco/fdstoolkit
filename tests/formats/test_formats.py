@@ -4,7 +4,7 @@ import zlib
 
 import pytest
 
-from fdstk.patch.formats import (
+from fdstoolkit.patch.formats import (
     PatchError,
     PatchFormat,
     apply_bps,

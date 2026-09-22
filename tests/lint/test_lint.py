@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import SIDE_SIZE
-from fdstk.fdskey.lint import CARD_FILE_SUFFIX, FIRMWARE_BUFFER, lint_card_image
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import SIDE_SIZE
+from fdstoolkit.fdskey.lint import CARD_FILE_SUFFIX, FIRMWARE_BUFFER, lint_card_image
 
 
 def formatted(sides: int = 1) -> bytes:

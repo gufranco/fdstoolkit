@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from fdstk.edit.recipes import RECIPE_VERSION, load_recipes, recipes_for
-from fdstk.edit.saves import SaveRecipe
+from fdstoolkit.edit.recipes import RECIPE_VERSION, load_recipes, recipes_for
+from fdstoolkit.edit.saves import SaveRecipe
 
 
 def recipe_file(tmp_path: Path, **overrides: Any) -> Path:

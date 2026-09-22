@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fdstk.build.blank import blank_image
-from fdstk.codecs.fds import build_header
-from fdstk.identify.near import NEAR_THRESHOLD, byte_diff, nearest_match, reference_images
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import build_header
+from fdstoolkit.identify.near import NEAR_THRESHOLD, byte_diff, nearest_match, reference_images
 
 
 def blank(*, headered: bool = False, game_name: str = "SMB") -> bytes:

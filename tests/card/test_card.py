@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from fdstk.codecs.fds import SIDE_SIZE, decode
-from fdstk.fdskey.card import (
+from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.fdskey.card import (
     BACKUP_SUFFIX,
     EVERDRIVE_SAVE_NAME,
     FirmwareVariant,
@@ -15,7 +15,7 @@ from fdstk.fdskey.card import (
     everdrive_save_path,
     firmware_checksum,
 )
-from fdstk.fdskey.lint import lint_card_image
+from fdstoolkit.fdskey.lint import lint_card_image
 
 
 def test_a_checksum_file_holds_the_md5_as_hex_text() -> None:

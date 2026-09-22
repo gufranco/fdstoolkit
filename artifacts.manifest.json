@@ -7,7 +7,7 @@
       "size": 65516,
       "sha256": "021c40c7962f1395bf3ad70273264bdc4bf5cd98b212409d0551f7c5f1042776",
       "sha1": "3e1b095652ea298f97d53271fbe7add19074f181",
-      "reproducible": "fds blank -o blank64.fds --sides 1 --header"
+      "reproducible": "fdstoolkit blank -o blank64.fds --sides 1 --header"
     },
     {
       "id": "blank-128",
@@ -15,11 +15,11 @@
       "size": 131016,
       "sha256": "e6dd229af11a153ddefc50f18431a509d1890f9b39b8349f6108c3e29315bccc",
       "sha1": "ea5f00f6ac97ca29af2856f1eec04c53b3e5284e",
-      "reproducible": "fds blank -o blank128.fds --sides 2 --header"
+      "reproducible": "fdstoolkit blank -o blank128.fds --sides 2 --header"
     }
   ],
   "corpus": {
-    "environment_variable": "FDSTK_CORPUS",
+    "environment_variable": "FDSTOOLKIT_CORPUS",
     "note": "Point this at a local directory of your own .fds and .qd files to run the corpus tests. Nothing is copied, committed or transmitted."
   }
 }
