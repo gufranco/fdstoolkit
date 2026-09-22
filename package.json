@@ -1,0 +1,19 @@
+{
+  "name": "famicom-disk-system-python-release-tooling",
+  "version": "0.0.0-managed-by-semantic-release",
+  "private": true,
+  "description": "Release tooling only. The package itself is Python and is installed from a release tarball or through Homebrew.",
+  "license": "MIT",
+  "scripts": {
+    "format": "prettier --write \"**/*.{json,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{json,yml,yaml}\""
+  },
+  "devDependencies": {
+    "@semantic-release/exec": "7.1.0",
+    "@semantic-release/git": "11.0.1",
+    "@semantic-release/github": "12.0.9",
+    "prettier": "3.9.6",
+    "semantic-release": "25.0.9"
+  },
+  "packageManager": "pnpm@12.5.1"
+}

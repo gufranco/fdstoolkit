@@ -4,19 +4,13 @@
     "nt-mini": {
       "source": "https://github.com/SmokeMonsterPacks/Nt-Mini-Noir-Jailbreak",
       "reason": "custom disk routines, or the game does not ask for the proper side when loading",
-      "titles": [
-        "Doremikko",
-        "Koneko Monogatari",
-        "Bishoujo Shashinkan - Moving School"
-      ],
+      "titles": ["Doremikko", "Koneko Monogatari", "Bishoujo Shashinkan - Moving School"],
       "also": "some unlicensed games, which the source does not name"
     },
     "mister": {
       "source": "https://github.com/MiSTer-devel/NES_MiSTer/blob/master/README.md",
       "reason": "the game only works in manual disk swap mode, holding the FDS button",
-      "titles": [
-        "Gall Force"
-      ],
+      "titles": ["Gall Force"],
       "also": "the source says the list is not complete"
     }
   }

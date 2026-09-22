@@ -20,3 +20,4 @@ htmlcov/
 
 !specs/
 !specs/**
+node_modules/
