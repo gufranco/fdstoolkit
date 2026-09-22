@@ -170,7 +170,13 @@ jobs:
               count=1,
           )
           text = re.sub(r'sha256 "[0-9a-f]{64}"', f'sha256 "{checksum}"', text, count=1)
-          text = text.replace('  license "MIT"', '  version "0.0.0"\n  license "MIT"', 1)
+          recorded = re.search(
+              r'^VERSION = "([^"]+)"$', Path("src/fdstk/version.py").read_text(), re.MULTILINE
+          )
+          assert recorded, "no VERSION in src/fdstk/version.py"
+          text = text.replace(
+              '  license "MIT"', f'  version "{recorded.group(1)}"\n  license "MIT"', 1
+          )
           target.write_text(text)
           PATCH
           brew install --build-from-source gufranco/fdstk-ci/fdstk
