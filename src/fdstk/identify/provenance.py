@@ -104,12 +104,15 @@ def _notes_for(info: DiskInfo, origin: Origin) -> tuple[str, ...]:
         notes.append("rewritten but carries no Disk Writer serial")
     if info.rewrite_count == 0 and origin is Origin.REWRITTEN:
         notes.append("rewritten but the rewrite count is zero")
-    rewritten = info.rewritten_date
-    if origin is Origin.REWRITTEN and rewritten is not None and rewritten > KIOSK_SERVICE_ENDED:
-        notes.append(
-            f"rewritten {rewritten[0]:04d}-{rewritten[1]:02d}-{rewritten[2]:02d}, after the Disk "
-            "Writer service ended on 2003-09-30, so a modern tool wrote it rather than a kiosk"
-        )
+    for label, stamped in (
+        ("manufactured", info.manufacturing_date),
+        ("rewritten", info.rewritten_date),
+    ):
+        if stamped is not None and stamped > KIOSK_SERVICE_ENDED:
+            notes.append(
+                f"{label} {stamped[0]:04d}-{stamped[1]:02d}-{stamped[2]:02d}, after the Disk "
+                "Writer service ended on 2003-09-30, so a modern tool wrote it"
+            )
     signature = signature_in(info)
     if signature is not None:
         notes.append(

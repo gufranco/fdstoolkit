@@ -147,3 +147,9 @@ def test_an_unformatted_side_has_no_colour() -> None:
     blank, _ = decode(blank_image(sides=1, headered=False, formatted=False))
 
     assert provenance_of(blank).sides[0].disk_colour is None
+
+
+def test_a_manufacturing_date_after_the_service_ended_is_flagged() -> None:
+    report = provenance_of(disk_with_info(x1F=bytes([0x86, 0x05, 0x01])))
+
+    assert any(note.startswith("manufactured 2011") for note in report.sides[0].notes)
