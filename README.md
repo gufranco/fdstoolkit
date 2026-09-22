@@ -1,32 +1,10 @@
-<div align="center">
+# fdstoolkit
 
-<h1>fdstoolkit</h1>
-
-<strong>Read, verify and identify Famicom Disk System images, and dump or write real disks.</strong>
+Command line tools for Famicom Disk System disk images: convert between formats, verify structure and checksums, identify images against a DAT, edit and repair them, prepare them for emulators and flash carts, and dump or write real disks through supported hardware.
 
 [![ci](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
 [![analysis](https://github.com/gufranco/fdstoolkit/actions/workflows/analysis.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/analysis.yml)
-[![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#development)
-[![tests](https://img.shields.io/badge/tests-898-brightgreen)](#development)
-[![types](https://img.shields.io/badge/types-pyright%20strict-blue)](#development)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-
-<p align="center">
-  <a href="#quick-start"><strong>Quick start</strong></a> &nbsp;|&nbsp;
-  <a href="#commands">Commands</a> &nbsp;|&nbsp;
-  <a href="#identity">Identity</a> &nbsp;|&nbsp;
-  <a href="#hardware"><strong>Hardware</strong></a>
-</p>
-
-</div>
-
-**38** commands · **898** tests · **100%** coverage · **1,042** images measured · **no** disk image, BIOS or link to either
-
----
-
-## The problem
-
-The tools in circulation answer the easy half of the question. They convert a good image into another good image. They do not tell you whether a dump is trustworthy, what a conversion threw away, why two dumps of the same game differ, what a console would do with the disk, or whether the disk you just overwrote was written correctly.
 
 ```console
 $ fdstoolkit info "Falsion (Japan).fds"
@@ -37,115 +15,265 @@ Falsion (Japan).fds: fds container, 2 side(s), 131000 bytes
 $ fdstoolkit diff "Falsion (Japan).fds" "Falsion (Japan).qd" --explain
 same software, 6 provenance field(s) differ
   side 0 manufacturing_date (provenance): 1987-10-09 against 1987-09-22
-  side 0 unknown_27 (provenance): 0099032001 against 00ffffff00
   side 0 rewritten_date (provenance): 1987-10-09 against ffffff
 
 $ fdstoolkit canon "Falsion (Japan).qd" --profile release
 fdstoolkit:v1:release/v1:826f23fad684f7acdb59b0132c4714e080f80e7a63e19cbce8a964e384fc1186
 ```
 
-Those are dumps of two different physical disks, in two different containers, and the last line is the same for both.
-
-## What it does
-
-| Area | Capability |
-|---|---|
-| Convert | `.fds` headered or headerless, `.qd`, raw pulse streams, per-side copier files, ares side files |
-| Verify | Checksum per block, structure, hidden files, leftover data, and the error a console would show |
-| Identify | Match against a No-Intro DAT on any digest it carries, or report the nearest known image when nothing matches |
-| Determinism | Four identity levels, so the same release compares equal whatever disk it came from |
-| Create | Blank disks, or a whole disk built from a JSON manifest |
-| Edit | List, extract, insert and remove files, hidden ones included |
-| Repair | Rebuild an image from its parsed model: checksums, declared sizes, leftover data |
-| Patch | IPS, UPS and BPS, applied correctly whether the patch assumed a header or not |
-| Saves | Merge or extract emulator saves, and find which file is the save by comparing dumps |
-| Export | The layout each device expects, with the BIOS placed where it looks for it |
-| BIOS | Identify a disk system BIOS, extract one from a larger dump, and say which emulators accept it |
-| Hardware | Dump and write real disks through an FDSStick, with retries, stability passes and read-back verification |
-
-## Quick start
-
-### Install
+## Install
 
 ```bash
 brew tap gufranco/fdstoolkit https://github.com/gufranco/fdstoolkit
 brew install gufranco/fdstoolkit/fdstoolkit
 ```
 
-Or straight from the repository, with [uv](https://docs.astral.sh/uv/):
+With [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv tool install git+https://github.com/gufranco/fdstoolkit
 ```
 
-This is not on PyPI, deliberately. The two lines above are the whole distribution.
-
-### Verify
+The hardware commands need the `hardware` extra, which pulls in hidapi:
 
 ```bash
-fdstoolkit doctor
+uv tool install 'fdstoolkit[hardware] @ git+https://github.com/gufranco/fdstoolkit'
 ```
 
-### Use it
+Check the installation with `fdstoolkit doctor`. It prints the version, the interpreter, the platform, whether hidapi is present, whether an FDSStick is connected, and the DAT cache location.
 
-```bash
-fdstoolkit info game.fds                      # what is on the disk
-fdstoolkit verify game.fds --strict           # does it hold together
-fdstoolkit hash game.fds                      # every digest, including the canonical one
-fdstoolkit boot game.fds                      # what the console would do with it
-fdstoolkit identify game.fds --dat fds.dat    # what it is
-fdstoolkit convert game.fds -o game.qd        # convert, losslessly
-fdstoolkit layout game.fds                    # where each file sits, and what it costs to reach
-fdstoolkit rebuild game.fds -o fixed.fds      # repair what can be repaired
-```
-
-Every command takes `--json` where a report makes sense, with sorted keys and no timestamp, so the output is diffable and scriptable. The exit code follows the worst finding.
+Requires Python 3.12 or newer. Runs on macOS, Linux and Windows.
 
 ## Commands
 
-`fdstoolkit --help` lists all of them, and `fdstoolkit <command> --help` explains one.
+Every command that produces a report accepts `--json`. The exit code is 0 when nothing failed and 1 when something did.
+
+### Inspecting
+
+| Command | Output |
+|---|---|
+| `fdstoolkit info IMAGE` | Side count, game code, dates, rewrite count, file counts, hidden files |
+| `fdstoolkit ls IMAGE` | Every file with name, load address, kind, size, hidden flag |
+| `fdstoolkit verify IMAGE` | Structural and checksum findings. `--strict` fails on warnings |
+| `fdstoolkit hash IMAGE` | CRC32, MD5, SHA-1, SHA-256, per side, canonical digest, RetroAchievements MD5 |
+| `fdstoolkit provenance IMAGE` | Factory or kiosk rewrite, dates, Disk Writer serial, rewrite count, disk colour |
+| `fdstoolkit boot IMAGE` | What the console does with each side, and the BIOS error it would show |
+| `fdstoolkit layout IMAGE` | File offsets on the side, and the time the drive spends reaching them |
+| `fdstoolkit diff A B` | Which blocks differ. `--explain` names the fields and files instead |
+
+### Converting and creating
+
+| Command | Output |
+|---|---|
+| `fdstoolkit convert IMAGE -o OUT` | Between `.fds` and `.qd`. `--header`, `--crc-mode` |
+| `fdstoolkit canon IMAGE --profile P` | Canonical digest, and the canonical image with `-o` |
+| `fdstoolkit blank -o OUT --sides N` | Blank image. `--formatted` writes a disk information block |
+| `fdstoolkit build MANIFEST -o OUT` | A disk built from a JSON manifest |
+| `fdstoolkit card -o OUT` | A blank an FDSKey card accepts. `--firmware released` |
+| `fdstoolkit split IMAGE -d DIR` | One file per side, in copier layout |
+| `fdstoolkit join FILES -o OUT` | Side files back into one image, in any argument order |
+| `fdstoolkit merge DISK1 DISK2 -o OUT` | The disks of a multi-disk game into one image |
+| `fdstoolkit unmerge SET -d DIR` | A merged image back into one file per disk |
+| `fdstoolkit export IMAGE --target T -d DIR` | The layout a device expects. `--bios` places the BIOS too |
+| `fdstoolkit import-ares FILES -o OUT` | An image from ares side files, including its save |
+
+### Editing and repairing
+
+| Command | Output |
+|---|---|
+| `fdstoolkit extract IMAGE -d DIR` | Every file to disk, hidden ones included |
+| `fdstoolkit insert IMAGE --file F --name N -o OUT` | Adds a file and raises the declared count |
+| `fdstoolkit set IMAGE --set field=value -o OUT` | Changes disk information fields |
+| `fdstoolkit clean IMAGE -o OUT` | Removes bytes after the last block |
+| `fdstoolkit rebuild IMAGE -o OUT` | Recomputes checksums, corrects declared sizes, drops trailing data |
+| `fdstoolkit patch IMAGE --patch P -o OUT` | Applies IPS, UPS or BPS, with or without a header |
+
+`rebuild` keeps hidden files by default. `--reveal-hidden` raises the declared count to the number of files present, `--drop-hidden` removes them, `--keep-tail` leaves trailing data alone, and `--renumber` renumbers the file headers.
+
+### Saves
+
+| Command | Output |
+|---|---|
+| `fdstoolkit saves A B ...` | Compares dumps of one release and reports which file holds the save |
+| `fdstoolkit save-apply IMAGE --save S -o OUT` | Merges an IPS, UPS or BPS save, or a whole image |
+| `fdstoolkit save-extract IMAGE --played P -o OUT` | Writes the difference as a save. `--format ips\|ups\|image` |
+| `fdstoolkit normalise-saves IMAGE -o OUT` | Blanks a save area from a declared recipe |
+
+### Identifying
+
+| Command | Output |
+|---|---|
+| `fdstoolkit identify IMAGE --dat FILE` | The matching DAT entry and which digest matched |
+| `fdstoolkit identify IMAGE --dat FILE --reference DIR` | On no match, the nearest image in DIR and the differing byte runs |
+| `fdstoolkit dat-cache` | The parsed-DAT cache. `--clear` empties it |
+| `fdstoolkit bios FILE` | The BIOS revision, and which emulators accept the file. `--extract` pulls the 8 KB out of a larger dump |
+| `fdstoolkit lint IMAGE` | Whether FDSKey will load the image |
+
+### Hardware
+
+| Command | Output |
+|---|---|
+| `fdstoolkit dump -o OUT` | Reads a disk. `--passes`, `--retries`, `--raw DIR` to keep pulse captures |
+| `fdstoolkit write IMAGE` | Writes a disk, reads it back and compares. `--backup` first |
+| `fdstoolkit consensus A B ... -o OUT` | Merges dumps by majority. `--map` prints per-block agreement |
+| `fdstoolkit surface` | Writes and reads back four patterns to grade the media |
+
+Both take `--backend simulation` or `--backend fdsstick`. The simulated backend takes `--source IMAGE` to stand in for the disk.
+
+## Preserving a disk
+
+Dump twice and compare, because one dump only says what the drive read once:
+
+```bash
+fdstoolkit dump -o pass1.fds --backend fdsstick --retries 3
+fdstoolkit dump -o pass2.fds --backend fdsstick --retries 3
+fdstoolkit diff pass1.fds pass2.fds
+```
+
+If the passes disagree, merge them instead of choosing one. Blocks are decided by majority and ties are reported:
+
+```bash
+fdstoolkit consensus pass1.fds pass2.fds pass3.fds -o merged.fds --map
+```
+
+Check the result, then identify it:
+
+```bash
+fdstoolkit verify merged.fds --strict
+fdstoolkit identify merged.fds --dat "Nintendo - Family Computer Disk System.dat"
+fdstoolkit hash merged.fds
+```
+
+The verify report calls out three things worth reading: hidden files, which are blocks past the declared count and are often real content; leftover data after the last block, which is what the disk held before it was last written; and checksum failures.
+
+Write a working copy rather than playing the original:
+
+```bash
+fdstoolkit lint copy.fds
+fdstoolkit write copy.fds --backend fdsstick --backup before.fds
+```
+
+Keep the original image as dumped, with hidden files, leftover data and bad checksums intact. Canonical and cleaned copies are derived from it, and each one reverses back with its sidecar.
 
 ## Identity
 
-**Two dumps of one game are not byte-identical, and neither is wrong.** Measured across 1,513 sides: 352 groups hold identical file data and still differ, always in the disk information block, in the fields a kiosk rewrites.
+Two dumps of one game are rarely byte-identical, because a kiosk rewrite changes the manufacturing date, the rewritten date, the Disk Writer serial and the rewrite count. Across 1,513 sides measured here, 352 groups hold identical file data and still differ in those fields.
 
-So identity comes at four levels, and every digest prints which one produced it:
+`fdstoolkit canon` and `fdstoolkit hash` therefore report identity at four levels, and every digest carries the level that produced it:
 
-| Level | Answers |
+| Profile | Question it answers |
 |---|---|
 | `raw` | Is this the same dump of the same physical disk |
 | `content` | Is this the same software, whatever disk it came from |
-| `release` | Is this the same release, whether it came off a factory disk or was rebuilt |
+| `release` | Is this the same release, from a factory disk or a rebuild |
 | `data` | Is the program identical, ignoring the disk label |
 
-Of 144 corpus groups whose file data is byte-identical, `content` agrees on 125 and `release` agrees on 142. The two that remain are one physical side labelled disk 0 in one dump and disk 1 in another, which is a real difference and stays visible.
+`release` also masks the country code, since the platform was Japan-only and the field names no release. It is masked rather than filled in: 409 sides carry a zero country byte next to a blank provenance region, and 22 carry a dumper's signature written over it.
 
-**A save is not "the last file".** That rule fails on the measurements: the differing file sat at the end in 17 pairs and four or more files from the end in 25. So a save is identified from evidence, by comparing dumps, or from a declared recipe, and a suggestive filename is a hint that is reported and never acted on.
+Canonicalisation is reversible. `fdstoolkit canon -o` writes the canonical image and a sidecar holding everything the profile masked.
 
-**Nothing written depends on when or where it ran.** Dates come from the manifest or from a fixed default, never from the clock. Reports carry no timestamp unless asked.
+## Formats
+
+A side is a sequence of blocks:
+
+| Block | Code | Length | Contents |
+|---|---|---|---|
+| Disk information | `0x01` | 56 | Verification string, game code, dates, kiosk provenance |
+| File amount | `0x02` | 2 | How many files the disk declares |
+| File header | `0x03` | 16 | Number, id, name, load address, size, kind |
+| File data | `0x04` | 1 + size | The file |
+
+| Container | Side size | Checksums | Notes |
+|---|---|---|---|
+| `.fds` headerless | 65500 | No | What No-Intro hashes |
+| `.fds` with fwNES header | 16 + 65500 per side | No | The header carries the side count |
+| `.qd` | 65536 | Yes | Virtual Console rips and Quick Disk dumps |
+| FDSKey card file | 65500 | No | Headerless `.fds` within the firmware limits |
+| Copier per-side files | One file per side, lettered from A | Depends | A side may exceed the nominal length |
+| ares side files | 73728 | Yes | Gaps and sync marks included |
+| Raw pulse stream | Variable | Yes | What the drive reads |
+
+What each conversion costs:
+
+| From | To | What is lost |
+|---|---|---|
+| `.fds` headered | `.fds` headerless | The declared side count |
+| `.fds` | `.qd` | Nothing. The checksums are computed from the data |
+| `.qd` | `.fds` | Every checksum, so verify before converting |
+| `.qd` with null checksums | `.fds` then `.qd` | The null checksums, unless `--crc-mode null` |
+| Either | per-side files | The side ordering, which the file suffixes carry |
+| Either | pulse stream | The original gap lengths, regenerated to specification |
+| Any image | `content` or `release` | The provenance fields, recoverable from the sidecar |
+
+A `.qd` from another system is refused by name rather than misread. HxC flux images and Sharp MZ disks in QDF and MZQ form each carry their own signature.
+
+### Multi-disk games
+
+A disk has two sides, so a `.fds` of 131,000 bytes holds one physical disk. A two-disk game arrives either as two files or as one file of four sides, which collections label `[Merged]`.
+
+```bash
+fdstoolkit merge "Game (Disk 1).fds" "Game (Disk 2).fds" -o "Game [Merged].fds"
+fdstoolkit unmerge "Game [Merged].fds" -d ./disks
+```
+
+The split reads the boundary from the disk information rather than the file size, since a set may label its disks with different game codes while leaving the disk number at zero.
+
+### Load times
+
+There is no fragmentation on a Famicom disk. A side is one sequential stream with no allocation table, so a file cannot be split across non-adjacent regions.
+
+What costs time is distance from the start of the side. `fdstoolkit layout` reports each file's offset in bytes and in seconds, plus dead weight after the last block, which `fdstoolkit rebuild` removes.
+
+### Booting
+
+`fdstoolkit boot` reports what a console does with a side. The BIOS loads every file whose ID is at or below the boot code, then compares 224 bytes of PPU memory at `$2800` against its copy of the licence screen and stops with error 20 if they differ.
+
+The approval data is matched by what the file loads rather than by its name, since *Super Mario Bros.* carries it in a nametable file with an unreadable name. A side without one is reported as needing the NMI bypass rather than as failing, because unlicensed titles and second disks of a set both produce that result.
+
+## Emulators and flash carts
+
+`fdstoolkit export --target` writes the layout a device expects and, with `--bios`, places the BIOS where that device looks for it:
+
+| Target | Layout | BIOS path |
+|---|---|---|
+| `nt-mini` | Headerless, a whole number of 65500-byte sides | `BIOS/fds.bin` |
+| `mister` | `.fds` | `boot0.rom` |
+| `everdrive-n8-pro` | `.fds` | `EDN8/syscore/disksys.rom` |
+| `mesen2` | `.fds` | `disksys.rom` |
+| `fceux` | `.fds` | `disksys.rom`, exactly 8192 bytes |
+| `ares` | One 73728-byte file per side | Not used |
+
+An export warns when the title appears on the device's list of games that do not work with automatic side swapping.
+
+`fdstoolkit bios` recognises the three BIOS revisions MAME lists and four official re-release variants, extracts the 8 KB from a 40 KB or iNES-wrapped dump, and reports which emulators accept the file.
+
+Saves are read and written as IPS (Mesen2, puNES), UPS (Nestopia UE), BPS, or as a whole image (FCEUX, Nt Mini). A headerless save merges into a headered image and the other way round.
 
 ## Hardware
 
-| Device | What it can do |
+| Device | Support |
 |---|---|
-| FDSStick with an adapter cable | Dump and write real disks from the PC |
-| Famicom Dumper over USB | The protocol is implemented and tested, including the status codes for a missing disk, a flat battery and a write-protected disk. The CLI does not open its serial link yet, so it is driven from the library |
-| FDSKey | Emulates a drive, so the PC only prepares and checks the SD card |
+| FDSStick with an adapter cable | Dump and write |
+| Famicom Dumper over USB | Protocol implemented and tested; the CLI does not open the serial link yet, so it is driven from the library |
+| FDSKey | The PC prepares and checks the SD card |
 
-The write path assumes the worst, because the hardware gives it no choice. The drive reports no error codes, and a write refused by an FD3206 controller is invisible to the host. So a write dumps and verifies a backup first, asks before overwriting, retries per block, then re-reads the whole disk and compares. A disk that reads back exactly as it was before is reported as what that controller does when it silently refuses a full-surface write.
+A write takes a verified backup, asks before overwriting, retries per block, then reads the whole disk back and compares. The final grade is clean, marginal when blocks needed retries, unstable when reads disagree, or failed.
+
+Before writing:
+
+- The drive needs its own power supply. The USB device cannot run it.
+- A drive with an FD3206 controller refuses a full-surface write and cannot report the refusal. The read-back comparison is the only way to detect it, and a disk that comes back unchanged is reported as that case.
+- A drive with misaligned heads writes disks only it can read, so a clean read-back does not prove the disk works elsewhere.
+
+`fdstoolkit dump --raw DIR` keeps the pulse captures alongside the decoded image.
 
 ## No game data
 
-This repository holds no disk image, no BIOS, and no link to either. Tests run on synthetic disks the toolkit generates. A test that needs a real dump is skipped unless `FDSTOOLKIT_CORPUS` points at a directory of your own files.
+This repository contains no disk image, no BIOS and no link to either. The tests generate their own disks.
 
-## Development
+## Contributing
 
-```bash
-uv sync --all-extras --dev
-uv run pytest --cov
-```
-
-Gates: `ruff format --check`, `ruff check`, `pyright` strict, and the suite at 100% coverage, statements and branches. See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through [SECURITY.md](SECURITY.md).
 
 ## Licence
 
