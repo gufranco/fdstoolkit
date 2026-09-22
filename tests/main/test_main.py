@@ -1771,3 +1771,99 @@ def test_layout_prints_the_reorder_note(tmp_path: Path) -> None:
     result = runner.invoke(app, ["layout", str(second)])
 
     assert "measurement rather than a recommendation" in result.stdout
+
+
+def test_merge_joins_two_disks_into_one_image(tmp_path: Path) -> None:
+    first = tmp_path / "disk1.fds"
+    second = tmp_path / "disk2.fds"
+    first.write_bytes(blank_image(sides=2, headered=False, formatted=True, game_name="ON1"))
+    second.write_bytes(blank_image(sides=2, headered=False, formatted=True, game_name="ON2"))
+    output = tmp_path / "set.fds"
+
+    result = runner.invoke(app, ["merge", str(first), str(second), "-o", str(output)])
+
+    assert result.exit_code == 0
+    assert "4 sides" in result.stdout
+    assert len(output.read_bytes()) == 4 * SIDE_SIZE
+
+
+def test_merge_refuses_a_set_larger_than_a_disk_holder(tmp_path: Path) -> None:
+    big = tmp_path / "big.fds"
+    big.write_bytes(blank_image(sides=8, headered=False, formatted=True))
+    small = tmp_path / "small.fds"
+    small.write_bytes(blank_image(sides=2, headered=False, formatted=True))
+
+    result = runner.invoke(app, ["merge", str(big), str(small), "-o", str(tmp_path / "out.fds")])
+
+    assert result.exit_code == 1
+    assert "at most 8 sides" in result.stdout
+
+
+def test_merge_can_write_a_qd(tmp_path: Path) -> None:
+    first = tmp_path / "a.fds"
+    first.write_bytes(blank_image(sides=1, headered=False, formatted=True))
+    output = tmp_path / "set.qd"
+
+    result = runner.invoke(app, ["merge", str(first), "-o", str(output)])
+
+    assert result.exit_code == 0
+    assert output.exists()
+
+
+def test_unmerge_writes_one_file_per_disk(tmp_path: Path) -> None:
+    first = tmp_path / "disk1.fds"
+    second = tmp_path / "disk2.fds"
+    first.write_bytes(blank_image(sides=2, headered=False, formatted=True, game_name="ON1"))
+    second.write_bytes(blank_image(sides=2, headered=False, formatted=True, game_name="ON2"))
+    merged = tmp_path / "set.fds"
+    runner.invoke(app, ["merge", str(first), str(second), "-o", str(merged)])
+    out = tmp_path / "split"
+
+    result = runner.invoke(app, ["unmerge", str(merged), "-d", str(out)])
+
+    assert result.exit_code == 0
+    written = sorted(path.name for path in out.iterdir())
+    assert written == ["set (Disk 1).fds", "set (Disk 2).fds"]
+
+
+def test_unmerge_refuses_to_overwrite(tmp_path: Path) -> None:
+    source = tmp_path / "one.fds"
+    source.write_bytes(blank_image(sides=2, headered=False, formatted=True))
+    out = tmp_path / "split"
+    runner.invoke(app, ["unmerge", str(source), "-d", str(out)])
+
+    result = runner.invoke(app, ["unmerge", str(source), "-d", str(out)])
+
+    assert result.exit_code == 1
+    assert "pass --force" in result.stdout
+
+
+def test_unmerge_reports_a_side_without_a_disk_number(tmp_path: Path) -> None:
+    source = tmp_path / "blank.fds"
+    source.write_bytes(blank_image(sides=1, headered=False, formatted=False))
+
+    result = runner.invoke(app, ["unmerge", str(source), "-d", str(tmp_path / "out")])
+
+    assert "FDS017" in result.stdout
+
+
+def test_unmerge_writes_qd_parts_from_a_qd(tmp_path: Path) -> None:
+    plain = tmp_path / "one.fds"
+    plain.write_bytes(blank_image(sides=2, headered=False, formatted=True))
+    source = tmp_path / "one.qd"
+    runner.invoke(app, ["convert", str(plain), "-o", str(source)])
+    out = tmp_path / "split"
+
+    runner.invoke(app, ["unmerge", str(source), "-d", str(out)])
+
+    assert [path.suffix for path in out.iterdir()] == [".qd"]
+
+
+def test_merge_keeps_a_header_when_asked(tmp_path: Path) -> None:
+    source = tmp_path / "one.fds"
+    source.write_bytes(blank_image(sides=2, headered=False, formatted=True))
+    output = tmp_path / "set.fds"
+
+    runner.invoke(app, ["merge", str(source), "-o", str(output), "--header"])
+
+    assert output.read_bytes()[:4] == b"FDS\x1a"

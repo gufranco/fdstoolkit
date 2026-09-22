@@ -18,6 +18,10 @@ Checksums are the reflected-0x8408 CRC-16 the hardware computes, confirmed again
 
 `fds rebuild` re-emits an image from its parsed model, recomputing a checksum that is null or wrong, correcting a file header whose declared size disagrees with its data, and dropping bytes after the last block. Hidden files survive unless `--drop-hidden` or `--reveal-hidden` says otherwise.
 
+### Multi-disk sets
+
+`fds merge` joins the disks of a multi-disk game into one image and `fds unmerge` splits one back into a file per disk. The split reads the boundary from the disk information, since a set may label its disks by game code while leaving the disk number at zero.
+
 ### Layout
 
 `fds layout` reports where each file sits on a side and what the drive costs to reach it. An FDS side is one sequential stream with no allocation table, so fragmentation in the floppy sense cannot occur; the cost is distance, and the report names it in bytes and in seconds, along with dead weight after the last block and what ordering files smallest first would save.
