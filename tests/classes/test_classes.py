@@ -12,7 +12,12 @@ from fdstoolkit.drive.classes import (
 
 
 def _values(short: int, medium: int, long_: int, invalid: int = 0) -> bytes:
-    return bytes([0] * short + [1] * medium + [2] * long_ + [3] * invalid)
+    pool = [0] * short + [1] * medium + [2] * long_ + [3] * invalid
+    total = len(pool)
+    if not total:
+        return b""
+    stride = 7919 % total or 1
+    return bytes(pool[(index * stride) % total] for index in range(total))
 
 
 def _healthy(total: int = 10_000) -> bytes:
@@ -51,21 +56,21 @@ def test_glitches_above_the_floor_read_as_glitching() -> None:
 
 
 def test_a_spread_shifted_towards_long_pulses_reads_as_slow() -> None:
-    report = measure_classes(_values(400, 300, 300))
+    report = measure_classes(_values(400, 350, 250))
 
     assert report.reading is Reading.SHIFTED
     assert report.drift > 0
 
 
 def test_a_spread_shifted_towards_short_pulses_reads_as_fast() -> None:
-    report = measure_classes(_values(950, 40, 10))
+    report = measure_classes(_values(800, 150, 50))
 
     assert report.reading is Reading.SHIFTED
     assert report.drift < 0
 
 
 def test_a_glitching_read_outranks_a_shifted_one() -> None:
-    report = measure_classes(_values(400, 300, 250, 50))
+    report = measure_classes(_values(400, 350, 200, 50))
 
     assert report.reading is Reading.GLITCHING
 
@@ -99,12 +104,13 @@ def test_a_glitching_report_names_the_glitches() -> None:
 
 
 def test_a_shifted_report_says_which_way() -> None:
-    assert "slow" in measure_classes(_values(400, 300, 300)).render()
-    assert "fast" in measure_classes(_values(950, 40, 10)).render()
+    assert "slow" in measure_classes(_values(400, 350, 250)).render()
+    assert "fast" in measure_classes(_values(800, 150, 50)).render()
 
 
-def test_the_reference_shares_come_from_the_protocol_document() -> None:
-    assert HEALTHY_SHARES == (0.74, 0.19, 0.07)
+def test_the_reference_shares_are_the_corpus_median() -> None:
+    assert HEALTHY_SHARES == (0.6313, 0.2788, 0.0900)
+    assert sum(HEALTHY_SHARES) == pytest.approx(1.0, abs=0.001)
 
 
 def test_a_report_of_no_pulse_has_no_shares_and_no_drift() -> None:
@@ -116,3 +122,21 @@ def test_a_report_of_no_pulse_has_no_shares_and_no_drift() -> None:
 
 def test_a_report_of_glitches_alone_has_no_drift() -> None:
     assert ClassReport(counts=(0, 0, 0, 5)).drift == 0.0
+
+
+def test_a_capture_of_almost_nothing_is_not_judged() -> None:
+    report = measure_classes(_values(300, 60, 20))
+
+    assert report.reading is Reading.SPARSE
+    assert not report.judgeable
+    assert "too few to say" in report.render()
+
+
+def test_a_capture_with_enough_data_is_judged() -> None:
+    assert measure_classes(_healthy()).judgeable
+
+
+def test_glitches_outrank_a_sparse_capture() -> None:
+    report = measure_classes(_values(300, 60, 20, 40))
+
+    assert report.reading is Reading.GLITCHING
