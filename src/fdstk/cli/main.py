@@ -20,6 +20,7 @@ from fdstk.edit.clean import clean_trailing_data
 from fdstk.edit.diskinfo import apply_edits, parse_edit
 from fdstk.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstk.edit.files import FileSpec, extract_files, insert_file
+from fdstk.edit.rebuild import RebuildOptions, rebuild
 from fdstk.edit.recipes import load_recipes
 from fdstk.edit.saves import find_save_candidates, normalise_saves
 from fdstk.fdskey.card import FirmwareVariant, card_blank
@@ -29,13 +30,16 @@ from fdstk.hardware.ports import HardwareFaultError
 from fdstk.hardware.session import Grade, WriteRefusedError, dump_repeated, write_verified
 from fdstk.hardware.session import dump as dump_disk
 from fdstk.hardware.simulation import SimulatedDrive
-from fdstk.identify.dat import MatchKind, load_dat
+from fdstk.identify.cache import DatCache
+from fdstk.identify.dat import Catalogue, Identification, MatchKind, load_dat
 from fdstk.identify.dat import identify as identify_image
 from fdstk.identify.hashes import digests_of, side_digests
+from fdstk.identify.near import NearMatch, nearest_match, reference_images
 from fdstk.identify.provenance import provenance_of
 from fdstk.patch.apply import apply_patch
 from fdstk.patch.formats import PatchError
 from fdstk.quality.consensus import build_consensus, compare_images
+from fdstk.quality.explain import Explanation, explain
 from fdstk.quality.surface import SurfaceTestRefusedError, surface_test
 from fdstk.report import as_json, diagnostics_as_data
 
@@ -525,15 +529,19 @@ def identify(
     image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
     dat: Annotated[Path, typer.Option("--dat", help="a No-Intro style DAT file")],
     *,
+    reference: Annotated[
+        Path | None,
+        typer.Option("--reference", help="a directory of known images, for a near match"),
+    ] = None,
+    no_cache: Annotated[
+        bool, typer.Option("--no-cache", help="parse the DAT instead of reading the cache")
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Match an image against a DAT, and say what it matched on."""
     data, _ = _read(image)
-    if not dat.is_file():
-        message = f"file not found: {dat}"
-        raise _fail(message)
     try:
-        catalogue = load_dat(dat)
+        catalogue, cached = _catalogue(dat, no_cache=no_cache)
     except ValueError as error:
         raise _fail(str(error)) from error
 
@@ -542,22 +550,67 @@ def identify(
         "path": str(image),
         "dat": catalogue.name,
         "dat_version": catalogue.version,
+        "cached": cached,
         "kind": str(result.kind),
         "name": result.entry.name if result.entry else None,
         "matched_on": result.matched_on,
         "same_size": [entry.name for entry in result.same_size],
     }
 
+    near = (
+        nearest_match(data, reference_images(reference, skip=image))
+        if reference is not None and result.kind is not MatchKind.EXACT
+        else None
+    )
+    if near is not None:
+        payload["nearest"] = {
+            "path": str(near.path),
+            "near": near.near,
+            "differing_bytes": near.diff.differing_bytes,
+            "ratio": round(near.diff.ratio, 6),
+            "first_offset": near.diff.first_offset,
+            "last_offset": near.diff.last_offset,
+            "runs": [list(run) for run in near.diff.runs],
+            "truncated_runs": near.diff.truncated_runs,
+        }
+
     if json_output:
         typer.echo(as_json(payload))
-    elif result.entry is not None:
-        typer.echo(f"{result.entry.name}  (matched on {result.matched_on})")
     else:
-        typer.echo("no match")
-        for entry in result.same_size:
-            typer.echo(f"  same size: {entry.name}")
+        _print_identification(result, near)
 
     raise typer.Exit(code=0 if result.kind is MatchKind.EXACT else 1)
+
+
+def _catalogue(dat: Path, *, no_cache: bool) -> tuple[Catalogue, bool]:
+    if no_cache:
+        if not dat.is_file():
+            message = f"file not found: {dat}"
+            raise ValueError(message)
+        return load_dat(dat), False
+    return DatCache().load(dat)
+
+
+def _print_identification(result: Identification, near: NearMatch | None) -> None:
+    if result.entry is not None:
+        typer.echo(f"{result.entry.name}  (matched on {result.matched_on})")
+        return
+
+    typer.echo("no match")
+    for entry in result.same_size:
+        typer.echo(f"  same size: {entry.name}")
+    if near is None:
+        return
+
+    label = "near match" if near.near else "nearest candidate"
+    typer.echo(
+        f"  {label}: {near.path.name}, {near.diff.differing_bytes} byte(s) differ "
+        f"({near.diff.ratio:.4%})"
+    )
+    for offset, length in near.diff.runs:
+        typer.echo(f"    0x{offset:06x}  {length} byte(s)")
+    if near.diff.truncated_runs:
+        typer.echo("    more runs not shown")
 
 
 @app.command()
@@ -753,12 +806,19 @@ def diff_command(
     first: Annotated[Path, typer.Argument(help="the first image")],
     second: Annotated[Path, typer.Argument(help="the second image")],
     *,
+    explain_fields: Annotated[
+        bool, typer.Option("--explain", help="name the fields and files that differ")
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Compare two images block by block."""
     left, _, _, _ = decode_image(first)
     right, _, _, _ = decode_image(second)
     report = compare_images(left, right)
+
+    if explain_fields:
+        _print_explanation(first, second, explain(left, right), json_output=json_output)
+        raise typer.Exit(code=0 if report.identical else 1)
 
     if json_output:
         typer.echo(
@@ -780,12 +840,129 @@ def diff_command(
     raise typer.Exit(code=0 if report.identical else 1)
 
 
+def _print_explanation(
+    first: Path, second: Path, result: Explanation, *, json_output: bool
+) -> None:
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "first": str(first),
+                    "second": str(second),
+                    "identical": result.identical,
+                    "same_software": result.same_software,
+                    "headline": result.headline,
+                    "fields": [
+                        {
+                            "side": entry.side,
+                            "field": entry.field,
+                            "description": entry.description,
+                            "identity": entry.identity,
+                            "first": entry.left,
+                            "second": entry.right,
+                        }
+                        for entry in result.fields
+                    ],
+                    "files": [
+                        {
+                            "side": entry.side,
+                            "position": entry.position,
+                            "name": entry.name,
+                            "change": str(entry.change),
+                            "detail": entry.detail,
+                        }
+                        for entry in result.files
+                    ],
+                }
+            )
+        )
+        return
+
+    typer.echo(result.headline)
+    for entry in result.fields:
+        marker = "identity" if entry.identity else "provenance"
+        typer.echo(
+            f"  side {entry.side} {entry.field} ({marker}): {entry.left} against {entry.right}"
+        )
+    for entry in result.files:
+        typer.echo(
+            f"  side {entry.side} file {entry.position} {entry.name}: "
+            f"{entry.change}, {entry.detail}"
+        )
+
+
+@app.command(name="rebuild")
+def rebuild_command(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
+    *,
+    keep_tail: Annotated[
+        bool, typer.Option("--keep-tail", help="keep data after the last block")
+    ] = False,
+    reveal_hidden: Annotated[
+        bool, typer.Option("--reveal-hidden", help="raise the file count to what the side holds")
+    ] = False,
+    drop_hidden: Annotated[
+        bool, typer.Option("--drop-hidden", help="remove files past the declared count")
+    ] = False,
+    renumber: Annotated[
+        bool, typer.Option("--renumber", help="renumber the files in order")
+    ] = False,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Re-emit an image from its parsed model, repairing what can be repaired."""
+    _guard_output(output, force=force)
+    disk, _, _, _ = decode_image(image)
+
+    try:
+        result, report = rebuild(
+            disk,
+            options=RebuildOptions(
+                keep_tail=keep_tail,
+                reveal_hidden=reveal_hidden,
+                drop_hidden=drop_hidden,
+                renumber=renumber,
+            ),
+        )
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    if _container_of(output) is Container.FDS:
+        data, _ = fds.encode(result, headered=False)
+    else:
+        data, _ = qd.encode(result)
+    output.write_bytes(data)
+
+    for action in report.actions:
+        typer.echo(f"side {action.side}: {action.detail}")
+    if not report.changed:
+        typer.echo("nothing to repair")
+    typer.echo(f"wrote {output} ({len(data)} bytes)")
+
+
+@app.command(name="dat-cache")
+def dat_cache(
+    *,
+    clear: Annotated[bool, typer.Option("--clear", help="remove every cached catalogue")] = False,
+) -> None:
+    """Show or clear the parsed DAT cache."""
+    cache = DatCache()
+    if clear:
+        typer.echo(f"removed {cache.clear()} cached catalogue(s) from {cache.root}")
+        return
+    entries = list(cache.entries())
+    typer.echo(f"{cache.root}: {len(entries)} cached catalogue(s)")
+
+
 @app.command()
 def consensus(
     images: Annotated[list[Path], typer.Argument(help="two or more dumps of one disk")],
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the merge")],
     *,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    stability_map: Annotated[
+        bool, typer.Option("--map", help="print the per-block stability map")
+    ] = False,
 ) -> None:
     """Merge several dumps of one disk, block by block, and report every disagreement."""
     _guard_output(output, force=force)
@@ -799,6 +976,12 @@ def consensus(
     data, _ = fds.encode(result.disk, headered=False)
     output.write_bytes(data)
 
+    if stability_map:
+        for entry in result.stability:
+            typer.echo(
+                f"side {entry.side} block {entry.block:3d}  {entry.kind:<11} "
+                f"{entry.agreement:6.1%}  {entry.variants} variant(s)  {entry.verdict}"
+            )
     for side_index, block_index in result.disagreements:
         typer.echo(f"side {side_index} block {block_index}: the dumps disagree")
     typer.echo(f"wrote {output} ({len(data)} bytes)")

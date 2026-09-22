@@ -1447,3 +1447,255 @@ def test_write_warns_when_an_interrupt_lands_mid_write(single_side: Path) -> Non
 
     assert result.exit_code == 1
     assert "half written" in result.stdout
+
+
+def test_identify_reads_the_cache_on_a_second_run(image: Path, tmp_path: Path) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+    runner.invoke(app, ["identify", str(image), "--dat", str(dat), "--json"])
+
+    payload = json.loads(
+        runner.invoke(app, ["identify", str(image), "--dat", str(dat), "--json"]).stdout
+    )
+
+    assert payload["cached"]
+
+
+def test_identify_can_skip_the_cache(image: Path, tmp_path: Path) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+
+    payload = json.loads(
+        runner.invoke(
+            app, ["identify", str(image), "--dat", str(dat), "--no-cache", "--json"]
+        ).stdout
+    )
+
+    assert not payload["cached"]
+
+
+def test_identify_without_the_cache_still_reports_a_missing_dat(
+    image: Path, tmp_path: Path
+) -> None:
+    result = runner.invoke(
+        app, ["identify", str(image), "--dat", str(tmp_path / "nope.dat"), "--no-cache"]
+    )
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+
+def test_identify_reports_the_nearest_reference_image(
+    single_side: Path, image: Path, tmp_path: Path
+) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+    references = tmp_path / "known"
+    references.mkdir()
+    close = bytearray(single_side.read_bytes())
+    close[0x34] = 0x03
+    (references / "close.fds").write_bytes(bytes(close))
+
+    result = runner.invoke(
+        app,
+        ["identify", str(single_side), "--dat", str(dat), "--reference", str(references)],
+    )
+
+    assert result.exit_code == 1
+    assert "near match: close.fds" in result.stdout
+    assert "1 byte(s) differ" in result.stdout
+
+
+def test_identify_reports_a_far_candidate_as_the_nearest_one(
+    single_side: Path, image: Path, tmp_path: Path
+) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+    references = tmp_path / "known"
+    references.mkdir()
+    far = bytearray(single_side.read_bytes())
+    for offset in range(40000):
+        far[offset] ^= 0xFF
+    (references / "far.fds").write_bytes(bytes(far))
+
+    result = runner.invoke(
+        app,
+        [
+            "identify",
+            str(single_side),
+            "--dat",
+            str(dat),
+            "--reference",
+            str(references),
+            "--json",
+        ],
+    )
+
+    payload = json.loads(result.stdout)
+    assert not payload["nearest"]["near"]
+    assert payload["nearest"]["truncated_runs"] is False
+
+
+def test_identify_prints_every_differing_run(
+    single_side: Path, image: Path, tmp_path: Path
+) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+    references = tmp_path / "known"
+    references.mkdir()
+    close = bytearray(single_side.read_bytes())
+    for offset in range(0, 200, 2):
+        close[offset] ^= 0xFF
+    (references / "close.fds").write_bytes(bytes(close))
+
+    result = runner.invoke(
+        app,
+        ["identify", str(single_side), "--dat", str(dat), "--reference", str(references)],
+    )
+
+    assert "more runs not shown" in result.stdout
+
+
+def test_dat_cache_reports_what_it_holds(image: Path, tmp_path: Path) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+    runner.invoke(app, ["identify", str(image), "--dat", str(dat)])
+
+    result = runner.invoke(app, ["dat-cache"])
+
+    assert result.exit_code == 0
+    assert "1 cached catalogue(s)" in result.stdout
+
+
+def test_dat_cache_can_be_cleared(image: Path, tmp_path: Path) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+    runner.invoke(app, ["identify", str(image), "--dat", str(dat)])
+
+    result = runner.invoke(app, ["dat-cache", "--clear"])
+
+    assert "removed 1 cached catalogue(s)" in result.stdout
+    assert "0 cached catalogue(s)" in runner.invoke(app, ["dat-cache"]).stdout
+
+
+def test_diff_explains_two_identical_images(image: Path) -> None:
+    result = runner.invoke(app, ["diff", str(image), str(image), "--explain"])
+
+    assert result.exit_code == 0
+    assert result.stdout.startswith("identical")
+
+
+def test_diff_explains_a_changed_field(image: Path, tmp_path: Path) -> None:
+    other = tmp_path / "other.fds"
+    runner.invoke(app, ["set", str(image), "-o", str(other), "--set", "game_version=2"])
+
+    result = runner.invoke(app, ["diff", str(image), str(other), "--explain"])
+
+    assert result.exit_code == 1
+    assert "different software" in result.stdout
+    assert "game_version (identity): 0x00 against 0x02" in result.stdout
+
+
+def test_diff_can_explain_as_json(image: Path, tmp_path: Path) -> None:
+    other = tmp_path / "other.fds"
+    runner.invoke(app, ["set", str(image), "-o", str(other), "--set", "rewrite_count=3"])
+
+    payload = json.loads(
+        runner.invoke(app, ["diff", str(image), str(other), "--explain", "--json"]).stdout
+    )
+
+    assert payload["same_software"]
+    assert payload["fields"][0]["field"] == "rewrite_count"
+
+
+def test_rebuild_reports_that_there_is_nothing_to_repair(image: Path, tmp_path: Path) -> None:
+    result = runner.invoke(app, ["rebuild", str(image), "-o", str(tmp_path / "out.fds")])
+
+    assert result.exit_code == 0
+    assert "nothing to repair" in result.stdout
+
+
+def test_rebuild_drops_trailing_data(tmp_path: Path) -> None:
+    raw = bytearray(blank_image(sides=1, headered=False, formatted=True))
+    raw[-4:] = b"junk"
+    source = tmp_path / "tail.fds"
+    source.write_bytes(bytes(raw))
+    output = tmp_path / "clean.fds"
+
+    result = runner.invoke(app, ["rebuild", str(source), "-o", str(output)])
+
+    assert "trailing byte(s) removed" in result.stdout
+    assert output.read_bytes().endswith(bytes(4))
+
+
+def test_rebuild_recomputes_checksums_in_a_qd(tmp_path: Path) -> None:
+    disk = Disk(
+        sides=(
+            Side(
+                blocks=(
+                    Block(
+                        kind=BlockKind.DISK_INFO,
+                        payload=blank_image(sides=1, headered=False, formatted=True)[:56],
+                        stored_crc=0,
+                    ),
+                ),
+                tail=b"",
+                capacity=SIDE_SIZE,
+            ),
+        )
+    )
+    source = tmp_path / "null.qd"
+    source.write_bytes(encode_qd(disk)[0])
+    output = tmp_path / "fixed.qd"
+
+    result = runner.invoke(app, ["rebuild", str(source), "-o", str(output)])
+
+    assert "checksum(s) recomputed" in result.stdout
+
+
+def test_rebuild_refuses_two_conflicting_options(image: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "rebuild",
+            str(image),
+            "-o",
+            str(tmp_path / "out.fds"),
+            "--reveal-hidden",
+            "--drop-hidden",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "either reveal or drop" in result.stdout
+
+
+def test_consensus_prints_a_stability_map(single_side: Path, tmp_path: Path) -> None:
+    other = tmp_path / "second.fds"
+    other.write_bytes(single_side.read_bytes())
+    output = tmp_path / "merged.fds"
+
+    result = runner.invoke(
+        app, ["consensus", str(single_side), str(other), "-o", str(output), "--map"]
+    )
+
+    assert result.exit_code == 0
+    assert "disk_info" in result.stdout
+    assert "100.0%" in result.stdout
+
+
+def test_diff_explains_a_file_difference(single_side: Path, tmp_path: Path) -> None:
+    payload = tmp_path / "main.prg"
+    payload.write_bytes(bytes([0xAA]) * 8)
+    other = tmp_path / "with-file.fds"
+    runner.invoke(
+        app,
+        [
+            "insert",
+            str(single_side),
+            "-o",
+            str(other),
+            "--file",
+            str(payload),
+            "--name",
+            "MAIN",
+        ],
+    )
+
+    result = runner.invoke(app, ["diff", str(single_side), str(other), "--explain"])
+
+    assert result.exit_code == 1
+    assert "file 0 MAIN: added, 8 bytes" in result.stdout

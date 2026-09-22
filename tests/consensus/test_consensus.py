@@ -94,3 +94,25 @@ def test_comparing_reports_a_block_count_mismatch() -> None:
 
     assert not report.identical
     assert "block count" in report.summary
+
+
+def test_the_stability_map_covers_every_block() -> None:
+    disks = [sample(), sample()]
+
+    result = build_consensus(disks)
+
+    assert len(result.stability) == sum(len(side.blocks) for side in disks[0].sides)
+    assert all(entry.stable for entry in result.stability)
+    assert result.stable
+
+
+def test_the_stability_map_reports_the_agreement_of_a_disputed_block() -> None:
+    disks = [sample(), sample(), altered(0x05)]
+
+    result = build_consensus(disks)
+
+    disputed = next(entry for entry in result.stability if not entry.stable)
+    assert disputed.variants == 2
+    assert disputed.agreement == pytest.approx(2 / 3)
+    assert disputed.kind == "file_amount"
+    assert not result.stable

@@ -19,10 +19,29 @@ class BlockVerdict(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class BlockStability:
+    side: int
+    block: int
+    kind: str
+    verdict: BlockVerdict
+    variants: int
+    agreement: float
+
+    @property
+    def stable(self) -> bool:
+        return self.verdict is BlockVerdict.AGREED
+
+
+@dataclass(frozen=True, slots=True)
 class ConsensusResult:
     disk: Disk
     verdicts: tuple[BlockVerdict, ...]
     disagreements: tuple[tuple[int, int], ...]
+    stability: tuple[BlockStability, ...] = ()
+
+    @property
+    def stable(self) -> bool:
+        return not self.disagreements
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +78,7 @@ def build_consensus(disks: Sequence[Disk]) -> ConsensusResult:
 
     verdicts: list[BlockVerdict] = []
     disagreements: list[tuple[int, int]] = []
+    stability: list[BlockStability] = []
     sides: list[Side] = []
 
     for side_index, side in enumerate(disks[0].sides):
@@ -67,6 +87,17 @@ def build_consensus(disks: Sequence[Disk]) -> ConsensusResult:
             payloads = [disk.sides[side_index].blocks[block_index].payload for disk in disks]
             chosen, verdict = _decide(payloads)
             verdicts.append(verdict)
+            counts = Counter(payloads)
+            stability.append(
+                BlockStability(
+                    side=side_index,
+                    block=block_index,
+                    kind=block.kind.name.lower(),
+                    verdict=verdict,
+                    variants=len(counts),
+                    agreement=counts[chosen] / len(payloads),
+                )
+            )
             if verdict is not BlockVerdict.AGREED:
                 disagreements.append((side_index, block_index))
             blocks.append(
@@ -78,6 +109,7 @@ def build_consensus(disks: Sequence[Disk]) -> ConsensusResult:
         disk=Disk(sides=tuple(sides), header_side_count=disks[0].header_side_count),
         verdicts=tuple(verdicts),
         disagreements=tuple(disagreements),
+        stability=tuple(stability),
     )
 
 

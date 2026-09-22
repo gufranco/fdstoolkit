@@ -164,3 +164,44 @@ def test_a_multi_side_manifest_builds_every_side(tmp_path: Path) -> None:
 
     assert disk.side_count == 2
     assert disk.sides[1].declared_file_count == 0
+
+
+def test_a_manifest_defaults_to_the_nintendo_licence_string(tmp_path: Path) -> None:
+    manifest = DiskManifest.from_dict(manifest_dict(tmp_path), root=tmp_path)
+
+    assert manifest.boots_on_stock_hardware
+    disk, _ = decode(build_from_manifest(manifest))
+    info = disk.sides[0].disk_info
+    assert info is not None
+    assert info.verification == b"*NINTENDO-HVC*"
+
+
+def test_the_licence_check_can_be_bypassed(tmp_path: Path) -> None:
+    payload = manifest_dict(tmp_path)
+    payload["licence"] = "bypass"
+
+    manifest = DiskManifest.from_dict(payload, root=tmp_path)
+
+    assert not manifest.boots_on_stock_hardware
+    disk, _ = decode(build_from_manifest(manifest))
+    info = disk.sides[0].disk_info
+    assert info is not None
+    assert info.verification == bytes(14)
+
+
+def test_a_custom_licence_string_is_written_verbatim(tmp_path: Path) -> None:
+    payload = manifest_dict(tmp_path)
+    payload["license"] = "*HOMEBREW-FDS*"
+
+    manifest = DiskManifest.from_dict(payload, root=tmp_path)
+
+    assert manifest.verification == b"*HOMEBREW-FDS*"
+    assert not manifest.boots_on_stock_hardware
+
+
+def test_a_licence_string_of_the_wrong_length_is_refused(tmp_path: Path) -> None:
+    payload = manifest_dict(tmp_path)
+    payload["licence"] = "TOO SHORT"
+
+    with pytest.raises(ValueError, match="14 characters"):
+        DiskManifest.from_dict(payload, root=tmp_path)
