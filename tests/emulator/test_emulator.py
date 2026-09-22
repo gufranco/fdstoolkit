@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import zlib
+
 import pytest
 
 from fdstk.build.blank import blank_image
 from fdstk.codecs.fds import decode
 from fdstk.core.diagnostics import Severity
 from fdstk.edit.emulator import SaveFormat, detect_save_format, extract_save, merge_save
-from fdstk.patch.build import build_ips
-from fdstk.patch.formats import PatchError
+from fdstk.patch.build import build_ips, build_ups
+from fdstk.patch.formats import PatchError, write_varint
 
 
 def original() -> bytes:
@@ -88,3 +90,76 @@ def test_merging_keeps_the_disk_parseable() -> None:
 
     assert merged == played()
     assert all(finding.severity is not Severity.ERROR for finding in findings)
+
+
+def test_a_ups_save_is_detected() -> None:
+    assert detect_save_format(build_ups(original(), played())) is SaveFormat.UPS
+
+
+def test_a_bps_save_is_detected() -> None:
+    assert detect_save_format(b"BPS1" + bytes(20)) is SaveFormat.BPS
+
+
+def test_a_ups_save_merges_into_the_image() -> None:
+    assert merge_save(original(), build_ups(original(), played())) == played()
+
+
+def test_a_ups_save_against_another_disk_is_refused() -> None:
+    other = blank_image(sides=1, headered=False, formatted=True, game_name="ZEL")
+
+    with pytest.raises(PatchError, match="does not match the patch"):
+        merge_save(other, build_ups(original(), played()))
+
+
+def test_a_save_can_be_written_as_ups() -> None:
+    save = extract_save(original(), played(), fmt=SaveFormat.UPS)
+
+    assert merge_save(original(), save) == played()
+
+
+def test_a_bps_save_merges_into_the_image() -> None:
+    patch = build_bps_copy(original(), played())
+
+    assert merge_save(original(), patch) == played()
+
+
+def test_a_headerless_whole_image_save_merges_into_a_headered_image() -> None:
+    headered = b"FDS\x1a\x01" + bytes(11) + original()
+
+    merged = merge_save(headered, played())
+
+    assert merged[:16] == headered[:16]
+    assert merged[16:] == played()
+
+
+def test_a_headered_whole_image_save_merges_into_a_headerless_image() -> None:
+    save = b"FDS\x1a\x01" + bytes(11) + played()
+
+    assert merge_save(original(), save) == played()
+
+
+def test_a_bps_save_cannot_be_written() -> None:
+    with pytest.raises(PatchError, match="cannot write a save as bps"):
+        extract_save(original(), played(), fmt=SaveFormat.BPS)
+
+
+def build_bps_copy(source: bytes, target: bytes) -> bytes:
+    body = bytearray(b"BPS1")
+    body += write_varint(len(source))
+    body += write_varint(len(target))
+    body += write_varint(0)
+    body += write_varint(((len(target) - 1) << 2) | 1)
+    body += target
+    body += zlib.crc32(source).to_bytes(4, "little")
+    body += zlib.crc32(target).to_bytes(4, "little")
+    body += zlib.crc32(bytes(body)).to_bytes(4, "little")
+    return bytes(body)
+
+
+def test_a_ups_save_changing_the_last_byte_round_trips() -> None:
+    changed = bytearray(original())
+    changed[-1] = 0x42
+
+    save = extract_save(original(), bytes(changed), fmt=SaveFormat.UPS)
+
+    assert merge_save(original(), save) == bytes(changed)

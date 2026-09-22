@@ -1265,7 +1265,7 @@ def save_extract(
     played: Annotated[Path, typer.Option("--played", help="the image a game wrote to")],
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the save")],
     *,
-    fmt: Annotated[SaveFormat, typer.Option("--format", help="ips or image")] = SaveFormat.IPS,
+    fmt: Annotated[SaveFormat, typer.Option("--format", help="ips, ups or image")] = SaveFormat.IPS,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
     """Write the difference between a pristine disk and a played one as a save."""
