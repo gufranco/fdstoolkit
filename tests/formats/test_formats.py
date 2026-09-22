@@ -5,6 +5,7 @@ import zlib
 import pytest
 
 from fdstk.patch.formats import (
+    PatchError,
     PatchFormat,
     apply_bps,
     apply_ips,
@@ -181,22 +182,16 @@ def build_bps(source: bytes, target: bytes) -> bytes:
 
 
 def test_a_truncated_varint_is_rejected() -> None:
-    from fdstk.patch.formats import PatchError
-
     with pytest.raises(PatchError, match="ended in the middle"):
         read_varint(bytes([0x01, 0x02]), 0)
 
 
 def test_a_ups_patch_without_its_magic_is_rejected() -> None:
-    from fdstk.patch.formats import PatchError
-
     with pytest.raises(PatchError, match="not a UPS patch"):
         apply_ups(b"nope" + bytes(20), b"")
 
 
 def test_a_bps_patch_without_its_magic_is_rejected() -> None:
-    from fdstk.patch.formats import PatchError
-
     with pytest.raises(PatchError, match="not a BPS patch"):
         apply_bps(b"nope" + bytes(20), b"")
 

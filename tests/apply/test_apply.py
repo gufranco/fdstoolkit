@@ -105,12 +105,39 @@ def test_the_outcome_names_the_patch_format() -> None:
     assert str(outcome.format) == "ips"
 
 
-def test_a_ups_patch_for_the_headerless_image_is_retried_without_the_header() -> None:
-    from tests.formats.test_formats import build_ups
+def ups_replacing(source: bytes, target: bytes) -> bytes:
+    out = bytearray(b"UPS1")
+    out += write_varint(len(source))
+    out += write_varint(len(target))
+    position = 0
+    previous = 0
+    while position < len(target):
+        original = source[position] if position < len(source) else 0
+        if original == target[position]:
+            position += 1
+            continue
+        start = position
+        chunk = bytearray()
+        while position < len(target):
+            original = source[position] if position < len(source) else 0
+            if original == target[position]:
+                break
+            chunk.append(original ^ target[position])
+            position += 1
+        out += write_varint(start - previous)
+        out += bytes(chunk)
+        out += b"\x00"
+        previous = position + 1
+    out += zlib.crc32(source).to_bytes(4, "little")
+    out += zlib.crc32(target).to_bytes(4, "little")
+    out += zlib.crc32(bytes(out)).to_bytes(4, "little")
+    return bytes(out)
 
+
+def test_a_ups_patch_for_the_headerless_image_is_retried_without_the_header() -> None:
     target = bytearray(headerless())
     target[0x11:0x14] = b"ZEL"
-    patch = build_ups(headerless(), bytes(target))
+    patch = ups_replacing(headerless(), bytes(target))
 
     outcome = apply_patch(patch, headered())
 
