@@ -20,6 +20,8 @@ CODES: Final[Mapping[str, str]] = {
     "FDS011": "side content exceeds the capacity of the target format",
     "FDS012": "file data block is shorter than its header declares",
     "FDS013": "header side count disagrees with the data present",
+    "FDS014": "no block was recovered from the pulse stream",
+    "FDS015": "a decoded region does not start with the sync mark",
 }
 
 
