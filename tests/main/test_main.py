@@ -493,3 +493,50 @@ def test_write_reports_a_missing_fdsstick(single_side: Path) -> None:
 
     assert result.exit_code == 1
     assert "FDSStick" in result.stdout or "hidapi" in result.stdout
+
+
+def test_clean_removes_trailing_data(tmp_path: Path) -> None:
+    raw = bytearray(blank_image(sides=1, headered=False, formatted=True))
+    raw[70:74] = bytes([0xDE, 0xAD, 0xBE, 0xEF])
+    source = tmp_path / "stale.fds"
+    source.write_bytes(bytes(raw))
+    out = tmp_path / "clean.fds"
+
+    result = runner.invoke(app, ["clean", str(source), "-o", str(out)])
+
+    assert result.exit_code == 0
+    assert "removed 16 trailing byte" in result.stdout
+    assert out.read_bytes() == blank_image(sides=1, headered=False, formatted=True)
+
+
+def test_diff_reports_identical_images(single_side: Path) -> None:
+    result = runner.invoke(app, ["diff", str(single_side), str(single_side)])
+
+    assert result.exit_code == 0
+    assert "identical" in result.stdout
+
+
+def test_diff_reports_a_difference(single_side: Path, image: Path) -> None:
+    result = runner.invoke(app, ["diff", str(single_side), str(image)])
+
+    assert result.exit_code == 1
+    assert "side count" in result.stdout
+
+
+def test_consensus_merges_identical_dumps(single_side: Path, tmp_path: Path) -> None:
+    out = tmp_path / "merged.fds"
+
+    result = runner.invoke(
+        app,
+        ["consensus", str(single_side), str(single_side), "-o", str(out)],
+    )
+
+    assert result.exit_code == 0
+    assert out.read_bytes() == single_side.read_bytes()
+
+
+def test_consensus_needs_two_dumps(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(app, ["consensus", str(single_side), "-o", str(tmp_path / "m.fds")])
+
+    assert result.exit_code == 1
+    assert "at least two" in result.stdout

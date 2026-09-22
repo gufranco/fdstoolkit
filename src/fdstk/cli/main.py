@@ -12,6 +12,7 @@ from fdstk.core.blocks import FileKind
 from fdstk.core.canon import canonicalise, digest_string, profile_by_name
 from fdstk.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstk.core.disk import Disk, Side
+from fdstk.edit.clean import clean_trailing_data
 from fdstk.edit.files import FileSpec, extract_files, insert_file
 from fdstk.edit.saves import find_save_candidates
 from fdstk.fdskey.lint import lint_card_image
@@ -26,6 +27,7 @@ from fdstk.identify.hashes import digests_of, side_digests
 from fdstk.identify.provenance import provenance_of
 from fdstk.patch.apply import apply_patch
 from fdstk.patch.formats import PatchError
+from fdstk.quality.consensus import build_consensus, compare_images
 from fdstk.report import as_json, diagnostics_as_data
 
 app = typer.Typer(
@@ -675,3 +677,84 @@ def saves(
             f"side {candidate.side} file {candidate.position} {candidate.name}: "
             f"{candidate.differing_bytes} of {candidate.size} bytes differ{marker}"
         )
+
+
+@app.command()
+def clean(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
+    *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Remove leftover bytes after the last block of every side."""
+    disk, _, _, _ = _decode(image)
+    _guard_output(output, force=force)
+
+    cleaned, removed = clean_trailing_data(disk)
+    target = _container_of(output)
+    if target is Container.FDS:
+        data, _ = fds.encode(cleaned, headered=False)
+    else:
+        data, _ = qd.encode(cleaned)
+    output.write_bytes(data)
+
+    for entry in removed:
+        typer.echo(f"side {entry.side}: removed {entry.bytes_removed} trailing byte(s)")
+    typer.echo(f"wrote {output} ({len(data)} bytes)")
+
+
+@app.command(name="diff")
+def diff_command(
+    first: Annotated[Path, typer.Argument(help="the first image")],
+    second: Annotated[Path, typer.Argument(help="the second image")],
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+) -> None:
+    """Compare two images block by block."""
+    left, _, _, _ = _decode(first)
+    right, _, _, _ = _decode(second)
+    report = compare_images(left, right)
+
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "first": str(first),
+                    "second": str(second),
+                    "identical": report.identical,
+                    "summary": report.summary,
+                    "differing_blocks": [list(pair) for pair in report.differing_blocks],
+                }
+            )
+        )
+    else:
+        typer.echo(report.summary)
+        for side_index, block_index in report.differing_blocks:
+            typer.echo(f"  side {side_index} block {block_index}")
+
+    raise typer.Exit(code=0 if report.identical else 1)
+
+
+@app.command()
+def consensus(
+    images: Annotated[list[Path], typer.Argument(help="two or more dumps of one disk")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the merge")],
+    *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Merge several dumps of one disk, block by block, and report every disagreement."""
+    _guard_output(output, force=force)
+    disks = [_decode(path)[0] for path in images]
+
+    try:
+        result = build_consensus(disks)
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    data, _ = fds.encode(result.disk, headered=False)
+    output.write_bytes(data)
+
+    for side_index, block_index in result.disagreements:
+        typer.echo(f"side {side_index} block {block_index}: the dumps disagree")
+    typer.echo(f"wrote {output} ({len(data)} bytes)")
+    raise typer.Exit(code=0 if not result.disagreements else 1)
