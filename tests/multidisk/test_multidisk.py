@@ -4,7 +4,7 @@ import pytest
 
 from fdstk.build.blank import blank_image
 from fdstk.codecs.fds import decode
-from fdstk.core.diagnostics import Severity
+from fdstk.core.diagnostics import Diagnostic, Severity
 from fdstk.core.disk import Disk
 from fdstk.edit.multidisk import MAX_SIDES, merge, unmerge
 
@@ -14,7 +14,7 @@ def game(*, name: str = "SMB", sides: int = 2) -> Disk:
     return disk
 
 
-def codes(findings: tuple[object, ...]) -> list[str]:
+def codes(findings: tuple[Diagnostic, ...]) -> list[str]:
     return [entry.code for entry in findings]
 
 
