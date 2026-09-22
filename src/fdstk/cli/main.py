@@ -46,7 +46,8 @@ def _container_of(path: Path) -> Container:
 
 def _read(path: Path) -> tuple[bytes, Container]:
     if not path.is_file():
-        raise _fail(f"file not found: {path}")
+        message = f"file not found: {path}"
+        raise _fail(message)
     return path.read_bytes(), _container_of(path)
 
 
@@ -90,7 +91,8 @@ def _exit_code(findings: tuple[Diagnostic, ...], *, strict: bool) -> int:
 
 def _guard_output(output: Path, *, force: bool) -> None:
     if output.exists() and not force:
-        raise _fail(f"{output} exists, pass --force to overwrite")
+        message = f"{output} exists, pass --force to overwrite"
+        raise _fail(message)
 
 
 @app.command()

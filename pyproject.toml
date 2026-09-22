@@ -61,6 +61,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "PLR2004", "SLF001", "INP001"]
+"src/fdstk/cli/*.py" = ["PLR0913", "FBT001", "FBT002"]
+
+[tool.ruff.lint.pylint]
+max-args = 8
 
 [tool.ruff.lint.flake8-annotations]
 mypy-init-return = true
