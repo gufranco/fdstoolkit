@@ -3,8 +3,8 @@ class Fdstoolkit < Formula
 
   desc "Convert, verify, identify, dump and write Famicom Disk System images"
   homepage "https://github.com/gufranco/fdstoolkit"
-  url "https://github.com/gufranco/fdstoolkit/archive/refs/tags/v0.3.2.tar.gz"
-  sha256 "f14cc190d819963893552be86e469a23bd775e70f0f523b2d0041dd9377a0fa8"
+  url "https://github.com/gufranco/fdstoolkit/archive/refs/tags/v0.4.0.tar.gz"
+  sha256 "70c060d9605848a9daddde5283f29a02c2e41657534de093560000fd66bb5aee"
   license "MIT"
   head "https://github.com/gufranco/fdstoolkit.git", branch: "main"
 
