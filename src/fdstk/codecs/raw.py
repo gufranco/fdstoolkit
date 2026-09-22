@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
 from typing import Final
 
@@ -149,6 +150,23 @@ def _encode_era_a(data: bytes) -> bytes:
     return bytes(out)
 
 
+def encode_block_stream(
+    payloads: Sequence[bytes],
+    *,
+    encoding: RawEncoding = RawEncoding.ERA_B,
+) -> bytes:
+    encoder = _encode_era_a if encoding is RawEncoding.ERA_A else _encode_era_b
+    values = bytearray(bytes([GAP_VALUE]) * (LEAD_IN_PACKED * VALUES_PER_BYTE))
+
+    for index, payload in enumerate(payloads):
+        if index:
+            values += bytes([GAP_VALUE]) * (INTER_BLOCK_PACKED * VALUES_PER_BYTE)
+        framed = bytes([SYNC_MARK]) + payload + encode_crc(block_crc(payload))
+        values += encoder(framed)
+
+    return pack_raw03(bytes(values))
+
+
 def encode_raw03(
     disk: Disk,
     *,
@@ -159,17 +177,10 @@ def encode_raw03(
         message = f"the image has no side {side}"
         raise ValueError(message)
 
-    encoder = _encode_era_a if encoding is RawEncoding.ERA_A else _encode_era_b
-    values = bytearray(bytes([GAP_VALUE]) * (LEAD_IN_PACKED * VALUES_PER_BYTE))
-
-    for index, block in enumerate(disk.sides[side].blocks):
-        if index:
-            values += bytes([GAP_VALUE]) * (INTER_BLOCK_PACKED * VALUES_PER_BYTE)
-        stored = block.stored_crc if block.stored_crc is not None else block.computed_crc
-        payload = bytes([SYNC_MARK]) + block.payload + encode_crc(stored)
-        values += encoder(payload)
-
-    return pack_raw03(bytes(values))
+    return encode_block_stream(
+        [block.payload for block in disk.sides[side].blocks],
+        encoding=encoding,
+    )
 
 
 def to_write_alphabet(values: bytes) -> bytes:

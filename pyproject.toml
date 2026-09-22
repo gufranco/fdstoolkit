@@ -24,6 +24,9 @@ dependencies = [
     "defusedxml>=0.7.1",
 ]
 
+[project.optional-dependencies]
+hardware = ["hidapi>=0.14.0"]
+
 [project.urls]
 Homepage = "https://github.com/gufranco/fdstk"
 Issues = "https://github.com/gufranco/fdstk/issues"

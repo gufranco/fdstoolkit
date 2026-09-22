@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from collections import deque
 
 import pytest
@@ -13,7 +14,9 @@ from fdstk.hardware.fdsstick import (
     PRODUCT_ID,
     VENDOR_ID,
     FdsStick,
+    HidApiTransport,
     ReportId,
+    open_fdsstick,
 )
 from fdstk.hardware.ports import FaultKind, HardwareFaultError
 
@@ -192,3 +195,114 @@ def test_closing_releases_the_transport() -> None:
     FdsStick(transport).close()
 
     assert transport.closed
+
+
+class FakeHidDevice:
+    def open(self, vendor_id: int, product_id: int) -> None:
+        self.opened = (vendor_id, product_id)
+
+    def __init__(self, *, strip_report_id: bool = False) -> None:
+        self.sent: list[bytes] = []
+        self.written: list[bytes] = []
+        self.closed = False
+        self.strip_report_id = strip_report_id
+
+    def send_feature_report(self, data: bytes) -> int:
+        self.sent.append(bytes(data))
+        return len(data)
+
+    def get_feature_report(self, report_id: int, length: int) -> list[int]:
+        body = list(range(min(length, 6)))
+        if self.strip_report_id:
+            return body
+        return [report_id, *body]
+
+    def write(self, data: bytes) -> int:
+        self.written.append(bytes(data))
+        return len(data)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_the_transport_forwards_a_feature_report() -> None:
+    device = FakeHidDevice()
+
+    HidApiTransport(device).send_feature(bytes([0x03, 0x01]))
+
+    assert device.sent == [bytes([0x03, 0x01])]
+
+
+def test_the_transport_keeps_the_report_id_when_the_backend_returns_it() -> None:
+    answer = HidApiTransport(FakeHidDevice()).get_feature(0x11, 8)
+
+    assert answer[0] == 0x11
+
+
+def test_the_transport_restores_a_stripped_report_id() -> None:
+    answer = HidApiTransport(FakeHidDevice(strip_report_id=True)).get_feature(0x11, 8)
+
+    assert answer[0] == 0x11
+
+
+def test_the_transport_forwards_an_output_report() -> None:
+    device = FakeHidDevice()
+
+    HidApiTransport(device).write_output(bytes([0x12, 0x00]))
+
+    assert device.written == [bytes([0x12, 0x00])]
+
+
+def test_the_transport_closes_the_device() -> None:
+    device = FakeHidDevice()
+
+    HidApiTransport(device).close()
+
+    assert device.closed
+
+
+def test_opening_without_hidapi_explains_the_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_import = builtins.__import__
+
+    def refuse(name: str, *args: object, **kwargs: object) -> object:
+        if name == "hid":
+            message = "no module named hid"
+            raise ImportError(message)
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", refuse)
+
+    with pytest.raises(HardwareFaultError, match="hardware extra"):
+        open_fdsstick()
+
+
+def test_opening_reports_a_device_that_does_not_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    class RefusingDevice(FakeHidDevice):
+        def open(self, vendor_id: int, product_id: int) -> None:
+            message = "no such device"
+            raise OSError(message)
+
+    class FakeModule:
+        def device(self) -> FakeHidDevice:
+            return RefusingDevice()
+
+    monkeypatch.setattr("fdstk.hardware.fdsstick._load_hid", FakeModule)
+
+    with pytest.raises(HardwareFaultError, match="no FDSStick answered"):
+        open_fdsstick()
+
+
+def test_opening_returns_a_device_that_has_shaken_hands(monkeypatch: pytest.MonkeyPatch) -> None:
+    device = FakeHidDevice()
+
+    class FakeModule:
+        def device(self) -> FakeHidDevice:
+            return device
+
+    monkeypatch.setattr("fdstk.hardware.fdsstick._load_hid", FakeModule)
+
+    stick = open_fdsstick()
+
+    assert isinstance(stick, FdsStick)
+    assert device.sent
+    assert device.opened == (VENDOR_ID, PRODUCT_ID)

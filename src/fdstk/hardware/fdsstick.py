@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import importlib
 from collections.abc import Iterator, Sequence
 from enum import IntEnum
-from typing import Final, Protocol, runtime_checkable
+from typing import Final, Protocol, cast, runtime_checkable
 
-from fdstk.codecs.raw import decode_raw03, unpack_raw03
+from fdstk.codecs.raw import decode_raw03, encode_block_stream, unpack_raw03
 from fdstk.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
 
 VENDOR_ID: Final = 0x16D0
@@ -176,6 +177,72 @@ class FdsStick:
             )
 
     def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
-        del side, blocks
-        message = "write_side needs an encoded pulse stream, use write_raw_side"
-        raise HardwareFaultError(message, kind=FaultKind.TRANSIENT)
+        del side
+        self.write_raw_side(encode_block_stream(blocks))
+
+
+@runtime_checkable
+class HidDevice(Protocol):
+    def open(self, vendor_id: int, product_id: int) -> None: ...
+
+    def send_feature_report(self, data: bytes) -> int: ...
+
+    def get_feature_report(self, report_id: int, length: int) -> list[int]: ...
+
+    def write(self, data: bytes) -> int: ...
+
+    def close(self) -> None: ...
+
+
+class HidApiTransport:
+    def __init__(self, device: HidDevice) -> None:
+        self._device = device
+
+    def send_feature(self, data: bytes) -> None:
+        self._device.send_feature_report(data)
+
+    def get_feature(self, report_id: int, length: int) -> bytes:
+        answer = bytes(self._device.get_feature_report(report_id, length))
+        if answer[:1] == bytes([report_id]):
+            return answer
+        return bytes([report_id]) + answer
+
+    def write_output(self, data: bytes) -> None:
+        self._device.write(data)
+
+    def close(self) -> None:
+        self._device.close()
+
+
+@runtime_checkable
+class HidModule(Protocol):
+    def device(self) -> HidDevice: ...
+
+
+def _load_hid() -> HidModule:
+    return cast("HidModule", importlib.import_module("hid"))
+
+
+def open_fdsstick() -> FdsStick:
+    try:
+        hid = _load_hid()
+    except ImportError as error:
+        message = (
+            "hidapi is not installed, so an FDSStick cannot be opened. "
+            "Install the hardware extra: uv pip install 'fdstk[hardware]'"
+        )
+        raise HardwareFaultError(message, kind=FaultKind.LINK) from error
+
+    device = hid.device()
+    try:
+        device.open(VENDOR_ID, PRODUCT_ID)
+    except OSError as error:
+        message = (
+            f"no FDSStick answered at {VENDOR_ID:#06x}:{PRODUCT_ID:#06x}. "
+            "Check the USB cable and that no other program holds the device"
+        )
+        raise HardwareFaultError(message, kind=FaultKind.LINK) from error
+
+    stick = FdsStick(HidApiTransport(device))
+    stick.handshake()
+    return stick

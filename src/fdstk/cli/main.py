@@ -15,6 +15,7 @@ from fdstk.core.disk import Disk, Side
 from fdstk.edit.files import FileSpec, extract_files, insert_file
 from fdstk.edit.saves import find_save_candidates
 from fdstk.fdskey.lint import lint_card_image
+from fdstk.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstk.hardware.ports import HardwareFaultError
 from fdstk.hardware.session import Grade, WriteRefusedError, dump_repeated, write_verified
 from fdstk.hardware.session import dump as dump_disk
@@ -366,7 +367,17 @@ def lint(
     raise typer.Exit(code=0 if not findings else 1)
 
 
-def _simulated_drive(source: Path | None) -> SimulatedDrive:
+class Backend(StrEnum):
+    SIMULATION = "simulation"
+    FDSSTICK = "fdsstick"
+
+
+def _open_drive(backend: Backend, source: Path | None) -> SimulatedDrive | FdsStick:
+    if backend is Backend.FDSSTICK:
+        try:
+            return open_fdsstick()
+        except HardwareFaultError as error:
+            raise _fail(str(error)) from error
     if source is None:
         message = "the simulated backend needs --source naming an image to stand in for the disk"
         raise _fail(message)
@@ -382,6 +393,9 @@ def dump(
         Path | None,
         typer.Option("--source", help="image the simulated drive holds"),
     ] = None,
+    backend: Annotated[
+        Backend, typer.Option("--backend", help="which drive to use")
+    ] = Backend.SIMULATION,
     sides: Annotated[int, typer.Option("--sides", min=1, max=8, help="sides to read")] = 1,
     passes: Annotated[int, typer.Option("--passes", min=1, help="read each side this often")] = 1,
     retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
@@ -389,7 +403,7 @@ def dump(
 ) -> None:
     """Dump a disk through a drive backend."""
     _guard_output(output, force=force)
-    drive = _simulated_drive(source)
+    drive = _open_drive(backend, source)
 
     try:
         if passes > 1:
@@ -418,6 +432,9 @@ def write(
         Path | None,
         typer.Option("--source", help="image the simulated drive holds"),
     ] = None,
+    backend: Annotated[
+        Backend, typer.Option("--backend", help="which drive to use")
+    ] = Backend.SIMULATION,
     backup: Annotated[
         Path | None,
         typer.Option("--backup", help="where to save the disk's current contents"),
@@ -427,7 +444,7 @@ def write(
 ) -> None:
     """Write an image to a disk, then read it back and compare."""
     disk, _, _, _ = _decode(image)
-    drive = _simulated_drive(source)
+    drive = _open_drive(backend, source)
 
     def confirm(message: str) -> bool:
         if yes:

@@ -473,3 +473,23 @@ def test_saves_needs_two_dumps(single_side: Path) -> None:
 
     assert result.exit_code == 1
     assert "at least two" in result.stdout
+
+
+def test_dump_reports_a_missing_fdsstick(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["dump", "-o", str(tmp_path / "dump.fds"), "--backend", "fdsstick"],
+    )
+
+    assert result.exit_code == 1
+    assert "FDSStick" in result.stdout or "hidapi" in result.stdout
+
+
+def test_write_reports_a_missing_fdsstick(single_side: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["write", str(single_side), "--backend", "fdsstick", "--yes"],
+    )
+
+    assert result.exit_code == 1
+    assert "FDSStick" in result.stdout or "hidapi" in result.stdout
