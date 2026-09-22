@@ -475,6 +475,10 @@ def dump(
     sides: Annotated[int, typer.Option("--sides", min=1, max=8, help="sides to read")] = 1,
     passes: Annotated[int, typer.Option("--passes", min=1, help="read each side this often")] = 1,
     retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
+    raw: Annotated[
+        Path | None,
+        typer.Option("--raw", help="also keep every pulse capture the drive returned, here"),
+    ] = None,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
     """Dump a disk through a drive backend."""
@@ -500,7 +504,20 @@ def dump(
     data, _ = fds.encode(result.as_disk(), headered=False)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
+    if raw is not None:
+        _keep_captures(drive, raw, stem=output.stem)
     raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
+
+
+def _keep_captures(drive: SimulatedDrive | FdsStick, directory: Path, *, stem: str) -> None:
+    if not isinstance(drive, FdsStick):
+        typer.echo("  the simulated drive has no pulse capture to keep")
+        return
+    directory.mkdir(parents=True, exist_ok=True)
+    for index, capture in enumerate(drive.captures, start=1):
+        target = directory / f"{stem}.read{index:02d}.raw03"
+        target.write_bytes(capture)
+        typer.echo(f"  kept {target} ({len(capture)} bytes of packed pulse classes)")
 
 
 @app.command()
@@ -548,6 +565,8 @@ def write(
     for side_index, block_index in report.mismatched_blocks:
         typer.echo(f"side {side_index}: block {block_index} did not read back as written")
     typer.echo(f"verified {report.verified}, grade {report.grade}")
+    for note in report.notes:
+        typer.echo(f"  {note}")
     raise typer.Exit(code=0 if report.verified else 1)
 
 

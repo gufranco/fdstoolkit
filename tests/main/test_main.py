@@ -2212,3 +2212,52 @@ def test_a_sharp_mz_disk_is_refused_by_name(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "Sharp MZ Quick Disk image in QDF form, not a Famicom" in result.stdout
+
+
+def test_dump_says_a_simulated_drive_has_no_capture(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "dump",
+            "-o",
+            str(tmp_path / "dump.fds"),
+            "--source",
+            str(single_side),
+            "--raw",
+            str(tmp_path / "raw"),
+        ],
+    )
+
+    assert "no pulse capture" in result.stdout
+
+
+def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    class CapturingStick(cli.FdsStick):
+        def __init__(self, disk: Disk) -> None:
+            self._drive = SimulatedDrive(disk)
+            self._captures = [b"\\x55" * 8]
+
+        def status(self):  # noqa: ANN202
+            return self._drive.status()
+
+        def read_side(self, side: int):  # noqa: ANN202
+            return self._drive.read_side(side)
+
+    disk, _ = cli.fds.decode(blank_image(sides=1, headered=False, formatted=True))
+    monkeypatch.setattr(cli, "open_fdsstick", lambda: CapturingStick(disk))
+
+    result = runner.invoke(
+        app,
+        [
+            "dump",
+            "-o",
+            str(tmp_path / "dump.fds"),
+            "--backend",
+            "fdsstick",
+            "--raw",
+            str(tmp_path / "raw"),
+        ],
+    )
+
+    assert (tmp_path / "raw" / "dump.read01.raw03").read_bytes() == b"\\x55" * 8
+    assert "packed pulse classes" in result.stdout

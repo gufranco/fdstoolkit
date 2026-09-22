@@ -62,6 +62,11 @@ class HidTransport(Protocol):
 class FdsStick:
     def __init__(self, transport: HidTransport) -> None:
         self._transport = transport
+        self._captures: list[bytes] = []
+
+    @property
+    def captures(self) -> tuple[bytes, ...]:
+        return tuple(self._captures)
 
     reports_write_protection: Final = False
 
@@ -166,7 +171,9 @@ class FdsStick:
 
     def read_side(self, side: int) -> Iterator[BlockRead]:
         del side
-        values = unpack_raw03(self.read_raw_side())
+        packed = self.read_raw_side()
+        self._captures.append(packed)
+        values = unpack_raw03(packed)
         decoded, _ = decode_raw03(values)
         for index, block in enumerate(decoded.blocks):
             yield BlockRead(

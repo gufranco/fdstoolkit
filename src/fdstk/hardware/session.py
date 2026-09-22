@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Final
 
 from fdstk.codecs import fds
 from fdstk.core.bitstream import emulated_side_size
@@ -91,17 +92,37 @@ class StabilityReport:
         )
 
 
+PORTABILITY_NOTE: Final = (
+    "verified on this drive only: a drive with misaligned heads writes disks that it reads "
+    "back and other drives cannot, so read the disk on a second drive before trusting it"
+)
+UNCHANGED_NOTE: Final = (
+    "the disk reads back exactly as it was before the write, which is what a drive with an "
+    "FD3206 controller does when it silently refuses a full-surface write; check the chip "
+    "marking, FD3206P rather than FD7201P, before suspecting the image"
+)
+
+
 @dataclass(frozen=True, slots=True)
 class WriteReport:
     verified: bool
     mismatched_blocks: tuple[tuple[int, int], ...]
     dump: DumpResult
+    unchanged: bool = False
 
     @property
     def grade(self) -> Grade:
         if not self.verified or self.mismatched_blocks:
             return Grade.FAILED
         return self.dump.grade
+
+    @property
+    def notes(self) -> tuple[str, ...]:
+        if self.verified:
+            return (PORTABILITY_NOTE,)
+        if self.unchanged:
+            return (UNCHANGED_NOTE,)
+        return ()
 
 
 def _require_readable(reader: DiskReader) -> None:
@@ -271,4 +292,11 @@ def write_verified(
         verified=not mismatched,
         mismatched_blocks=tuple(mismatched),
         dump=readback,
+        unchanged=bool(mismatched) and _same_first_side(present, readback),
     )
+
+
+def _same_first_side(before: DumpResult, after: DumpResult) -> bool:
+    first = [block.payload for block in before.sides[0].blocks]
+    second = [block.payload for block in after.sides[0].blocks]
+    return first == second

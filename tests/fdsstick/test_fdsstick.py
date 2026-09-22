@@ -345,3 +345,15 @@ def test_a_read_that_never_ends_stops_at_the_packet_ceiling() -> None:
     values = FdsStick(transport).read_raw_side()
 
     assert len(values) == MAX_PACKETS_PER_SIDE * BULK_READ_PAYLOAD
+
+
+def test_every_side_read_keeps_its_pulse_capture() -> None:
+    payload = encode_raw03(sample_disk(), side=0)
+    packets = read_packets(payload)
+    transport = FakeTransport({ReportId.BULK_READ: deque([*packets, *read_packets(payload)])})
+    stick = FdsStick(transport)
+
+    list(stick.read_side(0))
+    list(stick.read_side(0))
+
+    assert stick.captures == (payload, payload)

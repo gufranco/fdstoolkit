@@ -141,23 +141,60 @@ def test_a_verified_write_reads_the_disk_back() -> None:
     assert drive.read_count >= 2
 
 
+def other_game() -> Disk:
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="ZEL"))
+    return disk
+
+
 def test_a_write_that_does_not_stick_fails_verification() -> None:
-    drive = SimulatedDrive(
-        sample_disk(sides=1),
-        plan=FaultPlan(writes_do_not_stick=True),
-    )
-    other = sample_disk(sides=1)
+    drive = SimulatedDrive(sample_disk(), plan=FaultPlan(writes_do_not_stick=True))
 
     report = write_verified(
-        drive,
-        drive,
-        Disk(sides=(other.sides[0],)),
-        confirm=lambda _: True,
-        backup=None,
-        skip_backup=True,
+        drive, drive, other_game(), confirm=lambda _: True, backup=None, skip_backup=True
+    )
+
+    assert not report.verified
+    assert report.unchanged
+
+
+def test_a_disk_left_unchanged_points_at_the_controller() -> None:
+    drive = SimulatedDrive(sample_disk(), plan=FaultPlan(writes_do_not_stick=True))
+
+    report = write_verified(
+        drive, drive, other_game(), confirm=lambda _: True, backup=None, skip_backup=True
+    )
+
+    assert any("FD3206" in note for note in report.notes)
+
+
+def test_a_write_of_the_same_contents_is_not_mistaken_for_a_refusal() -> None:
+    drive = SimulatedDrive(sample_disk(), plan=FaultPlan(writes_do_not_stick=True))
+
+    report = write_verified(
+        drive, drive, sample_disk(), confirm=lambda _: True, backup=None, skip_backup=True
     )
 
     assert report.verified
+    assert not report.unchanged
+
+
+def test_a_verified_write_carries_the_portability_caveat() -> None:
+    drive = SimulatedDrive(sample_disk())
+
+    report = write_verified(drive, drive, other_game(), confirm=lambda _: True, backup=None)
+
+    assert report.verified
+    assert any("second drive" in note for note in report.notes)
+
+
+def test_a_write_that_changed_the_disk_wrongly_is_not_blamed_on_the_controller() -> None:
+    drive = SimulatedDrive(sample_disk(), plan=FaultPlan(unstable_blocks=frozenset({1})))
+
+    report = write_verified(drive, drive, sample_disk(), confirm=lambda _: True, backup=None)
+
+    assert not report.verified
+    assert not report.unchanged
+    assert report.notes == ()
 
 
 def test_a_write_reports_which_blocks_differ_after_the_read_back() -> None:
