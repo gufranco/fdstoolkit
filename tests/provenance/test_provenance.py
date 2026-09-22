@@ -20,7 +20,7 @@ def test_a_factory_disk_reports_no_rewrite() -> None:
 
     assert report.sides[0].origin is Origin.FACTORY
     assert report.sides[0].rewrite_count == 0
-    assert report.sides[0].writer_serial == 0
+    assert report.sides[0].writer_serial == 0xFFFF
 
 
 def test_a_kiosk_disk_reports_its_rewrite() -> None:
@@ -113,7 +113,7 @@ def test_a_clean_provenance_region_carries_no_signature() -> None:
 
 
 def test_a_short_run_of_text_is_not_a_signature() -> None:
-    assert provenance_of(disk_with_info(x20=b"ab")).sides[0].signature is None
+    assert provenance_of(disk_with_info(x1F=b"ab")).sides[0].signature is None
 
 
 def test_an_unformatted_side_carries_no_signature() -> None:
@@ -153,3 +153,22 @@ def test_a_manufacturing_date_after_the_service_ended_is_flagged() -> None:
     report = provenance_of(disk_with_info(x1F=bytes([0x86, 0x05, 0x01])))
 
     assert any(note.startswith("manufactured 2011") for note in report.sides[0].notes)
+
+
+def test_an_unwritten_writer_serial_is_a_factory_disk() -> None:
+    report = provenance_of(disk_with_info(x31=b"\xff\xff", x2C=b"\xff\xff\xff"))
+
+    assert report.sides[0].origin is Origin.FACTORY
+    assert not any("BCD" in note for note in report.sides[0].notes)
+
+
+def test_a_real_serial_still_reads_as_a_kiosk_rewrite() -> None:
+    report = provenance_of(disk_with_info(x31=b"\x72\x21", x2C=bytes([0x91, 0x05, 0x10])))
+
+    assert report.sides[0].origin is Origin.REWRITTEN
+
+
+def test_a_date_that_is_neither_blank_nor_unwritten_is_still_reported() -> None:
+    report = provenance_of(disk_with_info(x2C=bytes([0xAB, 0xCD, 0xEF])))
+
+    assert any("rewritten date is not valid BCD" in note for note in report.sides[0].notes)

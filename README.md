@@ -168,6 +168,8 @@ Two dumps of one game are rarely byte-identical, because a kiosk rewrite changes
 | `release` | Is this the same release, from a factory disk or a rebuild |
 | `data` | Is the program identical, ignoring the disk label |
 
+A disk created with `fdstoolkit blank --formatted` or `fdstoolkit build` carries the values a factory disk carries, measured from 1,729 never-rewritten sides: country `0x49`, the constants at `$23` and `$25`, and `0xFF` in the kiosk fields that a Disk Writer would fill in. No date comes from the clock, so two runs produce identical bytes.
+
 `release` also masks the country code, since the platform was Japan-only and the field names no release. It is masked rather than filled in: 409 sides carry a zero country byte next to a blank provenance region, and 22 carry a dumper's signature written over it.
 
 Canonicalisation is reversible. `fdstoolkit canon -o` writes the canonical image and a sidecar holding everything the profile masked.

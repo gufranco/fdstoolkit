@@ -13,6 +13,9 @@ MIN_SIGNATURE_RUN: Final = 4
 PRINTABLE_LOW: Final = 0x20
 PRINTABLE_HIGH: Final = 0x7E
 KIOSK_SERVICE_ENDED: Final = (2003, 9, 30)
+UNWRITTEN_SERIAL: Final = 0xFFFF
+UNWRITTEN_DATE: Final = b"\xff\xff\xff"
+BLANK_DATE: Final = bytes(3)
 DISK_COLOURS: Final[dict[int, str]] = {
     0x00: "yellow",
     0xFF: "blue",
@@ -72,9 +75,11 @@ def _origin_of(info: DiskInfo) -> Origin:
     count = info.rewrite_count
     if count is None:
         return Origin.UNKNOWN
-    stamped = info.raw("rewritten_date") != bytes(3)
+    blank = {bytes(3), b"\xff\xff\xff"}
+    stamped = info.raw("rewritten_date") not in blank
     moved = stamped and info.rewritten_date != info.manufacturing_date
-    if count > 0 or info.writer_serial != 0 or moved:
+    written = info.writer_serial not in {0, UNWRITTEN_SERIAL}
+    if count > 0 or written or moved:
         return Origin.REWRITTEN
     return Origin.FACTORY
 
@@ -94,13 +99,14 @@ def signature_in(info: DiskInfo) -> str | None:
 
 def _notes_for(info: DiskInfo, origin: Origin) -> tuple[str, ...]:
     notes: list[str] = []
-    if info.manufacturing_date is None:
+    unwritten = {UNWRITTEN_DATE, BLANK_DATE}
+    if info.manufacturing_date is None and info.raw("manufacturing_date") not in unwritten:
         notes.append("the manufacturing date is not valid BCD")
-    if info.rewritten_date is None:
+    if info.rewritten_date is None and info.raw("rewritten_date") not in unwritten:
         notes.append("the rewritten date is not valid BCD")
     if info.rewrite_count is None:
         notes.append("the rewrite count is not valid BCD")
-    if origin is Origin.REWRITTEN and info.writer_serial == 0:
+    if origin is Origin.REWRITTEN and info.writer_serial in {0, UNWRITTEN_SERIAL}:
         notes.append("rewritten but carries no Disk Writer serial")
     if info.rewrite_count == 0 and origin is Origin.REWRITTEN:
         notes.append("rewritten but the rewrite count is zero")

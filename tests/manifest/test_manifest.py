@@ -74,7 +74,7 @@ def test_a_build_carries_no_date_so_it_is_reproducible(tmp_path: Path) -> None:
     info = DiskInfo.parse(disk.sides[0].blocks[0].payload)
 
     assert info.raw("manufacturing_date") == bytes(3)
-    assert info.raw("rewritten_date") == bytes(3)
+    assert info.raw("rewritten_date") == b"\xff\xff\xff"
 
 
 def test_a_declared_date_is_written_in_bcd(tmp_path: Path) -> None:

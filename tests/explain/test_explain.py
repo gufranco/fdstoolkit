@@ -88,12 +88,12 @@ def test_a_provenance_field_difference_is_not_an_identity_one() -> None:
 
 def test_an_unreadable_date_falls_back_to_hex() -> None:
     payload = bytearray(sample().sides[0].blocks[0].payload)
-    payload[0x2C:0x2F] = b"\xff\xff\xff"
+    payload[0x2C:0x2F] = b"\xab\xcd\xef"
 
     result = explain(sample(), replace_info(sample(), bytes(payload)))
 
     difference = next(entry for entry in result.fields if entry.field == "rewritten_date")
-    assert difference.right == "ffffff"
+    assert difference.right == "abcdef"
 
 
 def test_the_verification_string_is_rendered_as_text() -> None:
@@ -194,7 +194,7 @@ def test_an_unchanged_file_produces_no_difference() -> None:
 
 def test_an_unreadable_rewritten_date_stays_out_of_the_headline() -> None:
     payload = bytearray(sample().sides[0].blocks[0].payload)
-    payload[0x2C:0x2F] = b"\xff\xff\xff"
+    payload[0x2C:0x2F] = b"\xab\xcd\xef"
 
     result = explain(sample(), replace_info(sample(), bytes(payload)))
 

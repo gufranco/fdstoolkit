@@ -11,6 +11,7 @@ from fdstoolkit.build.blank import (
 )
 from fdstoolkit.codecs.fds import SIDE_SIZE, decode
 from fdstoolkit.core.diskinfo import DiskInfo
+from fdstoolkit.identify.provenance import Origin, provenance_of
 
 
 def test_an_unformatted_single_side_matches_the_reference_blank() -> None:
@@ -65,7 +66,7 @@ def test_a_formatted_blank_carries_no_date_so_it_is_reproducible() -> None:
     info = DiskInfo.parse(disk.sides[0].blocks[0].payload)
 
     assert info.raw("manufacturing_date") == bytes(3)
-    assert info.raw("rewritten_date") == bytes(3)
+    assert info.raw("rewritten_date") == b"\xff\xff\xff"
     assert info.rewrite_count == 0
 
 
@@ -98,3 +99,24 @@ def test_a_side_count_outside_the_supported_range_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="between 1 and 8"):
         blank_image(sides=9, headered=False, formatted=False)
+
+
+def test_a_formatted_blank_carries_the_values_a_factory_disk_carries() -> None:
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True))
+    info = disk.sides[0].disk_info
+
+    assert info is not None
+    assert info.raw("country") == bytes([0x49])
+    assert info.raw("unknown_23") == bytes([0x61])
+    assert info.raw("unknown_25") == bytes([0x00, 0x02])
+    assert info.raw("writer_serial") == b"\xff\xff"
+    assert info.raw("rewritten_date") == b"\xff\xff\xff"
+
+
+def test_a_formatted_blank_reads_as_a_factory_disk() -> None:
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True))
+
+    report = provenance_of(disk)
+
+    assert report.sides[0].origin is Origin.FACTORY
+    assert report.sides[0].notes == ()

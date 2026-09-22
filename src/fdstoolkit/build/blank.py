@@ -12,6 +12,27 @@ DEFAULT_GAME_NAME: Final = "   "
 DEFAULT_LICENSEE: Final = 0x00
 COUNTRY_JAPAN: Final = 0x49
 FILLER_BYTE: Final = 0xFF
+UNWRITTEN_BYTE: Final = 0xFF
+
+FACTORY_CONSTANTS: Final[dict[str, bytes]] = {
+    "game_type": bytes([0x20]),
+    "unknown_18": bytes([0x00]),
+    "filler_1a": bytes([FILLER_BYTE] * 5),
+    "country": bytes([COUNTRY_JAPAN]),
+    "unknown_23": bytes([0x61]),
+    "unknown_24": bytes([0x00]),
+    "unknown_25": bytes([0x00, 0x02]),
+    "unknown_27": bytes([0x00, 0xFF, 0xFF, 0xFF, 0x00]),
+    "rewritten_date": bytes([UNWRITTEN_BYTE] * 3),
+    "unknown_2f": bytes([UNWRITTEN_BYTE]),
+    "unknown_30": bytes([UNWRITTEN_BYTE]),
+    "writer_serial": bytes([UNWRITTEN_BYTE] * 2),
+    "unknown_33": bytes([UNWRITTEN_BYTE]),
+    "rewrite_count": bytes([0x00]),
+    "actual_side": bytes([0x00]),
+    "disk_type_other": bytes([0x00]),
+    "disk_version": bytes([0x00]),
+}
 
 REFERENCE_BLANK_64_SHA256: Final = (
     "021c40c7962f1395bf3ad70273264bdc4bf5cd98b212409d0551f7c5f1042776"
@@ -32,11 +53,10 @@ def disk_info_block(*, side: int, disk_number: int, game_name: str) -> bytes:
     _write(payload, "verification", VERIFICATION_STRING)
     _write(payload, "licensee", bytes([DEFAULT_LICENSEE]))
     _write(payload, "game_name", game_name.encode("ascii"))
-    _write(payload, "game_type", bytes([0x20]))
     _write(payload, "side", bytes([side]))
     _write(payload, "disk_number", bytes([disk_number]))
-    _write(payload, "filler_1a", bytes([FILLER_BYTE] * 5))
-    _write(payload, "country", bytes([COUNTRY_JAPAN]))
+    for name, value in FACTORY_CONSTANTS.items():
+        _write(payload, name, value)
     return bytes(payload)
 
 
