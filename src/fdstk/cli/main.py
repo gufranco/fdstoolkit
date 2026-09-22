@@ -10,7 +10,9 @@ import typer
 from fdstk import __version__
 from fdstk.build.blank import blank_image
 from fdstk.build.manifest import build_from_manifest, load_manifest
+from fdstk.build.targets import TARGETS, export_for, swap_warnings
 from fdstk.codecs import fds, qd
+from fdstk.codecs.ares import decode_side
 from fdstk.codecs.mgd1 import SideFile, join_side_files, split_into_side_files
 from fdstk.core.bios import BootVerdict, predict_boot
 from fdstk.core.blocks import FileKind
@@ -1199,6 +1201,85 @@ def bios(
             typer.echo(f"wrote {extract}")
 
     raise typer.Exit(code=0 if revision is not None else 1)
+
+
+class TargetChoice(StrEnum):
+    NT_MINI = "nt-mini"
+    MISTER = "mister"
+    EVERDRIVE_N8_PRO = "everdrive-n8-pro"
+    MESEN2 = "mesen2"
+    FCEUX = "fceux"
+    ARES = "ares"
+
+
+@app.command()
+def export(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    target: Annotated[TargetChoice, typer.Option("--target", help="the device or emulator")],
+    directory: Annotated[Path, typer.Option("-d", "--directory", help="the card or folder root")],
+    *,
+    bios: Annotated[
+        Path | None, typer.Option("--bios", help="a BIOS to place where the target looks")
+    ] = None,
+    force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
+) -> None:
+    """Write an image in the layout a device or emulator expects."""
+    disk, _, _, _ = decode_image(image)
+    bios_data = None
+    if bios is not None:
+        if not bios.is_file():
+            message = f"file not found: {bios}"
+            raise _fail(message)
+        bios_data = bios.read_bytes()
+
+    try:
+        written = export_for(
+            disk,
+            target=target.value,
+            directory=directory,
+            stem=image.stem,
+            bios=bios_data,
+            force=force,
+        )
+    except FileExistsError as error:
+        message = f"{error}, pass --force to overwrite"
+        raise _fail(message) from error
+    except ValueError as error:
+        raise _fail(str(error)) from error
+
+    typer.echo(TARGETS[target.value].description)
+    for path in written:
+        typer.echo(f"wrote {path}")
+    for warning in swap_warnings(image.stem, target=target.value):
+        typer.echo(f"  {warning}")
+
+
+@app.command(name="import-ares")
+def import_ares(
+    files: Annotated[list[Path], typer.Argument(help="ares side files, in side order")],
+    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the image")],
+    *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+) -> None:
+    """Rebuild an image from ares per-side files, including any save they carry."""
+    _guard_output(output, force=force)
+    sides: list[Side] = []
+    for path in files:
+        if not path.is_file():
+            message = f"file not found: {path}"
+            raise _fail(message)
+        try:
+            sides.append(decode_side(path.read_bytes()))
+        except ValueError as error:
+            raise _fail(str(error)) from error
+
+    disk = Disk(sides=tuple(sides))
+    if _container_of(output) is Container.FDS:
+        data, _ = fds.encode(disk, headered=False)
+    else:
+        data, _ = qd.encode(disk)
+    output.write_bytes(data)
+    typer.echo(f"wrote {output} ({len(sides)} side(s), {len(data)} bytes)")
 
 
 @app.command()

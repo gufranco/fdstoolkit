@@ -2033,3 +2033,172 @@ def test_bios_reports_a_file_too_small_to_be_one(tmp_path: Path) -> None:
 
     assert "crc32" not in result.stdout
     assert "rejects it" in result.stdout
+
+
+def _game_with_a_file(tmp_path: Path, name: str = "Game") -> Path:
+    payload = tmp_path / "main.prg"
+    payload.write_bytes(bytes([0xAA]) * 8)
+    source = tmp_path / "blank.fds"
+    source.write_bytes(blank_image(sides=2, headered=False, formatted=True))
+    built = tmp_path / f"{name}.fds"
+    runner.invoke(
+        app, ["insert", str(source), "-o", str(built), "--file", str(payload), "--name", "MAIN"]
+    )
+    runner.invoke(
+        app,
+        [
+            "insert",
+            str(built),
+            "-o",
+            str(built),
+            "--file",
+            str(payload),
+            "--name",
+            "MAIN",
+            "--side",
+            "1",
+            "--force",
+        ],
+    )
+    return built
+
+
+def test_export_writes_a_headerless_image_for_the_nt_mini(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path)
+    card = tmp_path / "card"
+
+    result = runner.invoke(app, ["export", str(source), "--target", "nt-mini", "-d", str(card)])
+
+    assert result.exit_code == 0
+    assert len((card / "Game.fds").read_bytes()) == 2 * SIDE_SIZE
+
+
+def test_export_places_the_bios(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = _game_with_a_file(tmp_path)
+    bios_file = tmp_path / "bios.bin"
+    bios_file.write_bytes(_known_bios(monkeypatch))
+    card = tmp_path / "card"
+
+    runner.invoke(
+        app,
+        ["export", str(source), "--target", "mister", "-d", str(card), "--bios", str(bios_file)],
+    )
+
+    assert (card / "boot0.rom").exists()
+
+
+def test_export_warns_about_a_known_swap_exception(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path, name="Doremikko (Japan)")
+
+    result = runner.invoke(
+        app, ["export", str(source), "--target", "nt-mini", "-d", str(tmp_path / "card")]
+    )
+
+    assert "automatic side swap" in result.stdout
+
+
+def test_export_refuses_to_overwrite(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path)
+    card = tmp_path / "card"
+    runner.invoke(app, ["export", str(source), "--target", "nt-mini", "-d", str(card)])
+
+    result = runner.invoke(app, ["export", str(source), "--target", "nt-mini", "-d", str(card)])
+
+    assert result.exit_code == 1
+    assert "pass --force" in result.stdout
+
+
+def test_export_reports_a_missing_bios(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            str(source),
+            "--target",
+            "mister",
+            "-d",
+            str(tmp_path / "card"),
+            "--bios",
+            str(tmp_path / "nope.rom"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+
+def test_export_refuses_a_bios_for_ares(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = _game_with_a_file(tmp_path)
+    bios_file = tmp_path / "bios.bin"
+    bios_file.write_bytes(_known_bios(monkeypatch))
+
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            str(source),
+            "--target",
+            "ares",
+            "-d",
+            str(tmp_path / "out"),
+            "--bios",
+            str(bios_file),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "does not take a BIOS" in result.stdout
+
+
+def test_ares_files_round_trip_through_import(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path)
+    out = tmp_path / "ares"
+    runner.invoke(app, ["export", str(source), "--target", "ares", "-d", str(out)])
+    rebuilt = tmp_path / "rebuilt.fds"
+
+    result = runner.invoke(
+        app,
+        [
+            "import-ares",
+            str(out / "Game" / "disk1.sideA"),
+            str(out / "Game" / "disk1.sideB"),
+            "-o",
+            str(rebuilt),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert rebuilt.read_bytes() == source.read_bytes()
+
+
+def test_import_ares_can_write_a_qd(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path)
+    out = tmp_path / "ares"
+    runner.invoke(app, ["export", str(source), "--target", "ares", "-d", str(out)])
+
+    result = runner.invoke(
+        app,
+        ["import-ares", str(out / "Game" / "disk1.sideA"), "-o", str(tmp_path / "one.qd")],
+    )
+
+    assert result.exit_code == 0
+
+
+def test_import_ares_reports_a_missing_file(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["import-ares", str(tmp_path / "nope"), "-o", str(tmp_path / "x.fds")]
+    )
+
+    assert result.exit_code == 1
+
+
+def test_import_ares_refuses_a_file_of_the_wrong_size(tmp_path: Path) -> None:
+    bad = tmp_path / "disk1.sideA"
+    bad.write_bytes(bytes(10))
+
+    result = runner.invoke(app, ["import-ares", str(bad), "-o", str(tmp_path / "x.fds")])
+
+    assert result.exit_code == 1
+    assert "73728" in result.stdout
