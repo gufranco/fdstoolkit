@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: fdstk
+message: If you use this software, please cite it as below.
+type: software
+authors:
+  - given-names: Gustavo
+    family-names: Franco
+    alias: gufranco
+repository-code: https://github.com/gufranco/famicom-disk-system-python
+abstract: >-
+  A Famicom Disk System preservation toolkit: reads and writes every container
+  in use, verifies checksums and structure, answers whether two dumps are the
+  same release whatever media they came from, predicts what a console does with
+  a disk, and dumps or writes real disks through supported hardware.
+  Distributes no disk image, no BIOS and no link to either.
+keywords:
+  - famicom-disk-system
+  - famicom
+  - preservation
+  - emulation
+  - quick-disk
+license: MIT

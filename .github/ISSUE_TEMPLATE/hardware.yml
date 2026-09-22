@@ -1,0 +1,47 @@
+name: A result from real hardware
+description: You ran something from this project against an actual drive, an FDSStick or a Famicom Dumper.
+labels: [hardware]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most valuable kind of report this project can receive.
+        Nothing here has touched a real drive, so a result either way settles a
+        question that no amount of testing on a computer can. The open ones are
+        listed in `docs/provenance.md` and in the hardware verification steps
+        under `docs/`.
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: What the computer was talking to
+      options:
+        - FDSStick
+        - Famicom Dumper
+        - FDSKey
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: drive
+    attributes:
+      label: The drive, and its controller if you know it
+      placeholder: Twin Famicom AN-500B, FD3206P
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What you ran and what happened
+      description: Paste the command and its output. A failure is as useful as a success.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: disk
+    attributes:
+      label: Which disk, and what `fds info` says about it
+      description: Never attach the image. The report from `fds info` and `fds hash` identifies it.
