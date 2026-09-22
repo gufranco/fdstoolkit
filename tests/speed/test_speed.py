@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from fdstoolkit.drive.spec import NOMINAL_BIT_RATE_HZ, cell_from_bit_rate
-from fdstoolkit.drive.speed import Direction, Verdict, measure_speed
+from fdstoolkit.drive.speed import Direction, Verdict, from_cycles, measure_speed
 
 NOMINAL_CELL = cell_from_bit_rate(NOMINAL_BIT_RATE_HZ)
 
@@ -87,3 +87,36 @@ def test_the_report_renders_a_line_naming_what_to_do() -> None:
 
 def test_a_finely_set_drive_renders_as_settled() -> None:
     assert "hold" in measure_speed(_at(NOMINAL_BIT_RATE_HZ)).render()
+
+
+def test_a_console_reading_of_one_hundred_and_forty_eight_is_barely_fast() -> None:
+    report = from_cycles(148)
+
+    assert report.bit_rate_hz == pytest.approx(96_741, rel=0.001)
+    assert report.error == pytest.approx(0.0036, abs=0.0005)
+    assert report.verdict is Verdict.FINE
+
+
+def test_a_console_reading_of_one_hundred_and_forty_nine_is_barely_slow() -> None:
+    report = from_cycles(149)
+
+    assert report.error == pytest.approx(-0.0032, abs=0.0005)
+    assert report.verdict is Verdict.FINE
+
+
+def test_more_cycles_between_bytes_means_a_slower_disk() -> None:
+    assert from_cycles(152).bit_rate_hz < from_cycles(148).bit_rate_hz
+    assert from_cycles(152).direction is Direction.FASTER
+
+
+def test_fewer_cycles_between_bytes_means_a_faster_disk() -> None:
+    assert from_cycles(144).direction is Direction.SLOWER
+
+
+def test_a_console_reading_round_trips_through_the_cycle_count() -> None:
+    assert from_cycles(148).cycles_per_byte == pytest.approx(148, rel=1e-9)
+
+
+def test_a_reading_of_nothing_is_refused() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        from_cycles(0)

@@ -126,6 +126,18 @@ The readers have been run against real captures from public preservation dumps, 
 |---|---|
 | `fdstoolkit tune CAPTURE` | What to adjust, coarse actions first, then the fine ones |
 | `fdstoolkit tune-sweep CAPTURES...` | The speed window that reads clean, and the centre to settle on |
+| `fdstoolkit reading CYCLES` | What a console tool's cycles-between-bytes figure means, and which way to turn |
+| `fdstoolkit classes CAPTURE` | Judges a capture of pulse classes on what it can answer |
+
+A disk-lister tool running on the console reports the average CPU cycles between bytes, and that figure converts exactly: the 2A03 runs at 1.7897725 MHz and a byte is eight bits, so 148 cycles is 96.74 kbit/s and 152 is 94.20. More cycles between bytes means a slower disk. This is the one path to a speed measurement that needs no capture hardware at all.
+
+```console
+$ fdstoolkit reading 152
+94.20 kbit/s, cell 10616 ns (63.7 counts), -2.28% of nominal, in spec, run faster
+turn the motor trimmer counter-clockwise to run faster
+```
+
+An FDSStick rounds every pulse to one of three lengths inside the device, so its captures carry no timing and cannot measure speed. What they can answer is how the three lengths are distributed and how many pulses fell outside all three, which `classes` reports.
 
 The drive is measured against the bit rate, not against a rotation speed. The RAM adapter expects 96.4 kbit/s and tolerates ten percent either side, which is the only figure the hardware actually enforces; published rotation speeds for this mechanism disagree with each other by a factor of two, so the toolkit does not use them.
 

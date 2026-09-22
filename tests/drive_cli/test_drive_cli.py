@@ -128,7 +128,7 @@ def test_a_quantised_capture_is_refused_for_tuning(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "pulse classes" in result.stdout
-    assert "interval counts" in result.stdout
+    assert "Run classes on it instead" in result.stdout
 
 
 def test_a_quantised_capture_is_refused_for_a_sweep(tmp_path: Path) -> None:
@@ -139,3 +139,94 @@ def test_a_quantised_capture_is_refused_for_a_sweep(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "pulse classes" in result.stdout
+
+
+def test_a_class_capture_is_judged_on_what_it_can_answer(tmp_path: Path) -> None:
+    path = tmp_path / "classes.raw"
+    path.write_bytes(pack_raw03(bytes([0] * 740 + [1] * 190 + [2] * 70)))
+
+    result = runner.invoke(app, ["classes", str(path)])
+
+    assert result.exit_code == 0
+    assert "healthy" in result.stdout
+
+
+def test_a_glitching_class_capture_fails(tmp_path: Path) -> None:
+    path = tmp_path / "classes.raw"
+    path.write_bytes(pack_raw03(bytes([0] * 700 + [1] * 190 + [2] * 60 + [3] * 50)))
+
+    result = runner.invoke(app, ["classes", str(path)])
+
+    assert result.exit_code == 1
+    assert "glitch" in result.stdout
+
+
+def test_class_output_can_be_json(tmp_path: Path) -> None:
+    path = tmp_path / "classes.raw"
+    path.write_bytes(pack_raw03(bytes([0] * 740 + [1] * 190 + [2] * 70)))
+
+    result = runner.invoke(app, ["classes", str(path), "--json"])
+
+    assert json.loads(result.stdout)["reading"] == "healthy"
+
+
+def test_a_missing_class_capture_is_refused(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["classes", str(tmp_path / "nothing.raw")])
+
+    assert result.exit_code == 1
+    assert "file not found" in result.stdout
+
+
+def test_an_empty_class_capture_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "empty.raw"
+    path.write_bytes(b"")
+
+    result = runner.invoke(app, ["classes", str(path)])
+
+    assert result.exit_code == 1
+
+
+def test_unpacked_classes_can_be_named(tmp_path: Path) -> None:
+    path = tmp_path / "flat.raw"
+    path.write_bytes(bytes([0] * 740 + [1] * 190 + [2] * 70))
+
+    result = runner.invoke(app, ["classes", str(path), "--format", "counts"])
+
+    assert result.exit_code == 0
+
+
+def test_a_console_reading_at_target_needs_no_turn() -> None:
+    result = runner.invoke(app, ["reading", "148"])
+
+    assert result.exit_code == 0
+    assert "leave the trimmer alone" in result.stdout
+
+
+def test_a_high_console_reading_means_run_faster() -> None:
+    result = runner.invoke(app, ["reading", "155"])
+
+    assert result.exit_code == 1
+    assert "counter-clockwise" in result.stdout
+    assert "faster" in result.stdout
+
+
+def test_a_low_console_reading_means_run_slower() -> None:
+    result = runner.invoke(app, ["reading", "140"])
+
+    assert result.exit_code == 1
+    assert "clockwise" in result.stdout
+
+
+def test_a_console_reading_can_be_json() -> None:
+    result = runner.invoke(app, ["reading", "148", "--json"])
+
+    payload = json.loads(result.stdout)
+    assert payload["verdict"] == "fine"
+    assert payload["turn"] == "nothing"
+
+
+def test_a_console_reading_of_zero_is_refused() -> None:
+    result = runner.invoke(app, ["reading", "0"])
+
+    assert result.exit_code == 1
+    assert "positive" in result.stdout

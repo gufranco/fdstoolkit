@@ -8,6 +8,7 @@ from fdstoolkit.drive.spec import (
     BITS_PER_BYTE,
     CPU_CLOCK_HZ,
     NOMINAL_BIT_RATE_HZ,
+    NS_PER_SECOND,
     accept_band,
     bit_rate_from_cell,
     counts_from_cell,
@@ -86,3 +87,11 @@ def measure_speed(intervals: Sequence[int]) -> SpeedReport:
         raise ValueError(message)
     base, _, family = fit_family(intervals)
     return SpeedReport(cell_ns=base, family=family)
+
+
+def from_cycles(cycles_per_byte: float) -> SpeedReport:
+    if cycles_per_byte <= 0:
+        message = "a cycle count between bytes is positive"
+        raise ValueError(message)
+    cell = NS_PER_SECOND * cycles_per_byte / (CPU_CLOCK_HZ * BITS_PER_BYTE)
+    return SpeedReport(cell_ns=cell, family="console")
