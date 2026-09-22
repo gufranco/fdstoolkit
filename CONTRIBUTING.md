@@ -48,10 +48,9 @@ Each of those was believed until somebody counted.
 ## Hardware claims
 
 Nothing in this project has touched a real drive. Anything asserted about the
-FDSStick, the Famicom Dumper or a disk drive is read from a source and marked as
-unconfirmed in `docs/provenance.md`. A change that turns one of those into a
-verified claim is the most valuable kind of contribution here, and it belongs in
-that table with what was run.
+FDSStick, the Famicom Dumper or a disk drive was read from a source rather than
+measured, and a change that turns one of those into a verified claim is the most
+valuable kind of contribution here. Say what you ran.
 
 ## Commits
 

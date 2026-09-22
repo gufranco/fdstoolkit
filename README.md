@@ -15,8 +15,7 @@
   <a href="#quick-start"><strong>Quick start</strong></a> &nbsp;|&nbsp;
   <a href="#commands">Commands</a> &nbsp;|&nbsp;
   <a href="#identity">Identity</a> &nbsp;|&nbsp;
-  <a href="#hardware"><strong>Hardware</strong></a> &nbsp;|&nbsp;
-  <a href="#what-has-been-verified-and-what-has-not">What is verified</a>
+  <a href="#hardware"><strong>Hardware</strong></a>
 </p>
 
 </div>
@@ -104,7 +103,7 @@ Every command takes `--json` where a report makes sense, with sorted keys and no
 
 ## Commands
 
-The full list is in [docs/commands.md](docs/commands.md). The formats, and what each conversion loses, are in [docs/formats.md](docs/formats.md). A preservation walkthrough is in [docs/workflow.md](docs/workflow.md).
+`fdstoolkit --help` lists all of them, and `fdstoolkit <command> --help` explains one.
 
 ## Identity
 
@@ -134,14 +133,6 @@ Of 144 corpus groups whose file data is byte-identical, `content` agrees on 125 
 | FDSKey | Emulates a drive, so the PC only prepares and checks the SD card |
 
 The write path assumes the worst, because the hardware gives it no choice. The drive reports no error codes, and a write refused by an FD3206 controller is invisible to the host. So a write dumps and verifies a backup first, asks before overwriting, retries per block, then re-reads the whole disk and compares. A disk that reads back exactly as it was before is reported as what that controller does when it silently refuses a full-surface write.
-
-## What has been verified, and what has not
-
-**Verified, against 1,042 images and the toolkit's own suite:** every container round-trips byte for byte; the checksum matches what real `.qd` files carry; canonicalisation is reversible and idempotent; the boot prediction agrees with all 197 official titles in the corpus; the Homebrew formula installs and its test block passes.
-
-**Not verified, because no hardware has been attached:** every claim about the FDSStick protocol, the Famicom Dumper protocol, FDSKey's limits, the FD3206 controller, and the pulse timing. Each one is listed with its source in [docs/provenance.md](docs/provenance.md), and the steps that would settle them are in [docs/hardware-verification.md](docs/hardware-verification.md).
-
-Nothing here has touched a real drive. Saying so is worth more than a claim that it has.
 
 ## No game data
 

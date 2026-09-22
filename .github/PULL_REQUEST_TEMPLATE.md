@@ -15,4 +15,4 @@ project reversed under measurement. -->
 - [ ] `uv run pytest --cov` passes at 100%, on a clean checkout with no disk images present
 - [ ] No disk image, BIOS, firmware or save data added, in any form
 - [ ] Nothing added that points at where to obtain those files
-- [ ] Any new claim about hardware is marked unconfirmed in `docs/provenance.md`, or carries what was run
+- [ ] Any new claim about hardware says what was run, or says it is unconfirmed

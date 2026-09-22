@@ -58,11 +58,11 @@ class Fdstoolkit < Formula
     assert_match "fdstoolkit #{version}", shell_output("#{bin}/fdstoolkit --version")
 
     blank = testpath/"blank.fds"
-    system bin/"fds", "blank", "-o", blank, "--sides", "1", "--formatted"
+    system bin/"fdstoolkit", "blank", "-o", blank, "--sides", "1", "--formatted"
     assert_equal 65500, blank.size
 
     assert_match "1 side(s)", shell_output("#{bin}/fdstoolkit info #{blank}")
-    system bin/"fds", "verify", blank
+    system bin/"fdstoolkit", "verify", blank
     assert_match "fdstoolkit", shell_output("#{bin}/fdstoolkit doctor")
   end
 end
