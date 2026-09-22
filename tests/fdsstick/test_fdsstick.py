@@ -279,6 +279,7 @@ def test_opening_without_hidapi_explains_the_extra(monkeypatch: pytest.MonkeyPat
 def test_opening_reports_a_device_that_does_not_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     class RefusingDevice(FakeHidDevice):
         def open(self, vendor_id: int, product_id: int) -> None:
+            del vendor_id, product_id
             message = "no such device"
             raise OSError(message)
 
