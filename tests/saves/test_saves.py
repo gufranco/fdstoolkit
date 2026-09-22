@@ -131,3 +131,31 @@ def test_normalising_makes_two_played_copies_agree() -> None:
     second, _ = normalise_saves(other, [recipe])
 
     assert extract_files(first) == extract_files(second)
+
+
+def test_a_recipe_for_a_side_that_does_not_exist_is_ignored() -> None:
+    disk = disk_with([("PROGRAM", bytes(4))])
+    recipe = SaveRecipe(game_name="SMB", game_version=0, side=4, position=0, fill=0x00)
+
+    _, applied = normalise_saves(disk, [recipe])
+
+    assert applied == ()
+
+
+def test_a_recipe_for_an_unformatted_side_is_ignored() -> None:
+    unformatted, _ = decode(blank_image(sides=1, headered=False, formatted=False))
+    recipe = SaveRecipe(game_name="SMB", game_version=0, side=0, position=0, fill=0x00)
+
+    _, applied = normalise_saves(unformatted, [recipe])
+
+    assert applied == ()
+
+
+def test_a_recipe_naming_a_header_without_data_is_reported() -> None:
+    disk = disk_with([("FC_SAVE", bytes(4))])
+    side = disk.sides[0]
+    orphaned = side.__class__(blocks=side.blocks[:-1], tail=b"", capacity=side.capacity)
+    recipe = SaveRecipe(game_name="SMB", game_version=0, side=0, position=0, fill=0x00)
+
+    with pytest.raises(ValueError, match="no file at position 0"):
+        normalise_saves(Disk(sides=(orphaned,)), [recipe])

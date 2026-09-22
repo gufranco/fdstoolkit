@@ -143,3 +143,26 @@ def test_a_ups_patch_for_the_headerless_image_is_retried_without_the_header() ->
 
     assert outcome.applied_to == "headerless image"
     assert outcome.format is PatchFormat.UPS
+
+
+def test_a_headerless_image_reports_the_original_failure() -> None:
+    patch = bps_replacing(bytes([0x01, 0x02]), bytes([0x03, 0x04]))
+
+    with pytest.raises(PatchError, match="source does not match"):
+        apply_patch(patch, headerless())
+
+
+def test_a_headered_image_whose_both_forms_break_is_reported() -> None:
+    patch = (
+        b"PATCH"
+        + (0x05).to_bytes(3, "big")
+        + (2).to_bytes(2, "big")
+        + b"XX"
+        + (0x11).to_bytes(3, "big")
+        + (2).to_bytes(2, "big")
+        + b"YY"
+        + b"EOF"
+    )
+
+    with pytest.raises(PatchError, match="no longer parses"):
+        apply_patch(patch, headered())

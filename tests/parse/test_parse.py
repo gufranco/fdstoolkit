@@ -168,3 +168,11 @@ def test_diagnostics_carry_the_side_index() -> None:
     _, findings = parse_side(bytes(FDS_SIDE), has_crc=False, side_index=3)
 
     assert findings[0].side == 3
+
+
+def test_a_block_whose_crc_is_cut_short_is_reported() -> None:
+    raw = build_side(files=0, crc=True)[:-1]
+
+    _, findings = parse_side(raw, has_crc=True)
+
+    assert "FDS004" in [finding.code for finding in findings]

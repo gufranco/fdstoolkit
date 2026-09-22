@@ -85,6 +85,7 @@ reportUnnecessaryTypeIgnoreComment = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+norecursedirs = [".*", "node_modules", "dist"]
 addopts = "-q --strict-markers --strict-config"
 markers = [
   "corpus: runs against the local image corpus named by FDSTK_CORPUS",

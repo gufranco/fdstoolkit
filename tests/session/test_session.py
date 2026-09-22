@@ -180,3 +180,34 @@ def test_the_confirmation_message_names_what_is_at_stake() -> None:
 
     assert "overwrite" in seen[0]
     assert "side" in seen[0]
+
+
+def test_a_retry_that_returns_fewer_blocks_stops_the_walk() -> None:
+    class ShrinkingDrive(SimulatedDrive):
+        def __init__(self) -> None:
+            super().__init__(sample_disk(), plan=FaultPlan(bad_crc_blocks=frozenset({1})))
+            self._calls = 0
+
+        def read_side(self, side: int):  # noqa: ANN202
+            self._calls += 1
+            blocks = list(super().read_side(side))
+            if self._calls > 1:
+                return iter(blocks[:1])
+            return iter(blocks)
+
+    result = dump(ShrinkingDrive(), sides=1, retries=3)
+
+    assert result.sides[0].failed_blocks == (1,)
+
+
+def test_a_fault_during_the_write_stops_the_run() -> None:
+    class RefusingDrive(SimulatedDrive):
+        def write_side(self, side: int, blocks: object) -> None:
+            del side, blocks
+            message = "the drive stopped answering"
+            raise HardwareFaultError(message, kind=FaultKind.LINK)
+
+    drive = RefusingDrive(sample_disk())
+
+    with pytest.raises(WriteRefusedError, match="the write stopped at side 0"):
+        write_verified(drive, drive, sample_disk(), confirm=lambda _: True, backup=None)

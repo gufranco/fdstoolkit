@@ -138,11 +138,11 @@ def _encode_bits(bits: list[int]) -> bytes:
     return bytes(out)
 
 
-def _encode_era_b(data: bytes) -> bytes:
+def encode_era_b(data: bytes) -> bytes:
     return _encode_bits(_bits_lsb_first(data))
 
 
-def _encode_era_a(data: bytes) -> bytes:
+def encode_era_a(data: bytes) -> bytes:
     out = bytearray()
     for byte in data:
         out += unpack_raw03(bytes([ERA_A_NIBBLE[byte & 0x0F]]))
@@ -155,7 +155,7 @@ def encode_block_stream(
     *,
     encoding: RawEncoding = RawEncoding.ERA_B,
 ) -> bytes:
-    encoder = _encode_era_a if encoding is RawEncoding.ERA_A else _encode_era_b
+    encoder = encode_era_a if encoding is RawEncoding.ERA_A else encode_era_b
     values = bytearray(bytes([GAP_VALUE]) * (LEAD_IN_PACKED * VALUES_PER_BYTE))
 
     for index, payload in enumerate(payloads):

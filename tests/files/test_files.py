@@ -151,3 +151,35 @@ def test_an_unformatted_side_has_no_declared_count() -> None:
     disk, _ = decode(blank_image(sides=1, headered=False, formatted=False))
 
     assert declared_file_count(disk, side=0) is None
+
+
+def test_a_side_that_already_declares_the_maximum_refuses_another_file() -> None:
+    disk = disk_with(files=1)
+    crowded = set_declared_file_count(disk, side=0, count=1)
+    raised = crowded.sides[0].__class__(
+        blocks=tuple(
+            block.__class__(kind=block.kind, payload=bytes([0x02, 0xFF]))
+            if block.kind.name == "FILE_AMOUNT"
+            else block
+            for block in crowded.sides[0].blocks
+        ),
+        tail=b"",
+        capacity=crowded.sides[0].capacity,
+    )
+
+    with pytest.raises(ValueError, match="at most 255"):
+        insert_file(
+            Disk(sides=(raised,)),
+            side=0,
+            spec=FileSpec(name="NEW", address=0x6000, kind=FileKind.PROGRAM, data=b"\x01"),
+        )
+
+
+def test_removing_a_header_without_its_data_block_drops_only_the_header() -> None:
+    disk = disk_with(files=1)
+    side = disk.sides[0]
+    orphaned = side.__class__(blocks=side.blocks[:-1], tail=b"", capacity=side.capacity)
+
+    updated = remove_file(Disk(sides=(orphaned,)), side=0, position=0)
+
+    assert extract_files(updated) == ()

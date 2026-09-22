@@ -161,3 +161,27 @@ def test_an_entry_is_a_value_type() -> None:
     other = DatEntry(name="a", size=1, crc32="b", md5="c", sha1="d", sha256=None)
 
     assert one == other
+
+
+def test_an_entry_without_a_rom_element_is_skipped(tmp_path: Path) -> None:
+    path = tmp_path / "empty.dat"
+    path.write_text(
+        "<?xml version='1.0'?>\n<datafile>\n<header><name>x</name></header>\n"
+        '<game name="Broken"></game>\n</datafile>\n',
+        encoding="utf-8",
+    )
+
+    assert load_dat(path).entries == ()
+
+
+def test_a_headered_image_falls_back_to_the_headerless_size(
+    catalogue: Catalogue,
+    known: bytes,
+) -> None:
+    headered = bytearray(b"FDS\x1a" + bytes([1]) + bytes(11) + known)
+    headered[16 + 0x10 : 16 + 0x13] = b"XYZ"
+
+    result = identify(bytes(headered), catalogue)
+
+    assert result.kind is MatchKind.UNKNOWN
+    assert [entry.name for entry in result.same_size] == ["Known Game (Japan)"]

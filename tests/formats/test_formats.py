@@ -259,3 +259,50 @@ def test_a_ups_patch_can_extend_the_target() -> None:
     patch = build_ups(source, target)
 
     assert apply_ups(patch, source) == target
+
+
+def test_an_ips_patch_without_its_end_marker_stops_at_the_data() -> None:
+    patch = b"PATCH" + (0).to_bytes(3, "big") + (1).to_bytes(2, "big") + b"\xaa"
+
+    assert apply_ips(patch, bytes(4))[0] == 0xAA
+
+
+def test_a_ups_patch_whose_target_is_shorter_ignores_the_overflow() -> None:
+    source = bytes([0x01, 0x02, 0x03, 0x04])
+    patch = bytearray(b"UPS1")
+    patch += write_varint(len(source))
+    patch += write_varint(2)
+    patch += write_varint(0)
+    patch += bytes([0xFF, 0xFF, 0xFF, 0xFF])
+    patch += b"\x00"
+    patch += zlib.crc32(source).to_bytes(4, "little")
+    patch += zlib.crc32(bytes([0xFE, 0xFD])).to_bytes(4, "little")
+    patch += zlib.crc32(bytes(patch)).to_bytes(4, "little")
+
+    assert apply_ups(bytes(patch), source) == bytes([0xFE, 0xFD])
+
+
+def test_a_ups_patch_with_no_records_returns_the_source() -> None:
+    source = bytes([0x01, 0x02])
+    patch = bytearray(b"UPS1")
+    patch += write_varint(len(source))
+    patch += write_varint(len(source))
+    patch += zlib.crc32(source).to_bytes(4, "little")
+    patch += zlib.crc32(source).to_bytes(4, "little")
+    patch += zlib.crc32(bytes(patch)).to_bytes(4, "little")
+
+    assert apply_ups(bytes(patch), source) == source
+
+
+def test_a_ups_record_that_runs_to_the_end_of_the_body_stops_there() -> None:
+    source = bytes([0x01, 0x02])
+    patch = bytearray(b"UPS1")
+    patch += write_varint(len(source))
+    patch += write_varint(len(source))
+    patch += write_varint(0)
+    patch += bytes([0x03])
+    patch += zlib.crc32(source).to_bytes(4, "little")
+    patch += zlib.crc32(bytes([0x02, 0x02])).to_bytes(4, "little")
+    patch += zlib.crc32(bytes(patch)).to_bytes(4, "little")
+
+    assert apply_ups(bytes(patch), source) == bytes([0x02, 0x02])

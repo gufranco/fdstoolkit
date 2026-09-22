@@ -98,3 +98,17 @@ def test_a_fault_is_an_exception() -> None:
 
     with pytest.raises(HardwareFaultError, match="no answer"):
         raise fault
+
+
+def test_a_media_fault_classifies_as_media() -> None:
+    assert (
+        HardwareFaultError("unreadable block", kind=FaultKind.MEDIA).error_class is ErrorClass.MEDIA
+    )
+
+
+def test_a_transient_fault_classifies_by_its_message() -> None:
+    assert (
+        HardwareFaultError("input/output error", kind=FaultKind.TRANSIENT).error_class
+        is ErrorClass.MEDIA
+    )
+    assert HardwareFaultError("odd", kind=FaultKind.TRANSIENT).error_class is ErrorClass.OTHER

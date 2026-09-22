@@ -208,3 +208,34 @@ def test_a_canonical_side_longer_than_the_nominal_size_is_kept_whole() -> None:
     result = canonicalise(disk.__class__(sides=(stuffed,)), RAW_PROFILE)
 
     assert len(result.data) > SIDE_SIZE
+
+
+def test_a_canonical_side_longer_than_the_nominal_length_is_kept_whole() -> None:
+    disk, _ = decode(side_bytes())
+    side = disk.sides[0]
+    stuffed = side.__class__(
+        blocks=side.blocks * 2000,
+        tail=b"",
+        capacity=SIDE_SIZE,
+    )
+
+    result = canonicalise(disk.__class__(sides=(stuffed,)), CONTENT_PROFILE)
+
+    assert len(result.data) > SIDE_SIZE
+
+
+def test_a_raw_result_carries_the_header_when_the_image_had_one() -> None:
+    original = b"FDS\x1a" + bytes([1]) + bytes(11) + side_bytes()
+    disk, _ = decode(original)
+
+    assert canonicalise(disk, RAW_PROFILE).data == original
+
+
+def test_restoring_a_side_whose_content_fills_it_keeps_every_byte() -> None:
+    disk, _ = decode(side_bytes())
+    side = disk.sides[0]
+    crowded = side.__class__(blocks=side.blocks, tail=b"", capacity=10)
+
+    result = canonicalise(disk.__class__(sides=(crowded,)), CONTENT_PROFILE)
+
+    assert len(restore(result)) == sum(block.size for block in side.blocks)

@@ -11,6 +11,7 @@ from fdstk.codecs.raw import encode_raw03
 from fdstk.hardware.fdsstick import (
     BULK_READ_PAYLOAD,
     BULK_WRITE_PAYLOAD,
+    MAX_PACKETS_PER_SIDE,
     PRODUCT_ID,
     VENDOR_ID,
     FdsStick,
@@ -307,3 +308,40 @@ def test_opening_returns_a_device_that_has_shaken_hands(monkeypatch: pytest.Monk
     assert isinstance(stick, FdsStick)
     assert device.sent
     assert device.opened == (VENDOR_ID, PRODUCT_ID)
+
+
+def test_the_address_scan_walks_the_documented_range() -> None:
+    transport = FakeTransport()
+
+    FdsStick(transport).scan_address_table()
+
+    addresses = [
+        feature[1] | (feature[2] << 8)
+        for feature in transport.features
+        if feature[0] == ReportId.ADDRESS
+    ]
+    assert addresses[0] == 0x01B0
+    assert addresses[-1] == 0x04E0
+    assert len(addresses) == 52
+
+
+def test_writing_a_side_encodes_the_blocks_it_is_given() -> None:
+    transport = FakeTransport()
+    disk = sample_disk()
+
+    FdsStick(transport).write_side(0, [block.payload for block in disk.sides[0].blocks])
+
+    assert transport.outputs
+    assert transport.features[-1] == bytes([ReportId.FINALISE, 0x00])
+
+
+def test_a_read_that_never_ends_stops_at_the_packet_ceiling() -> None:
+    packets: deque[bytes] = deque(
+        bytes([ReportId.BULK_READ, (index % 255) + 1]) + bytes(BULK_READ_PAYLOAD)
+        for index in range(MAX_PACKETS_PER_SIDE + 5)
+    )
+    transport = FakeTransport({ReportId.BULK_READ: packets})
+
+    values = FdsStick(transport).read_raw_side()
+
+    assert len(values) == MAX_PACKETS_PER_SIDE * BULK_READ_PAYLOAD

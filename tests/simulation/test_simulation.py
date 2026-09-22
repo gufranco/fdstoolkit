@@ -124,3 +124,10 @@ def test_the_drive_counts_what_it_was_asked_to_do() -> None:
     list(drive.read_side(0))
 
     assert drive.read_count == 2
+
+
+def test_a_flat_battery_blocks_a_write() -> None:
+    drive = SimulatedDrive(sample_disk(), battery_ok=False)
+
+    with pytest.raises(HardwareFaultError, match="battery"):
+        drive.write_side(0, [bytes([0x02, 0x00])])

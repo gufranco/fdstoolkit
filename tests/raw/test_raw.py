@@ -12,6 +12,7 @@ from fdstk.codecs.raw import (
     RawEncoding,
     class_histogram,
     decode_raw03,
+    encode_era_b,
     encode_raw03,
     pack_raw03,
     quantise,
@@ -19,6 +20,7 @@ from fdstk.codecs.raw import (
     to_write_alphabet,
     unpack_raw03,
 )
+from fdstk.core.crc import encode_crc
 
 
 def sample_disk(files: int = 1):  # noqa: ANN201
@@ -147,3 +149,36 @@ def test_a_corrupted_stream_reports_the_block_it_lost() -> None:
 def test_encoding_an_unknown_side_is_refused() -> None:
     with pytest.raises(ValueError, match="no side 3"):
         encode_raw03(sample_disk(), side=3)
+
+
+def encoded(data: bytes) -> bytes:
+    return bytes([GAP_VALUE]) * MIN_GAP_VALUES + encode_era_b(data)
+
+
+def test_a_region_whose_block_kind_is_unknown_is_reported() -> None:
+    _, findings = decode_raw03(encoded(bytes([0x80, 0x09, 0x00, 0x00])))
+
+    assert "FDS015" in [finding.code for finding in findings]
+
+
+def test_a_region_without_the_sync_mark_is_reported() -> None:
+    _, findings = decode_raw03(encoded(bytes([0x41, 0x02, 0x00, 0x00])))
+
+    assert "FDS015" in [finding.code for finding in findings]
+
+
+def test_a_region_cut_short_of_its_crc_is_reported() -> None:
+    values = bytearray(encoded(bytes([0x80, 0x02, 0x01])))
+
+    _, findings = decode_raw03(bytes(values))
+
+    assert {"FDS004", "FDS015"} & {finding.code for finding in findings}
+
+
+def test_a_block_whose_crc_does_not_match_is_reported() -> None:
+    payload = bytes([0x02, 0x01])
+    stream = encoded(bytes([0x80]) + payload + encode_crc(0x1234))
+
+    _, findings = decode_raw03(stream)
+
+    assert "FDS002" in [finding.code for finding in findings]

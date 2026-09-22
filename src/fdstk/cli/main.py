@@ -68,7 +68,7 @@ def _read(path: Path) -> tuple[bytes, Container]:
     return path.read_bytes(), _container_of(path)
 
 
-def _decode(path: Path) -> tuple[Disk, tuple[Diagnostic, ...], bytes, Container]:
+def decode_image(path: Path) -> tuple[Disk, tuple[Diagnostic, ...], bytes, Container]:
     data, container = _read(path)
     decoder = fds.decode if container is Container.FDS else qd.decode
     disk, findings = decoder(data)
@@ -119,7 +119,7 @@ def info(
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Describe an image, side by side."""
-    disk, findings, data, container = _decode(image)
+    disk, findings, data, container = decode_image(image)
     payload: dict[str, object] = {
         "path": str(image),
         "container": str(container),
@@ -153,7 +153,7 @@ def ls(
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """List the files on every side."""
-    disk, _, _, _ = _decode(image)
+    disk, _, _, _ = decode_image(image)
     rows: list[dict[str, object]] = []
     for index, side in enumerate(disk.sides):
         declared = side.declared_file_count or 0
@@ -191,7 +191,7 @@ def verify(
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Check an image and report every finding."""
-    _, findings, _, _ = _decode(image)
+    _, findings, _, _ = decode_image(image)
     code = _exit_code(findings, strict=strict)
 
     if json_output:
@@ -221,7 +221,7 @@ def hash_command(
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Hash an image, every side, and its canonical form."""
-    disk, _, data, container = _decode(image)
+    disk, _, data, container = decode_image(image)
     side_size = fds.SIDE_SIZE if container is Container.FDS else qd.SIDE_SIZE
     try:
         canonical = canonicalise(disk, profile_by_name(profile))
@@ -265,7 +265,7 @@ def convert(
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
     """Convert between .fds and .qd."""
-    disk, _, _, _ = _decode(image)
+    disk, _, _, _ = decode_image(image)
     target = _container_of(output)
     _guard_output(output, force=force)
 
@@ -294,7 +294,7 @@ def canon(
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
     """Print the canonical digest, and optionally write the canonical image."""
-    disk, _, _, _ = _decode(image)
+    disk, _, _, _ = decode_image(image)
     try:
         result = canonicalise(disk, profile_by_name(profile))
     except ValueError as error:
@@ -375,7 +375,7 @@ class Backend(StrEnum):
     FDSSTICK = "fdsstick"
 
 
-def _open_drive(backend: Backend, source: Path | None) -> SimulatedDrive | FdsStick:
+def open_drive(backend: Backend, source: Path | None) -> SimulatedDrive | FdsStick:
     if backend is Backend.FDSSTICK:
         try:
             return open_fdsstick()
@@ -384,7 +384,7 @@ def _open_drive(backend: Backend, source: Path | None) -> SimulatedDrive | FdsSt
     if source is None:
         message = "the simulated backend needs --source naming an image to stand in for the disk"
         raise _fail(message)
-    disk, _, _, _ = _decode(source)
+    disk, _, _, _ = decode_image(source)
     return SimulatedDrive(disk)
 
 
@@ -406,7 +406,7 @@ def dump(
 ) -> None:
     """Dump a disk through a drive backend."""
     _guard_output(output, force=force)
-    drive = _open_drive(backend, source)
+    drive = open_drive(backend, source)
 
     try:
         if passes > 1:
@@ -446,8 +446,8 @@ def write(
     retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
 ) -> None:
     """Write an image to a disk, then read it back and compare."""
-    disk, _, _, _ = _decode(image)
-    drive = _open_drive(backend, source)
+    disk, _, _, _ = decode_image(image)
+    drive = open_drive(backend, source)
 
     def confirm(message: str) -> bool:
         if yes:
@@ -524,7 +524,7 @@ def extract(
     force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
 ) -> None:
     """Write every file on the disk to a directory."""
-    disk, _, _, _ = _decode(image)
+    disk, _, _, _ = decode_image(image)
     directory.mkdir(parents=True, exist_ok=True)
 
     for entry in extract_files(disk):
@@ -553,7 +553,7 @@ def insert_command(
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
     """Add a file to a side and write the result."""
-    disk, _, _, _ = _decode(image)
+    disk, _, _, _ = decode_image(image)
     _guard_output(output, force=force)
     if not file.is_file():
         message = f"file not found: {file}"
@@ -616,7 +616,7 @@ def provenance(
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Report where each side came from: factory, kiosk rewrite, or unknown."""
-    disk, _, _, _ = _decode(image)
+    disk, _, _, _ = decode_image(image)
     report = provenance_of(disk)
 
     if json_output:
@@ -642,7 +642,7 @@ def saves(
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Compare dumps of one release and report which file looks like the save."""
-    disks = [_decode(path)[0] for path in images]
+    disks = [decode_image(path)[0] for path in images]
     try:
         candidates = find_save_candidates(disks)
     except ValueError as error:
@@ -688,7 +688,7 @@ def clean(
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
     """Remove leftover bytes after the last block of every side."""
-    disk, _, _, _ = _decode(image)
+    disk, _, _, _ = decode_image(image)
     _guard_output(output, force=force)
 
     cleaned, removed = clean_trailing_data(disk)
@@ -712,8 +712,8 @@ def diff_command(
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Compare two images block by block."""
-    left, _, _, _ = _decode(first)
-    right, _, _, _ = _decode(second)
+    left, _, _, _ = decode_image(first)
+    right, _, _, _ = decode_image(second)
     report = compare_images(left, right)
 
     if json_output:
@@ -745,7 +745,7 @@ def consensus(
 ) -> None:
     """Merge several dumps of one disk, block by block, and report every disagreement."""
     _guard_output(output, force=force)
-    disks = [_decode(path)[0] for path in images]
+    disks = [decode_image(path)[0] for path in images]
 
     try:
         result = build_consensus(disks)

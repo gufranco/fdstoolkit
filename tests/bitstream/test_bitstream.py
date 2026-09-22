@@ -12,6 +12,7 @@ from fdstk.core.bitstream import (
     LEAD_IN_BITS,
     emulated_side_size,
     encode_side_bitstream,
+    fits_emulation_buffer,
     gap_length,
 )
 
@@ -96,3 +97,7 @@ def test_the_gap_constants_are_the_documented_ones() -> None:
 def test_a_negative_gap_is_rejected() -> None:
     with pytest.raises(ValueError, match="cannot be negative"):
         gap_length(-1)
+
+
+def test_a_side_that_fits_the_emulation_buffer_is_reported() -> None:
+    assert fits_emulation_buffer(sample_side())

@@ -7,9 +7,14 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+import fdstk.cli.main as cli
 from fdstk.build.blank import blank_image
 from fdstk.cli.main import app
 from fdstk.codecs.fds import SIDE_SIZE
+from fdstk.codecs.qd import encode as encode_qd
+from fdstk.core.blocks import Block, BlockKind
+from fdstk.core.disk import Disk, Side
+from fdstk.hardware.simulation import FaultPlan, SimulatedDrive
 
 runner = CliRunner()
 
@@ -596,3 +601,459 @@ def test_save_extract_reports_a_missing_played_image(single_side: Path, tmp_path
 
     assert result.exit_code == 1
     assert "not found" in result.stdout
+
+
+@pytest.fixture
+def hidden_file_image(tmp_path: Path) -> Path:
+    content = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    content[56:58] = bytes([0x02, 0x00])
+    header = (
+        bytes([0x03, 0x00, 0x00])
+        + b"SECRET  "
+        + (0x6000).to_bytes(2, "little")
+        + (4).to_bytes(2, "little")
+        + bytes([0x00])
+    )
+    content[58:74] = header
+    content[74:79] = bytes([0x04]) + bytes([0x55]) * 4
+    path = tmp_path / "hidden.fds"
+    path.write_bytes(bytes(content))
+    return path
+
+
+def test_info_prints_its_findings(damaged: Path) -> None:
+    result = runner.invoke(app, ["info", str(damaged)])
+
+    assert "FDS008" in result.stdout
+
+
+def test_ls_can_emit_json(hidden_file_image: Path) -> None:
+    payload = json.loads(runner.invoke(app, ["ls", str(hidden_file_image), "--json"]).stdout)
+
+    assert payload["files"][0]["name"] == "SECRET"
+    assert payload["files"][0]["hidden"] is True
+
+
+def test_ls_marks_a_hidden_file(hidden_file_image: Path) -> None:
+    result = runner.invoke(app, ["ls", str(hidden_file_image)])
+
+    assert "(hidden)" in result.stdout
+
+
+def test_verify_can_emit_json(image: Path) -> None:
+    payload = json.loads(runner.invoke(app, ["verify", str(image), "--json"]).stdout)
+
+    assert payload["ok"] is True
+    assert payload["worst_severity"] == "info"
+
+
+def test_hash_prints_a_human_report(image: Path) -> None:
+    result = runner.invoke(app, ["hash", str(image)])
+
+    assert "sha256" in result.stdout
+    assert "canonical fdscanon:v1:content/v1:" in result.stdout
+
+
+def test_hash_rejects_an_unknown_profile(image: Path) -> None:
+    result = runner.invoke(app, ["hash", str(image), "--profile", "nope"])
+
+    assert result.exit_code == 1
+    assert "unknown profile" in result.stdout
+
+
+def test_convert_reports_a_side_that_will_not_fit_the_target(tmp_path: Path) -> None:
+    info = bytearray(56)
+    info[0] = 0x01
+    info[1:15] = b"*NINTENDO-HVC*"
+    size = 65450
+    header = (
+        bytes([0x03, 0x00, 0x00])
+        + b"BIG     "
+        + (0x6000).to_bytes(2, "little")
+        + size.to_bytes(2, "little")
+        + bytes([0x00])
+    )
+    side = Side(
+        blocks=(
+            Block(kind=BlockKind.DISK_INFO, payload=bytes(info)),
+            Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([0x02, 0x01])),
+            Block(kind=BlockKind.FILE_HEADER, payload=header),
+            Block(kind=BlockKind.FILE_DATA, payload=bytes([0x04]) + bytes(size)),
+        ),
+        tail=b"",
+        capacity=65536,
+    )
+    data, _ = encode_qd(Disk(sides=(side,)))
+    source = tmp_path / "big.qd"
+    source.write_bytes(data)
+    out = tmp_path / "big.fds"
+
+    result = runner.invoke(app, ["convert", str(source), "-o", str(out)])
+
+    assert result.exit_code == 1
+    assert "FDS011" in result.stdout
+
+
+def test_extract_refuses_to_overwrite(hidden_file_image: Path, tmp_path: Path) -> None:
+    target = tmp_path / "files"
+    target.mkdir()
+    (target / "side0-00-SECRET.bin").write_bytes(b"old")
+
+    result = runner.invoke(app, ["extract", str(hidden_file_image), "-d", str(target)])
+
+    assert result.exit_code == 1
+    assert "--force" in result.stdout
+
+
+def test_insert_reports_a_missing_file(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "insert",
+            str(single_side),
+            "-o",
+            str(tmp_path / "out.fds"),
+            "--file",
+            str(tmp_path / "nope.bin"),
+            "--name",
+            "NEW",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "not found" in result.stdout
+
+
+def test_insert_can_write_a_qd(single_side: Path, tmp_path: Path) -> None:
+    payload = tmp_path / "payload.bin"
+    payload.write_bytes(bytes([0x42]) * 8)
+    out = tmp_path / "with-new.qd"
+
+    result = runner.invoke(
+        app,
+        [
+            "insert",
+            str(single_side),
+            "-o",
+            str(out),
+            "--file",
+            str(payload),
+            "--name",
+            "NEW",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.stat().st_size == 65536
+
+
+def test_provenance_prints_its_notes(tmp_path: Path) -> None:
+    raw = bytearray(blank_image(sides=1, headered=False, formatted=True))
+    raw[0x34] = 0xAF
+    path = tmp_path / "odd.fds"
+    path.write_bytes(bytes(raw))
+
+    result = runner.invoke(app, ["provenance", str(path)])
+
+    assert "rewrite count" in result.stdout
+
+
+def test_saves_can_emit_json(single_side: Path) -> None:
+    payload = json.loads(
+        runner.invoke(app, ["saves", str(single_side), str(single_side), "--json"]).stdout
+    )
+
+    assert payload["candidates"] == []
+
+
+def test_saves_reports_a_candidate(tmp_path: Path) -> None:
+    def with_save(fill: int) -> Path:
+        content = bytearray(blank_image(sides=1, headered=False, formatted=True))
+        content[56:58] = bytes([0x02, 0x01])
+        header = (
+            bytes([0x03, 0x00, 0x00])
+            + b"FC_SAVE "
+            + (0x6000).to_bytes(2, "little")
+            + (4).to_bytes(2, "little")
+            + bytes([0x00])
+        )
+        content[58:74] = header
+        content[74:79] = bytes([0x04]) + bytes([fill]) * 4
+        path = tmp_path / f"save{fill}.fds"
+        path.write_bytes(bytes(content))
+        return path
+
+    result = runner.invoke(app, ["saves", str(with_save(1)), str(with_save(2))])
+
+    assert "FC_SAVE" in result.stdout
+    assert "name reads like a save" in result.stdout
+
+
+def test_dump_reports_unstable_blocks(image: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(image), "--passes", "2"],
+    )
+
+    assert result.exit_code == 0
+
+
+def test_dump_reports_a_drive_fault(tmp_path: Path) -> None:
+    empty = tmp_path / "empty.fds"
+    empty.write_bytes(bytes(SIDE_SIZE))
+
+    result = runner.invoke(
+        app,
+        ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(empty), "--sides", "2"],
+    )
+
+    assert result.exit_code == 1
+
+
+def test_clean_can_write_a_qd(single_side: Path, tmp_path: Path) -> None:
+    out = tmp_path / "clean.qd"
+
+    result = runner.invoke(app, ["clean", str(single_side), "-o", str(out)])
+
+    assert result.exit_code == 0
+    assert out.stat().st_size == 65536
+
+
+def test_diff_can_emit_json(single_side: Path) -> None:
+    payload = json.loads(
+        runner.invoke(app, ["diff", str(single_side), str(single_side), "--json"]).stdout
+    )
+
+    assert payload["identical"] is True
+
+
+def test_diff_lists_the_blocks_that_differ(single_side: Path, tmp_path: Path) -> None:
+    other = tmp_path / "other.fds"
+    data = bytearray(single_side.read_bytes())
+    data[57] = 0x01
+    other.write_bytes(bytes(data))
+
+    result = runner.invoke(app, ["diff", str(single_side), str(other)])
+
+    assert result.exit_code == 1
+    assert "side 0 block" in result.stdout
+
+
+def test_consensus_reports_a_disagreement(single_side: Path, tmp_path: Path) -> None:
+    other = tmp_path / "other.fds"
+    data = bytearray(single_side.read_bytes())
+    data[57] = 0x01
+    other.write_bytes(bytes(data))
+
+    result = runner.invoke(
+        app,
+        ["consensus", str(single_side), str(other), "-o", str(tmp_path / "merged.fds")],
+    )
+
+    assert result.exit_code == 1
+    assert "disagree" in result.stdout
+
+
+def test_identify_can_emit_json(image: Path, tmp_path: Path) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+
+    payload = json.loads(
+        runner.invoke(app, ["identify", str(image), "--dat", str(dat), "--json"]).stdout
+    )
+
+    assert payload["kind"] == "exact"
+
+
+def test_identify_lists_entries_of_the_same_size(image: Path, tmp_path: Path) -> None:
+    dat = _dat_for(tmp_path / "test.dat", image)
+    other = tmp_path / "other.fds"
+    data = bytearray(image.read_bytes())
+    data[0x10:0x13] = b"XYZ"
+    other.write_bytes(bytes(data))
+
+    result = runner.invoke(app, ["identify", str(other), "--dat", str(dat)])
+
+    assert "same size" in result.stdout
+
+
+def test_save_apply_reports_an_unusable_save(single_side: Path, tmp_path: Path) -> None:
+    save = tmp_path / "save.bin"
+    save.write_bytes(bytes([0x01, 0x02, 0x03]))
+
+    result = runner.invoke(
+        app,
+        [
+            "save-apply",
+            str(single_side),
+            "--save",
+            str(save),
+            "-o",
+            str(tmp_path / "out.fds"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "not a save" in result.stdout
+
+
+def test_save_extract_refuses_an_unknown_format(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "save-extract",
+            str(single_side),
+            "--played",
+            str(single_side),
+            "-o",
+            str(tmp_path / "out.bin"),
+            "--format",
+            "unknown",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "cannot write" in result.stdout
+
+
+def test_blank_reports_an_invalid_game_name(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["blank", "-o", str(tmp_path / "b.fds"), "--game-name", "TOOLONG"],
+    )
+
+    assert result.exit_code == 1
+    assert "three characters" in result.stdout
+
+
+def test_saves_as_json_lists_a_candidate(tmp_path: Path) -> None:
+    def with_save(fill: int) -> Path:
+        content = bytearray(blank_image(sides=1, headered=False, formatted=True))
+        content[56:58] = bytes([0x02, 0x01])
+        header = (
+            bytes([0x03, 0x00, 0x00])
+            + b"FC_SAVE "
+            + (0x6000).to_bytes(2, "little")
+            + (4).to_bytes(2, "little")
+            + bytes([0x00])
+        )
+        content[58:74] = header
+        content[74:79] = bytes([0x04]) + bytes([fill]) * 4
+        path = tmp_path / f"json-save{fill}.fds"
+        path.write_bytes(bytes(content))
+        return path
+
+    payload = json.loads(
+        runner.invoke(app, ["saves", str(with_save(3)), str(with_save(4)), "--json"]).stdout
+    )
+
+    assert payload["candidates"][0]["name"] == "FC_SAVE"
+
+
+def test_dump_names_a_block_that_differs_between_passes(tmp_path: Path) -> None:
+    source = tmp_path / "source.fds"
+    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
+
+    original = cli.open_drive
+
+    def unstable(backend: object, path: Path | None) -> object:
+        del backend
+        assert path is not None
+        disk, _, _, _ = cli.decode_image(path)
+        return SimulatedDrive(disk, plan=FaultPlan(unstable_blocks=frozenset({1})))
+
+    cli.open_drive = unstable
+    try:
+        result = runner.invoke(
+            app,
+            ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(source), "--passes", "2"],
+        )
+    finally:
+        cli.open_drive = original
+
+    assert "differs between passes" in result.stdout
+
+
+def test_write_names_a_block_that_did_not_stick(tmp_path: Path) -> None:
+    source = tmp_path / "source.fds"
+    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
+
+    original = cli.open_drive
+
+    def unstable(backend: object, path: Path | None) -> object:
+        del backend
+        assert path is not None
+        disk, _, _, _ = cli.decode_image(path)
+        return SimulatedDrive(disk, plan=FaultPlan(unstable_blocks=frozenset({1})))
+
+    cli.open_drive = unstable
+    try:
+        result = runner.invoke(
+            app,
+            ["write", str(source), "--source", str(source), "--yes"],
+        )
+    finally:
+        cli.open_drive = original
+
+    assert "did not read back as written" in result.stdout
+
+
+def test_identify_reports_a_file_that_is_not_a_dat(image: Path, tmp_path: Path) -> None:
+    dat = tmp_path / "wrong.xml"
+    dat.write_text("<other/>", encoding="utf-8")
+
+    result = runner.invoke(app, ["identify", str(image), "--dat", str(dat)])
+
+    assert result.exit_code == 1
+    assert "not a DAT" in result.stdout
+
+
+def test_insert_reports_a_finding_from_the_encoder(tmp_path: Path) -> None:
+    info = bytearray(56)
+    info[0] = 0x01
+    info[1:15] = b"*NINTENDO-HVC*"
+    size = 65028
+    header = (
+        bytes([0x03, 0x00, 0x00])
+        + b"BIG     "
+        + (0x6000).to_bytes(2, "little")
+        + size.to_bytes(2, "little")
+        + bytes([0x00])
+    )
+    side = Side(
+        blocks=(
+            Block(kind=BlockKind.DISK_INFO, payload=bytes(info)),
+            Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([0x02, 0x01])),
+            Block(kind=BlockKind.FILE_HEADER, payload=header),
+            Block(kind=BlockKind.FILE_DATA, payload=bytes([0x04]) + bytes(size)),
+        ),
+        tail=b"",
+        capacity=65536,
+    )
+    data, _ = encode_qd(Disk(sides=(side,)))
+    source = tmp_path / "nearly-full.qd"
+    source.write_bytes(data)
+    payload = tmp_path / "payload.bin"
+    payload.write_bytes(bytes(400))
+
+    result = runner.invoke(
+        app,
+        [
+            "insert",
+            str(source),
+            "-o",
+            str(tmp_path / "out.fds"),
+            "--file",
+            str(payload),
+            "--name",
+            "NEW",
+        ],
+    )
+
+    assert "FDS011" in result.stdout
+
+
+def test_lint_can_emit_json(image: Path) -> None:
+    payload = json.loads(runner.invoke(app, ["lint", str(image), "--json"]).stdout)
+
+    assert payload["ok"] is True
+    assert payload["findings"] == []

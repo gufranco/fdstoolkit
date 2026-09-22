@@ -85,3 +85,17 @@ def test_the_report_renders_as_data() -> None:
     assert record["rewrite_count"] == 2
     assert record["origin"] == "rewritten"
     assert list(record) == sorted(record)
+
+
+def test_a_rewritten_date_that_is_not_bcd_is_flagged() -> None:
+    report = provenance_of(disk_with_info(x2C=bytes([0xAB, 0x02, 0x15]), x34=bytes([0x01])))
+
+    assert report.sides[0].rewritten_date is None
+    assert "rewritten date" in " ".join(report.sides[0].notes)
+
+
+def test_a_disk_with_a_serial_but_no_rewrite_count_is_flagged() -> None:
+    report = provenance_of(disk_with_info(x31=bytes([0x34, 0x12]), x34=bytes([0x00])))
+
+    assert report.sides[0].origin is Origin.REWRITTEN
+    assert "rewrite count is zero" in " ".join(report.sides[0].notes)
