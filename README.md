@@ -1,5 +1,7 @@
 # fdstoolkit
 
+**English** | [日本語](README.ja.md)
+
 A command-line toolkit for Famicom Disk System media: reading it, judging it, reconstructing it, writing it back, and keeping the drive that does all of that in adjustment.
 
 This is an instrument, not an application. It assumes you know what a disk information block is, that you are willing to open a drive and turn a trimmer, and that you would rather be told a measurement than a verdict. Every command that reports something accepts `--json`. Every command exits 0 when nothing failed and 1 when something did, so they compose in scripts.
@@ -20,6 +22,7 @@ This is an instrument, not an application. It assumes you know what a disk infor
   - [Masters and reference sets](#masters-and-reference-sets)
   - [Longitudinal tracking](#longitudinal-tracking)
   - [Hardware](#hardware)
+- [Web interface](#web-interface)
 - [Procedures](#procedures)
 - [Formats](#formats)
 - [Exit codes and scripting](#exit-codes-and-scripting)
@@ -27,30 +30,38 @@ This is an instrument, not an application. It assumes you know what a disk infor
 
 ## Install
 
-```console
-$ brew tap gufranco/fdstoolkit https://github.com/gufranco/fdstoolkit
-$ brew install gufranco/fdstoolkit/fdstoolkit
+```bash
+brew tap gufranco/fdstoolkit https://github.com/gufranco/fdstoolkit
+brew install gufranco/fdstoolkit/fdstoolkit
 ```
 
 `brew install --HEAD gufranco/fdstoolkit/fdstoolkit` tracks `main`.
 
-Hardware access needs the optional dependency:
-
-```console
-$ uv pip install 'fdstoolkit[hardware]'
-```
+Homebrew is the supported install path, and the formula carries everything: the
+hidapi library the drive needs and the web interface. Nothing else has to be
+installed, and `doctor` proves it on a fresh install.
 
 Confirm the installation and what it can reach:
 
-```console
-$ fdstoolkit doctor
-fdstoolkit        0.5.0
+```bash
+fdstoolkit doctor
+```
+
+```
+fdstoolkit        0.6.0
 python            3.13.15
 platform          Darwin arm64
 hardware support  hidapi is installed
-fdsstick          none connected at 16D0:0AAA [warning]
+fdsstick          1 device(s) connected, loopy FDSStick, serial 0001, firmware 1.04
+fdsstick access   the device opens for reading and writing
 dat cache         ~/.cache/fdstoolkit/dat, 0 catalogue(s)
 ```
+
+`doctor` checks the whole chain, not only the software. It reports whether hidapi is
+installed, whether an FDSStick is attached at `16D0:0AAA`, its manufacturer, product,
+serial and firmware as the device reports them, and whether it can actually be opened.
+The last check matters most on Linux, where a device enumerates fine and still refuses to
+open without a udev rule; `doctor` fails that check and prints the rule to install.
 
 ## Concepts you need first
 
@@ -76,7 +87,7 @@ Notation: `<>` is a value, `[]` is optional, `...` repeats.
 ### Inspection
 
 #### `doctor [--json]`
-Version, Python, platform, whether hardware support is installed, whether a device is attached, and the state of the DAT cache. Run this first when something behaves unexpectedly.
+Version, Python, platform, whether hardware support is installed, which devices are attached and whether they open, and the state of the DAT cache. Run this first when something behaves unexpectedly. The device detail it prints is what a dump submission needs under "hardware, firmware, software version".
 
 #### `info <image> [--json]`
 Side count, game code, manufacturing and rewrite dates, Disk Writer serial, declared and actual file counts, hidden files, trailing data.
@@ -189,8 +200,11 @@ A checksum answers one bit about a 65,500-byte side. These answer more.
 #### `reads <images>... [--json]`
 Compares repeated dumps of one physical disk block by block. Reports stability, which blocks move, and the direction of the bit flips. Magnetic decay loses transitions, so ones fall to zeros; the report names that as `loss`, the opposite as `gain`, and both as `mixed`.
 
-```console
-$ fdstoolkit reads pass1.fds pass2.fds pass3.fds
+```bash
+fdstoolkit reads pass1.fds pass2.fds pass3.fds
+```
+
+```
 passes        3
 stability     99.88%
 decay         loss
@@ -204,8 +218,11 @@ The drive's own error rate, measured against a disk you trust, so the drive is n
 #### `grade <image> [--read <r>...] [--margin <f>] [--map] [--json]`
 A grade with the measurement behind it. `--read` folds in repeated dumps, `--margin` folds in a flux margin from `flux`, `--map` prints the per-block confidence and the basis for each.
 
-```console
-$ fdstoolkit grade disk.fds --read pass2.fds --margin 0.68
+```bash
+fdstoolkit grade disk.fds --read pass2.fds --margin 0.68
+```
+
+```
 clean, confidence 0.97
   ok   errors 0 within 0
   ok   confidence 0.97 within 0.6
@@ -224,8 +241,11 @@ The opcode threshold is calibrated against 10,105 real program files, whose medi
 #### `flux <capture> [--format <f>] [--json]`
 Measures a capture: fitted bit cell, cluster centres and jitter, separation margin, stray count, outliers, speed, and which tracks carry no coherent data.
 
-```console
-$ fdstoolkit flux capture.scp
+```bash
+fdstoolkit flux capture.scp
+```
+
+```
 format        scp
 track 0       32753 pulses, bit cell 2825 ns (354013 Hz)
   class 0     centre     2825 ns  jitter    109 ns  7926 pulses
@@ -265,8 +285,11 @@ Everything here is measured against the bit rate, never a rotation speed. The RA
 #### `reading <cycles> [--json]`
 Interprets the average CPU cycles between bytes that a disk-lister tool displays on the console. This is the only speed measurement that needs no capture hardware.
 
-```console
-$ fdstoolkit reading 152
+```bash
+fdstoolkit reading 152
+```
+
+```
 94.20 kbit/s, cell 10616 ns (63.7 counts), -2.28% of nominal, in spec, run faster
 turn the motor trimmer counter-clockwise to run faster
 ```
@@ -285,8 +308,11 @@ Exact nominal is 148.53 cycles, so the integer display quantises at about 0.68% 
 #### `tune <capture> [--format <f>] [--json]`
 Measures a timing capture and reports what to adjust in two stages.
 
-```console
-$ fdstoolkit tune slow.raw
+```bash
+fdstoolkit tune slow.raw
+```
+
+```
 81.79 kbit/s, cell 12226 ns (73.4 counts), -15.15% of nominal, out of spec, run faster
 periodic, wow and flutter 3.42%, drift +0.26%, spread 9.69%
 score 6%
@@ -318,8 +344,11 @@ No Nintendo master image exists. Disks were sold blank and written at a kiosk th
 #### `masters <corpus> [--profile <name>] [--json]`
 One master per game by agreement across every dump in a directory. Reports the dissenters rather than hiding them.
 
-```console
-$ fdstoolkit masters ~/dumps
+```bash
+fdstoolkit masters ~/dumps
+```
+
+```
 profile       release
 dumps         595
 games         242
@@ -346,23 +375,145 @@ Record a dump against the physical disk it came from. Identity is derived from w
 #### `archive-trend [--db <p>] [--disk <id>] [--json]`
 Whether a disk is holding, degrading or reading better, how fast, and roughly how long it has left.
 
-```console
-$ fdstoolkit archive-trend
+```bash
+fdstoolkit archive-trend
+```
+
+```
 4f2a...c19b: degrading, +10.0 blocks a year, unreadable in about 8 years
 ```
 
 ### Hardware
 
-#### `dump -o <out> [--backend simulation|fdsstick|dumper] [--source <img>] [--sides N] [--passes N] [--retries N] [--raw <dir>] [--force]`
-Read a disk. `--passes` reads each side more than once, `--retries` sets per-block retries, `--raw` keeps every pulse capture the drive returned.
+#### `dump -o <out> [--backend simulation|fdsstick|dumper] [--source <img>] [--sides N] [--passes N] [--retries N] [--raw <dir>] [--log <file>] [--yes] [--force]`
+Read a disk. `--passes` reads each side more than once, `--retries` sets per-block retries, `--raw` keeps every pulse capture the drive returned, `--log` writes a record of how the dump was taken.
 
-#### `write <image> [--backend <b>] [--source <img>] [--backup <p>] [--retries N] [--yes]`
+A drive that reaches one face at a time cannot select a side. On those backends, reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
+
+#### `submit <image> --log <file> --dumper <name> [--affiliation <a>] [--photo <p>...] [--also <f>...] [-o <out>] [--force]`
+Assemble the submission a preservation project asks for.
+
+The published dumping guide states that FDS verification is difficult because hashes never match, since the header carries the rewrite date. That is true of SHA-256 and it is why this command prints an identity digest beside the hashes: under the `release` profile the rewrite date, the kiosk serial and the rewrite count are masked, and 142 of 144 corpus groups then agree. The submission carries both, so a reader who wants the byte-exact hash has it and a reader who wants to compare copies has that too.
+
+Every element the guide requires is present: size, CRC32, MD5, SHA-1 and SHA-256 per file, the tool with its hardware and firmware, the date, the dump log, and the non-default settings the dump ran with. `--also` hashes a second file into the same submission, which is how the RAW capture goes in beside the FDS. `--photo` cites a photograph you took.
+
+What the toolkit cannot produce is listed rather than omitted. Photographs of the packaging, the media and the PCB are required by the guide and no program can supply them, so the command exits 1 until they are cited.
+
+A log from a simulated drive is refused. A submission describes a physical disk, and a simulated dump describes none.
+
+```bash
+fdstoolkit dump -o disk.fds --backend fdsstick --sides 2 --raw captures/ --log disk.log.json
+fdstoolkit submit disk.fds --log disk.log.json --dumper "your name" \
+    --also captures/disk.read01.raw03 --photo media.jpg --photo pcb.jpg
+```
+
+#### `write <image> [--backend <b>] [--source <img>] [--backup <p>] [--retries N] [--assume-writable] [--yes]`
 Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`.
 
-#### `surface [--backend <b>] [...]`
-Write and read back complementary patterns to grade a scratch disk.
+An FDSStick does not report whether a disk is write protected, whether the battery holds, or whether a disk is even present. Rather than assume those are fine, the toolkit reports them as unknown and refuses a destructive write. `--assume-writable` proceeds anyway. A state the drive reports as bad is still refused, so the override clears uncertainty, never a known fault.
+
+#### `surface [--backend <b>] [--source <img>] [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]`
+Write and read back complementary patterns to grade a scratch disk. This is the magnetic
+equivalent of a multi-pass `dd` wipe: it forces every bit cell to flip in both directions and
+verifies what came back.
+
+One pass writes four patterns in sequence, `0x00`, `0xFF`, `0xAA`, `0x55`. The first two drive
+every cell to each saturation state, which is what exposes a weak cell that holds one polarity
+and not the other. The second two alternate at the bit level, which exposes adjacent-cell
+interference that a solid pattern cannot reach. Each pattern is read back and compared before the
+next is written.
+
+By default the side is filled to the physical limit of the track, 32 blocks and 59,145 data bytes
+against the 66,560-byte gapped buffer. The remainder is inter-block gap, which the drive rewrites
+on every pass anyway, so the whole surface is swept. `--quick` writes a single 4 KiB file instead,
+covering 12% of the track, for a fast check rather than a verdict.
+
+`--passes N` repeats the whole four-pattern cycle. More passes is how a marginal cell is
+separated from a dead one, because a dead cell fails every time and a marginal one does not.
+
+The report classifies each failing block by how often it failed:
+
+| Class | Meaning |
+|---|---|
+| hard | Failed on more than one pattern. The surface itself is gone at that spot |
+| transient | Failed exactly once. Marginal rather than dead |
+| recovered | Failed on an early pass and read clean on every later one. The rewrite reflowed the magnetisation |
+
+The recovered count is the repair case. Rewriting a cell that had drifted toward the threshold
+restores its margin, and a disk that starts with failures and ends clean has been refreshed rather
+than merely measured. It is not a substitute for a dump: back the disk up with `--backup` first,
+because every pass destroys what was there.
+
+`--finish` decides what the disk is left holding when the test ends.
+
+| Value | Leaves |
+|---|---|
+| `leave` | The last pattern written, `0x55`. The default |
+| `blank` | A factory-blank side: disk info block plus a file count of zero, byte-identical to what a kiosk-bought unwritten disk carries |
+| `erase` | No blocks at all, so the adapter finds nothing to read |
+
+`blank` is the useful one after a wipe. It produces the same bytes as
+`blank --formatted`, which means the disk goes back into the drawer in the state it shipped in
+and a writer will treat it as unwritten media.
 
 `--backend simulation` stands in for hardware and takes `--source` to name the image it holds.
+
+```bash
+fdstoolkit surface --backend fdsstick --sides 2 --passes 3 \
+    --backup before.fds --finish blank --yes
+```
+
+```
+59145 data bytes per side, 100.0% of the physical track, 3 pass(es) of 4 patterns
+pass 1 pattern 0x00: held
+...
+2 block(s) failed once, marginal rather than dead
+2 block(s) failed early and read clean after, so rewriting refreshed them
+left the disk formatted as it leaves the kiosk, verified
+grade clean
+```
+
+Exit status is 0 only when every pattern held and the finish verified.
+
+#### `web [--host <h>] [--port N] [--no-open]`
+Open the local web interface. Every command above is reachable from it, and each route calls exactly what the command calls. `--no-open` starts the server without opening a browser, which is what you want over SSH. Binds `127.0.0.1:8000` by default.
+
+## Web interface
+
+```bash
+fdstoolkit web
+```
+
+`web` opens a browser on the page. `fdstoolkit web --no-open` starts the server without one, which is what you want over SSH. There is no headless-only command, because the toolkit drives hardware attached to this machine and is never a public service.
+
+The page binds `127.0.0.1:8000` by default. It is not a service: nothing listens on a public interface unless you pass `--host`, and the page loads no remote resource, so no byte leaves the machine.
+
+The rule the design turns on is that the web layer decides nothing. Every route parses its payload, calls the same function the command calls, and reports what came back. A grade requested through the page carries the same confidence and the same basis as `grade` prints, because it is the same call. That is checked rather than asserted: the tests compare a route's answer against the command's answer for the same input.
+
+| Route | Command it mirrors |
+|---|---|
+| `GET /api/catalogue` | the profile, format and target tables |
+| `GET /api/doctor` | `doctor` |
+| `POST /api/info` | `info` and `ls` |
+| `POST /api/verify` | `verify` |
+| `POST /api/hash` | `hash` |
+| `POST /api/grade` | `grade` |
+| `POST /api/reads` | `reads` |
+| `POST /api/flux` | `flux` |
+| `POST /api/tune` | `tune` |
+| `POST /api/reading` | `reading` |
+| `POST /api/classes` | `classes` |
+| `POST /api/blank` | `blank` |
+| `POST /api/canon` | `canon` |
+| `POST /api/convert` | `convert` |
+
+Images and captures travel base64 encoded in the request body. `GET /docs` serves the generated API reference, so the page is one client of the endpoints rather than the only one.
+
+The choices the page offers come from `catalogue`, which is built over the enums. A profile or capture format added to the model appears in the page with no second edit.
+
+Nothing that writes to a disk is exposed. `dump`, `write` and `surface` stay on the command line, where the operator is in front of the drive and can answer a confirmation.
+
+The interface is in English and Japanese. Both dictionaries carry the same keys, and the test suite proves it rather than trusting it: every key the markup or the script references must exist in both, and no Japanese string may be left as English.
 
 ## Procedures
 
@@ -370,12 +521,12 @@ Write and read back complementary patterns to grade a scratch disk.
 
 One dump says what the drive read once. Two say whether it read the same thing twice.
 
-```console
-$ fdstoolkit dump -o pass1.fds --backend fdsstick --raw captures/
-$ fdstoolkit dump -o pass2.fds --backend fdsstick
-$ fdstoolkit reads pass1.fds pass2.fds
-$ fdstoolkit grade pass1.fds --read pass2.fds
-$ fdstoolkit archive-add pass1.fds --drive AN-500B
+```bash
+fdstoolkit dump -o pass1.fds --backend fdsstick --raw captures/
+fdstoolkit dump -o pass2.fds --backend fdsstick
+fdstoolkit reads pass1.fds pass2.fds
+fdstoolkit grade pass1.fds --read pass2.fds
+fdstoolkit archive-add pass1.fds --drive AN-500B
 ```
 
 If the two disagree, `consensus` merges them by majority and names every block that did not settle. If one dump has a block another has good, `splice` takes it.
@@ -395,10 +546,10 @@ One disk cannot answer this. Read several and compare where they failed: a place
 
 ### Building a reference set
 
-```console
-$ fdstoolkit masters ~/dumps
-$ fdstoolkit reference-build ~/dumps -o fds-reference.json --set-version 2026-09-22
-$ fdstoolkit reference-verify mine.fds --set fds-reference.json
+```bash
+fdstoolkit masters ~/dumps
+fdstoolkit reference-build ~/dumps -o fds-reference.json --set-version 2026-09-22
+fdstoolkit reference-verify mine.fds --set fds-reference.json
 ```
 
 ## Formats
@@ -442,10 +593,10 @@ What each conversion costs:
 
 Every reporting command takes `--json`, and the JSON is the same data the human output renders. Commands that write files refuse to overwrite without `--force`.
 
-```console
-$ fdstoolkit verify disk.fds --json | jq -r '.findings[] | "\(.code) \(.message)"'
-$ fdstoolkit masters ~/dumps --json | jq '.contested[].game'
-$ fdstoolkit tune capture.raw --json | jq -r '.actions[] | "\(.stage) \(.subject)"'
+```bash
+fdstoolkit verify disk.fds --json | jq -r '.findings[] | "\(.code) \(.message)"'
+fdstoolkit masters ~/dumps --json | jq '.contested[].game'
+fdstoolkit tune capture.raw --json | jq -r '.actions[] | "\(.stage) \(.subject)"'
 ```
 
 ## What this cannot do
@@ -465,3 +616,10 @@ Development setup, the test suite and the release process are in [CONTRIBUTING.m
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+---
+
+Famicom Disk System / ファミコン ディスクシステム / ディスクカード preservation, dumping
+(吸い出し), disk quality measurement, drive calibration (ドライブ調整), belt replacement
+(ベルト交換), FDSStick, FDSKey, No-Intro submission. Japanese documentation:
+[README.ja.md](README.ja.md).
