@@ -50,6 +50,15 @@ def test_no_heading_level_is_skipped() -> None:
     assert max(levels) - min(levels) < len(set(levels))
 
 
+def test_no_translated_element_wraps_a_control() -> None:
+    translated = re.findall(r'<(\w+)[^>]*\bdata-i18n="[^"]*"[^>]*>(.*?)</\1>', MARKUP, re.DOTALL)
+    swallowed = [
+        tag for tag, inner in translated if re.search(r"<(input|select|textarea|button)", inner)
+    ]
+
+    assert swallowed == []
+
+
 def test_the_page_renders_its_commands_from_the_catalogue() -> None:
     assert 'id="commands"' in MARKUP
     assert "catalogue.forms" in SCRIPT

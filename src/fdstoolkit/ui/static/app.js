@@ -212,7 +212,9 @@ function renderResult(target, payload) {
 
 function emptyResult(form) {
   const box = element('div', { className: 'empty' });
-  const needed = form.fields.filter((field) => field.required).map((field) => words(field.name));
+  const needed = form.fields
+    .filter((field) => field.required && field.kind !== 'auto')
+    .map((field) => words(field.name));
   box.append(element('p', { textContent: t('result.empty') }));
   if (needed.length) {
     box.append(element('p', {
@@ -327,14 +329,39 @@ async function valueOf(node) {
   return kind === 'number' ? Number(node.value) : node.value;
 }
 
-async function collect(panel) {
+function firstChosenName(panel) {
+  const source = Array.from(panel.querySelectorAll('[data-kind=file], [data-kind=files]'))
+    .find((node) => node.files && node.files.length);
+  return source ? source.files[0].name : '';
+}
+
+async function collect(panel, form) {
   const nodes = Array.from(panel.querySelectorAll('[data-field]'));
   const values = await Promise.all(nodes.map(valueOf));
-  return Object.fromEntries(
+  const given = Object.fromEntries(
     nodes
       .map((node, index) => [node.dataset.field, values[index]])
       .filter(([, value]) => value !== undefined),
   );
+  const derived = form.fields.filter((field) => field.kind === 'auto');
+  const chosen = derived.length ? firstChosenName(panel) : '';
+  return derived.reduce(
+    (body, field) => ({ ...body, [field.name]: named(chosen, field.default) }),
+    given,
+  );
+}
+
+function named(chosen, fallback) {
+  const wanted = String(fallback || '');
+  if (!chosen) {
+    return wanted;
+  }
+  const suffix = wanted.slice(wanted.lastIndexOf('.'));
+  if (!suffix || suffix === wanted || chosen.endsWith(suffix)) {
+    return chosen;
+  }
+  const dot = chosen.lastIndexOf('.');
+  return (dot > 0 ? chosen.slice(0, dot) : chosen) + suffix;
 }
 
 function blank(node) {
@@ -344,7 +371,9 @@ function blank(node) {
 }
 
 function missing(panel, form) {
-  const required = new Set(form.fields.filter((field) => field.required).map((field) => field.name));
+  const required = new Set(
+    form.fields.filter((field) => field.required && field.kind !== 'auto').map((field) => field.name),
+  );
   return Array.from(panel.querySelectorAll('[data-field]'))
     .filter((node) => required.has(node.dataset.field))
     .filter((node) => {
@@ -380,7 +409,7 @@ function runner(host, form, out) {
     run.textContent = t('state.running');
     out.replaceChildren(banner('busy', t('state.running')));
     try {
-      renderResult(out, await call(form.route, form.method, await collect(host)));
+      renderResult(out, await call(form.route, form.method, await collect(host, form)));
     } catch (error) {
       out.replaceChildren(
         banner('bad', t('state.failed')),
@@ -410,8 +439,9 @@ function renderPanel() {
 
   const left = element('div', { className: 'fields' });
   left.append(element('p', { className: 'group-label', textContent: t('group.inputs') }));
-  left.append(...(form.fields.length
-    ? form.fields.map(control)
+  const shownFields = form.fields.filter((field) => field.kind !== 'auto');
+  left.append(...(shownFields.length
+    ? shownFields.map(control)
     : [element('p', { className: 'field-help', textContent: t('group.nothing') })]));
   left.append(runner(host, form, out));
 

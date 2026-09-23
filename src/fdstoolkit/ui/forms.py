@@ -10,7 +10,9 @@ from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.flux.load import CaptureFormat
 from fdstoolkit.quality.surface import Finish
 
-FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice")
+FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice", "auto")
+
+DERIVED_FROM_FILE: Final = "name"
 
 FILE_FIELDS: Final = frozenset(
     {
@@ -99,7 +101,12 @@ def _kind(name: str, annotation: object) -> str:
     return "text"
 
 
+def _carries_a_file(model: type[BaseModel]) -> bool:
+    return any(name in FILE_FIELDS or name in FILE_LIST_FIELDS for name in model.model_fields)
+
+
 def _fields(model: type[BaseModel]) -> list[FormField]:
+    derived = _carries_a_file(model)
     built: list[FormField] = []
     for name, info in model.model_fields.items():
         required = info.default is PydanticUndefined and info.default_factory is None
@@ -109,7 +116,9 @@ def _fields(model: type[BaseModel]) -> list[FormField]:
         built.append(
             FormField(
                 name=name,
-                kind=_kind(name, info.annotation),
+                kind="auto"
+                if derived and name == DERIVED_FROM_FILE
+                else _kind(name, info.annotation),
                 required=required,
                 accepts=ACCEPTS.get(name, ""),
                 default=default,
