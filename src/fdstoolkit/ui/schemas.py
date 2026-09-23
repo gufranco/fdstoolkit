@@ -381,6 +381,11 @@ class DoctorResult(BaseModel):
     healthy: bool
 
 
+class HardwareResult(BaseModel):
+    connected: bool
+    detail: str
+
+
 class FileResult(BaseModel):
     name: str
     data: str

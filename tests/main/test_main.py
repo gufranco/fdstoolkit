@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import zlib
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from fdstoolkit.identify import firmware
 from fdstoolkit.quality.surface import Finish, PatternPass, SurfaceReport
 
 runner = CliRunner()
+PUBLISHED_HOST = "0.0.0.0"  # noqa: S104 -- the host this test asserts a warning for
 
 
 @pytest.fixture
@@ -2779,3 +2781,29 @@ def test_web_opens_a_browser_unless_told_not_to(monkeypatch: pytest.MonkeyPatch)
 
     assert result.exit_code == 0
     assert opened == ["http://127.0.0.1:9124"]
+
+
+def _stub_web() -> tuple[Callable[..., None], Callable[[], object]]:
+    def run(*_: object, **__: object) -> None:
+        return None
+
+    return run, object
+
+
+def test_a_loopback_bind_says_nothing_leaves_this_machine(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hardware_cmds, "_require_web", _stub_web)
+
+    result = runner.invoke(app, ["web", "--host", "127.0.0.1", "--no-open"])
+
+    assert "nothing leaves this machine" in result.stdout
+
+
+def test_a_published_bind_warns_instead_of_claiming_privacy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hardware_cmds, "_require_web", _stub_web)
+
+    result = runner.invoke(app, ["web", "--host", PUBLISHED_HOST, "--no-open"])
+
+    assert "nothing leaves this machine" not in result.stdout
+    assert "there is no password" in result.stdout

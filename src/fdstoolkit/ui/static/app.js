@@ -397,6 +397,22 @@ function summaryOf(form) {
   return label(`summary.${form.command}`, form.summary);
 }
 
+function hardwareNotice(form) {
+  const notice = element('p', { className: 'banner busy', textContent: t('hardware.checking') });
+  call('/api/hardware', 'GET')
+    .then((state) => {
+      notice.className = `banner ${state.connected ? 'good' : 'bad'}`;
+      notice.textContent = state.connected
+        ? `${t('hardware.present')} ${state.detail}`
+        : `${t('hardware.absent')} ${state.detail}`;
+    })
+    .catch((error) => {
+      notice.className = 'banner bad';
+      notice.textContent = `${t('hardware.unknown')} ${error.message}`;
+    });
+  return notice;
+}
+
 function runner(host, form, out) {
   const run = element('button', { type: 'button', className: 'run', textContent: t('button.run') });
   run.addEventListener('click', async () => {
@@ -454,6 +470,7 @@ function renderPanel() {
   host.append(
     heading(form),
     element('p', { className: 'summary', textContent: summaryOf(form) }),
+    ...(form.needs_hardware ? [hardwareNotice(form)] : []),
     columns,
   );
 }

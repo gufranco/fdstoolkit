@@ -65,7 +65,7 @@ def test_the_page_renders_its_commands_from_the_catalogue() -> None:
 
 
 def test_the_page_hardcodes_no_command() -> None:
-    hardcoded = set(re.findall(r"'/api/([\w-]+)'", SCRIPT)) - {"catalogue"}
+    hardcoded = set(re.findall(r"'/api/([\w-]+)'", SCRIPT)) - {"catalogue", "hardware"}
 
     assert hardcoded == set()
 
@@ -116,7 +116,11 @@ def test_the_page_covers_every_command_the_catalogue_names(client: TestClient) -
 
 def test_every_endpoint_the_script_calls_is_registered() -> None:
     called = set(re.findall(r"call\('(/api/[\w-]+)'", SCRIPT))
-    registered = set(ROUTE_FOR_COMMAND.values()) | {"/api/catalogue", "/api/doctor"}
+    registered = set(ROUTE_FOR_COMMAND.values()) | {
+        "/api/catalogue",
+        "/api/doctor",
+        "/api/hardware",
+    }
 
     assert called - registered == set()
 

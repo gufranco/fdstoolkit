@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from typing import Any, Final, cast, get_type_hints
 
@@ -83,7 +84,12 @@ class CommandForm(BaseModel):
     method: str
     family: str
     summary: str
+    needs_hardware: bool = False
     fields: list[FormField] = []
+
+
+def _opens_a_drive(callback: Callable[..., object]) -> bool:
+    return "open_drive(" in inspect.getsource(callback)
 
 
 def _kind(name: str, annotation: object) -> str:
@@ -150,17 +156,17 @@ def model_for(endpoint: Callable[..., object]) -> type[BaseModel] | None:
     return None
 
 
-def _described() -> dict[str, tuple[str, str]]:
+def _described() -> dict[str, tuple[str, str, bool]]:
     from fdstoolkit.cli.main import app  # noqa: PLC0415
 
-    found: dict[str, tuple[str, str]] = {}
+    found: dict[str, tuple[str, str, bool]] = {}
     for registered in app.registered_commands:
         callback = cast("Callable[..., object]", registered.callback)
         name = registered.name or callback.__name__.replace("_", "-")
         spoken = registered.help or callback.__doc__ or ""
         module = callback.__module__.rsplit(".", maxsplit=1)[-1]
         family = module.removesuffix("_cmds").removesuffix("_cli")
-        found[name] = (family, " ".join(spoken.split()))
+        found[name] = (family, " ".join(spoken.split()), _opens_a_drive(callback))
     return found
 
 
@@ -170,11 +176,16 @@ def form_for(command: str) -> CommandForm:
     route = ROUTE_FOR_COMMAND[command]
     endpoint = _endpoints().get(route)
     model = model_for(endpoint) if endpoint is not None else None
-    family, summary = _described().get(command, ("other", ""))
-    shared = {"command": command, "route": route, "family": family, "summary": summary}
-    if model is None:
-        return CommandForm(method="GET", fields=[], **shared)
-    return CommandForm(method="POST", fields=_fields(model), **shared)
+    family, summary, hardware = _described().get(command, ("other", "", False))
+    return CommandForm(
+        command=command,
+        route=route,
+        method="GET" if model is None else "POST",
+        family=family,
+        summary=summary,
+        needs_hardware=hardware,
+        fields=[] if model is None else _fields(model),
+    )
 
 
 def forms() -> list[CommandForm]:

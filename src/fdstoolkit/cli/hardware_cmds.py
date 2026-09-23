@@ -442,10 +442,22 @@ def _require_web() -> tuple[Callable[..., None], Callable[[], object]]:
         raise fail(UI_HINT) from error
 
 
+LOOPBACK: Final = frozenset({"127.0.0.1", "::1", "localhost"})
+
+PUBLISHED_HINT: Final = (
+    "anyone who can reach this machine on that port can drive it, and there is no password. "
+    "Bind 127.0.0.1 unless you meant to publish it"
+)
+
+
 def _start_web(*, host: str, port: int, open_browser: bool) -> None:
     run, build = _require_web()
     address = f"http://{host}:{port}"
-    typer.echo(f"serving on {address}, and nothing leaves this machine")
+    if host in LOOPBACK:
+        typer.echo(f"serving on {address}, and nothing leaves this machine")
+    else:
+        typer.echo(f"serving on {address}")
+        typer.echo(PUBLISHED_HINT)
     if open_browser:
         webbrowser.open(address)
     run(build(), host=host, port=port)

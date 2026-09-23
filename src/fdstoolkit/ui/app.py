@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import base64
 import binascii
+from collections.abc import Awaitable, Callable
 from importlib import resources
 from pathlib import Path
 from typing import Final
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from fdstoolkit.build.blank import blank_image
@@ -18,7 +19,7 @@ from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, 
 from fdstoolkit.core.diagnostics import Diagnostic, worst_severity
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
-from fdstoolkit.doctor import diagnose
+from fdstoolkit.doctor import CheckStatus, diagnose
 from fdstoolkit.drive.advise import advise
 from fdstoolkit.drive.classes import measure_classes
 from fdstoolkit.drive.speed import from_cycles
@@ -48,6 +49,7 @@ from fdstoolkit.ui.schemas import (
     FluxResult,
     GradeResult,
     GradeSpec,
+    HardwareResult,
     HashResult,
     HashSpec,
     ImageSpec,
@@ -202,6 +204,11 @@ def doctor() -> DoctorResult:
     )
 
 
+def hardware() -> HardwareResult:
+    found = next(check for check in diagnose().checks if check.name == DEVICE_CHECK)
+    return HardwareResult(connected=found.status is CheckStatus.OK, detail=found.detail)
+
+
 def info(spec: ImageSpec) -> DiskView:
     disk, _, _ = _decode(spec.data)
     return DiskView.of(disk)
@@ -323,6 +330,7 @@ def _register_core(app: FastAPI) -> None:
     app.add_api_route("/", index, methods=["GET"], response_class=HTMLResponse)
     app.add_api_route("/api/catalogue", catalogue, methods=["GET"])
     app.add_api_route("/api/doctor", doctor, methods=["GET"])
+    app.add_api_route("/api/hardware", hardware, methods=["GET"])
     app.add_api_route("/api/info", info, methods=["POST"])
     app.add_api_route("/api/verify", verify, methods=["POST"])
     app.add_api_route("/api/hash", hashes, methods=["POST"])
@@ -389,8 +397,33 @@ def _register_hardware(app: FastAPI) -> None:
     app.add_api_route("/api/submit", hardware_routes.submit_route, methods=["POST"])
 
 
+DEVICE_CHECK: Final = "fdsstick"
+
+MAX_BODY_BYTES: Final = 64 * 1024 * 1024
+TOO_LARGE: Final = 413
+
+
+async def _reject_oversized(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+        return JSONResponse(
+            status_code=TOO_LARGE,
+            content={
+                "detail": (
+                    f"the request carries {int(declared)} bytes, and this server accepts "
+                    f"{MAX_BODY_BYTES} at most. A two-side disk image is about 131,000 bytes"
+                )
+            },
+        )
+    return await call_next(request)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="fdstoolkit", version=VERSION, docs_url="/docs")
+    app.middleware("http")(_reject_oversized)
     _register_core(app)
     _register_image(app)
     _register_analysis(app)

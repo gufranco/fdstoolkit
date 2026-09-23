@@ -1,17 +1,26 @@
 from __future__ import annotations
 
 import base64
+import inspect
 
 import pytest
 from fastapi.testclient import TestClient
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.cli.main import app as cli_app
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.diskinfo import PROFILES
+from fdstoolkit.doctor import CheckStatus, diagnose
 from fdstoolkit.drive.spec import NOMINAL_BIT_RATE_HZ, cell_from_bit_rate
 from fdstoolkit.flux.synth import synthesise
 from fdstoolkit.identify.hashes import digests_of
-from fdstoolkit.ui.app import create_app
+from fdstoolkit.ui.app import (
+    DEVICE_CHECK,
+    MAX_BODY_BYTES,
+    TOO_LARGE,
+    create_app,
+)
+from fdstoolkit.ui.forms import forms
 
 OK = 200
 BAD_REQUEST = 400
@@ -290,3 +299,44 @@ def test_a_canon_image_carries_a_profile_in_its_name(client: TestClient) -> None
     ).json()
 
     assert body["name"] == "smb.data.fds"
+
+
+def test_a_body_larger_than_the_ceiling_is_refused(client: TestClient) -> None:
+    answer = client.post(
+        "/api/verify",
+        json={"data": "AA=="},
+        headers={"content-length": str(MAX_BODY_BYTES + 1)},
+    )
+
+    assert answer.status_code == TOO_LARGE
+
+
+def test_a_body_inside_the_ceiling_is_accepted(client: TestClient) -> None:
+    answer = client.post("/api/verify", json={"data": ENCODED})
+
+    assert answer.status_code != TOO_LARGE
+
+
+def test_the_device_route_reports_what_the_check_found(client: TestClient) -> None:
+    answer = client.get("/api/hardware").json()
+    found = next(check for check in diagnose().checks if check.name == DEVICE_CHECK)
+
+    assert answer["detail"] == found.detail
+    assert answer["connected"] is (found.status is CheckStatus.OK)
+
+
+def test_only_the_commands_that_open_a_drive_are_marked() -> None:
+    marked = {form.command for form in forms() if form.needs_hardware}
+
+    assert marked == {"dump", "write", "surface"}
+
+
+def test_every_marked_command_opens_a_drive_in_the_cli() -> None:
+    opens = {
+        registered.name or registered.callback.__name__
+        for registered in cli_app.registered_commands
+        if registered.callback is not None
+        and "open_drive(" in inspect.getsource(registered.callback)
+    }
+
+    assert {form.command for form in forms() if form.needs_hardware} == opens
