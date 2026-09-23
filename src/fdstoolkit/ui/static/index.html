@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fdstoolkit</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header>
+  <h1 data-i18n="title">fdstoolkit</h1>
+  <p class="tagline" data-i18n="tagline">An instrument for Famicom Disk System media.</p>
+  <nav class="languages">
+    <button type="button" data-language="en">English</button>
+    <button type="button" data-language="ja">&#26085;&#26412;&#35486;</button>
+  </nav>
+</header>
+
+<main>
+  <p data-i18n="drop.hint">Nothing leaves this machine. The page talks to a server you started.</p>
+  <p data-i18n="page.parity">Every command the toolkit offers is here, and each one calls exactly what the command line calls.</p>
+  <label class="search" data-i18n="page.filter">Filter commands
+    <input type="search" id="search" data-i18n-placeholder="page.filter">
+  </label>
+  <div id="commands"></div>
+</main>
+
+<footer>
+  <p data-i18n="footer.cli">Every measurement here is the one the command line reports. The page computes nothing of its own.</p>
+</footer>
+
+<script src="/static/i18n.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

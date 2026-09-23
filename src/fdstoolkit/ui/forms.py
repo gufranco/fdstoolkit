@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any, Final, get_type_hints
+
+from pydantic import BaseModel
+from pydantic_core import PydanticUndefined
+
+from fdstoolkit.core.diskinfo import PROFILES
+from fdstoolkit.flux.load import CaptureFormat
+from fdstoolkit.quality.surface import Finish
+
+FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice")
+
+FILE_FIELDS: Final = frozenset(
+    {
+        "data",
+        "source",
+        "left",
+        "right",
+        "file",
+        "save",
+        "played",
+        "patch",
+        "dat",
+        "log",
+        "recipes",
+        "manifest",
+        "reference",
+        "bios",
+    }
+)
+
+FILE_LIST_FIELDS: Final = frozenset({"images", "reads", "donors", "captures"})
+
+CHOICES: Final[dict[str, tuple[str, ...]]] = {
+    "profile": tuple(sorted(PROFILES)),
+    "fmt": ("", *sorted(str(item) for item in CaptureFormat)),
+    "finish": tuple(str(item) for item in Finish),
+    "kind": ("program", "character", "nametable"),
+    "target": ("nt-mini", "mister", "everdrive-n8-pro", "mesen2", "fceux", "ares"),
+    "firmware": ("released", "master"),
+}
+
+
+class FormField(BaseModel):
+    name: str
+    kind: str
+    required: bool
+    default: Any = None
+    options: list[str] = []
+
+
+class CommandForm(BaseModel):
+    command: str
+    route: str
+    method: str
+    fields: list[FormField] = []
+
+
+def _kind(name: str, annotation: object) -> str:
+    if name in FILE_FIELDS:
+        return "file"
+    if name in FILE_LIST_FIELDS:
+        return "files"
+    if name in CHOICES:
+        return "choice"
+    text = str(annotation)
+    if "bool" in text:
+        return "flag"
+    if "int" in text or "float" in text:
+        return "number"
+    return "text"
+
+
+def _fields(model: type[BaseModel]) -> list[FormField]:
+    built: list[FormField] = []
+    for name, info in model.model_fields.items():
+        required = info.default is PydanticUndefined and info.default_factory is None
+        default = None if required else info.default
+        if default is PydanticUndefined:
+            default = None
+        built.append(
+            FormField(
+                name=name,
+                kind=_kind(name, info.annotation),
+                required=required,
+                default=default,
+                options=list(CHOICES.get(name, ())),
+            )
+        )
+    return built
+
+
+def _endpoints() -> dict[str, Callable[..., object]]:
+    from fdstoolkit.ui.app import create_app  # noqa: PLC0415
+
+    found: dict[str, Callable[..., object]] = {}
+    for route in create_app().routes:
+        path = getattr(route, "path", "")
+        endpoint = getattr(route, "endpoint", None)
+        if isinstance(path, str) and endpoint is not None:
+            found[path] = endpoint
+    return found
+
+
+def model_for(endpoint: Callable[..., object]) -> type[BaseModel] | None:
+    hints = get_type_hints(endpoint)
+    for name, hint in hints.items():
+        if name == "return":
+            continue
+        if isinstance(hint, type) and issubclass(hint, BaseModel):
+            return hint
+    return None
+
+
+def form_for(command: str) -> CommandForm:
+    from fdstoolkit.ui.app import ROUTE_FOR_COMMAND  # noqa: PLC0415
+
+    route = ROUTE_FOR_COMMAND[command]
+    endpoint = _endpoints().get(route)
+    model = model_for(endpoint) if endpoint is not None else None
+    if model is None:
+        return CommandForm(command=command, route=route, method="GET", fields=[])
+    return CommandForm(command=command, route=route, method="POST", fields=_fields(model))
+
+
+def forms() -> list[CommandForm]:
+    from fdstoolkit.ui.app import ROUTE_FOR_COMMAND  # noqa: PLC0415
+
+    return [form_for(command) for command in sorted(ROUTE_FOR_COMMAND)]

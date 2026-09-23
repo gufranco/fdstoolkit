@@ -1,7 +1,7 @@
 [project]
 name = "fdstoolkit"
 dynamic = ["version"]
-description = "Famicom Disk System preservation toolkit: convert, verify, identify, create, dump and write disk images"
+description = "A command-line toolkit for Famicom Disk System media: reading it, judging it, reconstructing it, writing it back, and keeping the drive that does all of that in adjustment."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -26,6 +26,7 @@ dependencies = [
 
 [project.optional-dependencies]
 hardware = ["hidapi>=0.14.0"]
+ui = ["fastapi>=0.115.0", "uvicorn>=0.32.0", "pydantic>=2.9.0"]
 
 [project.urls]
 Homepage = "https://github.com/gufranco/fdstoolkit"
@@ -41,6 +42,10 @@ dev = [
   "hypothesis>=6.140.0",
   "ruff>=0.14.0",
   "pyright>=1.1.406",
+  "fastapi>=0.115.0",
+  "uvicorn>=0.32.0",
+  "pydantic>=2.9.0",
+  "httpx2>=2.0.0",
 ]
 
 [build-system]
@@ -90,7 +95,11 @@ reportUnnecessaryTypeIgnoreComment = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 norecursedirs = [".*", "node_modules", "dist"]
-addopts = "-q --strict-markers --strict-config"
+addopts = "-q --strict-markers --strict-config --cov --cov-report=term-missing"
+filterwarnings = [
+  "error",
+  "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]
 markers = [
   "corpus: runs against the local image corpus named by FDSTOOLKIT_CORPUS",
   "hardware: needs a real device attached",
