@@ -15,6 +15,7 @@ from fdstoolkit.cli.common import (
     writer_for,
 )
 from fdstoolkit.codecs import fds
+from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.doctor import CheckStatus, diagnose
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
@@ -119,7 +120,9 @@ def dump(
     backend: Annotated[
         Backend, typer.Option("--backend", help="which drive to use")
     ] = Backend.SIMULATION,
-    sides: Annotated[int, typer.Option("--sides", min=1, max=8, help="sides to read")] = 1,
+    sides: Annotated[
+        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="sides to read")
+    ] = 1,
     passes: Annotated[int, typer.Option("--passes", min=1, help="read each side this often")] = 1,
     retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
     raw: Annotated[
@@ -274,7 +277,9 @@ def surface(
         Backend,
         typer.Option("--backend", help="which drive to use"),
     ] = Backend.SIMULATION,
-    sides: Annotated[int, typer.Option("--sides", min=1, max=8, help="sides to test")] = 1,
+    sides: Annotated[
+        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="sides to test")
+    ] = 1,
     backup: Annotated[
         Path | None,
         typer.Option("--backup", help="where to save the disk's current contents"),

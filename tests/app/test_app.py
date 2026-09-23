@@ -170,7 +170,7 @@ def test_reading_converts_a_console_cycle_count(client: TestClient) -> None:
 def test_a_cycle_count_of_nothing_is_refused(client: TestClient) -> None:
     answer = client.post("/api/reading", json={"cycles": 0})
 
-    assert answer.status_code == BAD_REQUEST
+    assert answer.status_code == UNPROCESSABLE
 
 
 def test_classes_judges_a_quantised_capture(client: TestClient) -> None:
@@ -192,7 +192,7 @@ def test_blank_builds_an_image(client: TestClient) -> None:
 def test_a_blank_with_no_sides_is_refused(client: TestClient) -> None:
     answer = client.post("/api/blank", json={"sides": 0})
 
-    assert answer.status_code == BAD_REQUEST
+    assert answer.status_code == UNPROCESSABLE
 
 
 def test_canon_writes_the_canonical_image(client: TestClient) -> None:

@@ -254,13 +254,41 @@ function fileControl(field) {
   return { node, box };
 }
 
+function bound(node, field) {
+  if (field.minimum !== null && field.minimum !== undefined) {
+    node.min = String(field.minimum);
+  }
+  if (field.maximum !== null && field.maximum !== undefined) {
+    node.max = String(field.maximum);
+  }
+  if (field.min_length !== null && field.min_length !== undefined) {
+    node.minLength = field.min_length;
+  }
+  if (field.max_length !== null && field.max_length !== undefined) {
+    node.maxLength = field.max_length;
+  }
+  if (field.pattern) {
+    node.pattern = field.pattern.replace(/^\^/, '').replace(/\$$/, '');
+  }
+  if (field.required) {
+    node.required = true;
+  }
+  return node;
+}
+
 function input(field) {
   if (field.kind === 'flag') {
     return element('input', { type: 'checkbox', checked: Boolean(field.default) });
   }
   const shown = field.default === null || field.default === undefined ? '' : String(field.default);
+  if (field.kind === 'date') {
+    return bound(element('input', { type: 'date', value: shown }), field);
+  }
   if (field.kind === 'number') {
-    return element('input', { type: 'number', step: 'any', value: shown });
+    return bound(
+      element('input', { type: 'number', step: String(field.step || 'any'), value: shown }),
+      field,
+    );
   }
   if (field.kind === 'choice') {
     const select = element('select', { value: shown });
@@ -271,7 +299,51 @@ function input(field) {
     })));
     return select;
   }
-  return element('input', { type: 'text', value: shown });
+  return bound(element('input', { type: 'text', value: shown }), field);
+}
+
+function problemFor(node, field) {
+  if (typeof node.checkValidity !== 'function' || node.checkValidity()) {
+    return '';
+  }
+  const state = node.validity;
+  if (state.rangeUnderflow) {
+    return t('bad.min').replace('{min}', String(field.minimum));
+  }
+  if (state.rangeOverflow) {
+    return t('bad.max').replace('{max}', String(field.maximum));
+  }
+  if (state.tooShort) {
+    return t('bad.short').replace('{n}', String(field.min_length));
+  }
+  if (state.tooLong) {
+    return t('bad.long').replace('{n}', String(field.max_length));
+  }
+  if (state.patternMismatch || state.badInput) {
+    return t('bad.shape');
+  }
+  return state.valueMissing ? t('bad.missing') : node.validationMessage;
+}
+
+function describeLimits(field) {
+  const low = field.minimum !== null && field.minimum !== undefined;
+  const high = field.maximum !== null && field.maximum !== undefined;
+  if (low && high) {
+    return t('limit.range').replace('{min}', field.minimum).replace('{max}', field.maximum);
+  }
+  if (low) {
+    return t('limit.min').replace('{min}', field.minimum);
+  }
+  if (high) {
+    return t('limit.max').replace('{max}', field.maximum);
+  }
+  if (field.min_length && field.min_length === field.max_length) {
+    return t('limit.exact').replace('{n}', field.min_length);
+  }
+  if (field.max_length) {
+    return t('limit.length').replace('{n}', field.max_length);
+  }
+  return '';
 }
 
 function control(field) {
@@ -295,6 +367,19 @@ function control(field) {
     wrap.append(line);
   } else {
     wrap.append(caption, node);
+  }
+
+  const problem = element('span', { className: 'field-problem' });
+  node.addEventListener('input', () => {
+    const reason = problemFor(node, field);
+    problem.textContent = reason;
+    wrap.classList.toggle('missing', Boolean(reason));
+  });
+  wrap.append(problem);
+
+  const limits = describeLimits(field);
+  if (limits) {
+    wrap.append(element('span', { className: 'field-help quiet', textContent: limits }));
   }
 
   const help = t(`field.${field.name}`);
@@ -370,6 +455,16 @@ function blank(node) {
     : node.value === '';
 }
 
+function invalid(panel, form) {
+  const byName = new Map(form.fields.map((field) => [field.name, field]));
+  return Array.from(panel.querySelectorAll('[data-field]'))
+    .filter((node) => typeof node.checkValidity === 'function' && !node.checkValidity())
+    .map((node) => {
+      const field = byName.get(node.dataset.field) || {};
+      return `${words(node.dataset.field)}: ${problemFor(node, field)}`;
+    });
+}
+
 function missing(panel, form) {
   const required = new Set(
     form.fields.filter((field) => field.required && field.kind !== 'auto').map((field) => field.name),
@@ -419,6 +514,14 @@ function runner(host, form, out) {
     const empty = missing(host, form);
     if (empty.length) {
       out.replaceChildren(banner('bad', t('state.missing').replace('{fields}', empty.join(', '))));
+      return;
+    }
+    const broken = invalid(host, form);
+    if (broken.length) {
+      out.replaceChildren(
+        banner('bad', t('state.invalid')),
+        ...broken.map((reason) => element('p', { className: 'reason', textContent: reason })),
+      );
       return;
     }
     run.disabled = true;

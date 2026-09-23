@@ -8,7 +8,7 @@ from typing import Final
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.bitstream import emulated_side_size
 from fdstoolkit.core.blocks import Block, BlockKind
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import Disk, Side, require_readable_sides
 from fdstoolkit.hardware.deadline import Deadline, guard
 from fdstoolkit.hardware.ports import (
     BlockRead,
@@ -212,6 +212,7 @@ def dump(
     timeout: float = DEFAULT_TIMEOUT,
     flip: Callable[[str], bool] | None = None,
 ) -> DumpResult:
+    require_readable_sides(sides)
     _require_readable(reader)
     dumped: list[SideDump] = []
     for side in range(sides):

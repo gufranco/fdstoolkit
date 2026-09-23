@@ -43,6 +43,8 @@ SIMULATED = "simulation"
 
 def _drive(source: str) -> SimulatedDrive:
     disk, _, _ = decode_payload(source)
+    if not any(side.blocks for side in disk.sides):
+        refuse("the image standing in for the disk carries no blocks, so there is nothing to read")
     return SimulatedDrive(disk)
 
 

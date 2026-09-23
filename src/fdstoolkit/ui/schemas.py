@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Any, Final, Self
 
 from pydantic import BaseModel, Field
 
 from fdstoolkit.core.diagnostics import Diagnostic
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.drive.advise import Advice
 from fdstoolkit.drive.classes import ClassReport
@@ -14,6 +14,15 @@ from fdstoolkit.flux.analysis import CaptureReport
 from fdstoolkit.identify.hashes import Digests
 from fdstoolkit.quality.grade import GradedReport
 from fdstoolkit.quality.reads import ReadStatistics
+
+ISO_DATE: Final = r"^$|^\d{4}-\d{2}-\d{2}$"
+MAX_PASSES: Final = 20
+MAX_RETRIES: Final = 20
+MAX_ADDRESS: Final = 0xFFFF
+MAX_NAME: Final = 120
+GAME_NAME_LENGTH: Final = 3
+MAX_SET_SIDES: Final = 8
+FILE_NAME_LENGTH: Final = 8
 
 
 class ProfileView(BaseModel):
@@ -29,7 +38,7 @@ class DiagnosticView(BaseModel):
     code: str
     severity: str
     message: str
-    side: int | None = None
+    side: int | None = Field(None, ge=0)
     offset: int | None = None
 
     @classmethod
@@ -338,7 +347,7 @@ class VerifySpec(ImageSpec):
 
 class GradeSpec(ImageSpec):
     reads: list[str] = Field(default_factory=list)
-    margin: float | None = None
+    margin: float | None = Field(None, ge=0.0, le=1.0)
 
 
 class ReadsSpec(BaseModel):
@@ -351,14 +360,14 @@ class CaptureSpec(BaseModel):
 
 
 class CyclesSpec(BaseModel):
-    cycles: float
+    cycles: float = Field(..., gt=0)
 
 
 class BlankSpec(BaseModel):
-    sides: int = 1
+    sides: int = Field(1, ge=1, le=MAX_SET_SIDES)
     formatted: bool = False
     headered: bool = False
-    game_name: str = "   "
+    game_name: str = Field("   ", min_length=GAME_NAME_LENGTH, max_length=GAME_NAME_LENGTH)
 
 
 class ConvertSpec(ImageSpec):
@@ -431,8 +440,8 @@ class SideSpec(ImageSpec):
 
 class InsertSpec(ImageSpec):
     file: str
-    file_name: str
-    address: int = 0x6000
+    file_name: str = Field(..., min_length=1, max_length=FILE_NAME_LENGTH)
+    address: int = Field(0x6000, ge=0, le=MAX_ADDRESS)
     kind: str = "program"
     side: int = 0
 
@@ -476,7 +485,7 @@ class ConsensusSpec(ImagesSpec):
 
 class CalibrateSpec(ImageSpec):
     reads: list[str] = Field(default_factory=list)
-    margin: float | None = None
+    margin: float | None = Field(None, ge=0.0, le=1.0)
 
 
 class IdentifySpec(ImageSpec):
@@ -502,7 +511,7 @@ class ExportSpec(ImageSpec):
 
 
 class CardSpec(BaseModel):
-    sides: int = 1
+    sides: int = Field(1, ge=1, le=MAX_SET_SIDES)
     firmware: str = "released"
 
 
@@ -517,7 +526,7 @@ class CorpusSpec(BaseModel):
 
 
 class ReferenceBuildSpec(CorpusSpec):
-    set_version: str
+    set_version: str = Field(..., min_length=1)
 
 
 class ReferenceVerifySpec(ImageSpec):
@@ -526,15 +535,15 @@ class ReferenceVerifySpec(ImageSpec):
 
 class DatBuildSpec(CorpusSpec):
     name: str = "Famicom Disk System"
-    set_version: str = ""
-    author: str = ""
+    set_version: str = Field("", min_length=1)
+    author: str = Field("", max_length=MAX_NAME)
 
 
 class ArchiveAddSpec(ImageSpec):
-    taken: str | None = None
+    taken: str | None = Field(None, pattern=ISO_DATE)
     drive: str = ""
     notes: str = ""
-    bad_blocks: int = 0
+    bad_blocks: int = Field(0, ge=0)
 
 
 class ArchiveTrendSpec(BaseModel):
@@ -552,24 +561,24 @@ class DecodeSpec(CaptureSpec):
 
 class DumpSpec(BaseModel):
     source: str
-    sides: int = 1
-    passes: int = 1
-    retries: int = 3
+    sides: int = Field(1, ge=1, le=SIDES_PER_DISK)
+    passes: int = Field(1, ge=1, le=MAX_PASSES)
+    retries: int = Field(3, ge=0, le=MAX_RETRIES)
     confirm: bool = False
 
 
 class WriteSpec(BaseModel):
     data: str
     source: str
-    retries: int = 3
+    retries: int = Field(3, ge=0, le=MAX_RETRIES)
     confirm: bool = False
     assume_writable: bool = False
 
 
 class SurfaceSpec(BaseModel):
     source: str
-    sides: int = 1
-    passes: int = 1
+    sides: int = Field(1, ge=1, le=SIDES_PER_DISK)
+    passes: int = Field(1, ge=1, le=MAX_PASSES)
     quick: bool = False
     finish: str = "leave"
     confirm: bool = False
@@ -578,7 +587,7 @@ class SurfaceSpec(BaseModel):
 
 class SubmitSpec(ImageSpec):
     log: str
-    dumper: str
+    dumper: str = Field(..., min_length=1)
     affiliation: str = ""
     photos: list[str] = Field(default_factory=list)
 

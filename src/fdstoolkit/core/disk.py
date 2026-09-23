@@ -1,9 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
 from fdstoolkit.core.blocks import Block, BlockKind, FileHeader
 from fdstoolkit.core.diskinfo import DiskInfo
+
+SIDES_PER_DISK: Final = 2
+
+
+def require_readable_sides(sides: int) -> None:
+    if not 1 <= sides <= SIDES_PER_DISK:
+        message = (
+            f"a disk card has {SIDES_PER_DISK} faces, so one pass covers 1 or "
+            f"{SIDES_PER_DISK} sides, not {sides}. Read each card separately and merge them"
+        )
+        raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)

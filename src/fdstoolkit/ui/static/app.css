@@ -277,6 +277,7 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
 .fields input[type="file"],
 .fields input[type="number"],
 .fields input[type="text"],
+.fields input[type="date"],
 .fields select {
   width: 100%;
   font: inherit;
@@ -547,4 +548,16 @@ footer p { margin: 0 auto; max-width: 46rem; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
+}
+
+.field-problem {
+  display: block;
+  color: var(--accent);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-top: 5px;
+}
+
+.fields input:invalid {
+  border-color: var(--accent);
 }

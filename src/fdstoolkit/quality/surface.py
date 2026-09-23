@@ -9,7 +9,7 @@ from fdstoolkit.build.blank import DEFAULT_GAME_NAME, disk_info_block
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.bitstream import EMULATION_BUFFER, emulated_side_size
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import Disk, Side, require_readable_sides
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import DiskReader, DiskWriter
 from fdstoolkit.hardware.session import Grade, dump, write_verified
@@ -198,6 +198,7 @@ def surface_test(
     backup: Callable[[bytes], None] | None = None,
     plan: SurfacePlan | None = None,
 ) -> SurfaceReport:
+    require_readable_sides(sides)
     plan = plan or SurfacePlan()
     rounds, fill, finish, retries = plan.rounds, plan.fill, plan.finish, plan.retries
     if rounds < 1:

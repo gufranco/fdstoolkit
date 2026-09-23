@@ -269,10 +269,7 @@ def tune(spec: CaptureSpec) -> TuneResult:
 
 
 def reading(spec: CyclesSpec) -> SpeedView:
-    try:
-        return SpeedView.of(from_cycles(spec.cycles))
-    except ValueError as error:
-        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
+    return SpeedView.of(from_cycles(spec.cycles))
 
 
 def classes(spec: CaptureSpec) -> ClassesResult:
@@ -281,15 +278,12 @@ def classes(spec: CaptureSpec) -> ClassesResult:
 
 
 def blank(spec: BlankSpec) -> FileResult:
-    try:
-        data = blank_image(
-            sides=spec.sides,
-            headered=spec.headered,
-            formatted=spec.formatted,
-            game_name=spec.game_name,
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
+    data = blank_image(
+        sides=spec.sides,
+        headered=spec.headered,
+        formatted=spec.formatted,
+        game_name=spec.game_name,
+    )
     return FileResult(
         name="blank.fds",
         data=base64.b64encode(data).decode("ascii"),

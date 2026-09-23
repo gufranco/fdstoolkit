@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from fdstoolkit.core.blocks import Block, BlockKind
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side, require_readable_sides
 
 
 def disk_info_block() -> Block:
@@ -103,3 +103,18 @@ def test_a_disk_accepts_a_matching_header_count() -> None:
     disk = Disk(sides=(formatted_side(),), header_side_count=1)
 
     assert disk.header_side_count == 1
+
+
+def test_a_side_count_a_card_cannot_have_is_refused() -> None:
+    with pytest.raises(ValueError, match="2 faces"):
+        require_readable_sides(SIDES_PER_DISK + 1)
+
+
+def test_a_side_count_of_nothing_is_refused() -> None:
+    with pytest.raises(ValueError, match="2 faces"):
+        require_readable_sides(0)
+
+
+def test_both_faces_of_one_card_are_allowed() -> None:
+    for sides in range(1, SIDES_PER_DISK + 1):
+        require_readable_sides(sides)

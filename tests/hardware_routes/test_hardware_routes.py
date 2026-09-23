@@ -103,7 +103,7 @@ def test_a_dump_carries_the_log_that_describes_it(client: TestClient) -> None:
 def test_a_dump_from_a_drive_with_no_disk_is_refused(client: TestClient) -> None:
     empty = base64.b64encode(bytes(16)).decode("ascii")
 
-    answer = client.post("/api/dump", json={"source": empty, "sides": 4})
+    answer = client.post("/api/dump", json={"source": empty, "sides": 1})
 
     assert answer.status_code == BAD_REQUEST
 
@@ -126,7 +126,7 @@ def test_a_surface_test_the_drive_refuses_is_reported(client: TestClient) -> Non
 
     answer = client.post(
         "/api/surface",
-        json={"source": empty, "sides": 4, "confirm": True},
+        json={"source": empty, "sides": 1, "confirm": True},
     )
 
     assert answer.status_code == BAD_REQUEST
@@ -162,3 +162,43 @@ def test_a_submission_from_a_hardware_log_renders(client: TestClient) -> None:
 
     assert "SHA-256 hash:" in body["text"]
     assert body["ok"]
+
+
+def test_a_dump_of_more_sides_than_a_card_has_is_refused(client: TestClient) -> None:
+    answer = client.post("/api/dump", json={"source": ONE, "sides": 4})
+
+    assert answer.status_code == UNPROCESSABLE
+
+
+def test_a_surface_test_of_more_sides_than_a_card_has_is_refused(client: TestClient) -> None:
+    answer = client.post(
+        "/api/surface",
+        json={"source": ONE, "sides": 4, "confirm": True},
+    )
+
+    assert answer.status_code == UNPROCESSABLE
+
+
+def test_a_source_with_no_blocks_is_refused(client: TestClient) -> None:
+    empty = base64.b64encode(bytes(16)).decode("ascii")
+
+    answer = client.post("/api/dump", json={"source": empty, "sides": 1})
+
+    assert answer.status_code == BAD_REQUEST
+
+
+def test_a_second_side_a_one_side_image_does_not_have_is_reported(client: TestClient) -> None:
+    answer = client.post("/api/dump", json={"source": ONE, "sides": 2})
+
+    assert answer.status_code == BAD_REQUEST
+
+
+def test_a_surface_test_on_a_side_the_image_does_not_have_is_reported(
+    client: TestClient,
+) -> None:
+    answer = client.post(
+        "/api/surface",
+        json={"source": ONE, "sides": 2, "confirm": True},
+    )
+
+    assert answer.status_code == BAD_REQUEST

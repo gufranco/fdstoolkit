@@ -11,9 +11,11 @@ from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.flux.load import CaptureFormat
 from fdstoolkit.quality.surface import Finish
 
-FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice", "auto")
+FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice", "auto", "date")
 
 DERIVED_FROM_FILE: Final = "name"
+
+DATE_FIELDS: Final = frozenset({"taken"})
 
 FILE_FIELDS: Final = frozenset(
     {
@@ -76,6 +78,12 @@ class FormField(BaseModel):
     accepts: str = ""
     default: Any = None
     options: list[str] = []
+    minimum: float | None = None
+    maximum: float | None = None
+    step: float | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str = ""
 
 
 class CommandForm(BaseModel):
@@ -92,19 +100,54 @@ def _opens_a_drive(callback: Callable[..., object]) -> bool:
     return "open_drive(" in inspect.getsource(callback)
 
 
-def _kind(name: str, annotation: object) -> str:
+class Bounds(BaseModel):
+    minimum: float | None = None
+    maximum: float | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str = ""
+
+
+NUMERIC_RULES: Final = (("ge", "minimum"), ("gt", "minimum"), ("le", "maximum"), ("lt", "maximum"))
+
+LENGTH_RULES: Final = (("min_length", "min_length"), ("max_length", "max_length"))
+
+
+def _bounds(info: object) -> Bounds:
+    found = Bounds()
+    for rule in getattr(info, "metadata", ()):
+        for attribute, key in NUMERIC_RULES:
+            value = getattr(rule, attribute, None)
+            if value is not None:
+                found = found.model_copy(update={key: float(value)})
+        for attribute, key in LENGTH_RULES:
+            value = getattr(rule, attribute, None)
+            if value is not None:
+                found = found.model_copy(update={key: int(value)})
+        pattern = getattr(rule, "pattern", None)
+        if pattern is not None:
+            found = found.model_copy(update={"pattern": str(pattern)})
+    return found
+
+
+def _named_kind(name: str) -> str:
+    if name in DATE_FIELDS:
+        return "date"
     if name in FILE_FIELDS:
         return "file"
     if name in FILE_LIST_FIELDS:
         return "files"
-    if name in CHOICES:
-        return "choice"
+    return "choice" if name in CHOICES else ""
+
+
+def _kind(name: str, annotation: object) -> str:
+    named = _named_kind(name)
+    if named:
+        return named
     text = str(annotation)
     if "bool" in text:
         return "flag"
-    if "int" in text or "float" in text:
-        return "number"
-    return "text"
+    return "number" if "int" in text or "float" in text else "text"
 
 
 def _carries_a_file(model: type[BaseModel]) -> bool:
@@ -129,6 +172,8 @@ def _fields(model: type[BaseModel]) -> list[FormField]:
                 accepts=ACCEPTS.get(name, ""),
                 default=default,
                 options=list(CHOICES.get(name, ())),
+                step=1 if "int" in str(info.annotation) else None,
+                **_bounds(info).model_dump(),
             )
         )
     return built
