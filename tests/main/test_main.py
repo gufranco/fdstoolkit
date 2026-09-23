@@ -8,16 +8,19 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import fdstoolkit.cli.main as cli
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.cli import common, hardware_cmds, inspect_cmds
 from fdstoolkit.cli.main import app
+from fdstoolkit.codecs import fds
 from fdstoolkit.codecs.fds import SIDE_SIZE
 from fdstoolkit.codecs.qd import encode as encode_qd
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.doctor import Check, CheckStatus, DoctorReport
+from fdstoolkit.hardware.session import Grade
 from fdstoolkit.hardware.simulation import FaultPlan, SimulatedDrive
 from fdstoolkit.identify import firmware
+from fdstoolkit.quality.surface import Finish, PatternPass, SurfaceReport
 
 runner = CliRunner()
 
@@ -956,22 +959,28 @@ def test_dump_names_a_block_that_differs_between_passes(tmp_path: Path) -> None:
     source = tmp_path / "source.fds"
     source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
 
-    original = cli.open_drive
+    original = hardware_cmds.open_drive
 
-    def unstable(backend: object, path: Path | None) -> object:
-        del backend
+    def unstable(
+        backend: object,
+        path: Path | None,
+        rate: float | None = None,
+        *,
+        assume_writable: bool = False,
+    ) -> object:
+        del backend, rate, assume_writable
         assert path is not None
-        disk, _, _, _ = cli.decode_image(path)
+        disk, _, _, _ = common.decode_image(path)
         return SimulatedDrive(disk, plan=FaultPlan(unstable_blocks=frozenset({1})))
 
-    cli.open_drive = unstable
+    hardware_cmds.open_drive = unstable
     try:
         result = runner.invoke(
             app,
             ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(source), "--passes", "2"],
         )
     finally:
-        cli.open_drive = original
+        hardware_cmds.open_drive = original
 
     assert "differs between passes" in result.stdout
 
@@ -980,22 +989,28 @@ def test_write_names_a_block_that_did_not_stick(tmp_path: Path) -> None:
     source = tmp_path / "source.fds"
     source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
 
-    original = cli.open_drive
+    original = hardware_cmds.open_drive
 
-    def unstable(backend: object, path: Path | None) -> object:
-        del backend
+    def unstable(
+        backend: object,
+        path: Path | None,
+        rate: float | None = None,
+        *,
+        assume_writable: bool = False,
+    ) -> object:
+        del backend, rate, assume_writable
         assert path is not None
-        disk, _, _, _ = cli.decode_image(path)
+        disk, _, _, _ = common.decode_image(path)
         return SimulatedDrive(disk, plan=FaultPlan(unstable_blocks=frozenset({1})))
 
-    cli.open_drive = unstable
+    hardware_cmds.open_drive = unstable
     try:
         result = runner.invoke(
             app,
             ["write", str(source), "--source", str(source), "--yes"],
         )
     finally:
-        cli.open_drive = original
+        hardware_cmds.open_drive = original
 
     assert "did not read back as written" in result.stdout
 
@@ -1415,38 +1430,38 @@ def test_dump_reports_that_the_dumper_backend_needs_a_link(tmp_path: Path) -> No
 
 
 def test_dump_stops_cleanly_on_an_interrupt(single_side: Path, tmp_path: Path) -> None:
-    original = cli.dump_disk
+    original = hardware_cmds.dump_disk
 
     def interrupt(*_: object, **__: object) -> object:
         raise KeyboardInterrupt
 
-    cli.dump_disk = interrupt
+    hardware_cmds.dump_disk = interrupt
     try:
         result = runner.invoke(
             app,
             ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(single_side)],
         )
     finally:
-        cli.dump_disk = original
+        hardware_cmds.dump_disk = original
 
     assert result.exit_code == 1
     assert "nothing was written" in result.stdout
 
 
 def test_write_warns_when_an_interrupt_lands_mid_write(single_side: Path) -> None:
-    original = cli.write_verified
+    original = hardware_cmds.write_verified
 
     def interrupt(*_: object, **__: object) -> object:
         raise KeyboardInterrupt
 
-    cli.write_verified = interrupt
+    hardware_cmds.write_verified = interrupt
     try:
         result = runner.invoke(
             app,
             ["write", str(single_side), "--source", str(single_side), "--yes"],
         )
     finally:
-        cli.write_verified = original
+        hardware_cmds.write_verified = original
 
     assert result.exit_code == 1
     assert "half written" in result.stdout
@@ -2215,7 +2230,10 @@ def test_a_sharp_mz_disk_is_refused_by_name(tmp_path: Path) -> None:
     assert "Sharp MZ Quick Disk image in QDF form, not a Famicom" in result.stdout
 
 
-def test_dump_says_a_simulated_drive_has_no_capture(single_side: Path, tmp_path: Path) -> None:
+def test_dump_keeps_the_simulated_drives_pulse_classes(
+    single_side: Path,
+    tmp_path: Path,
+) -> None:
     result = runner.invoke(
         app,
         [
@@ -2229,11 +2247,12 @@ def test_dump_says_a_simulated_drive_has_no_capture(single_side: Path, tmp_path:
         ],
     )
 
-    assert "no pulse capture" in result.stdout
+    assert "packed pulse classes" in result.stdout
+    assert list((tmp_path / "raw").glob("*.raw03"))
 
 
 def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    class CapturingStick(cli.FdsStick):
+    class CapturingStick(hardware_cmds.FdsStick):
         def __init__(self, disk: Disk) -> None:
             self._drive = SimulatedDrive(disk)
             self._captures = [b"\\x55" * 8]
@@ -2244,8 +2263,13 @@ def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.Mo
         def read_side(self, side: int):  # noqa: ANN202
             return self._drive.read_side(side)
 
-    disk, _ = cli.fds.decode(blank_image(sides=1, headered=False, formatted=True))
-    monkeypatch.setattr(cli, "open_fdsstick", lambda: CapturingStick(disk))
+    disk, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True))
+
+    def open_capturing(*, assume_writable: bool = False) -> CapturingStick:
+        del assume_writable
+        return CapturingStick(disk)
+
+    monkeypatch.setattr(hardware_cmds, "open_fdsstick", open_capturing)
 
     result = runner.invoke(
         app,
@@ -2281,9 +2305,477 @@ def test_doctor_can_emit_json() -> None:
 
 def test_doctor_fails_on_an_unhealthy_installation(monkeypatch: pytest.MonkeyPatch) -> None:
     unhealthy = DoctorReport(checks=(Check("python", CheckStatus.FAILED, "3.10.0"),))
-    monkeypatch.setattr(cli, "diagnose", lambda: unhealthy)
+    monkeypatch.setattr(inspect_cmds, "diagnose", lambda: unhealthy)
 
     result = runner.invoke(app, ["doctor"])
 
     assert result.exit_code == 1
     assert "[failed]" in result.stdout
+
+
+def test_dump_writes_a_log_naming_the_settings_it_used(
+    single_side: Path,
+    tmp_path: Path,
+) -> None:
+    log = tmp_path / "dump.log.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "dump",
+            "-o",
+            str(tmp_path / "dump.fds"),
+            "--source",
+            str(single_side),
+            "--log",
+            str(log),
+            "--retries",
+            "5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(log.read_text())
+    assert payload["settings"]["retries"] == 5
+    assert payload["simulated"] is True
+
+
+def test_dump_records_no_setting_it_was_not_given(single_side: Path, tmp_path: Path) -> None:
+    log = tmp_path / "dump.log.json"
+
+    runner.invoke(
+        app,
+        ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(single_side), "--log", str(log)],
+    )
+
+    assert json.loads(log.read_text())["settings"] == {}
+
+
+def _hardware_log(path: Path, source: Path, tmp_path: Path) -> None:
+    runner.invoke(
+        app,
+        ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(source), "--log", str(path)],
+    )
+    payload = json.loads(path.read_text())
+    payload["simulated"] = False
+    payload["backend"] = "fdsstick"
+    payload["device"] = "loopy FDSStick, firmware 1.04"
+    path.write_text(json.dumps(payload))
+
+
+def test_submit_prints_a_report_a_project_can_read(single_side: Path, tmp_path: Path) -> None:
+    log = tmp_path / "d.log.json"
+    _hardware_log(log, single_side, tmp_path)
+
+    result = runner.invoke(
+        app,
+        ["submit", str(tmp_path / "d.fds"), "--log", str(log), "--dumper", "someone"],
+    )
+
+    assert "SHA-256" in result.stdout
+    assert "fdstoolkit:v1:release" in result.stdout
+    assert result.exit_code == 1
+
+
+def test_submit_exits_clean_once_photographs_are_cited(
+    single_side: Path,
+    tmp_path: Path,
+) -> None:
+    log = tmp_path / "d.log.json"
+    _hardware_log(log, single_side, tmp_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "submit",
+            str(tmp_path / "d.fds"),
+            "--log",
+            str(log),
+            "--dumper",
+            "someone",
+            "--photo",
+            "media.jpg",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "media.jpg" in result.stdout
+
+
+def test_submit_writes_to_a_file_when_asked(single_side: Path, tmp_path: Path) -> None:
+    log = tmp_path / "d.log.json"
+    _hardware_log(log, single_side, tmp_path)
+    out = tmp_path / "submission.txt"
+
+    runner.invoke(
+        app,
+        [
+            "submit",
+            str(tmp_path / "d.fds"),
+            "--log",
+            str(log),
+            "--dumper",
+            "someone",
+            "--photo",
+            "media.jpg",
+            "-o",
+            str(out),
+        ],
+    )
+
+    assert "SHA-256" in out.read_text()
+
+
+def test_submit_hashes_another_file_alongside_the_image(
+    single_side: Path,
+    tmp_path: Path,
+) -> None:
+    log = tmp_path / "d.log.json"
+    _hardware_log(log, single_side, tmp_path)
+    extra = tmp_path / "d.raw03"
+    extra.write_bytes(b"\x55" * 64)
+
+    result = runner.invoke(
+        app,
+        [
+            "submit",
+            str(tmp_path / "d.fds"),
+            "--log",
+            str(log),
+            "--dumper",
+            "someone",
+            "--also",
+            str(extra),
+        ],
+    )
+
+    assert "File: d.raw03" in result.stdout
+
+
+def test_submit_refuses_a_simulated_log(single_side: Path, tmp_path: Path) -> None:
+    log = tmp_path / "d.log.json"
+    runner.invoke(
+        app,
+        ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(single_side), "--log", str(log)],
+    )
+
+    result = runner.invoke(
+        app,
+        ["submit", str(tmp_path / "d.fds"), "--log", str(log), "--dumper", "someone"],
+    )
+
+    assert result.exit_code == 1
+    assert "simulated" in result.stdout
+
+
+def test_submit_needs_an_image_that_exists(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["submit", str(tmp_path / "missing.fds"), "--log", str(tmp_path / "l"), "--dumper", "x"],
+    )
+
+    assert "file not found" in result.stdout
+
+
+def test_submit_needs_a_log_that_exists(single_side: Path, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["submit", str(single_side), "--log", str(tmp_path / "missing.json"), "--dumper", "x"],
+    )
+
+    assert "file not found" in result.stdout
+
+
+def test_submit_refuses_a_log_it_cannot_read(single_side: Path, tmp_path: Path) -> None:
+    log = tmp_path / "bad.json"
+    log.write_text("{}")
+
+    result = runner.invoke(
+        app,
+        ["submit", str(single_side), "--log", str(log), "--dumper", "x"],
+    )
+
+    assert "could not read" in result.stdout
+
+
+def test_submit_needs_every_extra_file_to_exist(single_side: Path, tmp_path: Path) -> None:
+    log = tmp_path / "d.log.json"
+    _hardware_log(log, single_side, tmp_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "submit",
+            str(tmp_path / "d.fds"),
+            "--log",
+            str(log),
+            "--dumper",
+            "someone",
+            "--also",
+            str(tmp_path / "missing.raw03"),
+        ],
+    )
+
+    assert "file not found" in result.stdout
+
+
+def test_submit_refuses_an_unnamed_dumper(single_side: Path, tmp_path: Path) -> None:
+    log = tmp_path / "d.log.json"
+    _hardware_log(log, single_side, tmp_path)
+
+    result = runner.invoke(
+        app,
+        ["submit", str(tmp_path / "d.fds"), "--log", str(log), "--dumper", "  "],
+    )
+
+    assert "names the dumper" in result.stdout
+
+
+def test_web_starts_the_application(monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[tuple[str, int]] = []
+
+    def fake_server() -> tuple[object, object]:
+        def run(built: object, *, host: str, port: int) -> None:
+            del built
+            started.append((host, port))
+
+        def build() -> object:
+            return object()
+
+        return run, build
+
+    monkeypatch.setattr(hardware_cmds, "web_server", fake_server)
+
+    result = runner.invoke(app, ["web", "--port", "9123", "--no-open"])
+
+    assert result.exit_code == 0
+    assert started == [("127.0.0.1", 9123)]
+
+
+def test_web_says_which_extra_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_server() -> tuple[object, object]:
+        raise ImportError
+
+    monkeypatch.setattr(hardware_cmds, "web_server", no_server)
+
+    result = runner.invoke(app, ["web"])
+
+    assert result.exit_code == 1
+    assert "brew install" in result.stdout
+
+
+def test_a_log_records_every_setting_that_was_not_the_default(
+    image: Path,
+    tmp_path: Path,
+) -> None:
+    log = tmp_path / "d.log.json"
+
+    runner.invoke(
+        app,
+        [
+            "dump",
+            "-o",
+            str(tmp_path / "d.fds"),
+            "--source",
+            str(image),
+            "--log",
+            str(log),
+            "--sides",
+            "2",
+            "--passes",
+            "2",
+        ],
+    )
+
+    settings = json.loads(log.read_text())["settings"]
+    assert settings["sides"] == 2
+    assert settings["passes"] == 2
+
+
+def test_a_simulated_drive_contributes_no_device_line() -> None:
+    assert hardware_cmds.device_line(SimulatedDrive(None)) is None
+
+
+def test_a_real_drive_takes_its_device_line_from_doctor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report = DoctorReport(
+        checks=(Check(name="fdsstick", status=CheckStatus.OK, detail="loopy FDSStick"),)
+    )
+    monkeypatch.setattr(hardware_cmds, "diagnose", lambda: report)
+
+    assert hardware_cmds.device_line(object()) == "loopy FDSStick"
+
+
+def test_a_real_drive_with_no_device_reported_contributes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report = DoctorReport(
+        checks=(Check(name="fdsstick", status=CheckStatus.WARNING, detail="none connected"),)
+    )
+    monkeypatch.setattr(hardware_cmds, "diagnose", lambda: report)
+
+    assert hardware_cmds.device_line(object()) is None
+
+
+def test_the_web_server_loader_returns_a_runner_and_a_factory() -> None:
+    run, build = hardware_cmds.web_server()
+
+    assert callable(run)
+    assert callable(build)
+
+
+def test_a_drive_that_returned_no_capture_says_so(tmp_path: Path) -> None:
+    drive = SimulatedDrive(None)
+
+    hardware_cmds.keep_captures(drive, tmp_path, stem="d")
+
+    assert not list(tmp_path.iterdir())
+
+
+def test_dump_asks_the_operator_to_turn_the_disk_over(
+    image: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class OneFace:
+        selects_sides = False
+
+        def __init__(self, disk: Disk) -> None:
+            self._inner = SimulatedDrive(disk)
+            self.facing = 0
+
+        def status(self):  # noqa: ANN202
+            return self._inner.status()
+
+        def read_side(self, side: int):  # noqa: ANN202, ARG002
+            return self._inner.read_side(self.facing)
+
+    disk, _, _, _ = common.decode_image(image)
+    drive = OneFace(disk)
+
+    def open_one_face(*args: object, **kwargs: object) -> OneFace:
+        del args, kwargs
+        return drive
+
+    def flipped(message: str) -> bool:
+        del message
+        drive.facing = 1
+        return True
+
+    monkeypatch.setattr(hardware_cmds, "open_drive", open_one_face)
+    monkeypatch.setattr(hardware_cmds.typer, "confirm", flipped)
+
+    result = runner.invoke(
+        app,
+        ["dump", "-o", str(tmp_path / "d.fds"), "--source", str(image), "--sides", "2"],
+    )
+
+    assert result.exit_code == 0
+
+
+def test_surface_names_every_class_of_failing_block(
+    single_side: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    report = SurfaceReport(
+        passes=(
+            PatternPass(
+                0x00, verified=False, mismatched_blocks=((0, 4), (0, 9)), grade=Grade.FAILED
+            ),
+            PatternPass(0xFF, verified=False, mismatched_blocks=((0, 4),), grade=Grade.FAILED),
+            PatternPass(0xAA, verified=True, mismatched_blocks=(), grade=Grade.CLEAN),
+        ),
+        coverage=1.0,
+        data_bytes=59145,
+        finish=Finish.ERASE,
+        finish_verified=False,
+    )
+
+    def fixed_report(*args: object, **kwargs: object) -> SurfaceReport:
+        del args, kwargs
+        return report
+
+    monkeypatch.setattr(hardware_cmds, "surface_test", fixed_report)
+
+    result = runner.invoke(
+        app,
+        ["surface", "--source", str(single_side), "--yes"],
+    )
+
+    assert "failed on more than one pattern" in result.stdout
+    assert "marginal rather than dead" in result.stdout
+    assert "rewriting refreshed them" in result.stdout
+    assert "erased, with nothing the adapter can read" in result.stdout
+    assert "which did not verify" in result.stdout
+    assert result.exit_code == 1
+
+
+def test_dump_can_be_told_the_disk_is_already_turned_over(
+    image: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class OneFace:
+        selects_sides = False
+
+        def __init__(self, disk: Disk) -> None:
+            self._inner = SimulatedDrive(disk)
+            self.facing = 0
+
+        def status(self):  # noqa: ANN202
+            return self._inner.status()
+
+        def read_side(self, side: int):  # noqa: ANN202
+            self.facing = side
+            return self._inner.read_side(self.facing)
+
+    disk, _, _, _ = common.decode_image(image)
+
+    def open_one_face(*args: object, **kwargs: object) -> OneFace:
+        del args, kwargs
+        return OneFace(disk)
+
+    monkeypatch.setattr(hardware_cmds, "open_drive", open_one_face)
+
+    result = runner.invoke(
+        app,
+        [
+            "dump",
+            "-o",
+            str(tmp_path / "d.fds"),
+            "--source",
+            str(image),
+            "--sides",
+            "2",
+            "--yes",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "turn the disk over" in result.stdout
+
+
+def test_web_opens_a_browser_unless_told_not_to(monkeypatch: pytest.MonkeyPatch) -> None:
+    opened: list[str] = []
+
+    def fake_server() -> tuple[object, object]:
+        def run(built: object, *, host: str, port: int) -> None:
+            del built, host, port
+
+        def build() -> object:
+            return object()
+
+        return run, build
+
+    def remember(address: str) -> bool:
+        opened.append(address)
+        return True
+
+    monkeypatch.setattr(hardware_cmds, "web_server", fake_server)
+    monkeypatch.setattr(hardware_cmds.webbrowser, "open", remember)
+
+    result = runner.invoke(app, ["web", "--port", "9124"])
+
+    assert result.exit_code == 0
+    assert opened == ["http://127.0.0.1:9124"]

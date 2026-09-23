@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
@@ -8,8 +9,9 @@ import typer
 
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
-from fdstoolkit.core.diagnostics import Diagnostic
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.diagnostics import Diagnostic, Severity, worst_severity
+from fdstoolkit.core.disk import Disk, Side
 
 FDS_SUFFIX: Final = ".fds"
 QD_SUFFIX: Final = ".qd"
@@ -18,6 +20,28 @@ QD_SUFFIX: Final = ".qd"
 class Container(StrEnum):
     FDS = "fds"
     QD = "qd"
+
+
+class KindChoice(StrEnum):
+    PROGRAM = "program"
+    CHARACTER = "character"
+    NAMETABLE = "nametable"
+
+
+class TargetChoice(StrEnum):
+    NT_MINI = "nt-mini"
+    MISTER = "mister"
+    EVERDRIVE_N8_PRO = "everdrive-n8-pro"
+    MESEN2 = "mesen2"
+    FCEUX = "fceux"
+    ARES = "ares"
+
+
+KIND_FOR_CHOICE: Final[dict[KindChoice, FileKind]] = {
+    KindChoice.PROGRAM: FileKind.PROGRAM,
+    KindChoice.CHARACTER: FileKind.CHARACTER,
+    KindChoice.NAMETABLE: FileKind.NAMETABLE,
+}
 
 
 def fail(message: str) -> typer.Exit:
@@ -57,3 +81,41 @@ def guard_output(output: Path, *, force: bool) -> None:
     if output.exists() and not force:
         message = f"{output} exists, pass --force to overwrite"
         raise fail(message)
+
+
+def exit_code(findings: tuple[Diagnostic, ...], *, strict: bool) -> int:
+    worst = worst_severity(findings)
+    if worst is Severity.ERROR:
+        return 1
+    if strict and worst is Severity.WARNING:
+        return 1
+    return 0
+
+
+def writer_for(path: Path) -> Callable[[bytes], None]:
+    def write(data: bytes) -> None:
+        path.write_bytes(data)
+
+    return write
+
+
+def side_summary(index: int, side: Side) -> dict[str, object]:
+    info = side.disk_info
+    manufactured = info.manufacturing_date if info else None
+    rewritten = info.rewritten_date if info else None
+    return {
+        "index": index,
+        "formatted": side.is_formatted,
+        "game_name": info.game_name if info else None,
+        "game_version": info.game_version if info else None,
+        "side": info.side if info else None,
+        "disk_number": info.disk_number if info else None,
+        "manufacturing_date": list(manufactured) if manufactured else None,
+        "rewritten_date": list(rewritten) if rewritten else None,
+        "rewrite_count": info.rewrite_count if info else None,
+        "writer_serial": info.writer_serial if info else None,
+        "declared_files": side.declared_file_count,
+        "files": side.file_count,
+        "hidden_files": side.hidden_file_count,
+        "data_after_last_block": side.has_data_after_last_block,
+    }
