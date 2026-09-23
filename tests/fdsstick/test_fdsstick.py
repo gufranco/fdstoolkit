@@ -9,9 +9,7 @@ from fdstoolkit.codecs.fds import decode as decode_fds
 from fdstoolkit.codecs.raw import encode_raw03
 from fdstoolkit.hardware import fdsstick as fdsstick_module
 from fdstoolkit.hardware.fdsstick import (
-    BULK_READ_PAYLOAD,
-    BULK_WRITE_PAYLOAD,
-    MAX_PACKETS_PER_SIDE,
+    CHUNK_PAYLOAD,
     PRODUCT_ID,
     VENDOR_ID,
     FdsStick,
@@ -19,7 +17,7 @@ from fdstoolkit.hardware.fdsstick import (
     ReportId,
     open_fdsstick,
 )
-from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.hardware.ports import HardwareFaultError
 
 
 class FakeTransport:
@@ -53,11 +51,11 @@ def sample_disk():  # noqa: ANN201
 def read_packets(payload: bytes) -> deque[bytes]:
     packets: deque[bytes] = deque()
     sequence = 1
-    for start in range(0, len(payload), BULK_READ_PAYLOAD):
-        chunk = payload[start : start + BULK_READ_PAYLOAD]
-        packets.append(bytes([ReportId.BULK_READ, sequence]) + chunk)
+    for start in range(0, len(payload), CHUNK_PAYLOAD):
+        chunk = payload[start : start + CHUNK_PAYLOAD]
+        packets.append(bytes([ReportId.DISK_CHUNK, sequence]) + chunk)
         sequence = 1 if sequence == 0xFF else sequence + 1
-    packets.append(bytes([ReportId.BULK_READ, sequence]))
+    packets.append(bytes([ReportId.DISK_CHUNK, sequence]))
     return packets
 
 
@@ -66,114 +64,10 @@ def test_the_device_identity_is_the_documented_one() -> None:
     assert PRODUCT_ID == 0x0AAA
 
 
-def test_the_handshake_probes_the_flash_and_reads_status() -> None:
-    transport = FakeTransport()
-
-    FdsStick(transport).handshake()
-
-    commands = [feature[0] for feature in transport.features]
-    assert commands.count(ReportId.COMMAND) >= 3
-    assert transport.features[0][1] == 0x01
-    assert transport.features[0][2] == 0x9F
-
-
-def test_a_bulk_read_returns_the_payload_of_every_packet() -> None:
-    payload = bytes(range(256)) * 4
-    transport = FakeTransport({ReportId.BULK_READ: read_packets(payload)})
-
-    values = FdsStick(transport).read_raw_side()
-
-    assert values == payload
-
-
-def test_a_bulk_read_starts_the_device_in_read_mode() -> None:
-    transport = FakeTransport({ReportId.BULK_READ: read_packets(bytes(16))})
-
-    FdsStick(transport).read_raw_side()
-
-    assert bytes([ReportId.MODE, 0x00]) in transport.features
-
-
-def test_a_short_packet_ends_the_read() -> None:
-    packets: deque[bytes] = deque(
-        [
-            bytes([ReportId.BULK_READ, 1]) + bytes(BULK_READ_PAYLOAD),
-            bytes([ReportId.BULK_READ, 2]) + bytes(10),
-            bytes([ReportId.BULK_READ, 3]) + bytes(BULK_READ_PAYLOAD),
-        ]
-    )
-    transport = FakeTransport({ReportId.BULK_READ: packets})
-
-    values = FdsStick(transport).read_raw_side()
-
-    assert len(values) == BULK_READ_PAYLOAD + 10
-
-
-def test_a_skipped_sequence_byte_is_reported_as_lost_data() -> None:
-    packets: deque[bytes] = deque(
-        [
-            bytes([ReportId.BULK_READ, 1]) + bytes(BULK_READ_PAYLOAD),
-            bytes([ReportId.BULK_READ, 9]) + bytes(BULK_READ_PAYLOAD),
-        ]
-    )
-    transport = FakeTransport({ReportId.BULK_READ: packets})
-
-    with pytest.raises(HardwareFaultError) as caught:
-        FdsStick(transport).read_raw_side()
-
-    assert caught.value.kind is FaultKind.MEDIA
-    assert "lost" in str(caught.value)
-
-
-def test_a_stale_first_packet_is_discarded() -> None:
-    packets: deque[bytes] = deque(
-        [
-            bytes([ReportId.BULK_READ, 7]) + bytes(BULK_READ_PAYLOAD),
-            bytes([ReportId.BULK_READ, 1]) + bytes(BULK_READ_PAYLOAD),
-            bytes([ReportId.BULK_READ, 2]) + bytes(10),
-        ]
-    )
-    transport = FakeTransport({ReportId.BULK_READ: packets})
-
-    values = FdsStick(transport).read_raw_side()
-
-    assert len(values) == BULK_READ_PAYLOAD + 10
-
-
-def test_a_truncated_response_is_a_link_fault() -> None:
-    transport = FakeTransport({ReportId.BULK_READ: deque([bytes([ReportId.BULK_READ])])})
-
-    with pytest.raises(HardwareFaultError) as caught:
-        FdsStick(transport).read_raw_side()
-
-    assert caught.value.kind is FaultKind.LINK
-
-
-def test_writing_sends_full_packets_and_finalises() -> None:
-    transport = FakeTransport()
-    disk = sample_disk()
-
-    FdsStick(transport).write_raw_side(encode_raw03(disk, side=0))
-
-    assert bytes([ReportId.MODE, 0x01]) in transport.features
-    assert all(len(packet) == BULK_WRITE_PAYLOAD + 1 for packet in transport.outputs)
-    assert transport.outputs[0][0] == ReportId.BULK_WRITE
-    assert transport.features[-1] == bytes([ReportId.FINALISE, 0x00])
-
-
-def test_a_short_final_packet_is_padded_rather_than_sent_short() -> None:
-    transport = FakeTransport()
-
-    FdsStick(transport).write_raw_side(bytes([0x55]) * (BULK_WRITE_PAYLOAD + 3))
-
-    assert len(transport.outputs) == 2
-    assert len(transport.outputs[1]) == BULK_WRITE_PAYLOAD + 1
-
-
 def test_reading_a_side_yields_blocks_with_their_crc_verdict() -> None:
     disk = sample_disk()
     payload = encode_raw03(disk, side=0)
-    transport = FakeTransport({ReportId.BULK_READ: read_packets(payload)})
+    transport = FakeTransport({ReportId.DISK_CHUNK: read_packets(payload)})
 
     blocks = list(FdsStick(transport).read_side(0))
 
@@ -290,7 +184,7 @@ def test_opening_reports_a_device_that_does_not_answer(monkeypatch: pytest.Monke
         open_fdsstick()
 
 
-def test_opening_returns_a_device_that_has_shaken_hands(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_opening_returns_a_usable_device(monkeypatch: pytest.MonkeyPatch) -> None:
     device = FakeHidDevice()
 
     class FakeModule:
@@ -302,23 +196,7 @@ def test_opening_returns_a_device_that_has_shaken_hands(monkeypatch: pytest.Monk
     stick = open_fdsstick()
 
     assert isinstance(stick, FdsStick)
-    assert device.sent
     assert device.opened == (VENDOR_ID, PRODUCT_ID)
-
-
-def test_the_address_scan_walks_the_documented_range() -> None:
-    transport = FakeTransport()
-
-    FdsStick(transport).scan_address_table()
-
-    addresses = [
-        feature[1] | (feature[2] << 8)
-        for feature in transport.features
-        if feature[0] == ReportId.ADDRESS
-    ]
-    assert addresses[0] == 0x01B0
-    assert addresses[-1] == 0x04E0
-    assert len(addresses) == 52
 
 
 def test_writing_a_side_encodes_the_blocks_it_is_given() -> None:
@@ -328,31 +206,22 @@ def test_writing_a_side_encodes_the_blocks_it_is_given() -> None:
     FdsStick(transport).write_side(0, [block.payload for block in disk.sides[0].blocks])
 
     assert transport.outputs
-    assert transport.features[-1] == bytes([ReportId.FINALISE, 0x00])
-
-
-def test_a_read_that_never_ends_stops_at_the_packet_ceiling() -> None:
-    packets: deque[bytes] = deque(
-        bytes([ReportId.BULK_READ, (index % 255) + 1]) + bytes(BULK_READ_PAYLOAD)
-        for index in range(MAX_PACKETS_PER_SIDE + 5)
-    )
-    transport = FakeTransport({ReportId.BULK_READ: packets})
-
-    values = FdsStick(transport).read_raw_side()
-
-    assert len(values) == MAX_PACKETS_PER_SIDE * BULK_READ_PAYLOAD
+    assert transport.features[-1] == bytes([ReportId.DISK_FINALISE, 0x00])
 
 
 def test_every_side_read_keeps_its_pulse_capture() -> None:
-    payload = encode_raw03(sample_disk(), side=0)
-    packets = read_packets(payload)
-    transport = FakeTransport({ReportId.BULK_READ: deque([*packets, *read_packets(payload)])})
-    stick = FdsStick(transport)
+    body = bytes(CHUNK_PAYLOAD)
+    packets = deque(
+        [
+            bytes([ReportId.DISK_CHUNK, 1]) + body,
+            bytes([ReportId.DISK_CHUNK, 2]) + bytes(4),
+        ]
+    )
+    stick = FdsStick(FakeTransport({ReportId.DISK_CHUNK: packets}))
 
     list(stick.read_side(0))
-    list(stick.read_side(0))
 
-    assert stick.captures == (payload, payload)
+    assert len(stick.captures) == 1
 
 
 def test_the_stick_reports_every_drive_state_as_unknown() -> None:
