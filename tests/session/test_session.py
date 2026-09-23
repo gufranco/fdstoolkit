@@ -10,6 +10,7 @@ from fdstoolkit.core.disk import Disk
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import (
     Grade,
+    SideFlipError,
     WriteRefusedError,
     dump,
     dump_repeated,
@@ -280,3 +281,113 @@ def test_a_write_refuses_an_image_that_cannot_fit_a_disk() -> None:
 
     with pytest.raises(WriteRefusedError, match="does not fit a disk"):
         write_verified(drive, drive, stuffed, confirm=lambda _: True, backup=None)
+
+
+class OneFace:
+    """A drive whose head reaches whichever face the operator put against it."""
+
+    selects_sides = False
+
+    def __init__(self, disk: Disk) -> None:
+        self._inner = SimulatedDrive(disk)
+        self.facing = 0
+
+    def status(self):  # noqa: ANN201
+        return self._inner.status()
+
+    def read_side(self, side: int):  # noqa: ANN201, ARG002
+        return self._inner.read_side(self.facing)
+
+
+def test_a_single_face_drive_asks_for_the_flip_before_the_second_side() -> None:
+    drive = OneFace(sample_disk(sides=2))
+    asked: list[str] = []
+
+    def flip(message: str) -> bool:
+        asked.append(message)
+        drive.facing = 1
+        return True
+
+    dump(drive, sides=2, flip=flip)
+
+    assert len(asked) == 1
+    assert "turn the disk over" in asked[0]
+    assert "side B" in asked[0]
+
+
+def test_a_single_face_drive_refuses_two_sides_with_no_operator() -> None:
+    drive = OneFace(sample_disk(sides=2))
+
+    with pytest.raises(SideFlipError, match="turned over"):
+        dump(drive, sides=2)
+
+
+def test_a_declined_flip_stops_the_dump() -> None:
+    drive = OneFace(sample_disk(sides=2))
+
+    with pytest.raises(SideFlipError, match="declined"):
+        dump(drive, sides=2, flip=lambda _: False)
+
+
+def test_a_disk_that_was_not_turned_over_is_caught() -> None:
+    drive = OneFace(sample_disk(sides=2))
+
+    with pytest.raises(SideFlipError, match="not turned over"):
+        dump(drive, sides=2, flip=lambda _: True)
+
+
+def test_a_single_face_drive_reads_one_side_without_being_asked() -> None:
+    drive = OneFace(sample_disk(sides=2))
+
+    result = dump(drive, sides=1)
+
+    assert len(result.sides) == 1
+
+
+def test_a_drive_that_selects_sides_is_never_asked_to_flip() -> None:
+    asked: list[str] = []
+
+    result = dump(
+        SimulatedDrive(sample_disk(sides=2)), sides=2, flip=lambda m: bool(asked.append(m)) or True
+    )
+
+    assert asked == []
+    assert len(result.sides) == 2
+
+
+def test_repeated_passes_ask_for_the_flip_on_every_pass() -> None:
+    drive = OneFace(sample_disk(sides=2))
+    asked: list[str] = []
+
+    def flip(message: str) -> bool:
+        asked.append(message)
+        drive.facing = 1 - drive.facing
+        return True
+
+    dump_repeated(drive, sides=2, passes=2, flip=flip)
+
+    assert len(asked) == 3
+    assert "back over" in asked[1]
+
+
+def test_repeated_passes_refuse_when_the_disk_is_not_returned_to_side_a() -> None:
+    drive = OneFace(sample_disk(sides=2))
+    answers = iter([True, False])
+
+    def flip(message: str) -> bool:
+        del message
+        answer = next(answers)
+        if answer:
+            drive.facing = 1
+        return answer
+
+    with pytest.raises(SideFlipError, match="returned to side A"):
+        dump_repeated(drive, sides=2, passes=2, flip=flip)
+
+
+def test_repeated_passes_on_one_side_need_no_flip() -> None:
+    drive = OneFace(sample_disk(sides=2))
+
+    report = dump_repeated(drive, sides=1, passes=2)
+
+    assert report.unstable_blocks == ()

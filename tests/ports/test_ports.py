@@ -11,6 +11,8 @@ from fdstoolkit.hardware.ports import (
     classify,
 )
 
+UNKNOWN_FIELDS = 4
+
 
 def test_a_block_read_carries_its_bytes_and_verdict() -> None:
     read = BlockRead(index=3, payload=bytes([0x02, 0x01]), crc_ok=True, attempts=1)
@@ -112,3 +114,88 @@ def test_a_transient_fault_classifies_by_its_message() -> None:
         is ErrorClass.MEDIA
     )
     assert HardwareFaultError("odd", kind=FaultKind.TRANSIENT).error_class is ErrorClass.OTHER
+
+
+def test_a_status_that_knows_nothing_blocks_a_write() -> None:
+    status = DriveStatus(
+        disk_present=None,
+        write_protected=None,
+        battery_ok=None,
+        ready=None,
+    )
+
+    assert not status.can_write
+    assert len(status.unknown) == UNKNOWN_FIELDS
+
+
+def test_an_unknown_status_still_allows_a_read() -> None:
+    status = DriveStatus(
+        disk_present=None,
+        write_protected=None,
+        battery_ok=None,
+        ready=None,
+    )
+
+    assert status.can_read
+
+
+def test_a_known_absent_disk_blocks_a_read() -> None:
+    status = DriveStatus(
+        disk_present=False,
+        write_protected=None,
+        battery_ok=None,
+        ready=None,
+    )
+
+    assert not status.can_read
+    assert "no disk in the drive" in status.blockers
+
+
+def test_the_write_blockers_name_what_could_not_be_established() -> None:
+    status = DriveStatus(
+        disk_present=True,
+        write_protected=None,
+        battery_ok=True,
+        ready=True,
+    )
+
+    assert not status.can_write
+    assert any("write protected is unknown" in reason for reason in status.write_blockers)
+
+
+def test_the_override_lets_an_unknown_status_write() -> None:
+    status = DriveStatus(
+        disk_present=None,
+        write_protected=None,
+        battery_ok=None,
+        ready=None,
+        assume_writable=True,
+    )
+
+    assert status.can_write
+    assert status.write_blockers == ()
+
+
+def test_the_override_does_not_silence_a_known_fault() -> None:
+    status = DriveStatus(
+        disk_present=True,
+        write_protected=True,
+        battery_ok=True,
+        ready=True,
+        assume_writable=True,
+    )
+
+    assert not status.can_write
+    assert "disk is write protected" in status.write_blockers
+
+
+def test_a_fully_known_healthy_drive_writes() -> None:
+    status = DriveStatus(
+        disk_present=True,
+        write_protected=False,
+        battery_ok=True,
+        ready=True,
+    )
+
+    assert status.can_write
+    assert status.unknown == ()

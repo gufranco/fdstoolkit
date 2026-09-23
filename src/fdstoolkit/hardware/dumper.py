@@ -55,6 +55,7 @@ class DumperLink(Protocol):
 
 class FamicomDumper:
     reports_write_protection: Final = True
+    selects_sides: Final = False
 
     def __init__(self, link: DumperLink) -> None:
         version = link.protocol_version()

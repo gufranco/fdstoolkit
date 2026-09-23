@@ -353,3 +353,25 @@ def test_every_side_read_keeps_its_pulse_capture() -> None:
     list(stick.read_side(0))
 
     assert stick.captures == (payload, payload)
+
+
+def test_the_stick_reports_every_drive_state_as_unknown() -> None:
+    stick = FdsStick(FakeTransport())
+
+    status = stick.status()
+
+    assert status.disk_present is None
+    assert status.write_protected is None
+    assert not status.can_write
+
+
+def test_the_stick_still_allows_a_read_it_cannot_vouch_for() -> None:
+    assert FdsStick(FakeTransport()).status().can_read
+
+
+def test_the_override_lets_the_stick_write() -> None:
+    assert FdsStick(FakeTransport(), assume_writable=True).status().can_write
+
+
+def test_the_stick_reads_one_face_and_says_so() -> None:
+    assert FdsStick.selects_sides is False

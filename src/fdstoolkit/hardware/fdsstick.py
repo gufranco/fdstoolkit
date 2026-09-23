@@ -60,25 +60,28 @@ class HidTransport(Protocol):
 
 
 class FdsStick:
-    def __init__(self, transport: HidTransport) -> None:
+    reports_write_protection: Final = False
+    selects_sides: Final = False
+
+    def __init__(self, transport: HidTransport, *, assume_writable: bool = False) -> None:
         self._transport = transport
         self._captures: list[bytes] = []
+        self._assume_writable = assume_writable
 
     @property
     def captures(self) -> tuple[bytes, ...]:
         return tuple(self._captures)
-
-    reports_write_protection: Final = False
 
     def close(self) -> None:
         self._transport.close()
 
     def status(self) -> DriveStatus:
         return DriveStatus(
-            disk_present=True,
-            write_protected=False,
-            battery_ok=True,
-            ready=True,
+            disk_present=None,
+            write_protected=None,
+            battery_ok=None,
+            ready=None,
+            assume_writable=self._assume_writable,
         )
 
     def _command(self, opcode: int, fill: int) -> None:
@@ -230,7 +233,7 @@ def _load_hid() -> HidModule:
     return cast("HidModule", importlib.import_module("hid"))
 
 
-def open_fdsstick() -> FdsStick:
+def open_fdsstick(*, assume_writable: bool = False) -> FdsStick:
     try:
         hid = _load_hid()
     except ImportError as error:
@@ -250,6 +253,6 @@ def open_fdsstick() -> FdsStick:
         )
         raise HardwareFaultError(message, kind=FaultKind.LINK) from error
 
-    stick = FdsStick(HidApiTransport(device))
+    stick = FdsStick(HidApiTransport(device), assume_writable=assume_writable)
     stick.handshake()
     return stick

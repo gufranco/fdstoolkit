@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -10,7 +10,13 @@ from fdstoolkit.core.bitstream import emulated_side_size
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.hardware.deadline import Deadline, guard
-from fdstoolkit.hardware.ports import BlockRead, DiskReader, DiskWriter, HardwareFaultError
+from fdstoolkit.hardware.ports import (
+    BlockRead,
+    DiskReader,
+    DiskWriter,
+    HardwareFaultError,
+    selects_sides,
+)
 
 DEFAULT_RETRIES = 3
 MIN_PASSES = 2
@@ -27,6 +33,47 @@ class Grade(StrEnum):
 
 class WriteRefusedError(Exception):
     pass
+
+
+class SideFlipError(Exception):
+    pass
+
+
+def _flip_message(side: int) -> str:
+    face = "B" if side % 2 else "A"
+    return (
+        f"turn the disk over so side {face} faces the head, then confirm. "
+        "This drive reads one face at a time and cannot select a side on its own"
+    )
+
+
+def _rewind_message() -> str:
+    return "turn the disk back over so side A faces the head for the next pass, then confirm"
+
+
+def _ask_for_flip(reader: DiskReader, side: int, flip: Callable[[str], bool] | None) -> None:
+    if selects_sides(reader):
+        return
+    if flip is None:
+        message = (
+            f"side {side} needs the disk turned over and no one is present to do it. "
+            "Dump one side at a time, or pass a confirmation callback"
+        )
+        raise SideFlipError(message)
+    if not flip(_flip_message(side)):
+        message = f"the operator declined to turn the disk over for side {side}"
+        raise SideFlipError(message)
+
+
+def _reject_unflipped(dumped: Sequence[SideDump], side: int) -> None:
+    latest = tuple(block.payload for block in dumped[-1].blocks)
+    for earlier in dumped[:-1]:
+        if tuple(block.payload for block in earlier.blocks) == latest:
+            message = (
+                f"side {side} read the same bytes as side {earlier.index}, "
+                "so the disk was not turned over. Nothing was written"
+            )
+            raise SideFlipError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,10 +210,13 @@ def dump(
     sides: int,
     retries: int = DEFAULT_RETRIES,
     timeout: float = DEFAULT_TIMEOUT,
+    flip: Callable[[str], bool] | None = None,
 ) -> DumpResult:
     _require_readable(reader)
     dumped: list[SideDump] = []
     for side in range(sides):
+        if side:
+            _ask_for_flip(reader, side, flip)
         deadline = Deadline(seconds=timeout)
         first_pass = guard(
             deadline, f"reading side {side}", lambda side=side: list(reader.read_side(side))
@@ -176,6 +226,8 @@ def dump(
             for index, block in enumerate(first_pass)
         )
         dumped.append(SideDump(index=side, blocks=blocks))
+        if side and not selects_sides(reader):
+            _reject_unflipped(dumped, side)
     return DumpResult(sides=tuple(dumped))
 
 
@@ -185,12 +237,20 @@ def dump_repeated(
     sides: int,
     passes: int = MIN_PASSES,
     retries: int = DEFAULT_RETRIES,
+    flip: Callable[[str], bool] | None = None,
 ) -> StabilityReport:
     if passes < MIN_PASSES:
         message = f"a stability check needs at least two passes, got {passes}"
         raise ValueError(message)
 
-    results = tuple(dump(reader, sides=sides, retries=retries) for _ in range(passes))
+    collected: list[DumpResult] = []
+    for attempt in range(passes):
+        rewind = attempt and sides > 1 and not selects_sides(reader)
+        if rewind and (flip is None or not flip(_rewind_message())):
+            message = "the disk was not returned to side A, so the passes cannot be compared"
+            raise SideFlipError(message)
+        collected.append(dump(reader, sides=sides, retries=retries, flip=flip))
+    results = tuple(collected)
     unstable: list[tuple[int, int]] = []
     first = results[0]
     for side_index, side in enumerate(first.sides):
@@ -246,7 +306,7 @@ def write_verified(
 ) -> WriteReport:
     status = writer.status()
     if not status.can_write:
-        message = f"cannot write: {', '.join(status.blockers)}"
+        message = f"cannot write: {', '.join(status.write_blockers)}"
         raise WriteRefusedError(message)
 
     oversized = [

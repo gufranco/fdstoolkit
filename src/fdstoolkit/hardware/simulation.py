@@ -2,11 +2,22 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from enum import StrEnum
 from types import MappingProxyType
+from typing import Final
 
+from fdstoolkit.codecs.raw import encode_block_stream, unpack_raw03
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.drive.spec import CAPTURE_CLOCK_HZ, NOMINAL_BIT_RATE_HZ, NS_PER_SECOND
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
+
+CLASS_RATIOS: Final = (1.0, 1.5, 2.0, 2.0)
+
+
+class CaptureMode(StrEnum):
+    CLASSES = "classes"
+    TIMING = "timing"
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,7 +40,12 @@ class SimulatedDrive:
         battery_ok: bool = True,
         ready: bool = True,
         plan: FaultPlan | None = None,
+        capture_mode: CaptureMode = CaptureMode.CLASSES,
+        bit_rate_hz: float = NOMINAL_BIT_RATE_HZ,
     ) -> None:
+        if bit_rate_hz <= 0:
+            message = "a simulated bit rate is positive"
+            raise ValueError(message)
         self._disk = disk
         self._write_protected = write_protected
         self._battery_ok = battery_ok
@@ -39,6 +55,23 @@ class SimulatedDrive:
         self._reads: dict[tuple[int, int], int] = {}
         self.read_count = 0
         self.write_count = 0
+        self.capture_mode = capture_mode
+        self._bit_rate_hz = bit_rate_hz
+        self._captures: list[bytes] = []
+
+    @property
+    def captures(self) -> tuple[bytes, ...]:
+        return tuple(self._captures)
+
+    def _capture(self, side: Side) -> bytes:
+        packed = encode_block_stream([block.payload for block in side.blocks])
+        if self.capture_mode is CaptureMode.CLASSES:
+            return packed
+        cell = NS_PER_SECOND / self._bit_rate_hz
+        ticks = cell * CAPTURE_CLOCK_HZ / NS_PER_SECOND
+        return bytes(
+            min(255, max(1, round(ticks * CLASS_RATIOS[value]))) for value in unpack_raw03(packed)
+        )
 
     def status(self) -> DriveStatus:
         return DriveStatus(
@@ -47,6 +80,12 @@ class SimulatedDrive:
             battery_ok=self._battery_ok,
             ready=self._ready,
         )
+
+    selects_sides: Final = True
+
+    @property
+    def disk(self) -> Disk | None:
+        return self._disk
 
     def _side(self, side: int) -> Side:
         if self._disk is None:
@@ -78,6 +117,7 @@ class SimulatedDrive:
     def read_side(self, side: int) -> Iterator[BlockRead]:
         target = self._side(side)
         self.read_count += 1
+        self._captures.append(self._capture(target))
         for index, block in enumerate(target.blocks):
             if self._plan.link_lost_after is not None and index >= self._plan.link_lost_after:
                 message = "the device stopped answering"

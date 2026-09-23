@@ -67,33 +67,54 @@ class HardwareFaultError(Exception):
         return classify(str(self))
 
 
+UNKNOWN_HINT = "this drive does not report it, so pass the override if you are sure"
+
+
 @dataclass(frozen=True, slots=True)
 class DriveStatus:
-    disk_present: bool
-    write_protected: bool
-    battery_ok: bool
-    ready: bool
+    disk_present: bool | None
+    write_protected: bool | None
+    battery_ok: bool | None
+    ready: bool | None
+    assume_writable: bool = False
 
     @property
     def blockers(self) -> tuple[str, ...]:
         reasons: list[str] = []
-        if not self.disk_present:
+        if self.disk_present is False:
             reasons.append("no disk in the drive")
-        if self.write_protected:
+        if self.write_protected is True:
             reasons.append("disk is write protected")
-        if not self.battery_ok:
+        if self.battery_ok is False:
             reasons.append("battery low")
-        if not self.ready:
+        if self.ready is False:
             reasons.append("drive not ready")
         return tuple(reasons)
 
     @property
+    def unknown(self) -> tuple[str, ...]:
+        names = (
+            ("whether a disk is in the drive", self.disk_present),
+            ("whether the disk is write protected", self.write_protected),
+            ("whether the battery holds", self.battery_ok),
+            ("whether the drive is ready", self.ready),
+        )
+        return tuple(name for name, value in names if value is None)
+
+    @property
+    def write_blockers(self) -> tuple[str, ...]:
+        if self.assume_writable:
+            return self.blockers
+        unknowns = tuple(f"{name} is unknown, {UNKNOWN_HINT}" for name in self.unknown)
+        return self.blockers + unknowns
+
+    @property
     def can_read(self) -> bool:
-        return self.disk_present and self.ready
+        return self.disk_present is not False and self.ready is not False
 
     @property
     def can_write(self) -> bool:
-        return self.can_read and not self.write_protected and self.battery_ok
+        return not self.write_blockers
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +138,10 @@ class DiskReader(Protocol):
     def status(self) -> DriveStatus: ...
 
     def read_side(self, side: int) -> Iterator[BlockRead]: ...
+
+
+def selects_sides(drive: object) -> bool:
+    return bool(getattr(drive, "selects_sides", False))
 
 
 @runtime_checkable
