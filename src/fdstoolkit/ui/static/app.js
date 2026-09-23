@@ -1,5 +1,7 @@
+import { DICTIONARIES, FALLBACK, initialLanguage, rememberLanguage } from './i18n.js';
+
 let state = {
-  language: window.i18n.initialLanguage(),
+  language: initialLanguage(),
   forms: [],
   filter: '',
   family: '',
@@ -11,7 +13,7 @@ function update(changes) {
 }
 
 function t(key) {
-  const table = window.i18n.DICTIONARIES[state.language] || window.i18n.DICTIONARIES[window.i18n.FALLBACK];
+  const table = DICTIONARIES[state.language] || DICTIONARIES[FALLBACK];
   return table[key] || '';
 }
 
@@ -39,7 +41,7 @@ function element(tag, properties) {
   return Object.assign(document.createElement(tag), properties);
 }
 
-function words(key) {
+export function words(key) {
   return key.replace(/_/g, ' ');
 }
 
@@ -62,7 +64,7 @@ async function encodeFile(file) {
   return window.btoa(Array.from(new Uint8Array(buffer), (byte) => String.fromCharCode(byte)).join(''));
 }
 
-function explain(detail) {
+export function explain(detail) {
   if (typeof detail === 'string') {
     return detail;
   }
@@ -90,7 +92,7 @@ async function call(path, method, body) {
   return payload;
 }
 
-function bytes(size) {
+export function bytes(size) {
   const kib = 1024;
   return size < kib ? `${size} B` : `${(size / kib).toFixed(1)} KiB`;
 }
@@ -107,7 +109,7 @@ function download(entry) {
   return row;
 }
 
-function scalar(value) {
+export function scalar(value) {
   if (value === null || value === undefined) {
     return t('value.none');
   }
@@ -143,7 +145,7 @@ function pairs(value) {
   return list;
 }
 
-function describe(value) {
+export function describe(value) {
   if (isScalar(value)) {
     return element('dd', { textContent: scalar(value) });
   }
@@ -179,14 +181,14 @@ function banner(kind, message) {
   return element('p', { className: `banner ${kind}`, textContent: message });
 }
 
-function isDownload(entry) {
+export function isDownload(entry) {
   return Boolean(entry)
     && typeof entry.data === 'string'
     && typeof entry.size === 'number'
     && typeof entry.name === 'string';
 }
 
-function renderResult(target, payload) {
+export function renderResult(target, payload) {
   if (isDownload(payload)) {
     target.replaceChildren(banner('good', t('state.file')), download(payload));
     return;
@@ -302,7 +304,7 @@ function input(field) {
   return bound(element('input', { type: 'text', value: shown }), field);
 }
 
-function problemFor(node, field) {
+export function problemFor(node, field) {
   if (typeof node.checkValidity !== 'function' || node.checkValidity()) {
     return '';
   }
@@ -325,7 +327,7 @@ function problemFor(node, field) {
   return state.valueMissing ? t('bad.missing') : node.validationMessage;
 }
 
-function describeLimits(field) {
+export function describeLimits(field) {
   const low = field.minimum !== null && field.minimum !== undefined;
   const high = field.maximum !== null && field.maximum !== undefined;
   if (low && high) {
@@ -436,7 +438,7 @@ async function collect(panel, form) {
   );
 }
 
-function named(chosen, fallback) {
+export function named(chosen, fallback) {
   const wanted = String(fallback || '');
   if (!chosen) {
     return wanted;
@@ -640,7 +642,7 @@ function wire() {
   document.querySelectorAll('[data-language]').forEach((button) => {
     button.addEventListener('click', () => {
       update({ language: button.dataset.language });
-      window.i18n.rememberLanguage(state.language);
+      rememberLanguage(state.language);
       applyLanguage();
     });
   });
@@ -661,7 +663,7 @@ function wire() {
   });
 }
 
-async function start() {
+export async function start() {
   wire();
   applyLanguage();
   try {
@@ -676,5 +678,3 @@ async function start() {
     );
   }
 }
-
-start();

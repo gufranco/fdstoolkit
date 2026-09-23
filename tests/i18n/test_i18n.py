@@ -82,8 +82,9 @@ def test_the_language_choice_survives_storage_being_unavailable() -> None:
     assert "localStorage" in DICTIONARIES
 
 
-def test_the_dictionaries_load_before_the_page_script() -> None:
-    assert MARKUP.index("/static/i18n.js") < MARKUP.index("/static/app.js")
+def test_the_page_script_pulls_the_dictionaries_in_itself() -> None:
+    assert "from './i18n.js'" in SCRIPT
+    assert "import { start }" in MARKUP
 
 
 @pytest.mark.parametrize("language", LANGUAGES)

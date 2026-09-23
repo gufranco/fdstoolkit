@@ -1,4 +1,4 @@
-const DICTIONARIES = {
+export const DICTIONARIES = {
   en: {
     'title': 'fdstoolkit',
     'tagline': 'An instrument for Famicom Disk System media. Every command the command line offers is here.',
@@ -249,7 +249,7 @@ const DICTIONARIES = {
 },
 };
 
-const FALLBACK = 'en';
+export const FALLBACK = 'en';
 
 function storedLanguage() {
   try {
@@ -259,7 +259,7 @@ function storedLanguage() {
   }
 }
 
-function rememberLanguage(code) {
+export function rememberLanguage(code) {
   try {
     window.localStorage.setItem('fdstoolkit.language', code);
   } catch (error) {
@@ -267,7 +267,7 @@ function rememberLanguage(code) {
   }
 }
 
-function initialLanguage() {
+export function initialLanguage() {
   const stored = storedLanguage();
   if (stored && DICTIONARIES[stored]) {
     return stored;
@@ -275,5 +275,3 @@ function initialLanguage() {
   const browser = (navigator.language || FALLBACK).slice(0, 2);
   return DICTIONARIES[browser] ? browser : FALLBACK;
 }
-
-window.i18n = { DICTIONARIES, FALLBACK, initialLanguage, rememberLanguage };

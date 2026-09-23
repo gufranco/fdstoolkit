@@ -44,3 +44,18 @@ def test_no_python_file_is_hidden_from_a_clean_checkout() -> None:
     hidden = git("-c", "core.excludesFile=/dev/null", "status", "--porcelain", "-uall")
 
     assert [line for line in hidden if line.startswith("??") and line.endswith(".py")] == []
+
+
+def test_the_page_tests_run_in_continuous_integration() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "pnpm test" in workflow
+
+
+def test_every_page_script_is_covered_by_a_test_file() -> None:
+    scripts = {path.stem for path in (ROOT / "src/fdstoolkit/ui/static").glob("*.js")}
+    exercised = "".join(
+        path.read_text(encoding="utf-8") for path in (ROOT / "tests/web").glob("*.test.js")
+    )
+
+    assert {name for name in scripts if f"static/{name}.js" not in exercised} == {"i18n"}

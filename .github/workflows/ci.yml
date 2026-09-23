@@ -35,6 +35,19 @@ jobs:
       - name: Types
         run: uv run pyright
 
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install the page test tooling
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Test the page
+        run: pnpm test
+
       - name: Lint the workflows
         uses: raven-actions/actionlint@v2
 
