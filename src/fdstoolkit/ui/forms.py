@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Final, get_type_hints
+from typing import Any, Final, cast, get_type_hints
 
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
@@ -43,10 +43,34 @@ CHOICES: Final[dict[str, tuple[str, ...]]] = {
 }
 
 
+IMAGE_SUFFIXES: Final = ".fds,.qd"
+
+ACCEPTS: Final[dict[str, str]] = {
+    "data": IMAGE_SUFFIXES,
+    "source": IMAGE_SUFFIXES,
+    "left": IMAGE_SUFFIXES,
+    "right": IMAGE_SUFFIXES,
+    "file": IMAGE_SUFFIXES,
+    "played": IMAGE_SUFFIXES,
+    "images": IMAGE_SUFFIXES,
+    "reads": IMAGE_SUFFIXES,
+    "donors": IMAGE_SUFFIXES,
+    "captures": ".scp,.raw,.hfe",
+    "dat": ".dat,.xml",
+    "save": ".ips,.ups,.fds",
+    "patch": ".ips,.bps,.xdelta",
+    "recipes": ".json",
+    "manifest": ".json",
+    "log": ".json",
+    "bios": ".bin,.rom",
+}
+
+
 class FormField(BaseModel):
     name: str
     kind: str
     required: bool
+    accepts: str = ""
     default: Any = None
     options: list[str] = []
 
@@ -55,6 +79,8 @@ class CommandForm(BaseModel):
     command: str
     route: str
     method: str
+    family: str
+    summary: str
     fields: list[FormField] = []
 
 
@@ -85,6 +111,7 @@ def _fields(model: type[BaseModel]) -> list[FormField]:
                 name=name,
                 kind=_kind(name, info.annotation),
                 required=required,
+                accepts=ACCEPTS.get(name, ""),
                 default=default,
                 options=list(CHOICES.get(name, ())),
             )
@@ -114,15 +141,31 @@ def model_for(endpoint: Callable[..., object]) -> type[BaseModel] | None:
     return None
 
 
+def _described() -> dict[str, tuple[str, str]]:
+    from fdstoolkit.cli.main import app  # noqa: PLC0415
+
+    found: dict[str, tuple[str, str]] = {}
+    for registered in app.registered_commands:
+        callback = cast("Callable[..., object]", registered.callback)
+        name = registered.name or callback.__name__.replace("_", "-")
+        spoken = registered.help or callback.__doc__ or ""
+        module = callback.__module__.rsplit(".", maxsplit=1)[-1]
+        family = module.removesuffix("_cmds").removesuffix("_cli")
+        found[name] = (family, " ".join(spoken.split()))
+    return found
+
+
 def form_for(command: str) -> CommandForm:
     from fdstoolkit.ui.app import ROUTE_FOR_COMMAND  # noqa: PLC0415
 
     route = ROUTE_FOR_COMMAND[command]
     endpoint = _endpoints().get(route)
     model = model_for(endpoint) if endpoint is not None else None
+    family, summary = _described().get(command, ("other", ""))
+    shared = {"command": command, "route": route, "family": family, "summary": summary}
     if model is None:
-        return CommandForm(command=command, route=route, method="GET", fields=[])
-    return CommandForm(command=command, route=route, method="POST", fields=_fields(model))
+        return CommandForm(method="GET", fields=[], **shared)
+    return CommandForm(method="POST", fields=_fields(model), **shared)
 
 
 def forms() -> list[CommandForm]:

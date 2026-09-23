@@ -1,6 +1,30 @@
+<div align="center">
+
 # fdstoolkit
 
+<strong>Read a Famicom Disk System disk, judge what came back, reconstruct what Nintendo wrote, and write it again.</strong>
+
+[![ci](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#contributing)
+[![python](https://img.shields.io/badge/python-3.13-blue)](pyproject.toml)
+
+<p align="center">
+  <a href="#install">Install</a> &nbsp;|&nbsp;
+  <a href="#concepts-you-need-first">Concepts</a> &nbsp;|&nbsp;
+  <a href="#command-reference">Commands</a> &nbsp;|&nbsp;
+  <a href="#web-interface">Web interface</a> &nbsp;|&nbsp;
+  <a href="#procedures">Procedures</a> &nbsp;|&nbsp;
+  <a href="#formats">Formats</a>
+</p>
+
 **English** | [日本語](README.ja.md)
+
+</div>
+
+**56** commands, every one of them on the local web page as well. **1,754** tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, pulse classes across **120** real sides, blank-disk values across **1,729** never-rewritten ones.
+
+---
 
 A command-line toolkit for Famicom Disk System media: reading it, judging it, reconstructing it, writing it back, and keeping the drive that does all of that in adjustment.
 
@@ -86,118 +110,463 @@ Notation: `<>` is a value, `[]` is optional, `...` repeats.
 
 ### Inspection
 
-#### `doctor [--json]`
+#### `doctor`
+
+```bash
+fdstoolkit doctor [--json]
+```
+
 Version, Python, platform, whether hardware support is installed, which devices are attached and whether they open, and the state of the DAT cache. Run this first when something behaves unexpectedly. The device detail it prints is what a dump submission needs under "hardware, firmware, software version".
 
-#### `info <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/doctor-dark.png">
+<img alt="The doctor command on the local web page" src="assets/screenshots/doctor-light.png">
+</picture>
+
+#### `info`
+
+```bash
+fdstoolkit info <image> [--json]
+```
+
 Side count, game code, manufacturing and rewrite dates, Disk Writer serial, declared and actual file counts, hidden files, trailing data.
 
-#### `ls <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/info-dark.png">
+<img alt="The info command on the local web page" src="assets/screenshots/info-light.png">
+</picture>
+
+#### `ls`
+
+```bash
+fdstoolkit ls <image> [--json]
+```
+
 Every file on every side: number, id, name, load address, kind, size, and whether it sits past the declared count.
 
-#### `verify <image> [--strict] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/ls-dark.png">
+<img alt="The ls command on the local web page" src="assets/screenshots/ls-light.png">
+</picture>
+
+#### `verify`
+
+```bash
+fdstoolkit verify <image> [--strict] [--json]
+```
+
 Structural and checksum findings, each with a code. `--strict` fails on warnings as well as errors.
 
-#### `hash <image> [--profile <name>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/verify-dark.png">
+<img alt="The verify command on the local web page" src="assets/screenshots/verify-light.png">
+</picture>
+
+#### `hash`
+
+```bash
+fdstoolkit hash <image> [--profile <name>] [--json]
+```
+
 CRC32, MD5, SHA-1 and SHA-256 of the whole image and of each side, plus the canonical digest and the RetroAchievements MD5.
 
-#### `diff <a> <b> [--explain] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/hash-dark.png">
+<img alt="The hash command on the local web page" src="assets/screenshots/hash-light.png">
+</picture>
+
+#### `diff`
+
+```bash
+fdstoolkit diff <a> <b> [--explain] [--json]
+```
+
 Which blocks differ. `--explain` names the disk-info fields and the files instead of block indices.
 
-#### `boot <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/diff-dark.png">
+<img alt="The diff command on the local web page" src="assets/screenshots/diff-light.png">
+</picture>
+
+#### `boot`
+
+```bash
+fdstoolkit boot <image> [--json]
+```
+
 What the BIOS does with each side: which file it loads, whether approval data is present, and the error number it would display.
 
-#### `layout <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/boot-dark.png">
+<img alt="The boot command on the local web page" src="assets/screenshots/boot-light.png">
+</picture>
+
+#### `layout`
+
+```bash
+fdstoolkit layout <image> [--json]
+```
+
 Byte offset of each file along the spiral and the time the drive spends reaching it, at the nominal bit rate.
 
-#### `provenance <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/layout-dark.png">
+<img alt="The layout command on the local web page" src="assets/screenshots/layout-light.png">
+</picture>
+
+#### `provenance`
+
+```bash
+fdstoolkit provenance <image> [--json]
+```
+
 Factory, kiosk rewrite, or unknown, per side, with the dates, serial and rewrite count behind the verdict. A factory disk carries serial `ffff` and rewrite count `00`.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/provenance-dark.png">
+<img alt="The provenance command on the local web page" src="assets/screenshots/provenance-light.png">
+</picture>
 
 ### Conversion and construction
 
-#### `convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|compute|null] [--force]`
+#### `convert`
+
+```bash
+fdstoolkit convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|compute|null] [--force]
+```
+
 Between `.fds` and `.qd`. `--crc-mode` decides what goes in the CRC fields when writing `.qd`: keep what the source had, recompute, or zero them. `preserve` is the default because a round trip that recomputes silently repairs corruption you may be trying to study.
 
-#### `canon <image> --profile <name> [-o <out>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/convert-dark.png">
+<img alt="The convert command on the local web page" src="assets/screenshots/convert-light.png">
+</picture>
+
+#### `canon`
+
+```bash
+fdstoolkit canon <image> --profile <name> [-o <out>] [--force]
+```
+
 Print the canonical digest, and with `-o` write the canonical image.
 
-#### `blank -o <out> [--sides N] [--formatted] [--header] [--game-name ABC] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/canon-dark.png">
+<img alt="The canon command on the local web page" src="assets/screenshots/canon-light.png">
+</picture>
+
+#### `blank`
+
+```bash
+fdstoolkit blank -o <out> [--sides N] [--formatted] [--header] [--game-name ABC] [--force]
+```
+
 A blank image. `--formatted` writes a disk information block using values measured from 1,729 never-rewritten sides: country `49`, serial `ffff`, rewrite count `00`, filler `ff`.
 
-#### `build <manifest> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/blank-dark.png">
+<img alt="The blank command on the local web page" src="assets/screenshots/blank-light.png">
+</picture>
+
+#### `build`
+
+```bash
+fdstoolkit build <manifest> -o <out> [--force]
+```
+
 A disk built from a JSON manifest naming the disk fields and the files to place.
 
-#### `card -o <out> [--firmware <variant>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/build-dark.png">
+<img alt="The build command on the local web page" src="assets/screenshots/build-light.png">
+</picture>
+
+#### `card`
+
+```bash
+fdstoolkit card -o <out> [--firmware <variant>] [--force]
+```
+
 A blank an FDSKey card accepts.
 
-#### `split <image> -d <dir> [--stem <s>] [--force]` and `join <files>... -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/card-dark.png">
+<img alt="The card command on the local web page" src="assets/screenshots/card-light.png">
+</picture>
+
+#### `split` and `join`
+
+```bash
+fdstoolkit split <image> -d <dir> [--stem <s>] [--force]
+fdstoolkit join <files>... -o <out> [--force]
+```
+
 One file per side in copier layout, and back. `--stem` sets the base name for the side files, defaulting to `fc1234`. `join` accepts the files in any order.
 
-#### `merge <disks>... -o <out> [--header|--no-header] [--force]` and `unmerge <set> -d <dir> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/split-dark.png">
+<img alt="The split command on the local web page" src="assets/screenshots/split-light.png">
+</picture>
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/join-dark.png">
+<img alt="The join command on the local web page" src="assets/screenshots/join-light.png">
+</picture>
+
+#### `merge` and `unmerge`
+
+```bash
+fdstoolkit merge <disks>... -o <out> [--header|--no-header] [--force]
+fdstoolkit unmerge <set> -d <dir> [--force]
+```
+
 The disks of a multi-disk game into one image, and back. Pass the disks in order. `--header` writes an fwNES header; the default is `--no-header`.
 
-#### `export <image> --target <t> -d <dir> [--bios <file>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/merge-dark.png">
+<img alt="The merge command on the local web page" src="assets/screenshots/merge-light.png">
+</picture>
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/unmerge-dark.png">
+<img alt="The unmerge command on the local web page" src="assets/screenshots/unmerge-light.png">
+</picture>
+
+#### `export`
+
+```bash
+fdstoolkit export <image> --target <t> -d <dir> [--bios <file>] [--force]
+```
+
 The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`, `ares`. `--bios` also places the BIOS where that target looks for it.
 
-#### `import-ares <files>... -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
+<img alt="The export command on the local web page" src="assets/screenshots/export-light.png">
+</picture>
+
+#### `import-ares`
+
+```bash
+fdstoolkit import-ares <files>... -o <out> [--force]
+```
+
 An image rebuilt from ares per-side files, including any save they carry.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/import-ares-dark.png">
+<img alt="The import-ares command on the local web page" src="assets/screenshots/import-ares-light.png">
+</picture>
 
 ### Editing and repair
 
-#### `extract <image> -d <dir> [--force]`
+#### `extract`
+
+```bash
+fdstoolkit extract <image> -d <dir> [--force]
+```
+
 Every file to disk, including files past the declared count.
 
-#### `insert <image> --file <f> --name <n> -o <out> [--address <hex>] [--kind program|character|nametable] [--side N] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/extract-dark.png">
+<img alt="The extract command on the local web page" src="assets/screenshots/extract-light.png">
+</picture>
+
+#### `insert`
+
+```bash
+fdstoolkit insert <image> --file <f> --name <n> -o <out> [--address <hex>] [--kind program|character|nametable] [--side N] [--force]
+```
+
 Adds a file and raises the declared count. `--address` defaults to `6000`.
 
-#### `set <image> --set field=value... -o <out> [--side N] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/insert-dark.png">
+<img alt="The insert command on the local web page" src="assets/screenshots/insert-light.png">
+</picture>
+
+#### `set`
+
+```bash
+fdstoolkit set <image> --set field=value... -o <out> [--side N] [--force]
+```
+
 Change disk information fields. Repeatable. Field names are the ones `info --json` prints.
 
-#### `clean <image> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/set-dark.png">
+<img alt="The set command on the local web page" src="assets/screenshots/set-light.png">
+</picture>
+
+#### `clean`
+
+```bash
+fdstoolkit clean <image> -o <out> [--force]
+```
+
 Remove non-zero bytes after the last block.
 
-#### `rebuild <image> -o <out> [--keep-tail] [--reveal-hidden] [--drop-hidden] [--renumber] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/clean-dark.png">
+<img alt="The clean command on the local web page" src="assets/screenshots/clean-light.png">
+</picture>
+
+#### `rebuild`
+
+```bash
+fdstoolkit rebuild <image> -o <out> [--keep-tail] [--reveal-hidden] [--drop-hidden] [--renumber] [--force]
+```
+
 Re-emit from the parsed model: recompute checksums, correct declared sizes, drop trailing data. Hidden files are kept by default; `--reveal-hidden` raises the declared count to match, `--drop-hidden` removes them.
 
-#### `patch <image> --patch <p> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/rebuild-dark.png">
+<img alt="The rebuild command on the local web page" src="assets/screenshots/rebuild-light.png">
+</picture>
+
+#### `patch`
+
+```bash
+fdstoolkit patch <image> --patch <p> -o <out> [--force]
+```
+
 Apply IPS, UPS or BPS, whether the patch was made against the headered or headerless image.
 
-#### `splice <image> --donor <d>... -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/patch-dark.png">
+<img alt="The patch command on the local web page" src="assets/screenshots/patch-light.png">
+</picture>
+
+#### `splice`
+
+```bash
+fdstoolkit splice <image> --donor <d>... -o <out> [--force]
+```
+
 Replace blocks whose CRC fails with the same block from a donor dump that has it good. Reports each substitution and every block no donor could supply. Exits 1 if anything is left unrepaired.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/splice-dark.png">
+<img alt="The splice command on the local web page" src="assets/screenshots/splice-light.png">
+</picture>
 
 ### Saves
 
-#### `saves <images>... [--json]`
+#### `saves`
+
+```bash
+fdstoolkit saves <images>... [--json]
+```
+
 Compares dumps of one release and reports which file holds the save.
 
-#### `save-apply <image> --save <s> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/saves-dark.png">
+<img alt="The saves command on the local web page" src="assets/screenshots/saves-light.png">
+</picture>
+
+#### `save-apply`
+
+```bash
+fdstoolkit save-apply <image> --save <s> -o <out> [--force]
+```
+
 Merge an IPS, UPS, BPS or whole-image save back in.
 
-#### `save-extract <image> --played <p> -o <out> [--format ips|ups|image] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-apply-dark.png">
+<img alt="The save-apply command on the local web page" src="assets/screenshots/save-apply-light.png">
+</picture>
+
+#### `save-extract`
+
+```bash
+fdstoolkit save-extract <image> --played <p> -o <out> [--format ips|ups|image] [--force]
+```
+
 Write the difference between a pristine disk and a played one.
 
-#### `normalise-saves <image> --recipes <r> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-extract-dark.png">
+<img alt="The save-extract command on the local web page" src="assets/screenshots/save-extract-light.png">
+</picture>
+
+#### `normalise-saves`
+
+```bash
+fdstoolkit normalise-saves <image> --recipes <r> -o <out> [--force]
+```
+
 Blank a declared save region so two played copies compare equal. `--recipes` names the file declaring which region is the save, and is required: the toolkit will not guess which bytes a game writes.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/normalise-saves-dark.png">
+<img alt="The normalise-saves command on the local web page" src="assets/screenshots/normalise-saves-light.png">
+</picture>
 
 ### Identification
 
-#### `identify <image> --dat <file> [--reference <dir>] [--no-cache] [--json]`
+#### `identify`
+
+```bash
+fdstoolkit identify <image> --dat <file> [--reference <dir>] [--no-cache] [--json]
+```
+
 The matching DAT entry and which digest matched. With `--reference`, a miss reports the nearest image in that directory and the byte runs that differ.
 
-#### `dat-cache [--clear]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/identify-dark.png">
+<img alt="The identify command on the local web page" src="assets/screenshots/identify-light.png">
+</picture>
+
+#### `dat-cache`
+
+```bash
+fdstoolkit dat-cache [--clear]
+```
+
 Show or clear the parsed-DAT cache.
 
-#### `bios <file> [--extract <out>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dat-cache-dark.png">
+<img alt="The dat-cache command on the local web page" src="assets/screenshots/dat-cache-light.png">
+</picture>
+
+#### `bios`
+
+```bash
+fdstoolkit bios <file> [--extract <out>] [--force]
+```
+
 BIOS revision and which emulators accept the file. `--extract` pulls the 8 KB image out of a larger dump.
 
-#### `lint <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/bios-dark.png">
+<img alt="The bios command on the local web page" src="assets/screenshots/bios-light.png">
+</picture>
+
+#### `lint`
+
+```bash
+fdstoolkit lint <image> [--json]
+```
+
 Whether FDSKey will load the image, before it reaches the card.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/lint-dark.png">
+<img alt="The lint command on the local web page" src="assets/screenshots/lint-light.png">
+</picture>
 
 ### Quality measurement
 
 A checksum answers one bit about a 65,500-byte side. These answer more.
 
-#### `reads <images>... [--json]`
+#### `reads`
+
+```bash
+fdstoolkit reads <images>... [--json]
+```
+
 Compares repeated dumps of one physical disk block by block. Reports stability, which blocks move, and the direction of the bit flips. Magnetic decay loses transitions, so ones fall to zeros; the report names that as `loss`, the opposite as `gain`, and both as `mixed`.
 
 ```bash
@@ -212,10 +581,30 @@ bits lost     14
 bits gained   0
 ```
 
-#### `calibrate <reference> --read <r>... [--margin <f>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reads-dark.png">
+<img alt="The reads command on the local web page" src="assets/screenshots/reads-light.png">
+</picture>
+
+#### `calibrate`
+
+```bash
+fdstoolkit calibrate <reference> --read <r>... [--margin <f>] [--json]
+```
+
 The drive's own error rate, measured against a disk you trust, so the drive is not blamed for the disk or the reverse. Verdict is `good`, `marginal` or `faulty`.
 
-#### `grade <image> [--read <r>...] [--margin <f>] [--map] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
+<img alt="The calibrate command on the local web page" src="assets/screenshots/calibrate-light.png">
+</picture>
+
+#### `grade`
+
+```bash
+fdstoolkit grade <image> [--read <r>...] [--margin <f>] [--map] [--json]
+```
+
 A grade with the measurement behind it. `--read` folds in repeated dumps, `--margin` folds in a flux margin from `flux`, `--map` prints the per-block confidence and the basis for each.
 
 ```bash
@@ -231,14 +620,34 @@ clean, confidence 0.97
 
 Confidence starts from the checksum state and is adjusted by read agreement and flux margin. A container that stores no checksums is treated as unproven rather than suspect, which is why a headerless `.fds` does not grade as unstable.
 
-#### `integrity <image> [--original-crcs] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/grade-dark.png">
+<img alt="The grade command on the local web page" src="assets/screenshots/grade-light.png">
+</picture>
+
+#### `integrity`
+
+```bash
+fdstoolkit integrity <image> [--original-crcs] [--json]
+```
+
 Finds images that pass every checksum and are still wrong: a file body that is almost entirely undocumented opcodes, a body whose length disagrees with its header, and, with `--original-crcs`, a dump whose stored checksums all recompute exactly when they should not.
 
 The opcode threshold is calibrated against 10,105 real program files, whose median is 36% undocumented opcodes because these files routinely carry graphics and tables. Only a file that is almost entirely non-code is reported. Names like `SAVEDATA` and `JMP-TBL.` surface that way and are working as intended.
 
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/integrity-dark.png">
+<img alt="The integrity command on the local web page" src="assets/screenshots/integrity-light.png">
+</picture>
+
 ### Flux captures
 
-#### `flux <capture> [--format <f>] [--json]`
+#### `flux`
+
+```bash
+fdstoolkit flux <capture> [--format <f>] [--json]
+```
+
 Measures a capture: fitted bit cell, cluster centres and jitter, separation margin, stray count, outliers, speed, and which tracks carry no coherent data.
 
 ```bash
@@ -268,21 +677,51 @@ Three things this does that a fixed-threshold reader does not:
 
 A revolution that does not span a full rotation is marked partial and left out of the speed figures.
 
-#### `flux-decode <capture> -o <out> [--format <f>] [--fixed] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/flux-dark.png">
+<img alt="The flux command on the local web page" src="assets/screenshots/flux-light.png">
+</picture>
+
+#### `flux-decode`
+
+```bash
+fdstoolkit flux-decode <capture> -o <out> [--format <f>] [--fixed] [--force]
+```
+
 Decode a capture into a disk image. Thresholds are fitted to the capture, so a stream recorded well off nominal still decodes; `--fixed` uses nominal thresholds instead.
 
-#### `classes <capture> [--format <f>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/flux-decode-dark.png">
+<img alt="The flux-decode command on the local web page" src="assets/screenshots/flux-decode-light.png">
+</picture>
+
+#### `classes`
+
+```bash
+fdstoolkit classes <capture> [--format <f>] [--json]
+```
+
 For captures that carry pulse classes rather than timing. Reports the distribution across the three lengths and the count of pulses that fell outside all of them.
 
 Gap runs are excluded before measuring, because a gap is a long run of short pulses and leaving it in makes the distribution a measure of how full the disk is rather than of how the drive reads. Over the remainder, 120 real sides give a median of 63.1, 27.9 and 9.0 percent, which is the reference used here. On a perfect drive those 120 sides spread from -5.4 to +3.0 percent, so the threshold sits at 6 percent and none of them trip it.
 
 Two limits worth knowing. A capture with fewer than 512 pulses outside the gaps is reported as sparse rather than judged. And the invalid-pulse count is the only figure here that is independent of what is on the disk, so it is the one to trust when the two disagree.
 
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/classes-dark.png">
+<img alt="The classes command on the local web page" src="assets/screenshots/classes-light.png">
+</picture>
+
 ### Drive calibration
 
 Everything here is measured against the bit rate, never a rotation speed. The RAM adapter expects 96.4 kbit/s and tolerates ten percent, and that is the only figure the hardware enforces. Published rotation speeds for this mechanism disagree by a factor of two and carry no tolerance.
 
-#### `reading <cycles> [--json]`
+#### `reading`
+
+```bash
+fdstoolkit reading <cycles> [--json]
+```
+
 Interprets the average CPU cycles between bytes that a disk-lister tool displays on the console. This is the only speed measurement that needs no capture hardware.
 
 ```bash
@@ -305,7 +744,17 @@ The conversion is exact: the 2A03 runs at 1.7897725 MHz over eight bits, so cycl
 
 Exact nominal is 148.53 cycles, so the integer display quantises at about 0.68% per count.
 
-#### `tune <capture> [--format <f>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reading-dark.png">
+<img alt="The reading command on the local web page" src="assets/screenshots/reading-light.png">
+</picture>
+
+#### `tune`
+
+```bash
+fdstoolkit tune <capture> [--format <f>] [--json]
+```
+
 Measures a timing capture and reports what to adjust in two stages.
 
 ```bash
@@ -332,16 +781,36 @@ Speed alone cannot separate a stretched belt from a misadjusted trimmer, so cell
 
 Measurement resolution is 0.001% of the cell, from an analytic least-squares solve after a coarse-to-fine scan.
 
-#### `tune-sweep <captures>... [--format <f>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/tune-dark.png">
+<img alt="The tune command on the local web page" src="assets/screenshots/tune-light.png">
+</picture>
+
+#### `tune-sweep`
+
+```bash
+fdstoolkit tune-sweep <captures>... [--format <f>] [--json]
+```
+
 One capture per trimmer position, in any order. Finds the full range of speeds that read clean and reports the centre to settle on, plus the width of that window as a health figure. A healthy drive reads across a wide span; a tired one only at a point.
 
 Set the trimmer to the centre of the window rather than to the first position that works.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/tune-sweep-dark.png">
+<img alt="The tune-sweep command on the local web page" src="assets/screenshots/tune-sweep-light.png">
+</picture>
 
 ### Masters and reference sets
 
 No Nintendo master image exists. Disks were sold blank and written at a kiosk that stamped each one, so two copies of a game differ in bytes. The closest thing to a master is what every surviving dump agrees on once that stamp is set aside.
 
-#### `masters <corpus> [--profile <name>] [--json]`
+#### `masters`
+
+```bash
+fdstoolkit masters <corpus> [--profile <name>] [--json]
+```
+
 One master per game by agreement across every dump in a directory. Reports the dissenters rather than hiding them.
 
 ```bash
@@ -355,24 +824,84 @@ games         242
 unanimous     210 of 242
 ```
 
-#### `reference-build <corpus> -o <set> --set-version <v> [--profile <name>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/masters-dark.png">
+<img alt="The masters command on the local web page" src="assets/screenshots/masters-light.png">
+</picture>
+
+#### `reference-build`
+
+```bash
+fdstoolkit reference-build <corpus> -o <set> --set-version <v> [--profile <name>] [--force]
+```
+
 Publish the result as a digest set anyone can verify against without installing anything.
 
-#### `reference-verify <image> --set <set> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reference-build-dark.png">
+<img alt="The reference-build command on the local web page" src="assets/screenshots/reference-build-light.png">
+</picture>
+
+#### `reference-verify`
+
+```bash
+fdstoolkit reference-verify <image> --set <set> [--json]
+```
+
 `match`, `mismatch` with the expected digest, or `unknown`.
 
-#### `dat-build <corpus> -o <out> --name <n> --set-version <v> [--author <a>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reference-verify-dark.png">
+<img alt="The reference-verify command on the local web page" src="assets/screenshots/reference-verify-light.png">
+</picture>
+
+#### `dat-build`
+
+```bash
+fdstoolkit dat-build <corpus> -o <out> --name <n> --set-version <v> [--author <a>] [--force]
+```
+
 A Logiqx DAT, so the results reach the tools the community already uses.
 
-#### `consensus <images>... -o <out> [--map] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dat-build-dark.png">
+<img alt="The dat-build command on the local web page" src="assets/screenshots/dat-build-light.png">
+</picture>
+
+#### `consensus`
+
+```bash
+fdstoolkit consensus <images>... -o <out> [--map] [--force]
+```
+
 Merge several dumps of one disk block by block by majority, and report every disagreement. `--map` prints per-block agreement.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/consensus-dark.png">
+<img alt="The consensus command on the local web page" src="assets/screenshots/consensus-light.png">
+</picture>
 
 ### Longitudinal tracking
 
-#### `archive-add <image> [--db <p>] [--taken <date>] [--drive <s>] [--notes <s>] [--bad-blocks <n>]`
+#### `archive-add`
+
+```bash
+fdstoolkit archive-add <image> [--db <p>] [--taken <date>] [--drive <s>] [--notes <s>] [--bad-blocks <n>]
+```
+
 Record a dump against the physical disk it came from. Identity is derived from what the kiosk stamped, so two copies of one game are tracked apart.
 
-#### `archive-trend [--db <p>] [--disk <id>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/archive-add-dark.png">
+<img alt="The archive-add command on the local web page" src="assets/screenshots/archive-add-light.png">
+</picture>
+
+#### `archive-trend`
+
+```bash
+fdstoolkit archive-trend [--db <p>] [--disk <id>] [--json]
+```
+
 Whether a disk is holding, degrading or reading better, how fast, and roughly how long it has left.
 
 ```bash
@@ -383,14 +912,34 @@ fdstoolkit archive-trend
 4f2a...c19b: degrading, +10.0 blocks a year, unreadable in about 8 years
 ```
 
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/archive-trend-dark.png">
+<img alt="The archive-trend command on the local web page" src="assets/screenshots/archive-trend-light.png">
+</picture>
+
 ### Hardware
 
-#### `dump -o <out> [--backend simulation|fdsstick|dumper] [--source <img>] [--sides N] [--passes N] [--retries N] [--raw <dir>] [--log <file>] [--yes] [--force]`
+#### `dump`
+
+```bash
+fdstoolkit dump -o <out> [--backend simulation|fdsstick|dumper] [--source <img>] [--sides N] [--passes N] [--retries N] [--raw <dir>] [--log <file>] [--yes] [--force]
+```
+
 Read a disk. `--passes` reads each side more than once, `--retries` sets per-block retries, `--raw` keeps every pulse capture the drive returned, `--log` writes a record of how the dump was taken.
 
 A drive that reaches one face at a time cannot select a side. On those backends, reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
 
-#### `submit <image> --log <file> --dumper <name> [--affiliation <a>] [--photo <p>...] [--also <f>...] [-o <out>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dump-dark.png">
+<img alt="The dump command on the local web page" src="assets/screenshots/dump-light.png">
+</picture>
+
+#### `submit`
+
+```bash
+fdstoolkit submit <image> --log <file> --dumper <name> [--affiliation <a>] [--photo <p>...] [--also <f>...] [-o <out>] [--force]
+```
+
 Assemble the submission a preservation project asks for.
 
 The published dumping guide states that FDS verification is difficult because hashes never match, since the header carries the rewrite date. That is true of SHA-256 and it is why this command prints an identity digest beside the hashes: under the `release` profile the rewrite date, the kiosk serial and the rewrite count are masked, and 142 of 144 corpus groups then agree. The submission carries both, so a reader who wants the byte-exact hash has it and a reader who wants to compare copies has that too.
@@ -407,12 +956,32 @@ fdstoolkit submit disk.fds --log disk.log.json --dumper "your name" \
     --also captures/disk.read01.raw03 --photo media.jpg --photo pcb.jpg
 ```
 
-#### `write <image> [--backend <b>] [--source <img>] [--backup <p>] [--retries N] [--assume-writable] [--yes]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/submit-dark.png">
+<img alt="The submit command on the local web page" src="assets/screenshots/submit-light.png">
+</picture>
+
+#### `write`
+
+```bash
+fdstoolkit write <image> [--backend <b>] [--source <img>] [--backup <p>] [--retries N] [--assume-writable] [--yes]
+```
+
 Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`.
 
 An FDSStick does not report whether a disk is write protected, whether the battery holds, or whether a disk is even present. Rather than assume those are fine, the toolkit reports them as unknown and refuses a destructive write. `--assume-writable` proceeds anyway. A state the drive reports as bad is still refused, so the override clears uncertainty, never a known fault.
 
-#### `surface [--backend <b>] [--source <img>] [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">
+<img alt="The write command on the local web page" src="assets/screenshots/write-light.png">
+</picture>
+
+#### `surface`
+
+```bash
+fdstoolkit surface [--backend <b>] [--source <img>] [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
+```
+
 Write and read back complementary patterns to grade a scratch disk. This is the magnetic
 equivalent of a multi-pass `dd` wipe: it forces every bit cell to flip in both directions and
 verifies what came back.
@@ -475,7 +1044,17 @@ grade clean
 
 Exit status is 0 only when every pattern held and the finish verified.
 
-#### `web [--host <h>] [--port N] [--no-open]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/surface-dark.png">
+<img alt="The surface command on the local web page" src="assets/screenshots/surface-light.png">
+</picture>
+
+#### `web`
+
+```bash
+fdstoolkit web [--host <h>] [--port N] [--no-open]
+```
+
 Open the local web interface. Every command above is reachable from it, and each route calls exactly what the command calls. `--no-open` starts the server without opening a browser, which is what you want over SSH. Binds `127.0.0.1:8000` by default.
 
 ## Web interface
@@ -619,7 +1198,12 @@ MIT. See [LICENSE](LICENSE).
 
 ---
 
+<div align="center">
+
 Famicom Disk System / ファミコン ディスクシステム / ディスクカード preservation, dumping
 (吸い出し), disk quality measurement, drive calibration (ドライブ調整), belt replacement
-(ベルト交換), FDSStick, FDSKey, No-Intro submission. Japanese documentation:
-[README.ja.md](README.ja.md).
+(ベルト交換), FDSStick, FDSKey, No-Intro submission.
+
+Japanese documentation: <a href="README.ja.md">README.ja.md</a>
+
+</div>

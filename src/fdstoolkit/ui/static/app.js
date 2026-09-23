@@ -1,8 +1,46 @@
-const state = { language: window.i18n.initialLanguage(), forms: [], filter: '' };
+let state = {
+  language: window.i18n.initialLanguage(),
+  forms: [],
+  filter: '',
+  family: '',
+  command: '',
+};
+
+function update(changes) {
+  state = { ...state, ...changes };
+}
 
 function t(key) {
   const table = window.i18n.DICTIONARIES[state.language] || window.i18n.DICTIONARIES[window.i18n.FALLBACK];
-  return table[key] || key;
+  return table[key] || '';
+}
+
+function label(key, fallback) {
+  return t(key) || fallback;
+}
+
+function families() {
+  return [...new Set(state.forms.map((form) => form.family))].toSorted();
+}
+
+function visible() {
+  const needle = state.filter.trim().toLowerCase();
+  if (needle) {
+    return state.forms.filter((form) => form.command.includes(needle));
+  }
+  return state.forms.filter((form) => form.family === state.family);
+}
+
+function selected() {
+  return state.forms.find((form) => form.command === state.command) || null;
+}
+
+function element(tag, properties) {
+  return Object.assign(document.createElement(tag), properties);
+}
+
+function words(key) {
+  return key.replace(/_/g, ' ');
 }
 
 function applyLanguage() {
@@ -21,11 +59,22 @@ function applyLanguage() {
 
 async function encodeFile(file) {
   const buffer = await file.arrayBuffer();
-  let binary = '';
-  new Uint8Array(buffer).forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return window.btoa(binary);
+  return window.btoa(Array.from(new Uint8Array(buffer), (byte) => String.fromCharCode(byte)).join(''));
+}
+
+function explain(detail) {
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        const where = Array.isArray(item.loc) ? item.loc.filter((part) => part !== 'body').join(' ') : '';
+        return where ? `${words(where)}: ${item.msg}` : item.msg;
+      })
+      .join('. ');
+  }
+  return JSON.stringify(detail);
 }
 
 async function call(path, method, body) {
@@ -36,176 +85,411 @@ async function call(path, method, body) {
   });
   const payload = await answer.json();
   if (!answer.ok) {
-    const detail = payload.detail;
-    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    throw new Error(explain(payload.detail));
   }
   return payload;
 }
 
-function download(name, data, size) {
-  const link = document.createElement('a');
-  link.href = 'data:application/octet-stream;base64,' + data;
-  link.download = name;
-  link.textContent = t('button.download') + ' ' + name + ' (' + size + ')';
-  return link;
+function bytes(size) {
+  const kib = 1024;
+  return size < kib ? `${size} B` : `${(size / kib).toFixed(1)} KiB`;
+}
+
+function download(entry) {
+  const link = element('a', {
+    href: 'data:application/octet-stream;base64,' + entry.data,
+    download: entry.name,
+    className: 'download',
+    textContent: `${t('button.download')} ${entry.name}`,
+  });
+  const row = element('div', { className: 'download-row' });
+  row.append(link, element('span', { className: 'download-size', textContent: bytes(entry.size) }));
+  return row;
+}
+
+function scalar(value) {
+  if (value === null || value === undefined) {
+    return t('value.none');
+  }
+  if (typeof value === 'boolean') {
+    return value ? t('value.yes') : t('value.no');
+  }
+  return String(value);
+}
+
+function isScalar(value) {
+  return value === null || value === undefined || typeof value !== 'object';
+}
+
+function table(rows) {
+  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const node = element('table', { className: 'grid' });
+  const head = element('tr', {});
+  head.append(...columns.map((column) => element('th', { textContent: words(column) })));
+  const body = rows.map((row) => {
+    const line = element('tr', {});
+    line.append(...columns.map((column) => element('td', { textContent: scalar(row[column]) })));
+    return line;
+  });
+  node.append(head, ...body);
+  return node;
+}
+
+function pairs(value) {
+  const list = element('dl', { className: 'pairs' });
+  Object.entries(value).forEach(([key, item]) => {
+    list.append(element('dt', { textContent: words(key) }), describe(item));
+  });
+  return list;
+}
+
+function describe(value) {
+  if (isScalar(value)) {
+    return element('dd', { textContent: scalar(value) });
+  }
+  const holder = element('dd', {});
+  if (Array.isArray(value)) {
+    if (!value.length) {
+      holder.append(element('span', { className: 'quiet', textContent: t('value.empty') }));
+      return holder;
+    }
+    if (value.every(isScalar)) {
+      holder.append(element('span', { textContent: value.map(scalar).join(', ') }));
+      return holder;
+    }
+    if (value.every((item) => !Array.isArray(item) && typeof item === 'object')) {
+      holder.append(table(value));
+      return holder;
+    }
+  }
+  holder.append(pairs(value));
+  return holder;
+}
+
+function raw(payload) {
+  const box = element('details', { className: 'raw' });
+  box.append(
+    element('summary', { textContent: t('result.raw') }),
+    element('pre', { textContent: JSON.stringify(payload, null, 2) }),
+  );
+  return box;
+}
+
+function banner(kind, message) {
+  return element('p', { className: `banner ${kind}`, textContent: message });
+}
+
+function isDownload(entry) {
+  return Boolean(entry)
+    && typeof entry.data === 'string'
+    && typeof entry.size === 'number'
+    && typeof entry.name === 'string';
 }
 
 function renderResult(target, payload) {
-  target.textContent = '';
-  if (payload && typeof payload.data === 'string' && typeof payload.size === 'number') {
-    target.appendChild(download(payload.name, payload.data, payload.size));
+  if (isDownload(payload)) {
+    target.replaceChildren(banner('good', t('state.file')), download(payload));
     return;
   }
-  if (payload && Array.isArray(payload.files)) {
-    payload.files.forEach((entry) => {
-      const row = document.createElement('div');
-      row.appendChild(download(entry.name, entry.data, entry.size));
-      target.appendChild(row);
-    });
+  if (payload && Array.isArray(payload.files) && payload.files.length && payload.files.every(isDownload)) {
+    target.replaceChildren(banner('good', t('state.files').replace('{n}', String(payload.files.length))));
+    target.append(...payload.files.map(download));
     return;
   }
   if (payload && typeof payload.text === 'string') {
-    const block = document.createElement('pre');
-    block.textContent = payload.text;
-    target.appendChild(block);
+    target.replaceChildren(banner('good', t('state.done')), element('pre', { textContent: payload.text }));
     return;
   }
-  const block = document.createElement('pre');
-  block.textContent = JSON.stringify(payload, null, 2);
-  target.appendChild(block);
+  if (payload && typeof payload === 'object') {
+    target.replaceChildren(banner('good', t('state.done')), pairs(payload), raw(payload));
+    return;
+  }
+  target.replaceChildren(
+    banner('good', t('state.done')),
+    element('pre', { textContent: JSON.stringify(payload, null, 2) }),
+  );
+}
+
+function emptyResult(form) {
+  const box = element('div', { className: 'empty' });
+  const needed = form.fields.filter((field) => field.required).map((field) => words(field.name));
+  box.append(element('p', { textContent: t('result.empty') }));
+  if (needed.length) {
+    box.append(element('p', {
+      className: 'quiet',
+      textContent: t('result.needs').replace('{fields}', needed.join(', ')),
+    }));
+  }
+  box.append(element('p', { className: 'quiet', textContent: t('result.local') }));
+  return box;
+}
+
+function chosen(node) {
+  const files = Array.from(node.files || []);
+  return files.length ? files.map((file) => file.name).join(', ') : t('file.none');
+}
+
+function fileControl(field) {
+  const node = element('input', {
+    type: 'file',
+    multiple: field.kind === 'files',
+    className: 'offscreen',
+    accept: field.accepts,
+  });
+  const name = element('span', { className: 'file-name', textContent: t('file.none') });
+  const box = element('span', { className: 'file-box' });
+  box.append(
+    element('span', {
+      className: 'file-button',
+      textContent: t(field.kind === 'files' ? 'file.many' : 'file.one'),
+    }),
+    name,
+  );
+  node.addEventListener('change', () => {
+    name.textContent = chosen(node);
+    node.closest('label').classList.remove('missing');
+  });
+  return { node, box };
+}
+
+function input(field) {
+  if (field.kind === 'flag') {
+    return element('input', { type: 'checkbox', checked: Boolean(field.default) });
+  }
+  const shown = field.default === null || field.default === undefined ? '' : String(field.default);
+  if (field.kind === 'number') {
+    return element('input', { type: 'number', step: 'any', value: shown });
+  }
+  if (field.kind === 'choice') {
+    const select = element('select', { value: shown });
+    select.append(...field.options.map((option) => element('option', {
+      value: option,
+      textContent: option === '' ? t('flux.auto') : option,
+      selected: option === shown,
+    })));
+    return select;
+  }
+  return element('input', { type: 'text', value: shown });
 }
 
 function control(field) {
-  const wrap = document.createElement('label');
-  const caption = document.createElement('span');
-  caption.textContent = field.name.replace(/_/g, ' ') + (field.required ? ' *' : '');
-  wrap.appendChild(caption);
-
-  let input;
-  if (field.kind === 'file' || field.kind === 'files') {
-    input = document.createElement('input');
-    input.type = 'file';
-    if (field.kind === 'files') {
-      input.multiple = true;
-    }
-  } else if (field.kind === 'flag') {
-    input = document.createElement('input');
-    input.type = 'checkbox';
-    input.checked = Boolean(field.default);
-  } else if (field.kind === 'number') {
-    input = document.createElement('input');
-    input.type = 'number';
-    input.step = 'any';
-    if (field.default !== null && field.default !== undefined) {
-      input.value = String(field.default);
-    }
-  } else if (field.kind === 'choice') {
-    input = document.createElement('select');
-    field.options.forEach((option) => {
-      const node = document.createElement('option');
-      node.value = option;
-      node.textContent = option === '' ? t('flux.auto') : option;
-      input.appendChild(node);
-    });
-    if (field.default !== null && field.default !== undefined) {
-      input.value = String(field.default);
-    }
-  } else {
-    input = document.createElement('input');
-    input.type = 'text';
-    if (field.default !== null && field.default !== undefined) {
-      input.value = String(field.default);
-    }
+  const caption = element('span', { className: 'field-name', textContent: words(field.name) });
+  if (field.required) {
+    caption.append(element('span', { className: 'required', textContent: ` ${t('field.required')}` }));
   }
-  input.dataset.field = field.name;
-  input.dataset.kind = field.kind;
-  wrap.appendChild(input);
+
+  const files = field.kind === 'file' || field.kind === 'files';
+  const chooser = files ? fileControl(field) : null;
+  const node = chooser ? chooser.node : input(field);
+  node.dataset.field = field.name;
+  node.dataset.kind = field.kind;
+
+  const wrap = element('label', { className: field.kind === 'flag' ? 'field checkbox' : 'field' });
+  if (chooser) {
+    wrap.append(caption, node, chooser.box);
+  } else if (field.kind === 'flag') {
+    const line = element('span', { className: 'checkbox-line' });
+    line.append(node, caption);
+    wrap.append(line);
+  } else {
+    wrap.append(caption, node);
+  }
+
+  const help = t(`field.${field.name}`);
+  if (help) {
+    wrap.append(element('span', { className: 'field-help', textContent: help }));
+  }
+  if (files && field.accepts) {
+    wrap.append(element('span', {
+      className: 'field-help quiet',
+      textContent: t('field.accepts').replace('{list}', field.accepts.replace(/,/g, ', ')),
+    }));
+  }
   return wrap;
 }
 
-async function collect(panel) {
-  const body = {};
-  const inputs = panel.querySelectorAll('[data-field]');
-  for (const input of inputs) {
-    const name = input.dataset.field;
-    const kind = input.dataset.kind;
-    if (kind === 'file') {
-      const file = input.files && input.files[0];
-      if (file) {
-        body[name] = await encodeFile(file);
-      }
-    } else if (kind === 'files') {
-      const many = [];
-      for (const file of Array.from(input.files || [])) {
-        many.push(await encodeFile(file));
-      }
-      if (many.length) {
-        body[name] = many;
-      }
-    } else if (kind === 'flag') {
-      body[name] = input.checked;
-    } else if (kind === 'number') {
-      if (input.value !== '') {
-        body[name] = Number(input.value);
-      }
-    } else if (input.value !== '') {
-      body[name] = input.value;
-    }
+async function valueOf(node) {
+  const kind = node.dataset.kind;
+  if (kind === 'file') {
+    const file = node.files && node.files[0];
+    return file ? await encodeFile(file) : undefined;
   }
-  return body;
+  if (kind === 'files') {
+    const many = await Promise.all(Array.from(node.files || [], encodeFile));
+    return many.length ? many : undefined;
+  }
+  if (kind === 'flag') {
+    return node.checked;
+  }
+  if (node.value === '') {
+    return undefined;
+  }
+  return kind === 'number' ? Number(node.value) : node.value;
 }
 
-function panelFor(form) {
-  const panel = document.createElement('section');
-  panel.className = 'command';
-  panel.dataset.command = form.command;
+async function collect(panel) {
+  const nodes = Array.from(panel.querySelectorAll('[data-field]'));
+  const values = await Promise.all(nodes.map(valueOf));
+  return Object.fromEntries(
+    nodes
+      .map((node, index) => [node.dataset.field, values[index]])
+      .filter(([, value]) => value !== undefined),
+  );
+}
 
-  const title = document.createElement('h2');
-  title.textContent = form.command;
-  panel.appendChild(title);
+function blank(node) {
+  return node.dataset.kind === 'file' || node.dataset.kind === 'files'
+    ? !(node.files && node.files.length)
+    : node.value === '';
+}
 
-  const route = document.createElement('p');
-  route.className = 'hint';
-  route.textContent = form.method + ' ' + form.route;
-  panel.appendChild(route);
+function missing(panel, form) {
+  const required = new Set(form.fields.filter((field) => field.required).map((field) => field.name));
+  return Array.from(panel.querySelectorAll('[data-field]'))
+    .filter((node) => required.has(node.dataset.field))
+    .filter((node) => {
+      const empty = blank(node);
+      node.closest('label').classList.toggle('missing', empty);
+      return empty;
+    })
+    .map((node) => words(node.dataset.field));
+}
 
-  form.fields.forEach((field) => panel.appendChild(control(field)));
+function heading(form) {
+  const head = element('div', { className: 'panel-head' });
+  head.append(
+    element('h2', { className: 'command-name', textContent: form.command }),
+    element('span', { className: 'route', textContent: form.method + ' ' + form.route }),
+  );
+  return head;
+}
 
-  const run = document.createElement('button');
-  run.type = 'button';
-  run.textContent = t('button.run');
-  panel.appendChild(run);
+function summaryOf(form) {
+  return label(`summary.${form.command}`, form.summary);
+}
 
-  const out = document.createElement('div');
-  out.className = 'result';
-  out.textContent = t('result.empty');
-  panel.appendChild(out);
-
+function runner(host, form, out) {
+  const run = element('button', { type: 'button', className: 'run', textContent: t('button.run') });
   run.addEventListener('click', async () => {
+    const empty = missing(host, form);
+    if (empty.length) {
+      out.replaceChildren(banner('bad', t('state.missing').replace('{fields}', empty.join(', '))));
+      return;
+    }
+    run.disabled = true;
+    run.textContent = t('state.running');
+    out.replaceChildren(banner('busy', t('state.running')));
     try {
-      const body = await collect(panel);
-      renderResult(out, await call(form.route, form.method, body));
+      renderResult(out, await call(form.route, form.method, await collect(host)));
     } catch (error) {
-      out.textContent = t('error.failed') + ' ' + error.message;
+      out.replaceChildren(
+        banner('bad', t('state.failed')),
+        element('p', { className: 'reason', textContent: error.message }),
+        element('p', { className: 'quiet', textContent: t('state.hint') }),
+      );
+    } finally {
+      run.disabled = false;
+      run.textContent = t('button.run');
     }
   });
+  return run;
+}
 
-  return panel;
+function renderPanel() {
+  const host = document.getElementById('panel');
+  host.replaceChildren();
+  const form = selected();
+  if (!form) {
+    host.append(element('p', { className: 'summary', textContent: t('panel.none') }));
+    return;
+  }
+  host.dataset.command = form.command;
+
+  const out = element('div', { className: 'output' });
+  out.append(emptyResult(form));
+
+  const left = element('div', { className: 'fields' });
+  left.append(element('p', { className: 'group-label', textContent: t('group.inputs') }));
+  left.append(...(form.fields.length
+    ? form.fields.map(control)
+    : [element('p', { className: 'field-help', textContent: t('group.nothing') })]));
+  left.append(runner(host, form, out));
+
+  const right = element('div', { className: 'result' });
+  right.append(element('p', { className: 'group-label', textContent: t('group.result') }), out);
+
+  const columns = element('div', { className: 'columns' });
+  columns.append(left, right);
+
+  host.append(
+    heading(form),
+    element('p', { className: 'summary', textContent: summaryOf(form) }),
+    columns,
+  );
+}
+
+function familyButton(family) {
+  const button = element('button', { type: 'button', textContent: t(`family.${family}`) });
+  button.dataset.family = family;
+  button.setAttribute('aria-pressed', String(family === state.family));
+  button.addEventListener('click', () => {
+    const first = state.forms.find((form) => form.family === family);
+    update({ family, filter: '', command: first ? first.command : '' });
+    document.getElementById('search').value = '';
+    remember();
+    render();
+  });
+  return button;
+}
+
+function commandItem(form) {
+  const button = element('button', { type: 'button' });
+  button.append(
+    element('span', { className: 'item-name', textContent: form.command }),
+    element('span', { className: 'item-summary', textContent: summaryOf(form) }),
+  );
+  button.setAttribute('aria-current', String(form.command === state.command));
+  button.addEventListener('click', () => {
+    update({ command: form.command, family: form.family });
+    remember();
+    render();
+  });
+  const item = element('li', {});
+  item.append(button);
+  return item;
+}
+
+function remember() {
+  try {
+    window.history.replaceState(null, '', '#' + state.command);
+  } catch (error) {
+    return;
+  }
 }
 
 function render() {
-  const host = document.getElementById('commands');
-  host.textContent = '';
-  const needle = state.filter.trim().toLowerCase();
-  state.forms
-    .filter((form) => !needle || form.command.includes(needle))
-    .forEach((form) => host.appendChild(panelFor(form)));
+  document.getElementById('families').replaceChildren(...families().map(familyButton));
+
+  const shown = visible();
+  const listHost = document.getElementById('commands');
+  listHost.replaceChildren(...(shown.length
+    ? shown.map(commandItem)
+    : [element('li', { className: 'no-match', textContent: t('list.none') })]));
+
+  renderPanel();
+}
+
+function show(wanted) {
+  const form = state.forms.find((entry) => entry.command === wanted) || state.forms[0];
+  if (form) {
+    update({ command: form.command, family: form.family });
+  }
 }
 
 function wire() {
   document.querySelectorAll('[data-language]').forEach((button) => {
     button.addEventListener('click', () => {
-      state.language = button.dataset.language;
+      update({ language: button.dataset.language });
       window.i18n.rememberLanguage(state.language);
       applyLanguage();
     });
@@ -213,7 +497,16 @@ function wire() {
 
   const search = document.getElementById('search');
   search.addEventListener('input', () => {
-    state.filter = search.value;
+    update({ filter: search.value });
+    const first = visible()[0];
+    if (first) {
+      update({ command: first.command, family: first.family });
+    }
+    render();
+  });
+
+  window.addEventListener('hashchange', () => {
+    show(window.location.hash.replace('#', ''));
     render();
   });
 }
@@ -223,10 +516,14 @@ async function start() {
   applyLanguage();
   try {
     const catalogue = await call('/api/catalogue', 'GET');
-    state.forms = catalogue.forms;
+    update({ forms: catalogue.forms });
+    show(window.location.hash.replace('#', ''));
     render();
   } catch (error) {
-    document.getElementById('commands').textContent = t('error.failed') + ' ' + error.message;
+    document.getElementById('panel').replaceChildren(
+      banner('bad', t('state.failed')),
+      element('p', { className: 'reason', textContent: error.message }),
+    );
   }
 }
 

@@ -26,7 +26,7 @@ def git(*arguments: str) -> list[str]:
 
 def on_disk() -> set[str]:
     return {
-        str(path.relative_to(ROOT))
+        path.relative_to(ROOT).as_posix()
         for path in (ROOT / "tests").rglob("test_*.py")
         if "__pycache__" not in path.parts
     }

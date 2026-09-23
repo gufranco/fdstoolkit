@@ -1,6 +1,30 @@
+<div align="center">
+
 # fdstoolkit
 
+<strong>ディスクカードを読み取り、読み取れたものを評価し、任天堂が書いた内容を復元し、そしてもう一度書き込む。</strong>
+
+[![ci](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#貢献)
+[![python](https://img.shields.io/badge/python-3.13-blue)](pyproject.toml)
+
+<p align="center">
+  <a href="#インストール">インストール</a> &nbsp;|&nbsp;
+  <a href="#先に把握しておく概念">概念</a> &nbsp;|&nbsp;
+  <a href="#コマンドリファレンス">コマンド</a> &nbsp;|&nbsp;
+  <a href="#ウェブインターフェース">ウェブインターフェース</a> &nbsp;|&nbsp;
+  <a href="#手順">手順</a> &nbsp;|&nbsp;
+  <a href="#フォーマット">フォーマット</a>
+</p>
+
 [English](README.md) | **日本語**
+
+</div>
+
+コマンドは **56** 個、そのすべてがローカルの Web ページからも使えます。テストは **1,754** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、パルスクラスは実機の **120** 面、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
+
+---
 
 ファミコン ディスクシステムのディスクカードを扱うためのコマンドラインツールです。読み取り、品質の測定、再構成、書き戻し、そしてそれらを行うドライブ自体の調整までを対象とします。
 
@@ -80,118 +104,463 @@ dat cache         ~/.cache/fdstoolkit/dat, 0 catalogue(s)
 
 ### 検査
 
-#### `doctor [--json]`
+#### `doctor`
+
+```bash
+fdstoolkit doctor [--json]
+```
+
 バージョン、Python、プラットフォーム、ハードウェア対応の導入状況、接続されているデバイスとそれを開けるか、DAT キャッシュの状態。挙動がおかしいときは最初にこれを実行してください。ここで表示されるデバイス情報は、吸い出しの提出時に求められる「ハードウェア、ファームウェア、ソフトウェアのバージョン」に相当します。
 
-#### `info <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/doctor-dark.png">
+<img alt="ローカル Web ページの doctor コマンド" src="assets/screenshots/doctor-light.png">
+</picture>
+
+#### `info`
+
+```bash
+fdstoolkit info <image> [--json]
+```
+
 面数、ゲームコード、製造日と書き換え日、ディスクライターのシリアル、宣言されたファイル数と実際のファイル数、隠しファイル、末尾の余剰データ。
 
-#### `ls <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/info-dark.png">
+<img alt="ローカル Web ページの info コマンド" src="assets/screenshots/info-light.png">
+</picture>
+
+#### `ls`
+
+```bash
+fdstoolkit ls <image> [--json]
+```
+
 全面のすべてのファイル。番号、ID、名前、ロードアドレス、種別、サイズ、宣言数を超えた位置にあるかどうか。
 
-#### `verify <image> [--strict] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/ls-dark.png">
+<img alt="ローカル Web ページの ls コマンド" src="assets/screenshots/ls-light.png">
+</picture>
+
+#### `verify`
+
+```bash
+fdstoolkit verify <image> [--strict] [--json]
+```
+
 構造とチェックサムの検出結果を、それぞれコード付きで報告します。`--strict` は警告でも失敗とします。
 
-#### `hash <image> [--profile <name>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/verify-dark.png">
+<img alt="ローカル Web ページの verify コマンド" src="assets/screenshots/verify-light.png">
+</picture>
+
+#### `hash`
+
+```bash
+fdstoolkit hash <image> [--profile <name>] [--json]
+```
+
 イメージ全体と各面の CRC32、MD5、SHA-1、SHA-256、加えて正規化ダイジェストと RetroAchievements の MD5。
 
-#### `diff <a> <b> [--explain] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/hash-dark.png">
+<img alt="ローカル Web ページの hash コマンド" src="assets/screenshots/hash-light.png">
+</picture>
+
+#### `diff`
+
+```bash
+fdstoolkit diff <a> <b> [--explain] [--json]
+```
+
 どのブロックが異なるか。`--explain` はブロック番号ではなくディスク情報のフィールド名とファイル名で示します。
 
-#### `boot <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/diff-dark.png">
+<img alt="ローカル Web ページの diff コマンド" src="assets/screenshots/diff-light.png">
+</picture>
+
+#### `boot`
+
+```bash
+fdstoolkit boot <image> [--json]
+```
+
 各面を BIOS がどう扱うか。どのファイルを読み込むか、承認データがあるか、表示されるエラー番号は何か。
 
-#### `layout <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/boot-dark.png">
+<img alt="ローカル Web ページの boot コマンド" src="assets/screenshots/boot-light.png">
+</picture>
+
+#### `layout`
+
+```bash
+fdstoolkit layout <image> [--json]
+```
+
 渦巻き上での各ファイルのバイトオフセットと、公称ビットレートでドライブがそこへ到達するまでの時間。
 
-#### `provenance <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/layout-dark.png">
+<img alt="ローカル Web ページの layout コマンド" src="assets/screenshots/layout-light.png">
+</picture>
+
+#### `provenance`
+
+```bash
+fdstoolkit provenance <image> [--json]
+```
+
 面ごとに工場出荷、ディスクライターでの書き換え、判別不能のいずれかを、日付・シリアル・書き換え回数という根拠とともに報告します。工場出荷のディスクはシリアル `ffff`、書き換え回数 `00` を持ちます。
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/provenance-dark.png">
+<img alt="ローカル Web ページの provenance コマンド" src="assets/screenshots/provenance-light.png">
+</picture>
 
 ### 変換と生成
 
-#### `convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|compute|null] [--force]`
+#### `convert`
+
+```bash
+fdstoolkit convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|compute|null] [--force]
+```
+
 `.fds` と `.qd` の相互変換。`--crc-mode` は `.qd` を書くときに CRC フィールドへ何を入れるかを決めます。元の値を保持するか、再計算するか、ゼロにするか。既定が `preserve` なのは、再計算を伴う往復変換が、調査対象かもしれない破損を黙って修復してしまうからです。
 
-#### `canon <image> --profile <name> [-o <out>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/convert-dark.png">
+<img alt="ローカル Web ページの convert コマンド" src="assets/screenshots/convert-light.png">
+</picture>
+
+#### `canon`
+
+```bash
+fdstoolkit canon <image> --profile <name> [-o <out>] [--force]
+```
+
 正規化ダイジェストを表示し、`-o` を付けると正規化イメージを書き出します。
 
-#### `blank -o <out> [--sides N] [--formatted] [--header] [--game-name ABC] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/canon-dark.png">
+<img alt="ローカル Web ページの canon コマンド" src="assets/screenshots/canon-light.png">
+</picture>
+
+#### `blank`
+
+```bash
+fdstoolkit blank -o <out> [--sides N] [--formatted] [--header] [--game-name ABC] [--force]
+```
+
 空のイメージ。`--formatted` は、一度も書き換えられていない 1,729 面から実測した値でディスク情報ブロックを書きます。国コード `49`、シリアル `ffff`、書き換え回数 `00`、フィラー `ff`。
 
-#### `build <manifest> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/blank-dark.png">
+<img alt="ローカル Web ページの blank コマンド" src="assets/screenshots/blank-light.png">
+</picture>
+
+#### `build`
+
+```bash
+fdstoolkit build <manifest> -o <out> [--force]
+```
+
 ディスクのフィールドと配置するファイルを記述した JSON マニフェストからディスクを組み立てます。
 
-#### `card -o <out> [--firmware <variant>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/build-dark.png">
+<img alt="ローカル Web ページの build コマンド" src="assets/screenshots/build-light.png">
+</picture>
+
+#### `card`
+
+```bash
+fdstoolkit card -o <out> [--firmware <variant>] [--force]
+```
+
 FDSKey が受け付ける空のイメージ。
 
-#### `split <image> -d <dir> [--stem <s>] [--force]` と `join <files>... -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/card-dark.png">
+<img alt="ローカル Web ページの card コマンド" src="assets/screenshots/card-light.png">
+</picture>
+
+#### `split` and `join`
+
+```bash
+fdstoolkit split <image> -d <dir> [--stem <s>] [--force]
+fdstoolkit join <files>... -o <out> [--force]
+```
+
 コピア形式の 1 面 1 ファイルへの分割と、その逆。`--stem` は面ファイルの基本名で、既定は `fc1234` です。`join` はファイルの順序を問いません。
 
-#### `merge <disks>... -o <out> [--header|--no-header] [--force]` と `unmerge <set> -d <dir> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/split-dark.png">
+<img alt="ローカル Web ページの split コマンド" src="assets/screenshots/split-light.png">
+</picture>
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/join-dark.png">
+<img alt="ローカル Web ページの join コマンド" src="assets/screenshots/join-light.png">
+</picture>
+
+#### `merge` and `unmerge`
+
+```bash
+fdstoolkit merge <disks>... -o <out> [--header|--no-header] [--force]
+fdstoolkit unmerge <set> -d <dir> [--force]
+```
+
 複数ディスクのゲームを 1 つのイメージにまとめ、また分解します。ディスクは順番に指定してください。`--header` は fwNES ヘッダを付けます。既定は `--no-header` です。
 
-#### `export <image> --target <t> -d <dir> [--bios <file>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/merge-dark.png">
+<img alt="ローカル Web ページの merge コマンド" src="assets/screenshots/merge-light.png">
+</picture>
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/unmerge-dark.png">
+<img alt="ローカル Web ページの unmerge コマンド" src="assets/screenshots/unmerge-light.png">
+</picture>
+
+#### `export`
+
+```bash
+fdstoolkit export <image> --target <t> -d <dir> [--bios <file>] [--force]
+```
+
 機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`、`ares`。`--bios` を付けると BIOS もその対象が探す場所へ配置します。
 
-#### `import-ares <files>... -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
+<img alt="ローカル Web ページの export コマンド" src="assets/screenshots/export-light.png">
+</picture>
+
+#### `import-ares`
+
+```bash
+fdstoolkit import-ares <files>... -o <out> [--force]
+```
+
 ares の面別ファイルから、そこに含まれるセーブデータごとイメージを再構成します。
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/import-ares-dark.png">
+<img alt="ローカル Web ページの import-ares コマンド" src="assets/screenshots/import-ares-light.png">
+</picture>
 
 ### 編集と修復
 
-#### `extract <image> -d <dir> [--force]`
+#### `extract`
+
+```bash
+fdstoolkit extract <image> -d <dir> [--force]
+```
+
 宣言数を超えた位置にあるファイルも含め、すべてのファイルを書き出します。
 
-#### `insert <image> --file <f> --name <n> -o <out> [--address <hex>] [--kind program|character|nametable] [--side N] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/extract-dark.png">
+<img alt="ローカル Web ページの extract コマンド" src="assets/screenshots/extract-light.png">
+</picture>
+
+#### `insert`
+
+```bash
+fdstoolkit insert <image> --file <f> --name <n> -o <out> [--address <hex>] [--kind program|character|nametable] [--side N] [--force]
+```
+
 ファイルを追加し、宣言ファイル数を増やします。`--address` の既定値は `6000` です。
 
-#### `set <image> --set field=value... -o <out> [--side N] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/insert-dark.png">
+<img alt="ローカル Web ページの insert コマンド" src="assets/screenshots/insert-light.png">
+</picture>
+
+#### `set`
+
+```bash
+fdstoolkit set <image> --set field=value... -o <out> [--side N] [--force]
+```
+
 ディスク情報のフィールドを変更します。複数指定できます。フィールド名は `info --json` が出力するものです。
 
-#### `clean <image> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/set-dark.png">
+<img alt="ローカル Web ページの set コマンド" src="assets/screenshots/set-light.png">
+</picture>
+
+#### `clean`
+
+```bash
+fdstoolkit clean <image> -o <out> [--force]
+```
+
 最終ブロック以降に残った非ゼロバイトを除去します。
 
-#### `rebuild <image> -o <out> [--keep-tail] [--reveal-hidden] [--drop-hidden] [--renumber] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/clean-dark.png">
+<img alt="ローカル Web ページの clean コマンド" src="assets/screenshots/clean-light.png">
+</picture>
+
+#### `rebuild`
+
+```bash
+fdstoolkit rebuild <image> -o <out> [--keep-tail] [--reveal-hidden] [--drop-hidden] [--renumber] [--force]
+```
+
 解析済みのモデルから再出力します。チェックサムを再計算し、宣言サイズを訂正し、末尾の余剰データを落とします。隠しファイルは既定で保持されます。`--reveal-hidden` は宣言数を実数に合わせ、`--drop-hidden` は削除します。
 
-#### `patch <image> --patch <p> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/rebuild-dark.png">
+<img alt="ローカル Web ページの rebuild コマンド" src="assets/screenshots/rebuild-light.png">
+</picture>
+
+#### `patch`
+
+```bash
+fdstoolkit patch <image> --patch <p> -o <out> [--force]
+```
+
 IPS、UPS、BPS を適用します。ヘッダ付きとヘッダなしのどちらに対して作られたパッチでも構いません。
 
-#### `splice <image> --donor <d>... -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/patch-dark.png">
+<img alt="ローカル Web ページの patch コマンド" src="assets/screenshots/patch-light.png">
+</picture>
+
+#### `splice`
+
+```bash
+fdstoolkit splice <image> --donor <d>... -o <out> [--force]
+```
+
 CRC に失敗したブロックを、同じブロックが正常な別の吸い出しから移植します。置換した箇所と、どのドナーからも供給できなかったブロックをすべて報告します。修復できないものが残れば終了コード 1 を返します。
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/splice-dark.png">
+<img alt="ローカル Web ページの splice コマンド" src="assets/screenshots/splice-light.png">
+</picture>
 
 ### セーブデータ
 
-#### `saves <images>... [--json]`
+#### `saves`
+
+```bash
+fdstoolkit saves <images>... [--json]
+```
+
 同一タイトルの複数の吸い出しを比較し、どのファイルがセーブデータかを報告します。
 
-#### `save-apply <image> --save <s> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/saves-dark.png">
+<img alt="ローカル Web ページの saves コマンド" src="assets/screenshots/saves-light.png">
+</picture>
+
+#### `save-apply`
+
+```bash
+fdstoolkit save-apply <image> --save <s> -o <out> [--force]
+```
+
 IPS、UPS、BPS、またはイメージ全体のセーブを書き戻します。
 
-#### `save-extract <image> --played <p> -o <out> [--format ips|ups|image] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-apply-dark.png">
+<img alt="ローカル Web ページの save-apply コマンド" src="assets/screenshots/save-apply-light.png">
+</picture>
+
+#### `save-extract`
+
+```bash
+fdstoolkit save-extract <image> --played <p> -o <out> [--format ips|ups|image] [--force]
+```
+
 未プレイのディスクとプレイ済みのディスクの差分を書き出します。
 
-#### `normalise-saves <image> --recipes <r> -o <out> [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-extract-dark.png">
+<img alt="ローカル Web ページの save-extract コマンド" src="assets/screenshots/save-extract-light.png">
+</picture>
+
+#### `normalise-saves`
+
+```bash
+fdstoolkit normalise-saves <image> --recipes <r> -o <out> [--force]
+```
+
 宣言されたセーブ領域を消去し、プレイ済みの 2 本が一致して比較できるようにします。`--recipes` はどの領域がセーブかを宣言するファイルで、必須です。どのバイトをゲームが書き換えるかを本ツールが推測することはありません。
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/normalise-saves-dark.png">
+<img alt="ローカル Web ページの normalise-saves コマンド" src="assets/screenshots/normalise-saves-light.png">
+</picture>
 
 ### 識別
 
-#### `identify <image> --dat <file> [--reference <dir>] [--no-cache] [--json]`
+#### `identify`
+
+```bash
+fdstoolkit identify <image> --dat <file> [--reference <dir>] [--no-cache] [--json]
+```
+
 一致した DAT のエントリと、どのダイジェストで一致したか。`--reference` を付けると、一致しなかった場合にそのディレクトリ内で最も近いイメージと、異なるバイト範囲を報告します。
 
-#### `dat-cache [--clear]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/identify-dark.png">
+<img alt="ローカル Web ページの identify コマンド" src="assets/screenshots/identify-light.png">
+</picture>
+
+#### `dat-cache`
+
+```bash
+fdstoolkit dat-cache [--clear]
+```
+
 解析済み DAT のキャッシュを表示または削除します。
 
-#### `bios <file> [--extract <out>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dat-cache-dark.png">
+<img alt="ローカル Web ページの dat-cache コマンド" src="assets/screenshots/dat-cache-light.png">
+</picture>
+
+#### `bios`
+
+```bash
+fdstoolkit bios <file> [--extract <out>] [--force]
+```
+
 BIOS のリビジョンと、そのファイルを受け付けるエミュレータ。`--extract` はより大きなダンプから 8 KB のイメージを取り出します。
 
-#### `lint <image> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/bios-dark.png">
+<img alt="ローカル Web ページの bios コマンド" src="assets/screenshots/bios-light.png">
+</picture>
+
+#### `lint`
+
+```bash
+fdstoolkit lint <image> [--json]
+```
+
 そのイメージを FDSKey が読み込めるかどうかを、カードに書き込む前に判定します。
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/lint-dark.png">
+<img alt="ローカル Web ページの lint コマンド" src="assets/screenshots/lint-light.png">
+</picture>
 
 ### 品質測定
 
 チェックサムは 65,500 バイトの 1 面について 1 ビットしか答えません。以下はそれ以上を答えます。
 
-#### `reads <images>... [--json]`
+#### `reads`
+
+```bash
+fdstoolkit reads <images>... [--json]
+```
+
 同一の物理ディスクを繰り返し吸い出した結果をブロック単位で比較します。安定度、どのブロックが揺れるか、ビット反転の向きを報告します。磁気的な減衰は磁化の反転を失う方向に働くため、1 が 0 へ落ちます。本ツールはこれを `loss`、逆方向を `gain`、両方を `mixed` と呼びます。
 
 ```bash
@@ -206,10 +575,30 @@ bits lost     14
 bits gained   0
 ```
 
-#### `calibrate <reference> --read <r>... [--margin <f>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reads-dark.png">
+<img alt="ローカル Web ページの reads コマンド" src="assets/screenshots/reads-light.png">
+</picture>
+
+#### `calibrate`
+
+```bash
+fdstoolkit calibrate <reference> --read <r>... [--margin <f>] [--json]
+```
+
 信頼できるディスクを基準としてドライブ自身のエラー率を測ります。ディスクのせいをドライブに、あるいはその逆に押し付けないためです。判定は `good`、`marginal`、`faulty` のいずれかです。
 
-#### `grade <image> [--read <r>...] [--margin <f>] [--map] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
+<img alt="ローカル Web ページの calibrate コマンド" src="assets/screenshots/calibrate-light.png">
+</picture>
+
+#### `grade`
+
+```bash
+fdstoolkit grade <image> [--read <r>...] [--margin <f>] [--map] [--json]
+```
+
 根拠となる測定値を添えた評価。`--read` は繰り返し吸い出しを、`--margin` は `flux` が出したフラックスマージンを反映します。`--map` はブロックごとの信頼度と、その根拠を表示します。
 
 ```bash
@@ -225,14 +614,34 @@ clean, confidence 0.97
 
 信頼度はチェックサムの状態を出発点とし、読み取りの一致度とフラックスマージンで補正されます。チェックサムを保存しないコンテナは「疑わしい」ではなく「未証明」として扱われます。ヘッダなし `.fds` が不安定と評価されないのはそのためです。
 
-#### `integrity <image> [--original-crcs] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/grade-dark.png">
+<img alt="ローカル Web ページの grade コマンド" src="assets/screenshots/grade-light.png">
+</picture>
+
+#### `integrity`
+
+```bash
+fdstoolkit integrity <image> [--original-crcs] [--json]
+```
+
 すべてのチェックサムを通過しながら内容が誤っているイメージを見つけます。ほぼ全体が未定義オペコードのファイル本体、ヘッダと長さが食い違う本体、そして `--original-crcs` を付けた場合は、本来そうならないはずなのに保存済みチェックサムがすべて正確に再計算できてしまう吸い出し。
 
 オペコードの閾値は実在する 10,105 本のプログラムファイルを基準に較正してあります。これらの中央値は未定義オペコード 36% です。グラフィックやテーブルを日常的に含むためです。したがって、ほぼコードでないファイルだけが報告されます。`SAVEDATA` や `JMP-TBL.` のような名前がここに現れるのは正しい動作です。
 
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/integrity-dark.png">
+<img alt="ローカル Web ページの integrity コマンド" src="assets/screenshots/integrity-light.png">
+</picture>
+
 ### フラックスキャプチャ
 
-#### `flux <capture> [--format <f>] [--json]`
+#### `flux`
+
+```bash
+fdstoolkit flux <capture> [--format <f>] [--json]
+```
+
 キャプチャを測定します。フィッティングされたビットセル長、クラスタの中心とジッタ、分離マージン、外れ値の数、速度、そして一貫したデータを持たないトラックを報告します。
 
 ```bash
@@ -262,21 +671,51 @@ verdict       healthy
 
 1 回転に満たない回転は部分回転として印を付け、速度の計算から除外します。
 
-#### `flux-decode <capture> -o <out> [--format <f>] [--fixed] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/flux-dark.png">
+<img alt="ローカル Web ページの flux コマンド" src="assets/screenshots/flux-light.png">
+</picture>
+
+#### `flux-decode`
+
+```bash
+fdstoolkit flux-decode <capture> -o <out> [--format <f>] [--fixed] [--force]
+```
+
 キャプチャをディスクイメージへデコードします。閾値はキャプチャに合わせて推定されるため、公称から大きく外れて記録されたストリームでもデコードできます。`--fixed` は代わりに公称の閾値を使います。
 
-#### `classes <capture> [--format <f>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/flux-decode-dark.png">
+<img alt="ローカル Web ページの flux-decode コマンド" src="assets/screenshots/flux-decode-light.png">
+</picture>
+
+#### `classes`
+
+```bash
+fdstoolkit classes <capture> [--format <f>] [--json]
+```
+
 時間情報ではなくパルスクラスを持つキャプチャ向けです。3 種類の長さへの分布と、そのいずれにも入らなかったパルスの数を報告します。
 
 測定の前にギャップの連続を除外します。ギャップとは短いパルスの長い連続であり、含めたままでは分布が「ドライブがどう読んでいるか」ではなく「ディスクがどれだけ埋まっているか」の指標になってしまうためです。残りの部分について、実在する 120 面の中央値は 63.1、27.9、9.0 パーセントで、これを基準値としています。正常なドライブではこの 120 面が -5.4 から +3.0 パーセントに分布するため、閾値は 6 パーセントに置いてあり、どの面もこれに触れません。
 
 知っておくべき制限が 2 つあります。ギャップを除いたパルスが 512 個未満のキャプチャは、判定せず「サンプル不足」として報告します。また、ここで唯一ディスクの内容に依存しない数値は無効パルス数なので、数値どうしが食い違う場合はそちらを信頼してください。
 
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/classes-dark.png">
+<img alt="ローカル Web ページの classes コマンド" src="assets/screenshots/classes-light.png">
+</picture>
+
 ### ドライブ調整
 
 ここでのすべての測定はビットレートを基準としており、回転数は使いません。RAM アダプタは 96.4 kbit/s を期待し、許容範囲は 10 パーセントです。ハードウェアが実際に要求しているのはこの数値だけです。この機構の回転数として公表されている値は 2 倍の開きがあり、許容範囲も示されていません。
 
-#### `reading <cycles> [--json]`
+#### `reading`
+
+```bash
+fdstoolkit reading <cycles> [--json]
+```
+
 ディスク一覧表示ツールが実機の画面に表示する、バイト間の平均 CPU サイクル数を解釈します。キャプチャ機器を必要としない唯一の速度測定手段です。
 
 ```bash
@@ -299,7 +738,17 @@ turn the motor trimmer counter-clockwise to run faster
 
 厳密な公称値は 148.53 サイクルなので、整数表示は 1 カウントあたり約 0.68% の刻みになります。
 
-#### `tune <capture> [--format <f>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reading-dark.png">
+<img alt="ローカル Web ページの reading コマンド" src="assets/screenshots/reading-light.png">
+</picture>
+
+#### `tune`
+
+```bash
+fdstoolkit tune <capture> [--format <f>] [--json]
+```
+
 時間情報を持つキャプチャを測定し、何を調整すべきかを 2 段階で報告します。
 
 ```bash
@@ -326,16 +775,36 @@ score 6%
 
 測定分解能はセル長の 0.001% です。粗密 2 段階の走査の後、解析的な最小二乗法で解いています。
 
-#### `tune-sweep <captures>... [--format <f>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/tune-dark.png">
+<img alt="ローカル Web ページの tune コマンド" src="assets/screenshots/tune-light.png">
+</picture>
+
+#### `tune-sweep`
+
+```bash
+fdstoolkit tune-sweep <captures>... [--format <f>] [--json]
+```
+
 半固定抵抗の位置ごとに 1 つずつキャプチャを与えます。順不同で構いません。正常に読める速度範囲の全体を求め、落ち着かせるべき中心と、その窓の幅を健全性の指標として報告します。健全なドライブは広い範囲で読み、疲れたドライブは 1 点でしか読みません。
 
 最初に読めた位置ではなく、窓の中心に半固定抵抗を設定してください。
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/tune-sweep-dark.png">
+<img alt="ローカル Web ページの tune-sweep コマンド" src="assets/screenshots/tune-sweep-light.png">
+</picture>
 
 ### マスターと参照セット
 
 任天堂のマスターイメージは存在しません。ディスクは空の状態で販売され、店頭のディスクライターで書き込まれ、その際に 1 枚ずつ刻印されたからです。したがって同じゲームの 2 本はバイト列が一致しません。マスターに最も近いものは、その刻印を除いたうえで現存するすべての吸い出しが一致する内容です。
 
-#### `masters <corpus> [--profile <name>] [--json]`
+#### `masters`
+
+```bash
+fdstoolkit masters <corpus> [--profile <name>] [--json]
+```
+
 ディレクトリ内のすべての吸い出しの合議により、ゲームごとに 1 つのマスターを作ります。少数意見は隠さず報告します。
 
 ```bash
@@ -349,24 +818,84 @@ games         242
 unanimous     210 of 242
 ```
 
-#### `reference-build <corpus> -o <set> --set-version <v> [--profile <name>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/masters-dark.png">
+<img alt="ローカル Web ページの masters コマンド" src="assets/screenshots/masters-light.png">
+</picture>
+
+#### `reference-build`
+
+```bash
+fdstoolkit reference-build <corpus> -o <set> --set-version <v> [--profile <name>] [--force]
+```
+
 その結果を、何もインストールせずに照合できるダイジェストの集合として公開します。
 
-#### `reference-verify <image> --set <set> [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reference-build-dark.png">
+<img alt="ローカル Web ページの reference-build コマンド" src="assets/screenshots/reference-build-light.png">
+</picture>
+
+#### `reference-verify`
+
+```bash
+fdstoolkit reference-verify <image> --set <set> [--json]
+```
+
 `match`、期待されるダイジェストを添えた `mismatch`、または `unknown`。
 
-#### `dat-build <corpus> -o <out> --name <n> --set-version <v> [--author <a>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reference-verify-dark.png">
+<img alt="ローカル Web ページの reference-verify コマンド" src="assets/screenshots/reference-verify-light.png">
+</picture>
+
+#### `dat-build`
+
+```bash
+fdstoolkit dat-build <corpus> -o <out> --name <n> --set-version <v> [--author <a>] [--force]
+```
+
 Logiqx 形式の DAT を出力し、コミュニティが既に使っているツールへ結果を届けます。
 
-#### `consensus <images>... -o <out> [--map] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dat-build-dark.png">
+<img alt="ローカル Web ページの dat-build コマンド" src="assets/screenshots/dat-build-light.png">
+</picture>
+
+#### `consensus`
+
+```bash
+fdstoolkit consensus <images>... -o <out> [--map] [--force]
+```
+
 同一ディスクの複数の吸い出しを、ブロック単位の多数決で統合し、一致しなかった箇所をすべて報告します。`--map` はブロックごとの一致度を表示します。
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/consensus-dark.png">
+<img alt="ローカル Web ページの consensus コマンド" src="assets/screenshots/consensus-light.png">
+</picture>
 
 ### 経年追跡
 
-#### `archive-add <image> [--db <p>] [--taken <date>] [--drive <s>] [--notes <s>] [--bad-blocks <n>]`
+#### `archive-add`
+
+```bash
+fdstoolkit archive-add <image> [--db <p>] [--taken <date>] [--drive <s>] [--notes <s>] [--bad-blocks <n>]
+```
+
 吸い出しを、それが取られた物理ディスクに紐付けて記録します。同一性はディスクライターが刻印した内容から導かれるため、同じゲームの 2 本も別個体として追跡されます。
 
-#### `archive-trend [--db <p>] [--disk <id>] [--json]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/archive-add-dark.png">
+<img alt="ローカル Web ページの archive-add コマンド" src="assets/screenshots/archive-add-light.png">
+</picture>
+
+#### `archive-trend`
+
+```bash
+fdstoolkit archive-trend [--db <p>] [--disk <id>] [--json]
+```
+
 そのディスクが状態を保っているか、劣化しているか、あるいはより良く読めるようになっているか。その速度と、残された時間のおおよその見積もり。
 
 ```bash
@@ -377,14 +906,34 @@ fdstoolkit archive-trend
 4f2a...c19b: degrading, +10.0 blocks a year, unreadable in about 8 years
 ```
 
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/archive-trend-dark.png">
+<img alt="ローカル Web ページの archive-trend コマンド" src="assets/screenshots/archive-trend-light.png">
+</picture>
+
 ### ハードウェア
 
-#### `dump -o <out> [--backend simulation|fdsstick|dumper] [--source <img>] [--sides N] [--passes N] [--retries N] [--raw <dir>] [--log <file>] [--yes] [--force]`
+#### `dump`
+
+```bash
+fdstoolkit dump -o <out> [--backend simulation|fdsstick|dumper] [--source <img>] [--sides N] [--passes N] [--retries N] [--raw <dir>] [--log <file>] [--yes] [--force]
+```
+
 ディスクを読み取ります。`--passes` は各面を複数回読み、`--retries` はブロックごとの再試行回数を決め、`--raw` はドライブが返したパルスキャプチャをすべて保存し、`--log` はその吸い出しがどう行われたかの記録を書き出します。
 
 一度に片面しか読めないドライブは、面を選択できません。そうしたバックエンドで複数面を読む場合、読み取りの合間にディスクを裏返すよう求め、同じ面を二度読むくらいなら処理を中止します。`--yes` はその確認に自動で答えます。2 回目の読み取りが 1 回目と同じバイト列を返した場合、吸い出しは失敗し、何も書き出しません。裏返されなかったディスクは、両面を吸い出したように見えて実際はそうでないファイルを生むからです。
 
-#### `submit <image> --log <file> --dumper <name> [--affiliation <a>] [--photo <p>...] [--also <f>...] [-o <out>] [--force]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dump-dark.png">
+<img alt="ローカル Web ページの dump コマンド" src="assets/screenshots/dump-light.png">
+</picture>
+
+#### `submit`
+
+```bash
+fdstoolkit submit <image> --log <file> --dumper <name> [--affiliation <a>] [--photo <p>...] [--also <f>...] [-o <out>] [--force]
+```
+
 保存プロジェクトが求める提出内容を組み立てます。
 
 公開されている吸い出しガイドは、ヘッダが書き換え日を含むためハッシュが一致せず、FDS の検証は難しいと述べています。SHA-256 については事実であり、このコマンドがハッシュの隣に同一性ダイジェストを出力するのはそのためです。`release` プロファイルでは書き換え日、ディスクライターのシリアル、書き換え回数が除外され、コーパスの 144 グループ中 142 が一致します。提出内容には両方が含まれるので、バイト単位のハッシュが必要な読み手にも、別個体どうしを比較したい読み手にも応えられます。
@@ -401,12 +950,32 @@ fdstoolkit submit disk.fds --log disk.log.json --dumper "あなたの名前" \
     --also captures/disk.read01.raw03 --photo media.jpg --photo pcb.jpg
 ```
 
-#### `write <image> [--backend <b>] [--source <img>] [--backup <p>] [--retries N] [--assume-writable] [--yes]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/submit-dark.png">
+<img alt="ローカル Web ページの submit コマンド" src="assets/screenshots/submit-light.png">
+</picture>
+
+#### `write`
+
+```bash
+fdstoolkit write <image> [--backend <b>] [--source <img>] [--backup <p>] [--retries N] [--assume-writable] [--yes]
+```
+
 ディスクへ書き込み、読み戻して比較します。`--backup` は書き込む前に現在の内容を保存します。`--yes` がなければ確認を求めます。
 
 FDSStick は、ディスクが書き込み禁止かどうかも、電池が保っているかどうかも、そもそもディスクが入っているかどうかも報告しません。本ツールはそれらを良好と仮定せず、不明として報告したうえで破壊的な書き込みを拒否します。`--assume-writable` はそれでも続行します。ドライブが不良と報告した状態は依然として拒否されるため、この指定が解除するのは不確実性だけであり、既知の不良ではありません。
 
-#### `surface [--backend <b>] [--source <img>] [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">
+<img alt="ローカル Web ページの write コマンド" src="assets/screenshots/write-light.png">
+</picture>
+
+#### `surface`
+
+```bash
+fdstoolkit surface [--backend <b>] [--source <img>] [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
+```
+
 互いに補完的なパターンを書いては読み戻し、不要ディスクの状態を評価します。多重書き込みによるディスク消去の磁気版にあたり、すべてのビットセルを両方向へ強制的に反転させたうえで、戻ってきた内容を検証します。
 
 1 巡で `0x00`、`0xFF`、`0xAA`、`0x55` の 4 パターンを順に書きます。前の 2 つはすべてのセルをそれぞれの飽和状態へ追い込み、片方の極性しか保持できない弱ったセルを露出させます。後の 2 つはビット単位で交互に切り替わるため、一様なパターンでは到達できない隣接セル間の干渉を露出させます。各パターンは次を書く前に読み戻して比較されます。
@@ -454,7 +1023,17 @@ grade clean
 
 すべてのパターンが保持され、かつ終了処理が検証できた場合にのみ終了コード 0 を返します。
 
-#### `web [--host <h>] [--port N] [--no-open]`
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/surface-dark.png">
+<img alt="ローカル Web ページの surface コマンド" src="assets/screenshots/surface-light.png">
+</picture>
+
+#### `web`
+
+```bash
+fdstoolkit web [--host <h>] [--port N] [--no-open]
+```
+
 ローカルのウェブインターフェースを開きます。上記のすべてのコマンドがそこから利用でき、各ルートはコマンドが呼ぶものとまったく同じ処理を呼び出します。`--no-open` はブラウザを開かずにサーバーだけを起動します。SSH 越しに使う場合はこちらです。既定では `127.0.0.1:8000` を待ち受けます。
 
 ## ウェブインターフェース
@@ -598,4 +1177,11 @@ MIT です。[LICENSE](LICENSE) を参照してください。
 
 ---
 
-ファミコン ディスクシステム / ディスクカード の保存、吸い出し、ディスク品質の測定、ドライブの調整、ベルト交換、モーター回転数の調整、FDSStick、FDSKey、No-Intro への提出。English documentation: [README.md](README.md).
+<div align="center">
+
+ファミコン ディスクシステム / ディスクカード の保存、吸い出し、ディスク品質の測定、
+ドライブの調整、ベルト交換、モーター回転数の調整、FDSStick、FDSKey、No-Intro への提出。
+
+English documentation: <a href="README.md">README.md</a>
+
+</div>

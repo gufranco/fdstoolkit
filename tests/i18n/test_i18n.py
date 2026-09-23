@@ -5,6 +5,7 @@ import re
 import pytest
 
 from fdstoolkit.ui.app import STATIC_DIR
+from fdstoolkit.ui.forms import forms
 
 MARKUP = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
 SCRIPT = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
@@ -83,6 +84,19 @@ def test_the_language_choice_survives_storage_being_unavailable() -> None:
 
 def test_the_dictionaries_load_before_the_page_script() -> None:
     assert MARKUP.index("/static/i18n.js") < MARKUP.index("/static/app.js")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_command_family_carries_a_label(language: str) -> None:
+    wanted = {f"family.{form.family}" for form in forms()}
+
+    assert wanted - _keys(language) == set()
+
+
+def test_no_label_names_a_family_that_does_not_exist() -> None:
+    declared = {key for key in _keys("en") if key.startswith("family.")}
+
+    assert declared - {f"family.{form.family}" for form in forms()} == set()
 
 
 def test_no_key_is_declared_twice_in_one_language() -> None:
