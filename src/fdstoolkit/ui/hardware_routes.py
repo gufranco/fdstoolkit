@@ -75,7 +75,6 @@ def write_route(spec: WriteSpec) -> RowsResult:
             confirm=lambda _: True,
             backup=None,
             retries=spec.retries,
-            skip_backup=True,
         )
     except (HardwareFaultError, WriteRefusedError) as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
@@ -118,8 +117,11 @@ def surface_route(spec: SurfaceSpec) -> RowsResult:
                 "transient_blocks": len(report.transient_blocks),
                 "recovered_blocks": len(report.recovered_blocks),
                 "finish": str(report.finish),
+                "finish_ran": report.finish_ran,
                 "finish_verified": report.finish_verified,
+                "stopped": "" if report.stopped is None else report.stopped.value,
+                "refusal": report.refusal,
             }
         ],
-        ok=report.finish_verified,
+        ok=report.passed,
     )

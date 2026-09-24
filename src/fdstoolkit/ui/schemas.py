@@ -9,12 +9,11 @@ from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.drive.classes import ClassReport
 from fdstoolkit.drive.speed import SpeedReport
+from fdstoolkit.hardware.session import MAX_PASSES, MAX_RETRIES
 from fdstoolkit.identify.hashes import Digests
 from fdstoolkit.quality.grade import GradedReport
 from fdstoolkit.quality.reads import ReadStatistics
 
-MAX_PASSES: Final = 20
-MAX_RETRIES: Final = 20
 MAX_ADDRESS: Final = 0xFFFF
 MAX_NAME: Final = 120
 GAME_NAME_LENGTH: Final = 3

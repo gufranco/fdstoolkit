@@ -729,7 +729,9 @@ fdstoolkit consensus <images>... -o <out> [--map] [--force]
 fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [--yes] [--force]
 ```
 
-ディスクを読み取ります。`--passes` は各面を複数回読み、`--retries` はブロックごとの再試行回数を決め、`--raw` はドライブが返したパルスキャプチャをすべて保存します。
+ディスクを読み取ります。`--passes` は各面を複数回読み、`--retries` は不良ブロックのある面をあと何回まで読み直すかを決め、`--raw` はドライブが返したパルスキャプチャをすべて保存します。
+
+ドライブは 1 ブロックだけを読むことができないため、再試行は毎回その面全体の読み直しになります。予算がブロックごとではなく面ごとなのはそのためです。1 回の読み直しで、まだ失敗しているブロックすべてを解決します。不良ブロックが 10 個ある面でも、追加の読み取りは最大で `--retries` 回であり、その 10 倍にはなりません。読み直したブロックは位置ではなく種別とファイル番号で照合するため、損傷したブロックが読み直しで消えても、後続のブロックがずれることはありません。読み直しでようやく正しく読めたブロックは、ディスクが劣化している兆候として数えます。
 
 ドライブは一度に片面しか読めず、面を選択できません。そのため複数面を読む場合、読み取りの合間にディスクを裏返すよう求め、同じ面を二度読むくらいなら処理を中止します。`--yes` はその確認に自動で答えます。2 回目の読み取りが 1 回目と同じバイト列を返した場合、吸い出しは失敗し、何も書き出しません。裏返されなかったディスクは、両面を吸い出したように見えて実際はそうでないファイルを生むからです。
 
@@ -746,9 +748,9 @@ fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [-
 fdstoolkit write <image> [--backup <p>] [--retries N] [--yes]
 ```
 
-ディスクへ書き込み、読み戻して比較します。`--backup` は書き込む前に現在の内容を保存します。`--yes` がなければ確認を求めます。
+ディスクへ書き込み、読み戻して比較します。`--backup` は書き込む前に現在の内容を保存します。`--yes` がなければ確認を求めます。書き込みは片面ずつです。両面のイメージは、ディスクを裏返す手順をコマンドが案内できるようになるまで拒否します。
 
-FDSStick は、ディスクが書き込み禁止かどうかも、電池が保っているかどうかも、そもそもディスクが入っているかどうかも報告しないため、本ツールは書き込み前にそれらを確認できません。その代わりにディスクを守るのは書き込みの前後の手順です。`--backup` を指定すれば先に現在の内容を保存し、`--yes` を指定しない限り開始前に確認し、書き込み後にはすべてを読み戻して書き込むはずだった内容と比較します。書き込みを受け付けなかったディスクは、そこで不一致として現れます。
+FDSStick は、ディスクが書き込み禁止かどうかも、電池が保っているかどうかも、そもそもディスクが入っているかどうかも報告しないため、本ツールは書き込み前にそれらを確認できません。その代わりにディスクを守るのは書き込みの前後の手順です。書き込む前に面を 1 回だけ読み、その 1 回の読み取りが `--backup` で保存するバックアップであり、書き込み後の確認の基準にもなります。`--yes` を指定しない限り開始前に確認し、書き込み後にはすべてを読み戻して書き込むはずだった内容と比較します。読み戻した内容が書き込み前の読み取りとまったく同じなら、ディスクは書き込みを受け付けていません。その場合、コマンドは不一致のブロックを列挙するのではなく、その旨を伝えて中止します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">
@@ -789,22 +791,41 @@ recovered の数が、修復にあたる部分です。閾値へ近づいてい�
 
 消去の後に有用なのは `blank` です。出力されるバイト列は `blank --formatted` と同一であり、ディスクは出荷時の状態で保管でき、書き込みソフトからは未使用の媒体として扱われます。
 
+判定が決まった時点でテストは止まります。すでに劣化しているディスクに対して、それ以上のパスはディスクを傷めるだけだからです。
+
+- 2 つのパターンで失敗したブロックが最初に出た時点で、損傷として止まります。
+- ディスクが書き込みを受け付けなかった場合、書き込み不能として止まります。
+- ドライブが止まった場合は、他のコマンドと同じく即座に止まります。
+
+止まったテストは `--finish` を行いません。1 回だけ失敗したブロックでは止まりません。1 回の失敗はパスを重ねて切り分けるべき境界的なケースだからです。
+
 ```bash
-fdstoolkit surface --sides 2 --passes 3 \
-    --backup before.fds --finish blank --yes
+fdstoolkit surface --passes 3 --backup before.fds --finish blank --yes
 ```
 
 ```
-59145 data bytes per side, 100.0% of the physical track, 3 pass(es) of 4 patterns
+59145 data bytes per side, 100.0% of the physical track, 12 pattern pass(es) run
 pass 1 pattern 0x00: held
+pass 1 pattern 0xff: held
 ...
-2 block(s) failed once, marginal rather than dead
-2 block(s) failed early and read clean after, so rewriting refreshed them
+pass 3 pattern 0x55: held
 left the disk formatted as it leaves the kiosk, verified
 grade clean
 ```
 
-すべてのパターンが保持され、かつ終了処理が検証できた場合にのみ終了コード 0 を返します。
+同じコマンドを、1 か所が壊れたディスクで実行した場合:
+
+```
+59145 data bytes per side, 100.0% of the physical track, 2 pattern pass(es) run
+pass 1 pattern 0x00: did not hold
+pass 1 pattern 0xff: did not hold
+1 block(s) failed on more than one pattern, which is the surface itself
+stopped early: a block failed on two patterns, so the surface is damaged
+the finish was skipped because the test stopped early
+grade failed
+```
+
+すべてのパターンが保持され、かつ終了処理が検証できた場合にのみ終了コード 0 を返します。`write` と同じく、当面は片面ずつのテストです。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/surface-dark.png">

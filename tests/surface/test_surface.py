@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pytest
 from drive_double import FaultPlan, SimulatedDrive
 
@@ -10,6 +12,7 @@ from fdstoolkit.quality.surface import (
     PATTERNS,
     Finish,
     PatternPass,
+    StopReason,
     SurfacePlan,
     SurfaceReport,
     SurfaceTestRefusedError,
@@ -18,6 +21,14 @@ from fdstoolkit.quality.surface import (
 )
 
 BLANK_BLOCKS = 2
+
+
+class FinishRefusingDrive(SimulatedDrive):
+    def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+        if self.write_count >= len(PATTERNS):
+            self.write_count += 1
+            return
+        super().write_side(side, blocks)
 
 
 def scratch_disk():  # noqa: ANN201
@@ -42,13 +53,61 @@ def test_a_healthy_disk_passes_every_pattern() -> None:
     assert report.failed_patterns == ()
 
 
-def test_a_disk_that_does_not_hold_a_write_fails() -> None:
+def test_a_disk_that_does_not_take_a_write_stops_at_the_first_pattern() -> None:
     drive = SimulatedDrive(scratch_disk(), plan=FaultPlan(writes_do_not_stick=True))
 
     report = surface_test(drive, drive, sides=1, confirm=lambda _: True)
 
+    assert report.stopped is StopReason.REFUSED
+    assert report.passes == ()
     assert report.grade is Grade.FAILED
-    assert report.failed_patterns
+    assert drive.write_count == 1
+    assert not report.passed
+
+
+def test_a_block_failing_on_two_patterns_stops_the_test() -> None:
+    drive = SimulatedDrive(scratch_disk(), plan=FaultPlan(unstable_blocks=frozenset({1})))
+
+    report = surface_test(drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(rounds=3))
+
+    assert report.stopped is StopReason.DAMAGED
+    assert len(report.passes) == 2
+    assert report.hard_blocks == ((0, 1),)
+    assert drive.write_count == 2
+
+
+def test_a_block_failing_once_does_not_stop_the_test() -> None:
+    class OnceUnstableDrive(SimulatedDrive):
+        def read_side(self, side: int):  # noqa: ANN202
+            if self.read_count == 1:
+                self._plan = FaultPlan(unstable_blocks=frozenset({1}))
+            elif self.read_count == 2:
+                self._plan = FaultPlan()
+            return super().read_side(side)
+
+    drive = OnceUnstableDrive(scratch_disk())
+
+    report = surface_test(drive, drive, sides=1, confirm=lambda _: True)
+
+    assert report.stopped is None
+    assert len(report.passes) == len(PATTERNS)
+
+
+def test_a_stopped_test_skips_its_finish() -> None:
+    drive = SimulatedDrive(scratch_disk(), plan=FaultPlan(unstable_blocks=frozenset({1})))
+
+    report = surface_test(
+        drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(finish=Finish.BLANK)
+    )
+
+    assert report.stopped is StopReason.DAMAGED
+    assert not report.finish_ran
+    assert drive.write_count == 2
+
+
+def test_a_stop_reason_says_what_it_means() -> None:
+    assert "damaged" in StopReason.DAMAGED.value
+    assert "did not take a write" in StopReason.REFUSED.value
 
 
 def test_the_test_refuses_to_run_without_consent() -> None:
@@ -76,8 +135,16 @@ def test_the_original_is_dumped_before_the_first_write() -> None:
 
     surface_test(drive, drive, sides=1, confirm=lambda _: True, backup=saved.append)
 
-    assert saved
+    assert len(saved) == 1
     assert saved[0][:1] == bytes([0x01])
+
+
+def test_the_backup_reuses_the_read_taken_before_the_first_write() -> None:
+    drive = SimulatedDrive(scratch_disk())
+
+    surface_test(drive, drive, sides=1, confirm=lambda _: True, backup=lambda _: None)
+
+    assert drive.read_count == 2 * len(PATTERNS)
 
 
 def test_a_write_protected_disk_is_refused() -> None:
@@ -95,12 +162,25 @@ def test_an_empty_drive_is_refused() -> None:
 
 
 def test_the_report_names_the_pattern_that_failed() -> None:
-    drive = SimulatedDrive(scratch_disk(), plan=FaultPlan(writes_do_not_stick=True))
+    drive = SimulatedDrive(scratch_disk(), plan=FaultPlan(unstable_blocks=frozenset({1})))
 
     report = surface_test(drive, drive, sides=1, confirm=lambda _: True)
 
-    assert report.passes[0].pattern in PATTERNS
+    assert report.passes[0].pattern == PATTERNS[0]
     assert not report.passes[0].verified
+
+
+def test_a_run_passes_only_when_every_pattern_held_and_the_finish_verified() -> None:
+    held = PatternPass(0x00, verified=True, mismatched_blocks=(), grade=Grade.CLEAN)
+    failed = PatternPass(0xFF, verified=False, mismatched_blocks=((0, 3),), grade=Grade.FAILED)
+
+    clean = SurfaceReport(passes=(held,))
+    broken = SurfaceReport(passes=(held, failed))
+    unfinished = SurfaceReport(passes=(held,), finish_verified=False)
+
+    assert clean.passed
+    assert not broken.passed
+    assert not unfinished.passed
 
 
 def test_a_report_of_marginal_passes_is_not_clean() -> None:
@@ -247,10 +327,13 @@ def test_an_erase_finish_leaves_nothing_the_adapter_can_read() -> None:
 
 
 def test_a_finish_that_does_not_stick_is_reported() -> None:
-    drive = SimulatedDrive(scratch_disk(), plan=FaultPlan(writes_do_not_stick=True))
+    drive = FinishRefusingDrive(scratch_disk())
 
     report = surface_test(
         drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(finish=Finish.BLANK)
     )
 
+    assert report.stopped is None
+    assert report.finish_ran
     assert not report.finish_verified
+    assert not report.passed

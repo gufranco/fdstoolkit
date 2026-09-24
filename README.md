@@ -735,7 +735,9 @@ Merge several dumps of one disk block by block by majority, and report every dis
 fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [--yes] [--force]
 ```
 
-Read a disk. `--passes` reads each side more than once, `--retries` sets per-block retries, and `--raw` keeps every pulse capture the drive returned.
+Read a disk. `--passes` reads each side more than once, `--retries` re-reads a side that has failed blocks up to that many more times, and `--raw` keeps every pulse capture the drive returned.
+
+The drive cannot read one block on its own, so every retry is a full read of the side. That is why the budget is per side rather than per block: each re-read resolves every block still failing, and a side with ten bad blocks costs at most `--retries` more reads, not ten times that. A re-read block is matched by its type and file number, never by position, so a damaged block that vanishes on the re-read cannot shift the ones after it. Blocks that only read clean on a re-read are counted as a sign the disk is wearing.
 
 The drive reaches one face at a time and cannot select a side, so reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
 
@@ -752,9 +754,9 @@ Every read and write runs against a deadline. Before anything has been measured 
 fdstoolkit write <image> [--backup <p>] [--retries N] [--yes]
 ```
 
-Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`.
+Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`. One side at a time: a two-side image is refused until the command can walk you through turning the disk over.
 
-An FDSStick does not report whether a disk is write protected, whether the battery holds, or whether a disk is even present, so the toolkit cannot check any of them before writing. What protects the disk instead is the sequence around the write: it saves the current contents first when you pass `--backup`, asks before it starts unless you pass `--yes`, and reads everything back afterwards to compare it with what was meant to be written. A disk that did not take the write shows up there as a mismatch.
+An FDSStick does not report whether a disk is write protected, whether the battery holds, or whether a disk is even present, so the toolkit cannot check any of them before writing. What protects the disk instead is the sequence around the write. The side is read once before anything is written, and that one read is both the backup `--backup` saves and the baseline for the check afterwards. The command asks before it starts unless you pass `--yes`, and reads everything back afterwards to compare it with what was meant to be written. If the readback is identical to the read taken before, the disk did not take the write at all, and the command stops and says so rather than listing mismatched blocks.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">
@@ -810,22 +812,41 @@ because every pass destroys what was there.
 `blank --formatted`, which means the disk goes back into the drawer in the state it shipped in
 and a writer will treat it as unwritten media.
 
+The test stops as soon as its verdict is decided, because every further pass only wears a disk that is already failing:
+
+- the first block that fails on two patterns stops it as damaged;
+- a write the disk did not take stops it as not taking writes;
+- a stalled drive stops it at once, like any other command.
+
+A stopped test skips its `--finish`. A block that fails once does not stop anything, since one failure is the marginal case more passes are meant to separate.
+
 ```bash
-fdstoolkit surface --sides 2 --passes 3 \
-    --backup before.fds --finish blank --yes
+fdstoolkit surface --passes 3 --backup before.fds --finish blank --yes
 ```
 
 ```
-59145 data bytes per side, 100.0% of the physical track, 3 pass(es) of 4 patterns
+59145 data bytes per side, 100.0% of the physical track, 12 pattern pass(es) run
 pass 1 pattern 0x00: held
+pass 1 pattern 0xff: held
 ...
-2 block(s) failed once, marginal rather than dead
-2 block(s) failed early and read clean after, so rewriting refreshed them
+pass 3 pattern 0x55: held
 left the disk formatted as it leaves the kiosk, verified
 grade clean
 ```
 
-Exit status is 0 only when every pattern held and the finish verified.
+The same command on a disk with one bad spot:
+
+```
+59145 data bytes per side, 100.0% of the physical track, 2 pattern pass(es) run
+pass 1 pattern 0x00: did not hold
+pass 1 pattern 0xff: did not hold
+1 block(s) failed on more than one pattern, which is the surface itself
+stopped early: a block failed on two patterns, so the surface is damaged
+the finish was skipped because the test stopped early
+grade failed
+```
+
+Exit status is 0 only when every pattern held and the finish verified. Like `write`, the test runs on one side at a time for now.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/surface-dark.png">

@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 from drive_double import FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.edit.files import FileSpec, insert_file
+from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import (
     Grade,
     SideFlipError,
+    WriteNotTakenError,
     WriteRefusedError,
     dump,
     dump_repeated,
@@ -22,6 +27,110 @@ def sample_disk(sides: int = 1) -> Disk:
     return disk
 
 
+FILES = 5
+
+
+def disk_with_files(count: int = FILES) -> Disk:
+    disk = sample_disk()
+    for number in range(count):
+        disk = insert_file(
+            disk,
+            side=0,
+            spec=FileSpec(
+                name=f"FILE{number}",
+                address=0x6000,
+                kind=FileKind.PROGRAM,
+                data=bytes([number + 1]) * 16,
+            ),
+        )
+    return disk
+
+
+class DroppingDrive(SimulatedDrive):
+    def __init__(self, disk: Disk, *, dropped: int, plan: FaultPlan) -> None:
+        super().__init__(disk, plan=plan)
+        self.dropped = dropped
+
+    def read_side(self, side: int) -> Iterator[BlockRead]:
+        blocks = list(super().read_side(side))
+        if self.read_count == 1:
+            return iter(blocks)
+        return iter(blocks[: self.dropped] + blocks[self.dropped + 1 :])
+
+
+def test_many_failed_blocks_share_one_retry_budget() -> None:
+    disk = disk_with_files()
+    flaky = dict.fromkeys(range(2, len(disk.sides[0].blocks)), 99)
+    drive = SimulatedDrive(disk, plan=FaultPlan(flaky_blocks=flaky))
+
+    dump(drive, sides=1, retries=3)
+
+    assert len(flaky) > 3
+    assert drive.read_count == 4
+
+
+def test_a_retry_budget_of_nothing_reads_the_side_once() -> None:
+    drive = SimulatedDrive(sample_disk(), plan=FaultPlan(bad_crc_blocks=frozenset({1})))
+
+    result = dump(drive, sides=1, retries=0)
+
+    assert drive.read_count == 1
+    assert result.sides[0].failed_blocks == (1,)
+
+
+def test_a_clean_side_is_never_read_again() -> None:
+    drive = SimulatedDrive(disk_with_files())
+
+    dump(drive, sides=1, retries=3)
+
+    assert drive.read_count == 1
+
+
+def test_one_re_read_resolves_every_block_that_now_reads_clean() -> None:
+    disk = disk_with_files()
+    drive = SimulatedDrive(disk, plan=FaultPlan(flaky_blocks={3: 2, 5: 2, 7: 2}))
+
+    result = dump(drive, sides=1, retries=3)
+
+    assert drive.read_count == 2
+    assert result.sides[0].marginal_blocks == (3, 5, 7)
+    assert result.grade is Grade.MARGINAL
+
+
+def test_a_re_read_that_loses_an_earlier_block_still_recovers_by_header() -> None:
+    disk = disk_with_files()
+    last_data = len(disk.sides[0].blocks) - 1
+    drive = DroppingDrive(disk, dropped=3, plan=FaultPlan(flaky_blocks={last_data: 2}))
+
+    result = dump(drive, sides=1, retries=2)
+
+    recovered = result.sides[0].blocks[last_data]
+    assert recovered.crc_ok
+    assert recovered.payload == disk.sides[0].blocks[last_data].payload
+
+
+def test_a_block_whose_header_is_gone_from_the_re_read_stays_failed() -> None:
+    disk = disk_with_files()
+    drive = DroppingDrive(disk, dropped=4, plan=FaultPlan(flaky_blocks={4: 2}))
+
+    result = dump(drive, sides=1, retries=1)
+
+    assert result.sides[0].failed_blocks == (4,)
+    assert result.sides[0].blocks[4].attempts == 2
+
+
+def test_a_block_with_no_bytes_cannot_be_matched_and_stays_failed() -> None:
+    class EmptyBlockDrive(SimulatedDrive):
+        def read_side(self, side: int) -> Iterator[BlockRead]:
+            blocks = list(super().read_side(side))
+            blocks[1] = BlockRead(index=1, payload=b"", crc_ok=False, attempts=1)
+            return iter(blocks)
+
+    result = dump(EmptyBlockDrive(sample_disk()), sides=1, retries=2)
+
+    assert result.sides[0].failed_blocks == (1,)
+
+
 def test_a_clean_dump_is_graded_clean() -> None:
     result = dump(SimulatedDrive(sample_disk()), sides=1)
 
@@ -32,7 +141,7 @@ def test_a_clean_dump_is_graded_clean() -> None:
 def test_a_dump_retries_a_flaky_block_and_grades_it_marginal() -> None:
     drive = SimulatedDrive(sample_disk(), plan=FaultPlan(flaky_blocks={1: 3}))
 
-    result = dump(drive, sides=1, retries=4)
+    result = dump(drive, sides=1, retries=3)
 
     assert result.grade is Grade.MARGINAL
     assert result.sides[0].blocks[1].attempts == 3
@@ -51,7 +160,7 @@ def test_a_block_that_never_reads_cleanly_fails_the_dump() -> None:
 def test_a_failing_block_is_still_kept_in_the_dump() -> None:
     drive = SimulatedDrive(sample_disk(), plan=FaultPlan(bad_crc_blocks=frozenset({1})))
 
-    result = dump(drive, sides=1, retries=1)
+    result = dump(drive, sides=1, retries=0)
 
     assert len(result.sides[0].blocks) == 2
 
@@ -145,36 +254,31 @@ def other_game() -> Disk:
     return disk
 
 
-def test_a_write_that_does_not_stick_fails_verification() -> None:
+def test_a_write_the_disk_did_not_take_stops_as_refused() -> None:
     drive = SimulatedDrive(sample_disk(), plan=FaultPlan(writes_do_not_stick=True))
 
-    report = write_verified(
-        drive, drive, other_game(), confirm=lambda _: True, backup=None, skip_backup=True
-    )
+    with pytest.raises(WriteNotTakenError, match="reads back exactly as it was before") as caught:
+        write_verified(drive, drive, other_game(), confirm=lambda _: True, backup=None)
 
-    assert not report.verified
-    assert report.unchanged
+    assert "FD3206" in str(caught.value)
 
 
-def test_a_disk_left_unchanged_points_at_the_controller() -> None:
-    drive = SimulatedDrive(sample_disk(), plan=FaultPlan(writes_do_not_stick=True))
+def test_the_disk_is_read_once_before_a_write() -> None:
+    drive = SimulatedDrive(sample_disk())
+    saved: list[bytes] = []
 
-    report = write_verified(
-        drive, drive, other_game(), confirm=lambda _: True, backup=None, skip_backup=True
-    )
+    write_verified(drive, drive, other_game(), confirm=lambda _: True, backup=saved.append)
 
-    assert any("FD3206" in note for note in report.notes)
+    assert drive.read_count == 2
+    assert len(saved) == 1
 
 
 def test_a_write_of_the_same_contents_is_not_mistaken_for_a_refusal() -> None:
     drive = SimulatedDrive(sample_disk(), plan=FaultPlan(writes_do_not_stick=True))
 
-    report = write_verified(
-        drive, drive, sample_disk(), confirm=lambda _: True, backup=None, skip_backup=True
-    )
+    report = write_verified(drive, drive, sample_disk(), confirm=lambda _: True, backup=None)
 
     assert report.verified
-    assert not report.unchanged
 
 
 def test_a_verified_write_carries_the_portability_caveat() -> None:
@@ -192,7 +296,6 @@ def test_a_write_that_changed_the_disk_wrongly_is_not_blamed_on_the_controller()
     report = write_verified(drive, drive, sample_disk(), confirm=lambda _: True, backup=None)
 
     assert not report.verified
-    assert not report.unchanged
     assert report.notes == ()
 
 
@@ -218,24 +321,6 @@ def test_the_confirmation_message_names_what_is_at_stake() -> None:
 
     assert "overwrite" in seen[0]
     assert "side" in seen[0]
-
-
-def test_a_retry_that_returns_fewer_blocks_stops_the_walk() -> None:
-    class ShrinkingDrive(SimulatedDrive):
-        def __init__(self) -> None:
-            super().__init__(sample_disk(), plan=FaultPlan(bad_crc_blocks=frozenset({1})))
-            self._calls = 0
-
-        def read_side(self, side: int):  # noqa: ANN202
-            self._calls += 1
-            blocks = list(super().read_side(side))
-            if self._calls > 1:
-                return iter(blocks[:1])
-            return iter(blocks)
-
-    result = dump(ShrinkingDrive(), sides=1, retries=3)
-
-    assert result.sides[0].failed_blocks == (1,)
 
 
 def test_a_fault_during_the_write_stops_the_run() -> None:

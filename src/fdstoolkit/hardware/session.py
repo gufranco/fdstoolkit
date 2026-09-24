@@ -18,6 +18,8 @@ from fdstoolkit.hardware.ports import (
 )
 
 DEFAULT_RETRIES = 3
+MAX_RETRIES: Final = 20
+MAX_PASSES: Final = 20
 MIN_PASSES = 2
 EMULATED_CAPACITY = 66560
 
@@ -30,6 +32,10 @@ class Grade(StrEnum):
 
 
 class WriteRefusedError(Exception):
+    pass
+
+
+class WriteNotTakenError(WriteRefusedError):
     pass
 
 
@@ -141,10 +147,11 @@ PORTABILITY_NOTE: Final = (
     "verified on this drive only: a drive with misaligned heads writes disks that it reads "
     "back and other drives cannot, so read the disk on a second drive before trusting it"
 )
-UNCHANGED_NOTE: Final = (
-    "the disk reads back exactly as it was before the write, which is what a drive with an "
-    "FD3206 controller does when it silently refuses a full-surface write; check the chip "
-    "marking, FD3206P rather than FD7201P, before suspecting the image"
+REFUSED_WRITE: Final = (
+    "the disk reads back exactly as it was before the write, so it did not take the write. "
+    "That is what a drive with an FD3206 controller does when it silently refuses a "
+    "full-surface write; check the chip marking, FD3206P rather than FD7201P, before "
+    "suspecting the image"
 )
 
 
@@ -153,7 +160,6 @@ class WriteReport:
     verified: bool
     mismatched_blocks: tuple[tuple[int, int], ...]
     dump: DumpResult
-    unchanged: bool = False
 
     @property
     def grade(self) -> Grade:
@@ -165,8 +171,6 @@ class WriteReport:
     def notes(self) -> tuple[str, ...]:
         if self.verified:
             return (PORTABILITY_NOTE,)
-        if self.unchanged:
-            return (UNCHANGED_NOTE,)
         return ()
 
 
@@ -177,29 +181,50 @@ def _require_readable(reader: DiskReader) -> None:
         raise WriteRefusedError(message)
 
 
-def _read_block_with_retries(
-    reader: DiskReader,
-    side: int,
-    index: int,
-    first: BlockRead,
-    retries: int,
-) -> BlockRead:
-    if first.crc_ok or retries <= 1:
-        return first
-    attempts = 1
-    latest = first
-    while attempts < retries and not latest.crc_ok:
-        attempts += 1
+Identity = tuple[int, int]
+NO_FILE: Final = -1
+
+
+def _identities(blocks: Sequence[BlockRead]) -> tuple[Identity | None, ...]:
+    number = NO_FILE
+    found: list[Identity | None] = []
+    for block in blocks:
+        if not block.payload:
+            found.append(None)
+            continue
+        kind = block.payload[0]
+        if kind == BlockKind.FILE_HEADER and len(block.payload) > 1:
+            number = block.payload[1]
+        found.append(
+            (kind, number if kind in {BlockKind.FILE_HEADER, BlockKind.FILE_DATA} else NO_FILE)
+        )
+    return tuple(found)
+
+
+def _read_side_with_retries(reader: DiskReader, side: int, retries: int) -> tuple[BlockRead, ...]:
+    resolved = list(reader.read_side(side))
+    wanted = _identities(resolved)
+    reads = 1
+    while reads <= retries and any(not block.crc_ok for block in resolved):
+        reads += 1
         again = list(reader.read_side(side))
-        if index >= len(again):
-            break
-        latest = again[index]
-    return BlockRead(
-        index=index,
-        payload=latest.payload,
-        crc_ok=latest.crc_ok,
-        attempts=attempts,
-    )
+        clean = {
+            identity: block
+            for identity, block in zip(_identities(again), again, strict=True)
+            if identity is not None and block.crc_ok
+        }
+        for position, block in enumerate(resolved):
+            if block.crc_ok:
+                continue
+            identity = wanted[position]
+            match = clean.get(identity) if identity is not None else None
+            resolved[position] = BlockRead(
+                index=position,
+                payload=match.payload if match is not None else block.payload,
+                crc_ok=match is not None,
+                attempts=reads,
+            )
+    return tuple(resolved)
 
 
 def dump(
@@ -215,12 +240,7 @@ def dump(
     for side in range(sides):
         if side:
             _ask_for_flip(reader, side, flip)
-        first_pass = list(reader.read_side(side))
-        blocks = tuple(
-            _read_block_with_retries(reader, side, index, block, retries)
-            for index, block in enumerate(first_pass)
-        )
-        dumped.append(SideDump(index=side, blocks=blocks))
+        dumped.append(SideDump(index=side, blocks=_read_side_with_retries(reader, side, retries)))
         if side and not selects_sides(reader):
             _reject_unflipped(dumped, side)
     return DumpResult(sides=tuple(dumped))
@@ -270,18 +290,6 @@ def _compare(disk: Disk, readback: DumpResult) -> tuple[tuple[int, int], ...]:
     return tuple(mismatched)
 
 
-def _take_backup(
-    reader: DiskReader,
-    disk: Disk,
-    backup: Callable[[bytes], None] | None,
-    retries: int,
-) -> None:
-    original = dump(reader, sides=disk.side_count, retries=retries)
-    if backup is not None:
-        data, _ = fds.encode(original.as_disk(), headered=False)
-        backup(data)
-
-
 def _confirmation_message(disk: Disk) -> str:
     return (
         f"overwrite the disk in the drive with {disk.side_count} side(s) of new data, "
@@ -297,7 +305,6 @@ def write_verified(
     confirm: Callable[[str], bool],
     backup: Callable[[bytes], None] | None,
     retries: int = DEFAULT_RETRIES,
-    skip_backup: bool = False,
 ) -> WriteReport:
     status = writer.status()
     if not status.can_write:
@@ -317,16 +324,17 @@ def write_verified(
         )
         raise WriteRefusedError(message)
 
-    present = dump(reader, sides=1, retries=retries)
-    if disk.side_count > len(present.sides) and disk.side_count > 1:
+    if disk.side_count > 1:
         message = (
-            f"the image has {disk.side_count} side(s); write them one side at a time, "
-            "flipping the disk between writes"
+            f"the image has {disk.side_count} sides; write them one side at a time, "
+            "turning the disk over between writes"
         )
         raise WriteRefusedError(message)
 
-    if not skip_backup:
-        _take_backup(reader, disk, backup, retries)
+    before = dump(reader, sides=1, retries=retries)
+    if backup is not None:
+        data, _ = fds.encode(before.as_disk(), headered=False)
+        backup(data)
 
     if not confirm(_confirmation_message(disk)):
         message = "the operator declined the write"
@@ -342,12 +350,13 @@ def write_verified(
 
     readback = dump(reader, sides=disk.side_count, retries=retries)
     mismatched = _compare(disk, readback)
+    if mismatched and _same_first_side(before, readback):
+        raise WriteNotTakenError(REFUSED_WRITE)
 
     return WriteReport(
         verified=not mismatched,
         mismatched_blocks=tuple(mismatched),
         dump=readback,
-        unchanged=bool(mismatched) and _same_first_side(present, readback),
     )
 
 

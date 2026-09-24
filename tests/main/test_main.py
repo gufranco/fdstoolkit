@@ -26,7 +26,7 @@ from fdstoolkit.hardware.fdsstick import FdsStick, HidApiTransport
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import Grade
 from fdstoolkit.identify import firmware
-from fdstoolkit.quality.surface import Finish, PatternPass, SurfaceReport
+from fdstoolkit.quality.surface import Finish, PatternPass, StopReason, SurfaceReport
 
 runner = CliRunner()
 STALL_CEILING = 0.05
@@ -348,6 +348,29 @@ def test_dump_reads_the_disk_in_the_drive(
     assert result.exit_code == 0
     assert "grade clean" in result.stdout
     assert out.stat().st_size == SIDE_SIZE
+
+
+def test_dump_names_blocks_that_only_read_clean_on_a_re_read(
+    image: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attach(monkeypatch, image, plan=FaultPlan(flaky_blocks={1: 2}))
+
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.fds")])
+
+    assert (
+        "side 0: 1 block(s) only read clean on a re-read, so this disk is wearing" in result.stdout
+    )
+
+
+def test_dump_names_blocks_that_never_read_clean(
+    image: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attach(monkeypatch, image, plan=FaultPlan(bad_crc_blocks=frozenset({1})))
+
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.fds"), "--retries", "0"])
+
+    assert result.exit_code == 1
+    assert "side 0: 1 block(s) never read clean, blocks 1" in result.stdout
 
 
 def test_dump_refuses_when_no_stick_is_attached(
@@ -2261,6 +2284,19 @@ def test_dump_asks_the_operator_to_turn_the_disk_over(
     assert result.exit_code == 0
 
 
+def test_surface_says_why_it_stopped_and_that_the_finish_was_skipped(
+    single_side: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attach(monkeypatch, single_side, plan=FaultPlan(writes_do_not_stick=True))
+
+    result = runner.invoke(app, ["surface", "--yes", "--finish", "blank"])
+
+    assert result.exit_code == 1
+    assert f"stopped early: {StopReason.REFUSED.value}" in result.stdout
+    assert "reads back exactly as it was before the write" in result.stdout
+    assert "the finish was skipped because the test stopped early" in result.stdout
+
+
 def test_surface_names_every_class_of_failing_block(
     single_side: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2277,6 +2313,7 @@ def test_surface_names_every_class_of_failing_block(
         data_bytes=59145,
         finish=Finish.ERASE,
         finish_verified=False,
+        finish_ran=True,
     )
 
     def fixed_report(*args: object, **kwargs: object) -> SurfaceReport:

@@ -18,6 +18,9 @@ from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
+    MAX_PASSES,
+    MAX_RETRIES,
+    DumpResult,
     Grade,
     SideFlipError,
     WriteRefusedError,
@@ -28,6 +31,7 @@ from fdstoolkit.hardware.session import dump as dump_disk
 from fdstoolkit.quality.surface import (
     Finish,
     SurfacePlan,
+    SurfaceReport,
     SurfaceTestRefusedError,
     surface_test,
 )
@@ -60,8 +64,18 @@ def dump(
     sides: Annotated[
         int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="1 or 2 sides to read")
     ] = 1,
-    passes: Annotated[int, typer.Option("--passes", min=1, help="read each side this often")] = 1,
-    retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
+    passes: Annotated[
+        int, typer.Option("--passes", min=1, max=MAX_PASSES, help="read each side this often")
+    ] = 1,
+    retries: Annotated[
+        int,
+        typer.Option(
+            "--retries",
+            min=0,
+            max=MAX_RETRIES,
+            help="re-read a side with failed blocks up to this many more times",
+        ),
+    ] = 3,
     raw: Annotated[
         Path | None,
         typer.Option("--raw", help="also keep every pulse capture the drive returned, here"),
@@ -107,9 +121,24 @@ def dump(
     data, _ = fds.encode(result.as_disk(), headered=False)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
+    report_blocks(result)
     if raw is not None:
         keep_captures(drive, raw, stem=output.stem)
     raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
+
+
+def report_blocks(result: DumpResult) -> None:
+    for side in result.sides:
+        if side.marginal_blocks:
+            typer.echo(
+                f"  side {side.index}: {len(side.marginal_blocks)} block(s) only read clean on "
+                "a re-read, so this disk is wearing"
+            )
+        if side.failed_blocks:
+            typer.echo(
+                f"  side {side.index}: {len(side.failed_blocks)} block(s) never read clean, "
+                f"blocks {', '.join(str(index) for index in side.failed_blocks)}"
+            )
 
 
 def keep_captures(drive: FdsStick, directory: Path, *, stem: str) -> None:
@@ -134,7 +163,15 @@ def write(
         typer.Option("--backup", help="where to save the disk's current contents"),
     ] = None,
     yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
-    retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
+    retries: Annotated[
+        int,
+        typer.Option(
+            "--retries",
+            min=0,
+            max=MAX_RETRIES,
+            help="re-read a side with failed blocks up to this many more times",
+        ),
+    ] = 3,
 ) -> None:
     """Write an image to a disk, then read it back and compare."""
     disk, _, _, _ = decode_image(image)
@@ -179,7 +216,9 @@ def surface(
     ] = None,
     passes: Annotated[
         int,
-        typer.Option("--passes", min=1, max=64, help="how many times to run the pattern cycle"),
+        typer.Option(
+            "--passes", min=1, max=MAX_PASSES, help="how many times to run the pattern cycle"
+        ),
     ] = 1,
     quick: Annotated[
         bool,
@@ -213,9 +252,15 @@ def surface(
     except (HardwareFaultError, WriteRefusedError, SurfaceTestRefusedError) as error:
         raise fail(str(error)) from error
 
+    report_surface(report)
+    typer.echo(f"grade {report.grade}")
+    raise typer.Exit(code=0 if report.passed else 1)
+
+
+def report_surface(report: SurfaceReport) -> None:
     typer.echo(
         f"{report.data_bytes} data bytes per side, {report.coverage:.1%} of the physical track, "
-        f"{passes} pass(es) of 4 patterns",
+        f"{len(report.passes)} pattern pass(es) run",
     )
     for entry in report.passes:
         state = "held" if entry.verified else "did not hold"
@@ -236,7 +281,14 @@ def surface(
             "so rewriting refreshed them",
         )
 
-    if report.finish is not Finish.LEAVE:
+    if report.stopped is not None:
+        typer.echo(f"stopped early: {report.stopped.value}")
+    if report.refusal:
+        typer.echo(f"  {report.refusal}")
+
+    if report.finish is not Finish.LEAVE and not report.finish_ran:
+        typer.echo("the finish was skipped because the test stopped early")
+    elif report.finish is not Finish.LEAVE:
         left = (
             "formatted as it leaves the kiosk"
             if report.finish is Finish.BLANK
@@ -244,10 +296,6 @@ def surface(
         )
         state = "verified" if report.finish_verified else "which did not verify"
         typer.echo(f"left the disk {left}, {state}")
-
-    typer.echo(f"grade {report.grade}")
-    ok = report.grade is Grade.CLEAN and report.finish_verified
-    raise typer.Exit(code=0 if ok else 1)
 
 
 def web_server() -> tuple[Callable[..., None], Callable[[], object]]:

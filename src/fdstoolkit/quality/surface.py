@@ -12,7 +12,7 @@ from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import Disk, Side, require_readable_sides
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import DiskReader, DiskWriter
-from fdstoolkit.hardware.session import Grade, dump, write_verified
+from fdstoolkit.hardware.session import Grade, WriteNotTakenError, write_verified
 
 PATTERNS: Final = (0x00, 0xFF, 0xAA, 0x55)
 PATTERN_FILE_SIZE: Final = 4096
@@ -28,6 +28,11 @@ IMAGE_BASE_COST: Final = 58
 
 class SurfaceTestRefusedError(Exception):
     pass
+
+
+class StopReason(StrEnum):
+    DAMAGED = "a block failed on two patterns, so the surface is damaged"
+    REFUSED = "the disk did not take a write, so every further pass would only wear it"
 
 
 class Finish(StrEnum):
@@ -60,6 +65,13 @@ class SurfaceReport:
     data_bytes: int = 0
     finish: Finish = Finish.LEAVE
     finish_verified: bool = True
+    finish_ran: bool = False
+    stopped: StopReason | None = None
+    refusal: str = ""
+
+    @property
+    def passed(self) -> bool:
+        return self.grade is Grade.CLEAN and self.finish_verified
 
     @property
     def failed_patterns(self) -> tuple[int, ...]:
@@ -94,7 +106,7 @@ class SurfaceReport:
 
     @property
     def grade(self) -> Grade:
-        if self.failed_patterns:
+        if self.stopped is not None or self.failed_patterns:
             return Grade.FAILED
         grades = {entry.grade for entry in self.passes}
         if Grade.UNSTABLE in grades:
@@ -182,6 +194,57 @@ def erased_disk(*, sides: int) -> Disk:
     )
 
 
+def _run_patterns(
+    writer: DiskWriter,
+    reader: DiskReader,
+    *,
+    plan: SurfacePlan,
+    sides: int,
+    backup: Callable[[bytes], None] | None,
+    results: list[PatternPass],
+) -> tuple[StopReason | None, str]:
+    failures: dict[tuple[int, int], int] = {}
+    for index in range(plan.rounds):
+        for pattern in PATTERNS:
+            try:
+                report = write_verified(
+                    writer,
+                    reader,
+                    pattern_disk(pattern, sides=sides, fill=plan.fill),
+                    confirm=lambda _: True,
+                    backup=backup if not results else None,
+                    retries=plan.retries,
+                )
+            except WriteNotTakenError as refused:
+                return StopReason.REFUSED, str(refused)
+            results.append(
+                PatternPass(
+                    pattern=pattern,
+                    verified=report.verified,
+                    mismatched_blocks=report.mismatched_blocks,
+                    grade=report.grade,
+                    round=index + 1,
+                ),
+            )
+            for block in report.mismatched_blocks:
+                failures[block] = failures.get(block, 0) + 1
+            if any(count >= HARD_FAILURES for count in failures.values()):
+                return StopReason.DAMAGED, ""
+    return None, ""
+
+
+def _finish(
+    writer: DiskWriter, reader: DiskReader, *, finish: Finish, sides: int, retries: int
+) -> bool:
+    final = blank_disk(sides=sides) if finish is Finish.BLANK else erased_disk(sides=sides)
+    try:
+        return write_verified(
+            writer, reader, final, confirm=lambda _: True, backup=None, retries=retries
+        ).verified
+    except WriteNotTakenError:
+        return False
+
+
 def _confirmation_message(sides: int) -> str:
     return (
         f"a surface test destroys every byte on {sides} side(s) of the disk in the drive. "
@@ -213,49 +276,17 @@ def surface_test(
         message = "the operator declined the surface test"
         raise SurfaceTestRefusedError(message)
 
-    if backup is not None:
-        original = dump(reader, sides=sides, retries=retries)
-        data, _ = fds.encode(original.as_disk(), headered=False)
-        backup(data)
-
     results: list[PatternPass] = []
     written = pattern_disk(PATTERNS[0], sides=sides, fill=fill).sides[0]
     coverage = emulated_side_size(written) / EMULATION_BUFFER
     data_bytes = written.content_size
+    stopped, refusal = _run_patterns(
+        writer, reader, plan=plan, sides=sides, backup=backup, results=results
+    )
 
-    for index in range(rounds):
-        for pattern in PATTERNS:
-            report = write_verified(
-                writer,
-                reader,
-                pattern_disk(pattern, sides=sides, fill=fill),
-                confirm=lambda _: True,
-                backup=None,
-                retries=retries,
-                skip_backup=True,
-            )
-            results.append(
-                PatternPass(
-                    pattern=pattern,
-                    verified=report.verified,
-                    mismatched_blocks=report.mismatched_blocks,
-                    grade=report.grade,
-                    round=index + 1,
-                ),
-            )
-
-    finished = True
-    if finish is not Finish.LEAVE:
-        final = blank_disk(sides=sides) if finish is Finish.BLANK else erased_disk(sides=sides)
-        finished = write_verified(
-            writer,
-            reader,
-            final,
-            confirm=lambda _: True,
-            backup=None,
-            retries=retries,
-            skip_backup=True,
-        ).verified
+    finished, ran = True, False
+    if finish is not Finish.LEAVE and stopped is None:
+        finished, ran = _finish(writer, reader, finish=finish, sides=sides, retries=retries), True
 
     return SurfaceReport(
         passes=tuple(results),
@@ -263,4 +294,7 @@ def surface_test(
         data_bytes=data_bytes,
         finish=finish,
         finish_verified=finished,
+        finish_ran=ran,
+        stopped=stopped,
+        refusal=refusal,
     )
