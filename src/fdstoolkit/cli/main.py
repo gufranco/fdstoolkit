@@ -6,7 +6,6 @@ import typer
 
 from fdstoolkit import __version__
 from fdstoolkit.cli import (
-    archive_cli,
     compare_cmds,
     convert_cmds,
     drive_cli,
@@ -34,7 +33,6 @@ hardware_cmds.register(app)
 flux_cli.register(app)
 quality_cli.register(app)
 master_cli.register(app)
-archive_cli.register(app)
 drive_cli.register(app)
 
 

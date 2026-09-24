@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -8,9 +7,7 @@ from xml.etree.ElementTree import ParseError
 
 from fastapi import HTTPException
 
-from fdstoolkit.archive.store import Archive, DumpRecord, disk_identity
-from fdstoolkit.archive.trend import trend_of
-from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
+from fdstoolkit.core.canon import profile_by_name
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.bracket import Setting, bracket_of
 from fdstoolkit.flux.analysis import analyse_capture
@@ -26,12 +23,8 @@ from fdstoolkit.master.corpus import build_masters
 from fdstoolkit.master.reference import ReferenceSet, reference_from
 from fdstoolkit.master.splice import splice
 from fdstoolkit.quality.calibrate import calibrate
-from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.consensus import build_consensus
-from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.ui.schemas import (
-    ArchiveAddSpec,
-    ArchiveTrendSpec,
     BiosSpec,
     CalibrateSpec,
     CorpusSpec,
@@ -58,8 +51,6 @@ from fdstoolkit.ui.shared import (
     rows_of,
 )
 
-ARCHIVE_NAME = "archive.json"
-
 
 def _corpus(spec: CorpusSpec) -> list[tuple[str, Disk]]:
     if not spec.images:
@@ -79,10 +70,6 @@ def _capture(payload: str, fmt: str | None):  # noqa: ANN202
     except (ValueError, IndexError, KeyError) as error:
         message = f"this capture could not be read: {error}"
         raise HTTPException(status_code=BAD_REQUEST, detail=message) from error
-
-
-def _archive_path(root: Path) -> Path:
-    return root / ARCHIVE_NAME
 
 
 def calibrate_drive(spec: CalibrateSpec) -> RowsResult:
@@ -233,43 +220,3 @@ def tune_sweep(spec: SweepSpec) -> RowsResult:
             }
         ]
     )
-
-
-def archive_add(spec: ArchiveAddSpec) -> RowsResult:
-    disk, _, findings = decode_payload(spec.data)
-    confidence = score_disk(disk)
-    graded = grade_disk(confidence=confidence, findings=findings)
-    identity = disk_identity(disk)
-    digest = digest_string(canonicalise(disk, profile_by_name("content")))
-    blocks = sum(len(side.blocks) for side in disk.sides)
-    record = DumpRecord(
-        disk_id=identity,
-        taken=spec.taken or "",
-        digest=digest,
-        grade=str(graded.grade),
-        confidence=graded.confidence,
-        blocks_total=blocks,
-        blocks_bad=spec.bad_blocks,
-        drive=spec.drive,
-        notes=spec.notes,
-    )
-    return RowsResult(rows=rows_of([asdict(record)]))
-
-
-def archive_trend(spec: ArchiveTrendSpec) -> RowsResult:
-    with TemporaryDirectory(prefix="fdstoolkit-ui-") as directory:
-        archive = Archive(_archive_path(Path(directory)))
-        disks = [spec.disk] if spec.disk else list(archive.disks())
-        rows = [{"disk": disk_id, **_trend_row(archive.history(disk_id))} for disk_id in disks]
-        archive.close()
-    return RowsResult(rows=rows)
-
-
-def _trend_row(history: Sequence[DumpRecord]) -> dict[str, object]:
-    if not history:
-        return {"dumps": 0}
-    return {"dumps": len(history), **asdict(trend_of(history))}
-
-
-def trend_rows(history: Sequence[DumpRecord]) -> dict[str, object]:
-    return _trend_row(history)

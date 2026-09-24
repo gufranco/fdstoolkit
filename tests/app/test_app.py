@@ -62,8 +62,7 @@ def test_the_catalogue_lists_every_profile(client: TestClient) -> None:
 def test_the_catalogue_lists_the_capture_formats(client: TestClient) -> None:
     body = client.get("/api/catalogue").json()
 
-    assert "scp" in body["capture_formats"]
-    assert "counts" in body["capture_formats"]
+    assert body["capture_formats"] == ["counts", "raw03"]
 
 
 def test_the_catalogue_lists_every_command_the_page_covers(client: TestClient) -> None:
@@ -256,14 +255,6 @@ def test_a_capture_format_that_does_not_exist_is_refused(client: TestClient) -> 
 
     assert answer.status_code == BAD_REQUEST
     assert "could not be read" in answer.json()["detail"]
-
-
-def test_a_capture_that_is_not_the_named_format_is_refused(client: TestClient) -> None:
-    rubbish = base64.b64encode(bytes(8)).decode("ascii")
-
-    answer = client.post("/api/flux", json={"data": rubbish, "fmt": "scp"})
-
-    assert answer.status_code == BAD_REQUEST
 
 
 def test_tuning_refuses_a_capture_that_carries_only_classes(client: TestClient) -> None:

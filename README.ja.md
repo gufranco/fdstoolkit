@@ -44,7 +44,6 @@
   - [フラックスキャプチャ](#フラックスキャプチャ)
   - [ドライブ調整](#ドライブ調整)
   - [マスターと参照セット](#マスターと参照セット)
-  - [経年追跡](#経年追跡)
   - [ハードウェア](#ハードウェア)
 - [ウェブインターフェース](#ウェブインターフェース)
 - [手順](#手順)
@@ -645,23 +644,23 @@ fdstoolkit flux <capture> [--format <f>] [--json]
 キャプチャを測定します。フィッティングされたビットセル長、クラスタの中心とジッタ、分離マージン、外れ値の数、速度、そして一貫したデータを持たないトラックを報告します。
 
 ```bash
-fdstoolkit flux capture.scp
+fdstoolkit flux capture.raw
 ```
 
 ```
-format        scp
-track 0       32753 pulses, bit cell 2825 ns (354013 Hz)
-  class 0     centre     2825 ns  jitter    109 ns  7926 pulses
-  class 1     centre     5367 ns  jitter     61 ns  19002 pulses
-  class 2     centre     8117 ns  jitter     35 ns  5825 pulses
-  0 to 1     margin 89.8% at boundary 4096 ns
-  1 to 2     margin 90.8% at boundary 6742 ns
-  speed       349.52 rpm
-worst margin  89.8% on track 0
+format        counts
+track 0       28344 pulses, bit cell 10400 ns (96157 Hz)
+  class 0     centre    10400 ns  jitter    159 ns  28239 pulses
+  class 1     centre    15600 ns  jitter    165 ns  78 pulses
+  class 2     centre    20870 ns  jitter    114 ns  27 pulses
+  0 to 1     margin 89.7% at boundary 13000 ns
+  1 to 2     margin 91.2% at boundary 18235 ns
+  speed       203.08 rpm
+worst margin  89.7% on track 0
 verdict       healthy
 ```
 
-読み込める形式は SuperCard Pro `.scp`、KryoFlux ストリーム、HxC `.hfe`、インターバルキャプチャです。ファイルから自動判定しますが、`--format` に `scp`、`hfe`、`kryoflux`、`counts`、`raw03` を指定して上書きできます。
+読み込める形式は FDSStick のインターバルカウントとパック済みパルス分類です。`--format raw03` で分類として指定しない限り、キャプチャはカウントとして読み込まれます。
 
 閾値固定の読み取り器にはできないことが 3 つあります。
 
@@ -875,51 +874,15 @@ fdstoolkit consensus <images>... -o <out> [--map] [--force]
 <img alt="ローカル Web ページの consensus コマンド" src="assets/screenshots/consensus-light.png">
 </picture>
 
-### 経年追跡
-
-#### `archive-add`
-
-```bash
-fdstoolkit archive-add <image> [--db <p>] [--taken <date>] [--drive <s>] [--notes <s>] [--bad-blocks <n>]
-```
-
-吸い出しを、それが取られた物理ディスクに紐付けて記録します。同一性はディスクライターが刻印した内容から導かれるため、同じゲームの 2 本も別個体として追跡されます。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/archive-add-dark.png">
-<img alt="ローカル Web ページの archive-add コマンド" src="assets/screenshots/archive-add-light.png">
-</picture>
-
-#### `archive-trend`
-
-```bash
-fdstoolkit archive-trend [--db <p>] [--disk <id>] [--json]
-```
-
-そのディスクが状態を保っているか、劣化しているか、あるいはより良く読めるようになっているか。その速度と、残された時間のおおよその見積もり。
-
-```bash
-fdstoolkit archive-trend
-```
-
-```
-4f2a...c19b: degrading, +10.0 blocks a year, unreadable in about 8 years
-```
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/archive-trend-dark.png">
-<img alt="ローカル Web ページの archive-trend コマンド" src="assets/screenshots/archive-trend-light.png">
-</picture>
-
 ### ハードウェア
 
 #### `dump`
 
 ```bash
-fdstoolkit dump -o <out> [--backend simulation|fdsstick|dumper] [--source <img>] [--sides N] [--passes N] [--retries N] [--raw <dir>] [--log <file>] [--yes] [--force]
+fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [--yes] [--force]
 ```
 
-ディスクを読み取ります。`--passes` は各面を複数回読み、`--retries` はブロックごとの再試行回数を決め、`--raw` はドライブが返したパルスキャプチャをすべて保存し、`--log` はその吸い出しがどう行われたかの記録を書き出します。
+ディスクを読み取ります。`--passes` は各面を複数回読み、`--retries` はブロックごとの再試行回数を決め、`--raw` はドライブが返したパルスキャプチャをすべて保存します。
 
 一度に片面しか読めないドライブは、面を選択できません。そうしたバックエンドで複数面を読む場合、読み取りの合間にディスクを裏返すよう求め、同じ面を二度読むくらいなら処理を中止します。`--yes` はその確認に自動で答えます。2 回目の読み取りが 1 回目と同じバイト列を返した場合、吸い出しは失敗し、何も書き出しません。裏返されなかったディスクは、両面を吸い出したように見えて実際はそうでないファイルを生むからです。
 
@@ -928,42 +891,15 @@ fdstoolkit dump -o <out> [--backend simulation|fdsstick|dumper] [--source <img>]
 <img alt="ローカル Web ページの dump コマンド" src="assets/screenshots/dump-light.png">
 </picture>
 
-#### `submit`
-
-```bash
-fdstoolkit submit <image> --log <file> --dumper <name> [--affiliation <a>] [--photo <p>...] [--also <f>...] [-o <out>] [--force]
-```
-
-保存プロジェクトが求める提出内容を組み立てます。
-
-公開されている吸い出しガイドは、ヘッダが書き換え日を含むためハッシュが一致せず、FDS の検証は難しいと述べています。SHA-256 については事実であり、このコマンドがハッシュの隣に同一性ダイジェストを出力するのはそのためです。`release` プロファイルでは書き換え日、ディスクライターのシリアル、書き換え回数が除外され、コーパスの 144 グループ中 142 が一致します。提出内容には両方が含まれるので、バイト単位のハッシュが必要な読み手にも、別個体どうしを比較したい読み手にも応えられます。
-
-ガイドが必須とする要素はすべて含まれます。ファイルごとのサイズ、CRC32、MD5、SHA-1、SHA-256、ハードウェアとファームウェアを含むツール名、日付、吸い出しログ、そして既定値から変更した設定です。`--also` は同じ提出内容に別のファイルのハッシュを加えます。FDS と並べて RAW キャプチャを含めるのはこの方法です。`--photo` は撮影した写真を参照として記載します。
-
-本ツールが用意できないものは、省略せず一覧に出します。パッケージ、媒体、基板の写真はガイドの必須項目であり、どのプログラムにも用意できないため、それらが記載されるまでコマンドは終了コード 1 を返します。
-
-シミュレートされたドライブのログは拒否されます。提出とは物理的なディスクについての記述であり、シミュレートされた吸い出しは何も記述していないからです。
-
-```bash
-fdstoolkit dump -o disk.fds --backend fdsstick --sides 2 --raw captures/ --log disk.log.json
-fdstoolkit submit disk.fds --log disk.log.json --dumper "あなたの名前" \
-    --also captures/disk.read01.raw03 --photo media.jpg --photo pcb.jpg
-```
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/submit-dark.png">
-<img alt="ローカル Web ページの submit コマンド" src="assets/screenshots/submit-light.png">
-</picture>
-
 #### `write`
 
 ```bash
-fdstoolkit write <image> [--backend <b>] [--source <img>] [--backup <p>] [--retries N] [--assume-writable] [--yes]
+fdstoolkit write <image> [--backup <p>] [--retries N] [--yes]
 ```
 
 ディスクへ書き込み、読み戻して比較します。`--backup` は書き込む前に現在の内容を保存します。`--yes` がなければ確認を求めます。
 
-FDSStick は、ディスクが書き込み禁止かどうかも、電池が保っているかどうかも、そもそもディスクが入っているかどうかも報告しません。本ツールはそれらを良好と仮定せず、不明として報告したうえで破壊的な書き込みを拒否します。`--assume-writable` はそれでも続行します。ドライブが不良と報告した状態は依然として拒否されるため、この指定が解除するのは不確実性だけであり、既知の不良ではありません。
+FDSStick は、ディスクが書き込み禁止かどうかも、電池が保っているかどうかも、そもそもディスクが入っているかどうかも報告しないため、本ツールは書き込み前にそれらを確認できません。その代わりにディスクを守るのは書き込みの前後の手順です。`--backup` を指定すれば先に現在の内容を保存し、`--yes` を指定しない限り開始前に確認し、書き込み後にはすべてを読み戻して書き込むはずだった内容と比較します。書き込みを受け付けなかったディスクは、そこで不一致として現れます。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">
@@ -973,7 +909,7 @@ FDSStick は、ディスクが書き込み禁止かどうかも、電池が保�
 #### `surface`
 
 ```bash
-fdstoolkit surface [--backend <b>] [--source <img>] [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
+fdstoolkit surface [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
 ```
 
 互いに補完的なパターンを書いては読み戻し、不要ディスクの状態を評価します。多重書き込みによるディスク消去の磁気版にあたり、すべてのビットセルを両方向へ強制的に反転させたうえで、戻ってきた内容を検証します。
@@ -1004,10 +940,8 @@ recovered の数が、修復にあたる部分です。閾値へ近づいてい�
 
 消去の後に有用なのは `blank` です。出力されるバイト列は `blank --formatted` と同一であり、ディスクは出荷時の状態で保管でき、書き込みソフトからは未使用の媒体として扱われます。
 
-`--backend simulation` はハードウェアの代わりに動作し、`--source` で保持するイメージを指定します。
-
 ```bash
-fdstoolkit surface --backend fdsstick --sides 2 --passes 3 \
+fdstoolkit surface --sides 2 --passes 3 \
     --backup before.fds --finish blank --yes
 ```
 
@@ -1080,11 +1014,10 @@ fdstoolkit web
 1 回の吸い出しは、ドライブが 1 度何を読んだかを示すだけです。2 回でようやく、同じものを 2 度読めたかが分かります。
 
 ```bash
-fdstoolkit dump -o pass1.fds --backend fdsstick --raw captures/
-fdstoolkit dump -o pass2.fds --backend fdsstick
+fdstoolkit dump -o pass1.fds --raw captures/
+fdstoolkit dump -o pass2.fds
 fdstoolkit reads pass1.fds pass2.fds
 fdstoolkit grade pass1.fds --read pass2.fds
-fdstoolkit archive-add pass1.fds --drive AN-500B
 ```
 
 2 つが食い違う場合、`consensus` が多数決で統合し、決着しなかったブロックをすべて列挙します。一方の吸い出しで壊れているブロックが他方で正常なら、`splice` がそれを取り込みます。
@@ -1129,9 +1062,6 @@ fdstoolkit reference-verify mine.fds --set fds-reference.json
 | FDSKey カードファイル | 65500 | なし | ファームウェアの制約内でヘッダなし |
 | コピアの面別ファイル | 面ごとに 1 つ | 場合による | 面が公称長を超えることがあります |
 | ares の面別ファイル | 73728 | あり | ギャップと同期マークを含みます |
-| SuperCard Pro `.scp` | 可変 | あり | フラックスのインターバル、分解能 25 ns |
-| KryoFlux ストリーム | 可変 | あり | フラックスのインターバル、インデックスブロックが回転を区切ります |
-| HxC `.hfe` | 可変 | あり | インターバルではなくビットセル |
 | インターバルカウント | 可変 | あり | 1 パルスのインターバルにつき 1 バイト |
 | パック済みパルスクラス | 可変 | あり | 1 パルスにつき 2 ビット、量子化済み |
 
@@ -1159,7 +1089,7 @@ fdstoolkit tune capture.raw --json | jq -r '.actions[] | "\(.stage) \(.subject)"
 
 ## このツールにできないこと
 
-**ディスクシステムのフラックスキャプチャは存在しません。** Quick Disk はインデックス穴も標準的なステッピングも持たない 1 本の連続した渦巻きであり、KryoFlux や Greaseweazle はこの媒体を読むことができません。`.scp`、KryoFlux、`.hfe` の読み取り機能があるのは、それらが他の媒体向けであることと、本ツールが自分で生成したのではないバイト列に対して測定層を検証する唯一の手段だったからです。
+**ディスクシステムのフラックスキャプチャは存在しません。** Quick Disk はインデックス穴も標準的なステッピングも持たない 1 本の連続した渦巻きであり、KryoFlux や Greaseweazle はこの媒体を読むことができません。本ツールが読み込むのは FDSStick が生成するものだけです。そのため測定層は、本ツール自身が合成したキャプチャと、手元にある場合は実際の FDSStick キャプチャに対して検証されます。
 
 **FDSStick ではドライブの速度を測定できません。** この機器はハードウェアの側で各パルスを 3 種類の長さのいずれかへ丸め、時間情報ではなくクラスを送ってきます。速度は `reading` による実機側の読み取りか、インターバルを保持するキャプチャ機器から得る必要があります。
 

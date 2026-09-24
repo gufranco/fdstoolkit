@@ -364,9 +364,6 @@ function bound(node, field) {
   if (field.max_length !== null && field.max_length !== undefined) {
     node.maxLength = field.max_length;
   }
-  if (field.pattern) {
-    node.pattern = field.pattern.replace(/^\^/, '').replace(/\$$/, '');
-  }
   if (field.required) {
     node.required = true;
   }
@@ -378,9 +375,6 @@ function input(field) {
     return element('input', { type: 'checkbox', checked: Boolean(field.default) });
   }
   const shown = field.default === null || field.default === undefined ? '' : String(field.default);
-  if (field.kind === 'date') {
-    return bound(element('input', { type: 'date', value: shown }), field);
-  }
   if (field.kind === 'number') {
     return bound(
       element('input', { type: 'number', step: String(field.step || 'any'), value: shown }),
@@ -416,7 +410,7 @@ export function problemFor(node, field) {
   if (state.tooLong) {
     return t('bad.long').replace('{n}', String(field.max_length));
   }
-  if (state.patternMismatch || state.badInput) {
+  if (state.badInput) {
     return t('bad.shape');
   }
   return state.valueMissing ? t('bad.missing') : node.validationMessage;

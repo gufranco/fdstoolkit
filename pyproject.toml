@@ -87,6 +87,7 @@ mypy-init-return = true
 
 [tool.pyright]
 include = ["src", "tests"]
+extraPaths = ["tests/support"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = true
@@ -94,6 +95,7 @@ reportUnnecessaryTypeIgnoreComment = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests/support"]
 norecursedirs = [".*", "node_modules", "dist"]
 addopts = "-q --strict-markers --strict-config --cov --cov-report=term-missing"
 filterwarnings = [

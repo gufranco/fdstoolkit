@@ -7,7 +7,6 @@ import pytest
 from fastapi import HTTPException
 
 from fdstoolkit.build.blank import blank_image
-from fdstoolkit.submit.report import no_metadata
 from fdstoolkit.ui.schemas import FilesResult, RowsResult
 from fdstoolkit.ui.shared import (
     BAD_REQUEST,
@@ -107,7 +106,3 @@ def test_anything_else_renders_as_a_value() -> None:
 def test_an_empty_rows_result_carries_an_empty_list() -> None:
     assert RowsResult().rows == []
     assert FilesResult().files == []
-
-
-def test_a_submission_metadata_table_starts_empty() -> None:
-    assert no_metadata() == {}

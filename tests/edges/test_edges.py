@@ -1,25 +1,19 @@
 from __future__ import annotations
 
-import struct
-from datetime import date
 from pathlib import Path
 
 import pytest
 import typer
 from typer.testing import CliRunner
 
-from fdstoolkit.archive.store import Archive, DumpRecord
-from fdstoolkit.archive.trend import Point, trend_of
-from fdstoolkit.cli.archive_cli import default_db
 from fdstoolkit.cli.common import decode_image
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.flux.analysis import IntervalReport, TrackReport, analyse_capture, analyse_intervals
-from fdstoolkit.flux.kryoflux import OOB, read_stream
-from fdstoolkit.flux.model import FluxCapture, FluxTrack, Revolution, Source
-from fdstoolkit.flux.scp import TABLE_OFFSET, read_scp, write_scp
+from fdstoolkit.flux.counts import write_counts
+from fdstoolkit.flux.model import FluxCapture, FluxTrack, Revolution
 from fdstoolkit.flux.synth import synthesise
 from fdstoolkit.identify.datfile import build_dat
 from fdstoolkit.identify.integrity import CodeReport
@@ -58,79 +52,6 @@ def _write(path: Path, disk: Disk | None = None) -> Path:
     data, _ = fds.encode(disk or _disk(), headered=False)
     path.write_bytes(data)
     return path
-
-
-def test_a_record_with_no_block_has_no_bad_share() -> None:
-    record = DumpRecord(
-        disk_id="a",
-        taken="2026-01-01",
-        digest="d",
-        grade="clean",
-        confidence=1.0,
-        blocks_total=0,
-        blocks_bad=0,
-    )
-
-    assert record.bad_share == 0.0
-
-
-def test_a_record_reports_its_bad_share() -> None:
-    record = DumpRecord(
-        disk_id="a",
-        taken="2026-01-01",
-        digest="d",
-        grade="clean",
-        confidence=1.0,
-        blocks_total=4,
-        blocks_bad=1,
-    )
-
-    assert record.bad_share == 0.25
-
-
-def test_closing_an_archive_twice_is_harmless(tmp_path: Path) -> None:
-    archive = Archive(tmp_path / "a.db")
-    archive.close()
-    archive.close()
-
-
-def test_a_point_with_no_block_has_no_bad_share() -> None:
-    point = Point(taken=date(2026, 1, 1), blocks_bad=0, blocks_total=0, confidence=1.0)
-
-    assert point.bad_share == 0.0
-
-
-def test_a_stable_trend_renders_without_a_projection() -> None:
-    records = [
-        DumpRecord(
-            disk_id="a",
-            taken=taken,
-            digest="d",
-            grade="clean",
-            confidence=1.0,
-            blocks_total=100,
-            blocks_bad=2,
-        )
-        for taken in ("2024-01-01", "2026-01-01")
-    ]
-
-    assert "unreadable" not in trend_of(records).render()
-
-
-def test_the_default_archive_path_follows_the_data_home(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-
-    assert default_db() == tmp_path / "fdstoolkit" / "archive.db"
-
-
-def test_the_default_archive_path_falls_back_on_the_home_directory(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-
-    assert default_db().parts[-4:] == (".local", "share", "fdstoolkit", "archive.db")
 
 
 def test_a_foreign_image_is_refused(tmp_path: Path) -> None:
@@ -203,42 +124,6 @@ def test_a_flux_report_adds_a_reason_to_the_grade() -> None:
     assert any(reason.metric == "flux margin" for reason in report.reasons)
 
 
-def test_an_overflow_interval_round_trips_through_the_capture_format() -> None:
-    huge = FluxCapture(
-        source=Source.SYNTHETIC,
-        tracks=(FluxTrack(index=0, revolutions=(Revolution(intervals=(2_000_000,)),)),),
-    )
-
-    restored = read_scp(write_scp(huge))
-
-    assert restored.track(0).intervals()[0] == pytest.approx(2_000_000, rel=0.01)
-
-
-def test_a_truncated_flux_run_stops_cleanly() -> None:
-    data = write_scp(synthesise(_disk()))
-    offset = struct.unpack_from("<I", data, TABLE_OFFSET)[0]
-    full = len(read_scp(data).track(0).intervals())
-
-    restored = read_scp(data[: offset + 200])
-
-    assert 0 < len(restored.track(0).intervals()) < full
-
-
-def test_a_track_whose_revolution_table_is_cut_short_still_loads() -> None:
-    data = bytearray(write_scp(synthesise(_disk(), revolutions=2)))
-    data[0x05] = 40
-
-    restored = read_scp(bytes(data))
-
-    assert restored.track(0).revolution_count >= 1
-
-
-def test_a_stream_whose_last_block_is_cut_short_stops() -> None:
-    capture = read_stream(bytes((0x40,)) + bytes((OOB, 0x02)))
-
-    assert capture.track(0).intervals() == (round(0x40 * 1e9 / 24027428.5714285),)
-
-
 def test_a_homepage_is_written_into_the_dat() -> None:
     text = build_dat([("A.fds", b"x")], name="F", version="1", homepage="https://example.test")
 
@@ -246,7 +131,7 @@ def test_a_homepage_is_written_into_the_dat() -> None:
 
 
 def test_the_flux_command_prints_speed_and_outliers(tmp_path: Path) -> None:
-    path = tmp_path / "capture.scp"
+    path = tmp_path / "capture.counts"
     capture = synthesise(_disk())
     stretched = FluxCapture(
         source=capture.source,
@@ -257,7 +142,7 @@ def test_the_flux_command_prints_speed_and_outliers(tmp_path: Path) -> None:
             ),
         ),
     )
-    path.write_bytes(write_scp(stretched))
+    path.write_bytes(write_counts(stretched))
 
     result = runner.invoke(app, ["flux", str(path)])
 
@@ -446,41 +331,24 @@ def test_a_stream_of_zero_intervals_still_reports() -> None:
     assert report.bit_rate_hz == 0.0
 
 
-def _empty_track_capture() -> bytes:
-    empty = FluxCapture(
-        source=Source.SYNTHETIC,
-        tracks=(FluxTrack(index=0, revolutions=(Revolution(intervals=()),)),),
-    )
-    return write_scp(empty)
-
-
-def test_a_capture_whose_track_holds_no_pulse_is_refused(tmp_path: Path) -> None:
-    path = tmp_path / "empty.scp"
-    path.write_bytes(_empty_track_capture())
+def test_a_capture_holding_no_pulse_is_refused_by_decode(tmp_path: Path) -> None:
+    path = tmp_path / "empty.counts"
+    path.write_bytes(b"")
 
     result = runner.invoke(app, ["flux-decode", str(path), "-o", str(tmp_path / "o.fds")])
 
     assert result.exit_code == 1
-    assert "no interval" in result.stdout
+    assert "empty" in result.stdout
 
 
-def test_measuring_a_capture_with_no_pulse_is_refused(tmp_path: Path) -> None:
-    path = tmp_path / "empty.scp"
-    path.write_bytes(_empty_track_capture())
+def test_measuring_a_capture_holding_no_pulse_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "empty.counts"
+    path.write_bytes(b"")
 
     result = runner.invoke(app, ["flux", str(path)])
 
     assert result.exit_code == 1
-    assert "no interval" in result.stdout
-
-
-def test_a_track_cut_off_before_its_revolution_table_still_loads() -> None:
-    data = write_scp(synthesise(_disk()))
-    offset = struct.unpack_from("<I", data, TABLE_OFFSET)[0]
-
-    restored = read_scp(data[: offset + 6])
-
-    assert restored.track(0).intervals() == ()
+    assert "empty" in result.stdout
 
 
 def test_an_unknown_image_prints_no_game(tmp_path: Path) -> None:

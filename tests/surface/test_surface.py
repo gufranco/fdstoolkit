@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import pytest
+from drive_double import FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image, formatted_side
 from fdstoolkit.codecs.fds import decode, encode
 from fdstoolkit.hardware.session import Grade
-from fdstoolkit.hardware.simulation import FaultPlan, SimulatedDrive
 from fdstoolkit.quality.surface import (
     PATTERNS,
     Finish,

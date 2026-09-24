@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 import pytest
+from drive_double import FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -16,7 +17,6 @@ from fdstoolkit.hardware.session import (
     dump_repeated,
     write_verified,
 )
-from fdstoolkit.hardware.simulation import FaultPlan, SimulatedDrive
 
 
 def sample_disk(sides: int = 1) -> Disk:

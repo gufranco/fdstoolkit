@@ -261,7 +261,7 @@ def test_a_codec_that_does_not_round_trip_is_reported(
         del disk, headered
         return b"", ()
 
-    monkeypatch.setattr(doctor_module.fds, "encode", empty_encode)
+    monkeypatch.setattr("fdstoolkit.doctor.fds.encode", empty_encode)
 
     report = diagnose(load_hid=missing_hid, cache=DatCache(tmp_path))
 
@@ -278,7 +278,7 @@ def test_a_codec_that_raises_is_reported_rather_than_crashing(
         message = "the decoder gave up"
         raise ValueError(message)
 
-    monkeypatch.setattr(doctor_module.fds, "decode", boom)
+    monkeypatch.setattr("fdstoolkit.doctor.fds.decode", boom)
 
     report = diagnose(load_hid=missing_hid, cache=DatCache(tmp_path))
 

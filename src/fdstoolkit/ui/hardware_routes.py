@@ -4,6 +4,7 @@ import base64
 
 from fastapi import HTTPException
 
+from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
     SideFlipError,
@@ -11,41 +12,34 @@ from fdstoolkit.hardware.session import (
     dump,
     write_verified,
 )
-from fdstoolkit.hardware.simulation import SimulatedDrive
 from fdstoolkit.quality.surface import (
     Finish,
     SurfacePlan,
     SurfaceTestRefusedError,
     surface_test,
 )
-from fdstoolkit.submit.log import load_log, log_of
-from fdstoolkit.submit.report import submission_for
 from fdstoolkit.ui.schemas import (
     DumpedResult,
     DumpSpec,
     RowsResult,
-    SubmitSpec,
     SurfaceSpec,
-    TextResult,
     WriteSpec,
 )
 from fdstoolkit.ui.shared import (
     BAD_REQUEST,
+    CONFLICT,
     UNPROCESSABLE,
-    bytes_of,
     decode_payload,
     encoded,
     refuse,
 )
 
-SIMULATED = "simulation"
 
-
-def _drive(source: str) -> SimulatedDrive:
-    disk, _, _ = decode_payload(source)
-    if not any(side.blocks for side in disk.sides):
-        refuse("the image standing in for the disk carries no blocks, so there is nothing to read")
-    return SimulatedDrive(disk)
+def _drive() -> FdsStick:
+    try:
+        return open_fdsstick()
+    except HardwareFaultError as error:
+        raise HTTPException(status_code=CONFLICT, detail=str(error)) from error
 
 
 def _confirmed(what: str, *, confirm: bool) -> None:
@@ -55,31 +49,24 @@ def _confirmed(what: str, *, confirm: bool) -> None:
 
 
 def dump_route(spec: DumpSpec) -> DumpedResult:
-    drive = _drive(spec.source)
+    drive = _drive()
     try:
         result = dump(drive, sides=spec.sides, retries=spec.retries)
     except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    record = log_of(
-        result,
-        backend=SIMULATED,
-        settings={"sides": spec.sides, "passes": spec.passes, "retries": spec.retries},
-        simulated=True,
-    )
     body = encoded(result.as_disk())
     return DumpedResult(
         name="dump.fds",
         data=base64.b64encode(body).decode("ascii"),
         size=len(body),
         grade=str(result.grade),
-        log=base64.b64encode(record.as_json().encode("utf-8")).decode("ascii"),
     )
 
 
 def write_route(spec: WriteSpec) -> RowsResult:
     _confirmed("writing a disk", confirm=spec.confirm)
     disk, _, _ = decode_payload(spec.data)
-    drive = _drive(spec.source)
+    drive = _drive()
     try:
         report = write_verified(
             drive,
@@ -106,7 +93,7 @@ def write_route(spec: WriteSpec) -> RowsResult:
 
 def surface_route(spec: SurfaceSpec) -> RowsResult:
     _confirmed("a surface test", confirm=spec.confirm)
-    drive = _drive(spec.source)
+    drive = _drive()
     try:
         finish = Finish(spec.finish)
     except ValueError as error:
@@ -136,23 +123,3 @@ def surface_route(spec: SurfaceSpec) -> RowsResult:
         ],
         ok=report.finish_verified,
     )
-
-
-def submit_route(spec: SubmitSpec) -> TextResult:
-    _, data, _ = decode_payload(spec.data)
-    try:
-        record = load_log(bytes_of(spec.log).decode("utf-8"))
-    except (ValueError, UnicodeDecodeError, KeyError) as error:
-        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    try:
-        report = submission_for(
-            data,
-            name=spec.name,
-            log=record,
-            dumper=spec.dumper,
-            affiliation=spec.affiliation,
-            evidence=tuple(spec.photos),
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    return TextResult(text=report.render(), ok=not report.missing_evidence)

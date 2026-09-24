@@ -276,7 +276,6 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
 .fields input[type="file"],
 .fields input[type="number"],
 .fields input[type="text"],
-.fields input[type="date"],
 .fields select {
   width: 100%;
   font: inherit;

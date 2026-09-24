@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import webbrowser
 from collections.abc import Callable
-from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final
 
@@ -16,7 +15,6 @@ from fdstoolkit.cli.common import (
 )
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.disk import SIDES_PER_DISK
-from fdstoolkit.doctor import CheckStatus, diagnose
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
@@ -27,22 +25,12 @@ from fdstoolkit.hardware.session import (
     write_verified,
 )
 from fdstoolkit.hardware.session import dump as dump_disk
-from fdstoolkit.hardware.simulation import CaptureMode, SimulatedDrive
 from fdstoolkit.quality.surface import (
     Finish,
     SurfacePlan,
     SurfaceTestRefusedError,
     surface_test,
 )
-from fdstoolkit.submit.log import load_log, log_of
-from fdstoolkit.submit.report import submission_for
-
-
-class Backend(StrEnum):
-    SIMULATION = "simulation"
-    FDSSTICK = "fdsstick"
-    DUMPER = "dumper"
-
 
 DEFAULT_SIDES: Final = 1
 
@@ -59,69 +47,18 @@ UI_HINT: Final = (
 )
 
 
-def _dump_settings(*, sides: int, passes: int, retries: int) -> dict[str, object]:
-    chosen: dict[str, object] = {}
-    if sides != DEFAULT_SIDES:
-        chosen["sides"] = sides
-    if passes != DEFAULT_PASSES:
-        chosen["passes"] = passes
-    if retries != DEFAULT_RETRY_COUNT:
-        chosen["retries"] = retries
-    return chosen
-
-
-def device_line(drive: object) -> str | None:
-    if isinstance(drive, SimulatedDrive):
-        return None
-    report = diagnose()
-    for check in report.checks:
-        if check.name == "fdsstick" and check.status is CheckStatus.OK:
-            return check.detail
-    return None
-
-
-def open_drive(
-    backend: Backend,
-    source: Path | None,
-    rate: float | None = None,
-    *,
-    assume_writable: bool = False,
-) -> SimulatedDrive | FdsStick:
-    if backend is Backend.DUMPER:
-        message = (
-            "the Famicom Dumper backend needs a serial link, which this build does not open yet. "
-            "Use --backend fdsstick, or drive it from the library with your own link"
-        )
-        raise fail(message)
-    if backend is Backend.FDSSTICK:
-        try:
-            return open_fdsstick(assume_writable=assume_writable)
-        except HardwareFaultError as error:
-            raise fail(str(error)) from error
-    if source is None:
-        message = "the simulated backend needs --source naming an image to stand in for the disk"
-        raise fail(message)
-    disk, _, _, _ = decode_image(source)
-    if rate is None:
-        return SimulatedDrive(disk)
-    if rate <= 0:
-        message = "a simulated bit rate is positive"
-        raise fail(message)
-    return SimulatedDrive(disk, capture_mode=CaptureMode.TIMING, bit_rate_hz=rate)
+def open_drive() -> FdsStick:
+    try:
+        return open_fdsstick()
+    except HardwareFaultError as error:
+        raise fail(str(error)) from error
 
 
 def dump(
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the dump")],
     *,
-    source: Annotated[
-        Path | None,
-        typer.Option("--source", help="image the simulated drive holds"),
-    ] = None,
-    backend: Annotated[
-        Backend, typer.Option("--backend", help="which drive to use")
-    ] = Backend.SIMULATION,
     sides: Annotated[
-        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="sides to read")
+        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="1 or 2 sides to read")
     ] = 1,
     passes: Annotated[int, typer.Option("--passes", min=1, help="read each side this often")] = 1,
     retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
@@ -129,26 +66,15 @@ def dump(
         Path | None,
         typer.Option("--raw", help="also keep every pulse capture the drive returned, here"),
     ] = None,
-    simulated_rate: Annotated[
-        float | None,
-        typer.Option(
-            "--simulated-rate",
-            help="make the simulated drive emit timing captures at this bit rate",
-        ),
-    ] = None,
-    log: Annotated[
-        Path | None,
-        typer.Option("--log", help="write a record of how this dump was taken, for submission"),
-    ] = None,
     yes: Annotated[
         bool,
         typer.Option("--yes", help="assume the disk is turned over when asked"),
     ] = False,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
-    """Dump a disk through a drive backend."""
+    """Dump a disk through the FDSStick."""
     guard_output(output, force=force)
-    drive = open_drive(backend, source, simulated_rate)
+    drive = open_drive()
 
     def flip(message: str) -> bool:
         if yes:
@@ -181,29 +107,18 @@ def dump(
     data, _ = fds.encode(result.as_disk(), headered=False)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
-    if log is not None:
-        record = log_of(
-            result,
-            backend=str(backend),
-            device=device_line(drive),
-            settings=_dump_settings(sides=sides, passes=passes, retries=retries),
-            simulated=isinstance(drive, SimulatedDrive),
-        )
-        log.write_text(record.as_json(), encoding="utf-8")
-        typer.echo(f"wrote {log} ({len(record.retried_blocks)} retried block(s) recorded)")
     if raw is not None:
         keep_captures(drive, raw, stem=output.stem)
     raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
 
 
-def keep_captures(drive: SimulatedDrive | FdsStick, directory: Path, *, stem: str) -> None:
+def keep_captures(drive: FdsStick, directory: Path, *, stem: str) -> None:
     captures = drive.captures
     if not captures:
         typer.echo("  the drive returned no pulse capture to keep")
         return
-    timing = isinstance(drive, SimulatedDrive) and drive.capture_mode is CaptureMode.TIMING
-    suffix = "counts" if timing else "raw03"
-    kind = "interval counts" if timing else "packed pulse classes"
+    suffix = "raw03"
+    kind = "packed pulse classes"
     directory.mkdir(parents=True, exist_ok=True)
     for index, capture in enumerate(captures, start=1):
         target = directory / f"{stem}.read{index:02d}.{suffix}"
@@ -214,30 +129,16 @@ def keep_captures(drive: SimulatedDrive | FdsStick, directory: Path, *, stem: st
 def write(
     image: Annotated[Path, typer.Argument(help="the image to write to a disk")],
     *,
-    source: Annotated[
-        Path | None,
-        typer.Option("--source", help="image the simulated drive holds"),
-    ] = None,
-    backend: Annotated[
-        Backend, typer.Option("--backend", help="which drive to use")
-    ] = Backend.SIMULATION,
     backup: Annotated[
         Path | None,
         typer.Option("--backup", help="where to save the disk's current contents"),
     ] = None,
-    assume_writable: Annotated[
-        bool,
-        typer.Option(
-            "--assume-writable",
-            help="proceed when the drive cannot report whether the disk is protected",
-        ),
-    ] = False,
     yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
     retries: Annotated[int, typer.Option("--retries", min=1, help="retries per block")] = 3,
 ) -> None:
     """Write an image to a disk, then read it back and compare."""
     disk, _, _, _ = decode_image(image)
-    drive = open_drive(backend, source, assume_writable=assume_writable)
+    drive = open_drive()
 
     def confirm(message: str) -> bool:
         if yes:
@@ -269,16 +170,8 @@ def write(
 
 def surface(
     *,
-    source: Annotated[
-        Path | None,
-        typer.Option("--source", help="image the simulated drive holds"),
-    ] = None,
-    backend: Annotated[
-        Backend,
-        typer.Option("--backend", help="which drive to use"),
-    ] = Backend.SIMULATION,
     sides: Annotated[
-        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="sides to test")
+        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="1 or 2 sides to test")
     ] = 1,
     backup: Annotated[
         Path | None,
@@ -296,17 +189,10 @@ def surface(
         Finish,
         typer.Option("--finish", help="what to leave on the disk when the test ends"),
     ] = Finish.LEAVE,
-    assume_writable: Annotated[
-        bool,
-        typer.Option(
-            "--assume-writable",
-            help="proceed when the drive cannot report whether the disk is protected",
-        ),
-    ] = False,
     yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
 ) -> None:
     """Write and read back complementary patterns to grade a scratch disk."""
-    drive = open_drive(backend, source, assume_writable=assume_writable)
+    drive = open_drive()
 
     def confirm(message: str) -> bool:
         if yes:
@@ -364,74 +250,6 @@ def surface(
     raise typer.Exit(code=0 if ok else 1)
 
 
-def submit(
-    image: Annotated[Path, typer.Argument(help="the image that was dumped")],
-    *,
-    log: Annotated[Path, typer.Option("--log", help="the log that dump wrote")],
-    dumper: Annotated[str, typer.Option("--dumper", help="who took the dump")],
-    affiliation: Annotated[
-        str,
-        typer.Option("--affiliation", help="a group to credit, if any"),
-    ] = "",
-    photo: Annotated[
-        list[Path] | None,
-        typer.Option("--photo", help="a photograph to cite, repeatable"),
-    ] = None,
-    also: Annotated[
-        list[Path] | None,
-        typer.Option("--also", help="another file to hash into the submission, repeatable"),
-    ] = None,
-    output: Annotated[
-        Path | None,
-        typer.Option("-o", "--output", help="write the submission here instead of printing it"),
-    ] = None,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Assemble the submission a preservation project asks for."""
-    if not image.is_file():
-        message = f"file not found: {image}"
-        raise fail(message)
-    if not log.is_file():
-        message = f"file not found: {log}"
-        raise fail(message)
-    if output is not None:
-        guard_output(output, force=force)
-
-    try:
-        record = load_log(log.read_text(encoding="utf-8"))
-    except (ValueError, OSError) as error:
-        message = f"could not read {log}: {error}"
-        raise fail(message) from error
-
-    extra: dict[str, bytes] = {}
-    for path in also or []:
-        if not path.is_file():
-            message = f"file not found: {path}"
-            raise fail(message)
-        extra[path.name] = path.read_bytes()
-
-    try:
-        report = submission_for(
-            image.read_bytes(),
-            name=image.name,
-            log=record,
-            dumper=dumper,
-            affiliation=affiliation,
-            evidence=tuple(str(path) for path in photo or []),
-            extra=extra,
-        )
-    except ValueError as error:
-        raise fail(str(error)) from error
-
-    text = report.render()
-    if output is None:
-        typer.echo(text, nl=False)
-    else:
-        output.write_text(text, encoding="utf-8")
-        typer.echo(f"wrote {output} ({len(report.files)} file(s) hashed)")
-    raise typer.Exit(code=0 if not report.missing_evidence else 1)
-
-
 def web_server() -> tuple[Callable[..., None], Callable[[], object]]:
     import uvicorn  # noqa: PLC0415
 
@@ -485,5 +303,4 @@ def register(app: typer.Typer) -> None:
     app.command()(dump)
     app.command()(write)
     app.command()(surface)
-    app.command()(submit)
     app.command()(web)

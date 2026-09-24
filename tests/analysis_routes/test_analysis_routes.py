@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import base64
-import json
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from fdstoolkit.archive.store import DumpRecord
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.drive.spec import NOMINAL_BIT_RATE_HZ, cell_from_bit_rate
 from fdstoolkit.flux.synth import synthesise
-from fdstoolkit.ui.analysis_routes import trend_rows
 from fdstoolkit.ui.app import create_app
 
 OK = 200
@@ -182,24 +179,10 @@ def test_tune_sweep_needs_a_capture(client: TestClient) -> None:
     assert answer.status_code == UNPROCESSABLE
 
 
-def test_an_archive_records_a_dump_and_reports_its_trend(client: TestClient) -> None:
-    added = client.post("/api/archive-add", json={"data": ONE, "drive": "AN-500B"}).json()
-
-    assert added["rows"]
-
-    trend = client.post("/api/archive-trend", json={}).json()
-
-    assert isinstance(trend["rows"], list)
-
-
-def test_the_archive_round_trips_through_json() -> None:
-    assert json.loads("[]") == []
-
-
-def test_a_sweep_capture_that_is_not_the_named_format_is_refused(client: TestClient) -> None:
+def test_a_sweep_naming_a_format_that_does_not_exist_is_refused(client: TestClient) -> None:
     rubbish = base64.b64encode(bytes(8)).decode("ascii")
 
-    answer = client.post("/api/tune-sweep", json={"captures": [rubbish], "fmt": "scp"})
+    answer = client.post("/api/tune-sweep", json={"captures": [rubbish], "fmt": "nonsense"})
 
     assert answer.status_code == BAD_REQUEST
     assert "could not be read" in answer.json()["detail"]
@@ -211,12 +194,6 @@ def test_a_capture_that_does_not_decode_is_refused(client: TestClient) -> None:
     answer = client.post("/api/flux-decode", json={"data": tiny, "fmt": "counts"})
 
     assert answer.status_code in {OK, BAD_REQUEST}
-
-
-def test_an_archive_with_no_history_reports_no_dumps(client: TestClient) -> None:
-    body = client.post("/api/archive-trend", json={"disk": "nothing"}).json()
-
-    assert body["rows"] == [{"disk": "nothing", "dumps": 0}]
 
 
 def test_a_capture_that_cannot_be_decoded_is_refused(client: TestClient) -> None:
@@ -233,28 +210,3 @@ def test_a_capture_that_cannot_be_decoded_is_refused(client: TestClient) -> None
 
     assert answer.status_code == BAD_REQUEST
     assert "could not be decoded" in answer.json()["detail"]
-
-
-def test_a_disk_with_history_reports_its_trend(client: TestClient) -> None:
-    body = client.post("/api/archive-trend", json={}).json()
-
-    assert isinstance(body["rows"], list)
-
-
-def test_a_history_with_dumps_reports_a_trend() -> None:
-    history = tuple(
-        DumpRecord(
-            disk_id="a",
-            taken=f"2026-0{index + 1}-01",
-            digest="d",
-            grade="clean",
-            confidence=1.0,
-            blocks_total=10,
-            blocks_bad=index,
-        )
-        for index in range(3)
-    )
-
-    row = trend_rows(history)
-
-    assert row["dumps"] == 3

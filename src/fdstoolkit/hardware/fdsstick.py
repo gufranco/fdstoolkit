@@ -57,11 +57,10 @@ class FdsStick:
     reports_write_protection: Final = False
     selects_sides: Final = False
 
-    def __init__(self, transport: HidTransport, *, assume_writable: bool = False) -> None:
+    def __init__(self, transport: HidTransport) -> None:
         self._transport = transport
         self._captures: list[bytes] = []
         self._resyncs: list[tuple[int, int]] = []
-        self._assume_writable = assume_writable
 
     @property
     def captures(self) -> tuple[bytes, ...]:
@@ -80,7 +79,6 @@ class FdsStick:
             write_protected=None,
             battery_ok=None,
             ready=None,
-            assume_writable=self._assume_writable,
         )
 
     def _start(self, mode: int) -> None:
@@ -195,7 +193,7 @@ def _load_hid() -> HidModule:
     return cast("HidModule", importlib.import_module("hid"))
 
 
-def open_fdsstick(*, assume_writable: bool = False) -> FdsStick:
+def open_fdsstick() -> FdsStick:
     try:
         hid = _load_hid()
     except ImportError as error:
@@ -215,4 +213,4 @@ def open_fdsstick(*, assume_writable: bool = False) -> FdsStick:
         )
         raise HardwareFaultError(message, kind=FaultKind.LINK) from error
 
-    return FdsStick(HidApiTransport(device), assume_writable=assume_writable)
+    return FdsStick(HidApiTransport(device))

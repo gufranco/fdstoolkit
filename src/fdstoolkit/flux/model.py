@@ -17,9 +17,6 @@ REVOLUTION_NS: Final = int(NS_PER_SECOND * 60 / NOMINAL_RPM)
 
 
 class Source(StrEnum):
-    SCP = "scp"
-    KRYOFLUX = "kryoflux"
-    HFE = "hfe"
     FDSSTICK = "fdsstick"
     SYNTHETIC = "synthetic"
 

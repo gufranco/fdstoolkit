@@ -45,9 +45,12 @@ a factor of two and carry no tolerance.
 - A capture that carries pulse classes cannot measure speed, and the toolkit
   refuses rather than inventing timing. An FDSStick rounds every pulse in
   hardware, so this is the common case rather than an edge case.
-- An FDSStick reports no drive state at all, so `DriveStatus` answers unknown
-  and a destructive write refuses. `--assume-writable` clears the uncertainty,
-  never a known fault.
+- An FDSStick reports no drive state at all, so `DriveStatus` answers unknown.
+  Unknown does not block a write; a state the drive reports as bad does. The
+  safety of a write comes from the backup, the confirmation and the readback
+  comparison, not from a status the stick cannot give.
+- Every game uses at most one disk, with one or two sides. No game spans a
+  second disk.
 - A drive that reaches one face at a time cannot select a side. Reading more
   than one side asks the operator to turn the disk over, and refuses rather
   than reading the same face twice.
@@ -108,7 +111,6 @@ behaviour.
 | `drive/` | Speed, stability, bracketing, fault classification, advice |
 | `quality/` | Reads, confidence, grading, calibration, the surface test |
 | `master/` | Corpus consensus, splicing, reference sets |
-| `submit/` | The dump log and the submission report |
 | `ui/` | The web surface: routes, schemas, derived forms, static page |
 | `cli/` | One module per command family, each with a `register(app)` |
 
@@ -119,9 +121,10 @@ twice belongs there rather than being copied.
 
 No flux capture of a Disk System disk exists anywhere. Quick Disk is one
 continuous spiral with no index hole and no stepping, so KryoFlux and
-Greaseweazle cannot read this medium. The readers for those formats exist to
-validate the measurement layer against bytes the toolkit did not generate
-itself, and doing so found four real defects.
+Greaseweazle cannot read this medium. Readers for their formats once lived here
+to validate the measurement layer against bytes the toolkit did not generate,
+and found four real defects before they were removed with every other path
+that needs hardware other than the FDSStick.
 
 Head alignment is not measurable from timing. Belt and motor faults are not
 separable without the pulley ratio, which no trustworthy source states. Both

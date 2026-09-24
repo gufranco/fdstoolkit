@@ -206,7 +206,7 @@ def surface_test(
         raise SurfaceTestRefusedError(message)
     status = writer.status()
     if not status.can_write:
-        message = f"cannot run a surface test: {', '.join(status.write_blockers)}"
+        message = f"cannot run a surface test: {', '.join(status.blockers)}"
         raise SurfaceTestRefusedError(message)
 
     if not confirm(_confirmation_message(sides)):

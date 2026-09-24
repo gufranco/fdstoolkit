@@ -61,7 +61,7 @@ def test_a_capture_without_a_track_is_refused() -> None:
 
 def test_a_capture_finds_a_track_by_its_own_index() -> None:
     capture = FluxCapture(
-        source=Source.SCP,
+        source=Source.FDSSTICK,
         tracks=(FluxTrack(index=7, revolutions=(Revolution(intervals=(1, 2)),)),),
     )
 
@@ -72,7 +72,7 @@ def test_a_capture_finds_a_track_by_its_own_index() -> None:
 
 def test_asking_a_capture_for_a_missing_track_is_refused() -> None:
     capture = FluxCapture(
-        source=Source.SCP,
+        source=Source.FDSSTICK,
         tracks=(FluxTrack(index=0, revolutions=(Revolution(intervals=(1,)),)),),
     )
 

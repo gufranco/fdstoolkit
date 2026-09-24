@@ -44,7 +44,6 @@ This is an instrument, not an application. It assumes you know what a disk infor
   - [Flux captures](#flux-captures)
   - [Drive calibration](#drive-calibration)
   - [Masters and reference sets](#masters-and-reference-sets)
-  - [Longitudinal tracking](#longitudinal-tracking)
   - [Hardware](#hardware)
 - [Web interface](#web-interface)
 - [Procedures](#procedures)
@@ -651,23 +650,23 @@ fdstoolkit flux <capture> [--format <f>] [--json]
 Measures a capture: fitted bit cell, cluster centres and jitter, separation margin, stray count, outliers, speed, and which tracks carry no coherent data.
 
 ```bash
-fdstoolkit flux capture.scp
+fdstoolkit flux capture.raw
 ```
 
 ```
-format        scp
-track 0       32753 pulses, bit cell 2825 ns (354013 Hz)
-  class 0     centre     2825 ns  jitter    109 ns  7926 pulses
-  class 1     centre     5367 ns  jitter     61 ns  19002 pulses
-  class 2     centre     8117 ns  jitter     35 ns  5825 pulses
-  0 to 1     margin 89.8% at boundary 4096 ns
-  1 to 2     margin 90.8% at boundary 6742 ns
-  speed       349.52 rpm
-worst margin  89.8% on track 0
+format        counts
+track 0       28344 pulses, bit cell 10400 ns (96157 Hz)
+  class 0     centre    10400 ns  jitter    159 ns  28239 pulses
+  class 1     centre    15600 ns  jitter    165 ns  78 pulses
+  class 2     centre    20870 ns  jitter    114 ns  27 pulses
+  0 to 1     margin 89.7% at boundary 13000 ns
+  1 to 2     margin 91.2% at boundary 18235 ns
+  speed       203.08 rpm
+worst margin  89.7% on track 0
 verdict       healthy
 ```
 
-Formats read: SuperCard Pro `.scp`, KryoFlux streams, HxC `.hfe`, and interval captures. Detected from the file; `--format` overrides with `scp`, `hfe`, `kryoflux`, `counts` or `raw03`.
+Formats read: FDSStick interval counts and packed pulse classes. A capture is read as counts unless `--format raw03` names it as classes.
 
 Three things this does that a fixed-threshold reader does not:
 
@@ -881,95 +880,32 @@ Merge several dumps of one disk block by block by majority, and report every dis
 <img alt="The consensus command on the local web page" src="assets/screenshots/consensus-light.png">
 </picture>
 
-### Longitudinal tracking
-
-#### `archive-add`
-
-```bash
-fdstoolkit archive-add <image> [--db <p>] [--taken <date>] [--drive <s>] [--notes <s>] [--bad-blocks <n>]
-```
-
-Record a dump against the physical disk it came from. Identity is derived from what the kiosk stamped, so two copies of one game are tracked apart.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/archive-add-dark.png">
-<img alt="The archive-add command on the local web page" src="assets/screenshots/archive-add-light.png">
-</picture>
-
-#### `archive-trend`
-
-```bash
-fdstoolkit archive-trend [--db <p>] [--disk <id>] [--json]
-```
-
-Whether a disk is holding, degrading or reading better, how fast, and roughly how long it has left.
-
-```bash
-fdstoolkit archive-trend
-```
-
-```
-4f2a...c19b: degrading, +10.0 blocks a year, unreadable in about 8 years
-```
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/archive-trend-dark.png">
-<img alt="The archive-trend command on the local web page" src="assets/screenshots/archive-trend-light.png">
-</picture>
-
 ### Hardware
 
 #### `dump`
 
 ```bash
-fdstoolkit dump -o <out> [--backend simulation|fdsstick|dumper] [--source <img>] [--sides N] [--passes N] [--retries N] [--raw <dir>] [--log <file>] [--yes] [--force]
+fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [--yes] [--force]
 ```
 
-Read a disk. `--passes` reads each side more than once, `--retries` sets per-block retries, `--raw` keeps every pulse capture the drive returned, `--log` writes a record of how the dump was taken.
+Read a disk. `--passes` reads each side more than once, `--retries` sets per-block retries, and `--raw` keeps every pulse capture the drive returned.
 
-A drive that reaches one face at a time cannot select a side. On those backends, reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
+The drive reaches one face at a time and cannot select a side, so reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dump-dark.png">
 <img alt="The dump command on the local web page" src="assets/screenshots/dump-light.png">
 </picture>
 
-#### `submit`
-
-```bash
-fdstoolkit submit <image> --log <file> --dumper <name> [--affiliation <a>] [--photo <p>...] [--also <f>...] [-o <out>] [--force]
-```
-
-Assemble the submission a preservation project asks for.
-
-The published dumping guide states that FDS verification is difficult because hashes never match, since the header carries the rewrite date. That is true of SHA-256 and it is why this command prints an identity digest beside the hashes: under the `release` profile the rewrite date, the kiosk serial and the rewrite count are masked, and 142 of 144 corpus groups then agree. The submission carries both, so a reader who wants the byte-exact hash has it and a reader who wants to compare copies has that too.
-
-Every element the guide requires is present: size, CRC32, MD5, SHA-1 and SHA-256 per file, the tool with its hardware and firmware, the date, the dump log, and the non-default settings the dump ran with. `--also` hashes a second file into the same submission, which is how the RAW capture goes in beside the FDS. `--photo` cites a photograph you took.
-
-What the toolkit cannot produce is listed rather than omitted. Photographs of the packaging, the media and the PCB are required by the guide and no program can supply them, so the command exits 1 until they are cited.
-
-A log from a simulated drive is refused. A submission describes a physical disk, and a simulated dump describes none.
-
-```bash
-fdstoolkit dump -o disk.fds --backend fdsstick --sides 2 --raw captures/ --log disk.log.json
-fdstoolkit submit disk.fds --log disk.log.json --dumper "your name" \
-    --also captures/disk.read01.raw03 --photo media.jpg --photo pcb.jpg
-```
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/submit-dark.png">
-<img alt="The submit command on the local web page" src="assets/screenshots/submit-light.png">
-</picture>
-
 #### `write`
 
 ```bash
-fdstoolkit write <image> [--backend <b>] [--source <img>] [--backup <p>] [--retries N] [--assume-writable] [--yes]
+fdstoolkit write <image> [--backup <p>] [--retries N] [--yes]
 ```
 
 Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`.
 
-An FDSStick does not report whether a disk is write protected, whether the battery holds, or whether a disk is even present. Rather than assume those are fine, the toolkit reports them as unknown and refuses a destructive write. `--assume-writable` proceeds anyway. A state the drive reports as bad is still refused, so the override clears uncertainty, never a known fault.
+An FDSStick does not report whether a disk is write protected, whether the battery holds, or whether a disk is even present, so the toolkit cannot check any of them before writing. What protects the disk instead is the sequence around the write: it saves the current contents first when you pass `--backup`, asks before it starts unless you pass `--yes`, and reads everything back afterwards to compare it with what was meant to be written. A disk that did not take the write shows up there as a mismatch.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">
@@ -979,7 +915,7 @@ An FDSStick does not report whether a disk is write protected, whether the batte
 #### `surface`
 
 ```bash
-fdstoolkit surface [--backend <b>] [--source <img>] [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
+fdstoolkit surface [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
 ```
 
 Write and read back complementary patterns to grade a scratch disk. This is the magnetic
@@ -1025,10 +961,8 @@ because every pass destroys what was there.
 `blank --formatted`, which means the disk goes back into the drawer in the state it shipped in
 and a writer will treat it as unwritten media.
 
-`--backend simulation` stands in for hardware and takes `--source` to name the image it holds.
-
 ```bash
-fdstoolkit surface --backend fdsstick --sides 2 --passes 3 \
+fdstoolkit surface --sides 2 --passes 3 \
     --backup before.fds --finish blank --yes
 ```
 
@@ -1101,11 +1035,10 @@ The interface is in English and Japanese. Both dictionaries carry the same keys,
 One dump says what the drive read once. Two say whether it read the same thing twice.
 
 ```bash
-fdstoolkit dump -o pass1.fds --backend fdsstick --raw captures/
-fdstoolkit dump -o pass2.fds --backend fdsstick
+fdstoolkit dump -o pass1.fds --raw captures/
+fdstoolkit dump -o pass2.fds
 fdstoolkit reads pass1.fds pass2.fds
 fdstoolkit grade pass1.fds --read pass2.fds
-fdstoolkit archive-add pass1.fds --drive AN-500B
 ```
 
 If the two disagree, `consensus` merges them by majority and names every block that did not settle. If one dump has a block another has good, `splice` takes it.
@@ -1150,9 +1083,6 @@ A side is a sequence of blocks:
 | FDSKey card file | 65500 | No | Headerless within the firmware limits |
 | Copier per-side files | one per side | Depends | A side may exceed the nominal length |
 | ares side files | 73728 | Yes | Gaps and sync marks included |
-| SuperCard Pro `.scp` | variable | Yes | Flux intervals, 25 ns resolution |
-| KryoFlux stream | variable | Yes | Flux intervals, index blocks split revolutions |
-| HxC `.hfe` | variable | Yes | Bitcells rather than intervals |
 | Interval counts | variable | Yes | One byte per pulse interval |
 | Packed pulse classes | variable | Yes | Two bits per pulse, already quantised |
 
@@ -1180,7 +1110,7 @@ fdstoolkit tune capture.raw --json | jq -r '.actions[] | "\(.stage) \(.subject)"
 
 ## What this cannot do
 
-**No FDS flux capture exists.** Quick Disk is one continuous spiral with no index hole and no standard stepping, so KryoFlux and Greaseweazle cannot read this medium at all. The `.scp`, KryoFlux and `.hfe` readers exist for other media and because real captures from them were the only way to validate the measurement layer against bytes the toolkit did not generate itself.
+**No FDS flux capture exists.** Quick Disk is one continuous spiral with no index hole and no standard stepping, so KryoFlux and Greaseweazle cannot read this medium at all. This toolkit reads only what an FDSStick produces. The measurement layer is therefore checked against captures it synthesises itself, and against real FDSStick captures when one is at hand.
 
 **An FDSStick cannot measure drive speed.** The device rounds every pulse to one of three lengths in hardware and sends classes, not timing. Speed must come from a console-side reading via `reading`, or from a capture device that preserves intervals.
 

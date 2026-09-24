@@ -15,7 +15,6 @@ from fdstoolkit.identify.hashes import Digests
 from fdstoolkit.quality.grade import GradedReport
 from fdstoolkit.quality.reads import ReadStatistics
 
-ISO_DATE: Final = r"^$|^\d{4}-\d{2}-\d{2}$"
 MAX_PASSES: Final = 20
 MAX_RETRIES: Final = 20
 MAX_ADDRESS: Final = 0xFFFF
@@ -540,17 +539,6 @@ class DatBuildSpec(CorpusSpec):
     author: str = Field("", max_length=MAX_NAME)
 
 
-class ArchiveAddSpec(ImageSpec):
-    taken: str | None = Field(None, pattern=ISO_DATE)
-    drive: str = ""
-    notes: str = ""
-    bad_blocks: int = Field(0, ge=0)
-
-
-class ArchiveTrendSpec(BaseModel):
-    disk: str | None = None
-
-
 class SweepSpec(BaseModel):
     captures: list[str] = Field(default_factory=list)
     fmt: str | None = None
@@ -561,7 +549,6 @@ class DecodeSpec(CaptureSpec):
 
 
 class DumpSpec(BaseModel):
-    source: str
     sides: SideCount = 1
     passes: int = Field(1, ge=1, le=MAX_PASSES)
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
@@ -570,27 +557,16 @@ class DumpSpec(BaseModel):
 
 class WriteSpec(BaseModel):
     data: str
-    source: str
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
     confirm: bool = False
-    assume_writable: bool = False
 
 
 class SurfaceSpec(BaseModel):
-    source: str
     sides: SideCount = 1
     passes: int = Field(1, ge=1, le=MAX_PASSES)
     quick: bool = False
     finish: str = "leave"
     confirm: bool = False
-    assume_writable: bool = False
-
-
-class SubmitSpec(ImageSpec):
-    log: str
-    dumper: str = Field(..., min_length=1)
-    affiliation: str = ""
-    photos: list[str] = Field(default_factory=list)
 
 
 class TextResult(BaseModel):
@@ -620,4 +596,3 @@ class FilesResult(BaseModel):
 
 class DumpedResult(FileResult):
     grade: str
-    log: str

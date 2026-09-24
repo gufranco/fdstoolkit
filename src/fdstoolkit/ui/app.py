@@ -144,12 +144,9 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "tune": "/api/tune",
     "tune-sweep": "/api/tune-sweep",
     "reading": "/api/reading",
-    "archive-add": "/api/archive-add",
-    "archive-trend": "/api/archive-trend",
     "dump": "/api/dump",
     "write": "/api/write",
     "surface": "/api/surface",
-    "submit": "/api/submit",
 }
 
 
@@ -291,7 +288,7 @@ def reading(spec: CyclesSpec) -> SpeedView:
 
 def classes(spec: CaptureSpec) -> ClassesResult:
     data = _bytes_of(spec.data)
-    return ClassesResult.of(measure_classes(data, packed=spec.fmt == "raw03"))
+    return ClassesResult.of(measure_classes(data, packed=(spec.fmt or "raw03") == "raw03"))
 
 
 def blank(spec: BlankSpec) -> FileResult:
@@ -397,15 +394,12 @@ def _register_analysis(app: FastAPI) -> None:
     app.add_api_route("/api/dat-cache", analysis_routes.dat_cache, methods=["GET"])
     app.add_api_route("/api/flux-decode", analysis_routes.flux_decode, methods=["POST"])
     app.add_api_route("/api/tune-sweep", analysis_routes.tune_sweep, methods=["POST"])
-    app.add_api_route("/api/archive-add", analysis_routes.archive_add, methods=["POST"])
-    app.add_api_route("/api/archive-trend", analysis_routes.archive_trend, methods=["POST"])
 
 
 def _register_hardware(app: FastAPI) -> None:
     app.add_api_route("/api/dump", hardware_routes.dump_route, methods=["POST"])
     app.add_api_route("/api/write", hardware_routes.write_route, methods=["POST"])
     app.add_api_route("/api/surface", hardware_routes.surface_route, methods=["POST"])
-    app.add_api_route("/api/submit", hardware_routes.submit_route, methods=["POST"])
 
 
 DEVICE_CHECK: Final = "fdsstick"

@@ -307,7 +307,7 @@ def write_verified(
 ) -> WriteReport:
     status = writer.status()
     if not status.can_write:
-        message = f"cannot write: {', '.join(status.write_blockers)}"
+        message = f"cannot write: {', '.join(status.blockers)}"
         raise WriteRefusedError(message)
 
     oversized = [

@@ -231,15 +231,14 @@ def test_the_stick_reports_every_drive_state_as_unknown() -> None:
 
     assert status.disk_present is None
     assert status.write_protected is None
-    assert not status.can_write
 
 
-def test_the_stick_still_allows_a_read_it_cannot_vouch_for() -> None:
+def test_the_stick_allows_a_read_it_cannot_vouch_for() -> None:
     assert FdsStick(FakeTransport()).status().can_read
 
 
-def test_the_override_lets_the_stick_write() -> None:
-    assert FdsStick(FakeTransport(), assume_writable=True).status().can_write
+def test_the_stick_allows_a_write_it_cannot_vouch_for() -> None:
+    assert FdsStick(FakeTransport()).status().can_write
 
 
 def test_the_stick_reads_one_face_and_says_so() -> None:

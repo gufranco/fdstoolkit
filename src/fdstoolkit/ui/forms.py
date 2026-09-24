@@ -12,11 +12,10 @@ from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.flux.load import CaptureFormat
 from fdstoolkit.quality.surface import Finish
 
-FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice", "auto", "date")
+FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice", "auto")
 
 DERIVED_FROM_FILE: Final = "name"
 
-DATE_FIELDS: Final = frozenset({"taken"})
 
 FILE_FIELDS: Final = frozenset(
     {
@@ -63,7 +62,7 @@ ACCEPTS: Final[dict[str, str]] = {
     "images": IMAGE_SUFFIXES,
     "reads": IMAGE_SUFFIXES,
     "donors": IMAGE_SUFFIXES,
-    "captures": ".scp,.raw,.hfe",
+    "captures": ".counts,.raw03",
     "dat": ".dat,.xml",
     "save": ".ips,.ups,.fds",
     "patch": ".ips,.bps,.xdelta",
@@ -86,7 +85,6 @@ class FormField(BaseModel):
     step: float | None = None
     min_length: int | None = None
     max_length: int | None = None
-    pattern: str = ""
 
 
 class CommandForm(BaseModel):
@@ -111,7 +109,6 @@ class Bounds(BaseModel):
     maximum: float | None = None
     min_length: int | None = None
     max_length: int | None = None
-    pattern: str = ""
 
 
 NUMERIC_RULES: Final = (("ge", "minimum"), ("gt", "minimum"), ("le", "maximum"), ("lt", "maximum"))
@@ -130,15 +127,10 @@ def _bounds(info: object) -> Bounds:
             value = getattr(rule, attribute, None)
             if value is not None:
                 found = found.model_copy(update={key: int(value)})
-        pattern = getattr(rule, "pattern", None)
-        if pattern is not None:
-            found = found.model_copy(update={"pattern": str(pattern)})
     return found
 
 
 def _named_kind(name: str) -> str:
-    if name in DATE_FIELDS:
-        return "date"
     if name in FILE_FIELDS:
         return "file"
     if name in FILE_LIST_FIELDS:

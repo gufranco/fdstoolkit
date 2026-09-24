@@ -12,7 +12,7 @@ from fdstoolkit.flux.model import NOMINAL_RPM
 pytestmark = pytest.mark.corpus
 
 CORPUS_ENV = "FDSTOOLKIT_FLUX_CORPUS"
-SUFFIXES = (".scp", ".raw", ".hfe")
+SUFFIXES = (".raw", ".counts")
 PLAUSIBLE_RPM = (90.0, 400.0)
 PLAUSIBLE_CELL_NS = (500.0, 40_000.0)
 
@@ -20,7 +20,7 @@ PLAUSIBLE_CELL_NS = (500.0, 40_000.0)
 def corpus_root() -> Path:
     raw = os.environ.get(CORPUS_ENV)
     if not raw:
-        pytest.skip(f"set {CORPUS_ENV} to a directory of real flux captures to run this")
+        pytest.skip(f"set {CORPUS_ENV} to a directory of real FDSStick timing captures to run this")
     root = Path(raw).expanduser()
     if not root.is_dir():
         pytest.skip(f"{CORPUS_ENV} does not name a directory: {root}")
