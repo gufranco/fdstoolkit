@@ -63,7 +63,10 @@ def test_the_report_numbers_are_the_ones_the_device_publishes() -> None:
     assert ReportId.DISK_START == 0x10
     assert ReportId.DISK_CHUNK == 0x11
     assert ReportId.DISK_WRITE == 0x12
-    assert ReportId.DISK_FINALISE == 0x20
+
+
+def test_the_driver_knows_only_the_reports_that_reach_a_real_drive() -> None:
+    assert {int(report) for report in ReportId} == {0x10, 0x11, 0x12}
 
 
 def test_a_read_starts_with_the_start_report_carrying_the_read_mode() -> None:
@@ -152,24 +155,39 @@ def test_every_write_report_fills_the_whole_frame() -> None:
     assert [len(packet) for packet in transport.outputs] == [WRITE_REPORT_LENGTH]
 
 
-def test_a_write_ends_with_the_finalise_report() -> None:
+def test_a_write_sends_nothing_after_its_data() -> None:
     transport = RecordingTransport()
 
     FdsStick(transport).write_raw_side(bytes(WRITE_PAYLOAD))
 
-    assert transport.features[-1] == bytes([ReportId.DISK_FINALISE, 0x00])
+    assert transport.features == [bytes([ReportId.DISK_START, MODE_WRITE])]
 
 
-def test_nothing_on_the_wire_touches_the_flash_reports() -> None:
+FLASH_REPORTS = frozenset({0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09})
+
+EMULATOR_REPORTS = frozenset({0x20, 0x21, 0x22, 0x23})
+
+
+def sent_by_a_full_session() -> set[int]:
     transport = RecordingTransport({ReportId.DISK_CHUNK: full_then_short()})
     stick = FdsStick(transport)
 
     stick.read_raw_side()
     stick.write_raw_side(bytes(WRITE_PAYLOAD))
 
-    sent = {packet[0] for packet in transport.features + transport.outputs}
-    assert sent <= set(ReportId)
-    assert sent.isdisjoint({0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09})
+    return {packet[0] for packet in transport.features + transport.outputs}
+
+
+def test_nothing_on_the_wire_touches_the_flash_reports() -> None:
+    assert sent_by_a_full_session().isdisjoint(FLASH_REPORTS)
+
+
+def test_nothing_on_the_wire_drives_the_disk_emulator() -> None:
+    assert sent_by_a_full_session().isdisjoint(EMULATOR_REPORTS)
+
+
+def test_every_report_sent_is_one_the_driver_declares() -> None:
+    assert sent_by_a_full_session() <= {int(report) for report in ReportId}
 
 
 class RefusingTransport(RecordingTransport):
@@ -198,7 +216,7 @@ def test_a_device_that_stops_once_the_disk_has_turned_is_not_a_fault() -> None:
 
     FdsStick(transport).write_raw_side(bytes(WRITE_PAYLOAD * (SETTLED_PACKETS + 5)))
 
-    assert transport.features[-1] == bytes([ReportId.DISK_FINALISE, 0x00])
+    assert len(transport.outputs) == SETTLED_PACKETS
 
 
 def test_a_disk_that_never_ends_stops_at_the_raw_ceiling() -> None:

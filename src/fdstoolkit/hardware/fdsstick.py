@@ -27,7 +27,6 @@ class ReportId(IntEnum):
     DISK_START = 0x10
     DISK_CHUNK = 0x11
     DISK_WRITE = 0x12
-    DISK_FINALISE = 0x20
 
 
 @runtime_checkable
@@ -105,7 +104,6 @@ class FdsStick:
                     message = f"the device stopped accepting data after {index} packet(s)"
                     raise HardwareFaultError(message, kind=FaultKind.LINK) from error
                 break
-        self._transport.send_feature(bytes([ReportId.DISK_FINALISE, 0x00]))
 
     def read_side(self, side: int) -> Iterator[BlockRead]:
         del side

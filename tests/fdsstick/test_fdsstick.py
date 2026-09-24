@@ -206,7 +206,7 @@ def test_writing_a_side_encodes_the_blocks_it_is_given() -> None:
     FdsStick(transport).write_side(0, [block.payload for block in disk.sides[0].blocks])
 
     assert transport.outputs
-    assert transport.features[-1] == bytes([ReportId.DISK_FINALISE, 0x00])
+    assert {packet[0] for packet in transport.outputs} == {ReportId.DISK_WRITE}
 
 
 def test_every_side_read_keeps_its_pulse_capture() -> None:

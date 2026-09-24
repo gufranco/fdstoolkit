@@ -53,11 +53,18 @@ a factor of two and carry no tolerance.
   than reading the same face twice.
 - `SAVEDATA` and `JMP-TBL.` are reported by the opcode check and are working as
   intended. They are almost entirely non-code.
-- The FDSStick driver speaks four reports and no more: `0x10` starts a transfer
-  with a mode byte, `0x11` streams a read chunk, `0x12` carries a write chunk as
-  an output report, `0x20` ends a write. Reports `0x01` through `0x09` drive the
-  onboard SPI flash. They are never sent, because reading a disk does not need
-  them and one published reading of `0x06` is a 64 KB block erase.
+- An FDSStick does two jobs. It is an interface between a real Disk System drive
+  and this machine, and it is a drive emulator that plays images off its own
+  flash. Only the first is in scope, so the driver speaks three reports and no
+  more: `0x10` starts a transfer and carries the mode, `0x11` streams a read
+  chunk, `0x12` carries a write chunk as an output report.
+- Reports `0x01` through `0x09` drive the onboard SPI flash, and `0x20` through
+  `0x23` drive the emulator. Neither group is ever sent. A read does not need the
+  flash, one published reading of `0x06` is a 64 KB block erase, and `0x20` with
+  a zero byte ejects an emulated disk rather than finishing a physical write.
+- How a physical write ends is unknown. The one set of notes taken from the
+  official binary lists the write-to-adapter terminator and its acknowledgement
+  as never traced, so the driver streams the side and stops.
 - Nothing in the hardware path has run against a device. Every driver test drives
   a recording stand-in, so it can prove which bytes we send and cannot prove the
   device accepts them.
