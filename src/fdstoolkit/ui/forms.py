@@ -9,7 +9,6 @@ from pydantic_core import PydanticUndefined
 
 from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.core.diskinfo import PROFILES
-from fdstoolkit.flux.load import CaptureFormat
 from fdstoolkit.quality.surface import Finish
 
 FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice", "auto")
@@ -20,7 +19,7 @@ DERIVED_FROM_FILE: Final = "name"
 FILE_FIELDS: Final = frozenset(
     {
         "data",
-        "source",
+        "capture",
         "left",
         "right",
         "file",
@@ -28,7 +27,6 @@ FILE_FIELDS: Final = frozenset(
         "played",
         "patch",
         "dat",
-        "log",
         "recipes",
         "manifest",
         "reference",
@@ -36,11 +34,10 @@ FILE_FIELDS: Final = frozenset(
     }
 )
 
-FILE_LIST_FIELDS: Final = frozenset({"images", "reads", "donors", "captures"})
+FILE_LIST_FIELDS: Final = frozenset({"images", "reads", "donors"})
 
 CHOICES: Final[dict[str, tuple[str, ...]]] = {
     "profile": tuple(sorted(PROFILES)),
-    "fmt": ("", *sorted(str(item) for item in CaptureFormat)),
     "save_as": ("ips", "ups", "image"),
     "finish": tuple(str(item) for item in Finish),
     "kind": ("program", "character", "nametable"),
@@ -54,7 +51,6 @@ IMAGE_SUFFIXES: Final = ".fds,.qd"
 
 ACCEPTS: Final[dict[str, str]] = {
     "data": IMAGE_SUFFIXES,
-    "source": IMAGE_SUFFIXES,
     "left": IMAGE_SUFFIXES,
     "right": IMAGE_SUFFIXES,
     "file": IMAGE_SUFFIXES,
@@ -62,13 +58,12 @@ ACCEPTS: Final[dict[str, str]] = {
     "images": IMAGE_SUFFIXES,
     "reads": IMAGE_SUFFIXES,
     "donors": IMAGE_SUFFIXES,
-    "captures": ".counts,.raw03",
+    "capture": ".raw03",
     "dat": ".dat,.xml",
     "save": ".ips,.ups,.fds",
     "patch": ".ips,.bps,.xdelta",
     "recipes": ".json",
     "manifest": ".json",
-    "log": ".json",
     "bios": ".bin,.rom",
 }
 

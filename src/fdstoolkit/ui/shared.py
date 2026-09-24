@@ -41,7 +41,10 @@ def decode_payload(payload: str) -> tuple[Disk, bytes, tuple[Diagnostic, ...]]:
         reject_foreign(data)
     except ForeignImageError as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    disk, findings = fds.decode(data)
+    try:
+        disk, findings = fds.decode(data)
+    except ValueError as error:
+        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
     return disk, data, findings
 
 

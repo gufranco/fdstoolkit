@@ -41,7 +41,6 @@
   - [セーブデータ](#セーブデータ)
   - [識別](#識別)
   - [品質測定](#品質測定)
-  - [フラックスキャプチャ](#フラックスキャプチャ)
   - [ドライブ調整](#ドライブ調整)
   - [マスターと参照セット](#マスターと参照セット)
   - [ハードウェア](#ハードウェア)
@@ -95,7 +94,9 @@ dat cache         ~/.cache/fdstoolkit/dat, 0 catalogue(s)
 
 ダイジェストは `fdstoolkit:v1:<プロファイル>/v1:<sha256>` の形式で出力されます。595 イメージのコーパスでは、`release` で 144 グループ中 142 が、`content` で 125 が一致します。
 
-**キャプチャには時間情報を持つものと持たないものがあります。** インターバルカウントは実際のパルス長を保持しているため速度を測定できます。パルスクラスはキャプチャ機器の側で既に 3 種類の公称長に丸められており、測定できません。本ツールはどちらを保持しているかを追跡し、後者から速度を導出することを拒否します。
+**FDSStick のキャプチャが持つのは時間情報ではなくパルスクラスです。** この機器はハードウェアの側で各パルスを 3 種類の公称長のいずれかへ丸め、`dump --raw` はそのクラスを `raw03` ファイルとして保存します。これはドライブが 3 種類の長さをどれだけ均等に分けて読めているかを示し、`classes` がそれを測定します。速度は示せないため、速度は実機側から `reading` で得ます。
+
+**1 本のゲームは 1 枚のディスクです。** どのゲームも片面または両面の 1 枚のディスクを使い、2 枚目にまたがるゲームはありません。3 面以上を持つイメージは複数のディスクを 1 つにまとめたものであり、すべてのコマンドがこれを拒否します。
 
 ## コマンドリファレンス
 
@@ -251,7 +252,7 @@ fdstoolkit canon <image> --profile <name> [-o <out>] [--force]
 #### `blank`
 
 ```bash
-fdstoolkit blank -o <out> [--sides N] [--formatted] [--header] [--game-name ABC] [--force]
+fdstoolkit blank -o <out> [--sides 1|2] [--formatted] [--header] [--game-name ABC] [--force]
 ```
 
 空のイメージ。`--formatted` は、一度も書き換えられていない 1,729 面から実測した値でディスク情報ブロックを書きます。国コード `49`、シリアル `ffff`、書き換え回数 `00`、フィラー `ff`。
@@ -277,7 +278,7 @@ fdstoolkit build <manifest> -o <out> [--force]
 #### `card`
 
 ```bash
-fdstoolkit card -o <out> [--firmware <variant>] [--force]
+fdstoolkit card -o <out> [--sides 1|2] [--firmware <variant>] [--force]
 ```
 
 FDSKey が受け付ける空のイメージ。
@@ -303,24 +304,6 @@ fdstoolkit join <files>... -o <out> [--force]
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/join-dark.png">
 <img alt="ローカル Web ページの join コマンド" src="assets/screenshots/join-light.png">
-</picture>
-
-#### `merge` and `unmerge`
-
-```bash
-fdstoolkit merge <disks>... -o <out> [--header|--no-header] [--force]
-fdstoolkit unmerge <set> -d <dir> [--force]
-```
-
-複数ディスクのゲームを 1 つのイメージにまとめ、また分解します。ディスクは順番に指定してください。`--header` は fwNES ヘッダを付けます。既定は `--no-header` です。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/merge-dark.png">
-<img alt="ローカル Web ページの merge コマンド" src="assets/screenshots/merge-light.png">
-</picture>
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/unmerge-dark.png">
-<img alt="ローカル Web ページの unmerge コマンド" src="assets/screenshots/unmerge-light.png">
 </picture>
 
 #### `export`
@@ -582,7 +565,7 @@ bits gained   0
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate <reference> --read <r>... [--margin <f>] [--json]
+fdstoolkit calibrate <reference> --read <r>... [--json]
 ```
 
 信頼できるディスクを基準としてドライブ自身のエラー率を測ります。ディスクのせいをドライブに、あるいはその逆に押し付けないためです。判定は `good`、`marginal`、`faulty` のいずれかです。
@@ -595,13 +578,13 @@ fdstoolkit calibrate <reference> --read <r>... [--margin <f>] [--json]
 #### `grade`
 
 ```bash
-fdstoolkit grade <image> [--read <r>...] [--margin <f>] [--map] [--json]
+fdstoolkit grade <image> [--read <r>...] [--map] [--json]
 ```
 
-根拠となる測定値を添えた評価。`--read` は繰り返し吸い出しを、`--margin` は `flux` が出したフラックスマージンを反映します。`--map` はブロックごとの信頼度と、その根拠を表示します。
+根拠となる測定値を添えた評価。`--read` は繰り返し吸い出しを反映します。`--map` はブロックごとの信頼度と、その根拠を表示します。
 
 ```bash
-fdstoolkit grade disk.fds --read pass2.fds --margin 0.68
+fdstoolkit grade disk.fds --read pass2.fds
 ```
 
 ```
@@ -611,7 +594,7 @@ clean, confidence 0.97
   ok   read stability 1 within 1
 ```
 
-信頼度はチェックサムの状態を出発点とし、読み取りの一致度とフラックスマージンで補正されます。チェックサムを保存しないコンテナは「疑わしい」ではなく「未証明」として扱われます。ヘッダなし `.fds` が不安定と評価されないのはそのためです。
+信頼度はチェックサムの状態を出発点とし、読み取りの一致度で補正されます。チェックサムを保存しないコンテナは「疑わしい」ではなく「未証明」として扱われます。ヘッダなし `.fds` が不安定と評価されないのはそのためです。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/grade-dark.png">
@@ -633,68 +616,17 @@ fdstoolkit integrity <image> [--original-crcs] [--json]
 <img alt="ローカル Web ページの integrity コマンド" src="assets/screenshots/integrity-light.png">
 </picture>
 
-### フラックスキャプチャ
+### ドライブ調整
 
-#### `flux`
-
-```bash
-fdstoolkit flux <capture> [--format <f>] [--json]
-```
-
-キャプチャを測定します。フィッティングされたビットセル長、クラスタの中心とジッタ、分離マージン、外れ値の数、速度、そして一貫したデータを持たないトラックを報告します。
-
-```bash
-fdstoolkit flux capture.raw
-```
-
-```
-format        counts
-track 0       28344 pulses, bit cell 10400 ns (96157 Hz)
-  class 0     centre    10400 ns  jitter    159 ns  28239 pulses
-  class 1     centre    15600 ns  jitter    165 ns  78 pulses
-  class 2     centre    20870 ns  jitter    114 ns  27 pulses
-  0 to 1     margin 89.7% at boundary 13000 ns
-  1 to 2     margin 91.2% at boundary 18235 ns
-  speed       203.08 rpm
-worst margin  89.7% on track 0
-verdict       healthy
-```
-
-読み込める形式は FDSStick のインターバルカウントとパック済みパルス分類です。`--format raw03` で分類として指定しない限り、キャプチャはカウントとして読み込まれます。
-
-閾値固定の読み取り器にはできないことが 3 つあります。
-
-- **パルスファミリを推定します。** ディスクシステムや MFM のストリームは 1、1.5、2 セルのインターバルで動き、グループ符号化のストリームは 1、2、3 で動きます。両方を試して当てはまりの良い方を採用します。誤った方を仮定すると、正常な媒体が壊れているように見えるためです。
-- **分離マージンは最も近い 1 パルスではなく第 1 パーセンタイルで測ります。** 実際のキャプチャには必ず数個の外れ値が含まれ、そのうちの 1 つが判定を左右すべきではありません。外れ値の数は別途報告されます。
-- **未フォーマットと劣化を区別します。** クラスタの相対的なばらつきが 15% を超えるトラックは一貫したデータを持たないと判断し、失敗ではなく未フォーマットと呼びます。実イメージでの実測では、フォーマット済みは 1.1〜2.9%、未フォーマットは 31.8〜42.6% でした。
-
-1 回転に満たない回転は部分回転として印を付け、速度の計算から除外します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/flux-dark.png">
-<img alt="ローカル Web ページの flux コマンド" src="assets/screenshots/flux-light.png">
-</picture>
-
-#### `flux-decode`
-
-```bash
-fdstoolkit flux-decode <capture> -o <out> [--format <f>] [--fixed] [--force]
-```
-
-キャプチャをディスクイメージへデコードします。閾値はキャプチャに合わせて推定されるため、公称から大きく外れて記録されたストリームでもデコードできます。`--fixed` は代わりに公称の閾値を使います。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/flux-decode-dark.png">
-<img alt="ローカル Web ページの flux-decode コマンド" src="assets/screenshots/flux-decode-light.png">
-</picture>
+ここでのすべての測定はビットレートを基準としており、回転数は使いません。RAM アダプタは 96.4 kbit/s を期待し、許容範囲は 10 パーセントです。ハードウェアが実際に要求しているのはこの数値だけです。この機構の回転数として公表されている値は 2 倍の開きがあり、許容範囲も示されていません。
 
 #### `classes`
 
 ```bash
-fdstoolkit classes <capture> [--format <f>] [--json]
+fdstoolkit classes <capture> [--json]
 ```
 
-時間情報ではなくパルスクラスを持つキャプチャ向けです。3 種類の長さへの分布と、そのいずれにも入らなかったパルスの数を報告します。
+`dump --raw` が保存した `raw03` キャプチャを読み込みます。3 種類の長さへの分布と、そのいずれにも入らなかったパルスの数を報告します。
 
 測定の前にギャップの連続を除外します。ギャップとは短いパルスの長い連続であり、含めたままでは分布が「ドライブがどう読んでいるか」ではなく「ディスクがどれだけ埋まっているか」の指標になってしまうためです。残りの部分について、実在する 120 面の中央値は 63.1、27.9、9.0 パーセントで、これを基準値としています。正常なドライブではこの 120 面が -5.4 から +3.0 パーセントに分布するため、閾値は 6 パーセントに置いてあり、どの面もこれに触れません。
 
@@ -705,28 +637,26 @@ fdstoolkit classes <capture> [--format <f>] [--json]
 <img alt="ローカル Web ページの classes コマンド" src="assets/screenshots/classes-light.png">
 </picture>
 
-### ドライブ調整
-
-ここでのすべての測定はビットレートを基準としており、回転数は使いません。RAM アダプタは 96.4 kbit/s を期待し、許容範囲は 10 パーセントです。ハードウェアが実際に要求しているのはこの数値だけです。この機構の回転数として公表されている値は 2 倍の開きがあり、許容範囲も示されていません。
-
 #### `reading`
 
 ```bash
 fdstoolkit reading <cycles> [--json]
 ```
 
-ディスク一覧表示ツールが実機の画面に表示する、バイト間の平均 CPU サイクル数を解釈します。キャプチャ機器を必要としない唯一の速度測定手段です。
+ディスク一覧表示ツールが実機の画面に表示する、バイト間の平均 CPU サイクル数を解釈します。FDSStick は時間情報ではなくパルスクラスを送るため、本ツールが行える速度測定はこれだけです。
 
 ```bash
 fdstoolkit reading 152
 ```
 
 ```
-94.20 kbit/s, cell 10616 ns (63.7 counts), -2.28% of nominal, in spec, run faster
-turn the motor trimmer counter-clockwise to run faster
+94.20 kbit/s, -2.28% of nominal, in spec
+the drive reads slow: raise the motor speed a little, then measure again
 ```
 
 換算は厳密です。2A03 は 1.7897725 MHz で動作し 1 バイトは 8 ビットなので、サイクル数はそのままレートへ写像されます。バイト間のサイクル数が多いほどディスクは遅く回っています。
+
+助言はモーターの速度を上げるか下げるかだけを示し、半固定抵抗をどちらへ回すかは示しません。本ツールが信頼できる出典に、その向きを示すものがないからです。少しだけ回して測り直し、数値が逆へ動いたら反対に回してください。
 
 | 表示値 | レート | 誤差 |
 |---|---|---|
@@ -740,58 +670,6 @@ turn the motor trimmer counter-clockwise to run faster
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reading-dark.png">
 <img alt="ローカル Web ページの reading コマンド" src="assets/screenshots/reading-light.png">
-</picture>
-
-#### `tune`
-
-```bash
-fdstoolkit tune <capture> [--format <f>] [--json]
-```
-
-時間情報を持つキャプチャを測定し、何を調整すべきかを 2 段階で報告します。
-
-```bash
-fdstoolkit tune slow.raw
-```
-
-```
-81.79 kbit/s, cell 12226 ns (73.4 counts), -15.15% of nominal, out of spec, run faster
-periodic, wow and flutter 3.42%, drift +0.26%, spread 9.69%
-score 6%
-  [coarse] motor speed: -15.15% of nominal, outside the band the adapter tolerates.
-           turn the motor trimmer counter-clockwise to run faster, then measure again
-  [coarse] belt and spindle: wow and flutter 3.42%, spread 9.69%.
-           replace or reseat the belt and check the spindle runs true, then measure again
-```
-
-| 段階 | 範囲 | 意味 |
-|---|---|---|
-| 粗調整 | ±10% の外 | アダプタがディスクを受け付けません |
-| 微調整 | ±1% の外 | 読めますが、調整されていません |
-| 完了 | ±1% 以内、ワウ 0.2% 未満 | 調整すべきものは残っていません |
-
-速度だけでは、伸びたベルトと半固定抵抗のずれを切り分けられません。そこでキャプチャ全体を通してセル長の推移を追跡します。周期的に揺れるドライブは `periodic`、一方向へずれていくものは `drifting`、安定しているものは `steady` と報告されます。
-
-測定分解能はセル長の 0.001% です。粗密 2 段階の走査の後、解析的な最小二乗法で解いています。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/tune-dark.png">
-<img alt="ローカル Web ページの tune コマンド" src="assets/screenshots/tune-light.png">
-</picture>
-
-#### `tune-sweep`
-
-```bash
-fdstoolkit tune-sweep <captures>... [--format <f>] [--json]
-```
-
-半固定抵抗の位置ごとに 1 つずつキャプチャを与えます。順不同で構いません。正常に読める速度範囲の全体を求め、落ち着かせるべき中心と、その窓の幅を健全性の指標として報告します。健全なドライブは広い範囲で読み、疲れたドライブは 1 点でしか読みません。
-
-最初に読めた位置ではなく、窓の中心に半固定抵抗を設定してください。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/tune-sweep-dark.png">
-<img alt="ローカル Web ページの tune-sweep コマンド" src="assets/screenshots/tune-sweep-light.png">
 </picture>
 
 ### マスターと参照セット
@@ -991,8 +869,6 @@ fdstoolkit web
 | `POST /api/hash` | `hash` |
 | `POST /api/grade` | `grade` |
 | `POST /api/reads` | `reads` |
-| `POST /api/flux` | `flux` |
-| `POST /api/tune` | `tune` |
 | `POST /api/reading` | `reading` |
 | `POST /api/classes` | `classes` |
 | `POST /api/blank` | `blank` |
@@ -1001,9 +877,9 @@ fdstoolkit web
 
 イメージとキャプチャは base64 で符号化してリクエストボディに載せます。`GET /docs` は生成された API リファレンスを提供するため、このページはエンドポイントの唯一の利用者ではなく、その 1 つにすぎません。
 
-ページが提示する選択肢は `catalogue` から取得され、これは列挙型の上に構築されています。モデルにプロファイルやキャプチャ形式を追加すれば、二度目の編集をせずともページに現れます。
+ページが提示する選択肢は `catalogue` から取得され、これは列挙型の上に構築されています。モデルにプロファイルを追加すれば、二度目の編集をせずともページに現れます。
 
-ディスクへ書き込む操作は一切公開していません。`dump`、`write`、`surface` はコマンドラインに留まります。操作者がドライブの前にいて、確認に答えられる場所だからです。
+`dump`、`write`、`surface` はこの端末に接続された FDSStick を操作します。接続されていない場合は 409 を返して原因を示し、`write` と `surface` はリクエストが消去を確認するまで開始しません。
 
 インターフェースは英語と日本語で提供されます。両方の辞書は同じキーを持ち、テストスイートがそれを信用ではなく検証します。マークアップまたはスクリプトが参照するキーは両方に存在しなければならず、日本語側に英語のまま残った文字列があってはなりません。
 
@@ -1025,11 +901,9 @@ fdstoolkit grade pass1.fds --read pass2.fds
 ### ドライブを調整する。粗調整から微調整へ
 
 1. 何よりも先にヘッドを清掃してください。汚れは媒体の不良として現れます。
-2. 実機でディスク一覧表示ツールを動かし、サイクル数を読み取って `reading` に渡します。指示どおりに半固定抵抗を回し、保持と言われるまで繰り返します。
-3. 微調整では、半固定抵抗の位置を変えながら複数回キャプチャし、`tune-sweep` にかけます。最初に読めた位置ではなく、正常に読める窓の中心で止めてください。
+2. 実機でディスク一覧表示ツールを動かし、サイクル数を読み取って `reading` に渡します。指示どおりにモーターの速度を少しずつ上げ下げし、そのままでよいと言われるまで繰り返します。
+3. 正常と分かっているディスクを `--raw` 付きで吸い出し、保存したキャプチャに `classes` をかけます。分布が glitching や shifted なら、ドライブはまだ 3 種類のパルス長をうまく分けて読めていません。
 4. 読み取りが難しいと分かっているディスクで確認します。コミュニティでは 39 ファイルを含む特定の面が使われており、チェックサムエラーなしに 39 個すべて読めれば合格です。
-
-`tune` が `steady` ではなく `periodic` や `drifting` を報告する場合、半固定抵抗をどこに置いても直りません。ベルトかスピンドルの問題です。
 
 ### ドライブとディスクのどちらが原因かを判断する
 
@@ -1062,8 +936,7 @@ fdstoolkit reference-verify mine.fds --set fds-reference.json
 | FDSKey カードファイル | 65500 | なし | ファームウェアの制約内でヘッダなし |
 | コピアの面別ファイル | 面ごとに 1 つ | 場合による | 面が公称長を超えることがあります |
 | ares の面別ファイル | 73728 | あり | ギャップと同期マークを含みます |
-| インターバルカウント | 可変 | あり | 1 パルスのインターバルにつき 1 バイト |
-| パック済みパルスクラス | 可変 | あり | 1 パルスにつき 2 ビット、量子化済み |
+| パック済みパルスクラス、`raw03` | 可変 | あり | 1 パルスにつき 2 ビット、FDSStick が量子化済み |
 
 各変換で失われるもの。
 
@@ -1073,27 +946,26 @@ fdstoolkit reference-verify mine.fds --set fds-reference.json
 | `.qd` | `.fds` | 保存されていたチェックサムすべて |
 | `.fds` | `.qd` | なし。ただしチェックサムは合成されます |
 | 任意 | 正規化形式 | プロファイルが除外するものすべて |
-| インターバルカウント | パルスクラス | 時間情報すべて。速度測定も不可能になります |
 
 ## 終了コードとスクリプト化
 
-`0` は異常なし、`1` は異常ありを意味します。何を異常とみなすかはコマンドごとに異なり、上に記載してあります。`splice` なら修復できなかったブロック、`masters` なら合議が割れたゲーム、`tune` なら微調整の範囲外にあるドライブ、`reference-verify` なら不一致です。
+`0` は異常なし、`1` は異常ありを意味します。何を異常とみなすかはコマンドごとに異なり、上に記載してあります。`splice` なら修復できなかったブロック、`masters` なら合議が割れたゲーム、`reading` なら微調整の範囲外にあるドライブ、`reference-verify` なら不一致です。
 
 報告を行うコマンドはすべて `--json` を受け付け、その JSON は人間向け出力と同じデータです。ファイルを書き出すコマンドは `--force` なしに上書きしません。
 
 ```bash
 fdstoolkit verify disk.fds --json | jq -r '.findings[] | "\(.code) \(.message)"'
 fdstoolkit masters ~/dumps --json | jq '.contested[].game'
-fdstoolkit tune capture.raw --json | jq -r '.actions[] | "\(.stage) \(.subject)"'
+fdstoolkit reading 152 --json | jq -r '.advice'
 ```
 
 ## このツールにできないこと
 
-**ディスクシステムのフラックスキャプチャは存在しません。** Quick Disk はインデックス穴も標準的なステッピングも持たない 1 本の連続した渦巻きであり、KryoFlux や Greaseweazle はこの媒体を読むことができません。本ツールが読み込むのは FDSStick が生成するものだけです。そのため測定層は、本ツール自身が合成したキャプチャと、手元にある場合は実際の FDSStick キャプチャに対して検証されます。
+**ディスクシステムのフラックスキャプチャは存在しません。** Quick Disk はインデックス穴も標準的なステッピングも持たない 1 本の連続した渦巻きであり、KryoFlux や Greaseweazle はこの媒体を読むことができません。本ツールが読み込むのは FDSStick が生成するものだけです。
 
-**FDSStick ではドライブの速度を測定できません。** この機器はハードウェアの側で各パルスを 3 種類の長さのいずれかへ丸め、時間情報ではなくクラスを送ってきます。速度は `reading` による実機側の読み取りか、インターバルを保持するキャプチャ機器から得る必要があります。
+**FDSStick ではドライブの速度を測定できません。** この機器はハードウェアの側で各パルスを 3 種類の長さのいずれかへ丸め、時間情報ではなくクラスを送ってきます。速度は `reading` による実機側の読み取りから得る必要があります。
 
-**ヘッドの位置合わせは時間情報だけでは測定できません。** 信号振幅か、複数のディスクにまたがるエラー密度の比較が必要です。`tune` はこれについて何も述べません。
+**ヘッドの位置合わせはパルスクラスからは測定できません。** 信号振幅か、複数のディスクにまたがるエラー密度の比較が必要です。
 
 **ベルトの不良とモーターの不良は切り分けられません。** プーリー比が必要ですが、信頼できる出典がその値を示していません。
 

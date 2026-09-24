@@ -3,7 +3,13 @@ from __future__ import annotations
 import pytest
 
 from fdstoolkit.core.blocks import Block, BlockKind
-from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side, require_readable_sides
+from fdstoolkit.core.disk import (
+    SIDES_PER_DISK,
+    Disk,
+    Side,
+    TooManySidesError,
+    require_readable_sides,
+)
 
 
 def disk_info_block() -> Block:
@@ -92,6 +98,11 @@ def test_a_disk_reports_its_side_count() -> None:
     disk = Disk(sides=(formatted_side(), formatted_side()))
 
     assert disk.side_count == 2
+
+
+def test_a_disk_of_more_than_two_sides_is_refused_as_a_bundle() -> None:
+    with pytest.raises(TooManySidesError, match="holds 3 sides"):
+        Disk(sides=(formatted_side(), formatted_side(), formatted_side()))
 
 
 def test_a_disk_rejects_a_header_count_that_contradicts_its_sides() -> None:

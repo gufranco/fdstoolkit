@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Final
 
 from fdstoolkit.core.diagnostics import Diagnostic, Severity
-from fdstoolkit.flux.analysis import CaptureReport
 from fdstoolkit.hardware.session import Grade
 from fdstoolkit.quality.confidence import LOW_CONFIDENCE, ConfidenceReport
 from fdstoolkit.quality.reads import ReadStatistics
@@ -48,7 +47,6 @@ def grade_disk(
     confidence: ConfidenceReport,
     findings: Sequence[Diagnostic] = (),
     reads: ReadStatistics | None = None,
-    flux: CaptureReport | None = None,
 ) -> GradedReport:
     errors = sum(1 for finding in findings if finding.severity is Severity.ERROR)
     warnings = sum(1 for finding in findings if finding.severity is Severity.WARNING)
@@ -72,15 +70,6 @@ def grade_disk(
                 value=reads.stability,
                 threshold=STABLE_READS,
                 passed=reads.stability >= STABLE_READS,
-            )
-        )
-    if flux is not None:
-        reasons.append(
-            Reason(
-                metric="flux margin",
-                value=flux.worst_margin,
-                threshold=0.35,
-                passed=flux.healthy,
             )
         )
 

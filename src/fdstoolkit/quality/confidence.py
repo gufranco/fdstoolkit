@@ -6,7 +6,6 @@ from typing import Final
 
 from fdstoolkit.core.blocks import CrcStatus
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.flux.analysis import HEALTHY_MARGIN
 from fdstoolkit.quality.reads import ReadStatistics
 
 CRC_VALID_PRIOR: Final = 0.90
@@ -15,8 +14,6 @@ CRC_NULL_PRIOR: Final = 0.50
 CRC_MISMATCH_PRIOR: Final = 0.02
 LOW_CONFIDENCE: Final = 0.60
 FULL_AGREEMENT_READS: Final = 5
-MARGIN_LIFT: Final = 0.5
-MARGIN_FLOOR: Final = 0.3
 
 
 class Basis(StrEnum):
@@ -27,8 +24,6 @@ class Basis(StrEnum):
     SINGLE_READ = "single read"
     READS_AGREE = "reads agree"
     READS_DISAGREE = "reads disagree"
-    FLUX_CLEAR = "flux margin clear"
-    FLUX_MARGINAL = "flux margin narrow"
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,18 +75,10 @@ def _apply_reads(score: float, share: float, passes: int) -> tuple[float, Basis]
     return score + (1.0 - score) * weight, Basis.READS_AGREE
 
 
-def _apply_margin(score: float, margin: float) -> tuple[float, Basis]:
-    if margin >= HEALTHY_MARGIN:
-        return score + (1.0 - score) * MARGIN_LIFT * margin, Basis.FLUX_CLEAR
-    scale = MARGIN_FLOOR + (1.0 - MARGIN_FLOOR) * (margin / HEALTHY_MARGIN)
-    return score * scale, Basis.FLUX_MARGINAL
-
-
 def score_disk(
     disk: Disk,
     *,
     reads: ReadStatistics | None = None,
-    margin: float | None = None,
 ) -> ConfidenceReport:
     lookup: dict[tuple[int, int], tuple[float, int]] = {}
     if reads is not None:
@@ -121,10 +108,6 @@ def score_disk(
                 share, passes = entry
                 score, read_basis = _apply_reads(score, share, passes)
                 basis.append(read_basis)
-
-            if margin is not None:
-                score, margin_basis = _apply_margin(score, margin)
-                basis.append(margin_basis)
 
             blocks.append(
                 BlockConfidence(

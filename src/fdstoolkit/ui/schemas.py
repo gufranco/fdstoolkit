@@ -7,10 +7,8 @@ from pydantic import BaseModel, Field, Strict
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.core.diskinfo import PROFILES
-from fdstoolkit.drive.advise import Advice
 from fdstoolkit.drive.classes import ClassReport
 from fdstoolkit.drive.speed import SpeedReport
-from fdstoolkit.flux.analysis import CaptureReport
 from fdstoolkit.identify.hashes import Digests
 from fdstoolkit.quality.grade import GradedReport
 from fdstoolkit.quality.reads import ReadStatistics
@@ -187,126 +185,23 @@ class ReadsResult(BaseModel):
         )
 
 
-class ClusterView(BaseModel):
-    label: int
-    centre_ns: float
-    spread_ns: float
-    count: int
-
-
-class TrackView(BaseModel):
-    index: int
-    pulses: int
-    bit_cell_ns: float
-    bit_rate_hz: float
-    clusters: list[ClusterView]
-    worst_margin: float
-    coherent: bool
-    healthy: bool
-
-
-class FluxResult(BaseModel):
-    fmt: str
-    tracks: list[TrackView]
-    worst_margin: float
-    formatted_tracks: int
-    blank_tracks: int
-    healthy: bool
-
-    @classmethod
-    def of(cls, report: CaptureReport, fmt: str) -> Self:
-        return cls(
-            fmt=fmt,
-            tracks=[
-                TrackView(
-                    index=track.index,
-                    pulses=sum(spin.pulses for spin in track.revolutions),
-                    bit_cell_ns=track.revolutions[0].base_ns,
-                    bit_rate_hz=track.revolutions[0].bit_rate_hz,
-                    clusters=[
-                        ClusterView(
-                            label=cluster.label,
-                            centre_ns=cluster.centre_ns,
-                            spread_ns=cluster.spread_ns,
-                            count=cluster.count,
-                        )
-                        for cluster in track.revolutions[0].clusters
-                    ],
-                    worst_margin=track.worst_margin,
-                    coherent=track.coherent,
-                    healthy=track.healthy,
-                )
-                for track in report.tracks
-            ],
-            worst_margin=report.worst_margin,
-            formatted_tracks=len(report.formatted),
-            blank_tracks=len(report.blank),
-            healthy=report.healthy,
-        )
-
-
 class SpeedView(BaseModel):
     bit_rate_hz: float
     cell_ns: float
-    counts: float
-    cycles_per_byte: float
     error: float
-    headroom: float
     verdict: str
     direction: str
+    advice: str
 
     @classmethod
     def of(cls, report: SpeedReport) -> Self:
         return cls(
             bit_rate_hz=report.bit_rate_hz,
             cell_ns=report.cell_ns,
-            counts=report.counts,
-            cycles_per_byte=report.cycles_per_byte,
             error=report.error,
-            headroom=report.headroom,
             verdict=str(report.verdict),
             direction=str(report.direction),
-        )
-
-
-class ActionView(BaseModel):
-    stage: str
-    subject: str
-    finding: str
-    action: str
-    gain: float
-
-
-class TuneResult(BaseModel):
-    speed: SpeedView
-    motion: str
-    wow_and_flutter: float
-    drift: float
-    spread: float
-    score: float
-    settled: bool
-    actions: list[ActionView]
-
-    @classmethod
-    def of(cls, advice: Advice) -> Self:
-        return cls(
-            speed=SpeedView.of(advice.speed),
-            motion=str(advice.stability.motion),
-            wow_and_flutter=advice.stability.wow_flutter,
-            drift=advice.stability.drift,
-            spread=advice.stability.spread,
-            score=advice.score,
-            settled=advice.settled,
-            actions=[
-                ActionView(
-                    stage=str(action.stage),
-                    subject=action.subject,
-                    finding=action.finding,
-                    action=action.action,
-                    gain=action.gain,
-                )
-                for action in advice.actions
-            ],
+            advice=report.advice,
         )
 
 
@@ -347,7 +242,6 @@ class VerifySpec(ImageSpec):
 
 class GradeSpec(ImageSpec):
     reads: list[str] = Field(default_factory=list)
-    margin: float | None = Field(None, ge=0.0, le=1.0)
 
 
 class ReadsSpec(BaseModel):
@@ -355,8 +249,7 @@ class ReadsSpec(BaseModel):
 
 
 class CaptureSpec(BaseModel):
-    data: str = Field(description="the capture, base64 encoded")
-    fmt: str | None = None
+    capture: str = Field(description="a raw03 capture kept by dump --raw, base64 encoded")
 
 
 class CyclesSpec(BaseModel):
@@ -413,7 +306,6 @@ class Catalogue(BaseModel):
     version: str
     forms: list[dict[str, Any]] = Field(default_factory=_no_rows)
     profiles: list[ProfileView]
-    capture_formats: list[str]
     export_targets: list[str]
     commands: list[str]
     extras: dict[str, Any] = Field(default_factory=dict)
@@ -485,7 +377,6 @@ class ConsensusSpec(ImagesSpec):
 
 class CalibrateSpec(ImageSpec):
     reads: list[str] = Field(default_factory=list)
-    margin: float | None = Field(None, ge=0.0, le=1.0)
 
 
 class IdentifySpec(ImageSpec):
@@ -499,10 +390,6 @@ class BiosSpec(BaseModel):
 
 class SplitSpec(ImageSpec):
     stem: str = "fc1234"
-
-
-class MergeSpec(ImagesSpec):
-    headered: bool = False
 
 
 class ExportSpec(ImageSpec):
@@ -537,15 +424,6 @@ class DatBuildSpec(CorpusSpec):
     name: str = "Famicom Disk System"
     set_version: str = Field("", min_length=1)
     author: str = Field("", max_length=MAX_NAME)
-
-
-class SweepSpec(BaseModel):
-    captures: list[str] = Field(default_factory=list)
-    fmt: str | None = None
-
-
-class DecodeSpec(CaptureSpec):
-    fixed: bool = False
 
 
 class DumpSpec(BaseModel):

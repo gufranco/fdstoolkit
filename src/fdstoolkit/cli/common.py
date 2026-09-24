@@ -73,7 +73,10 @@ def decode_image(path: Path) -> tuple[Disk, tuple[Diagnostic, ...], bytes, Conta
     except ForeignImageError as error:
         raise fail(str(error)) from error
     decoder = fds.decode if container is Container.FDS else qd.decode
-    disk, findings = decoder(data)
+    try:
+        disk, findings = decoder(data)
+    except ValueError as error:
+        raise fail(str(error)) from error
     return disk, findings, data, container
 
 

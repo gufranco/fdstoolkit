@@ -265,24 +265,6 @@ def test_join_needs_a_side_file(client: TestClient) -> None:
     assert answer.status_code == UNPROCESSABLE
 
 
-def test_merge_joins_two_disks(client: TestClient) -> None:
-    body = client.post("/api/merge", json={"images": [ONE, ONE]}).json()
-
-    assert body["size"] >= len(ONE_SIDE) * 2
-
-
-def test_merge_needs_a_disk(client: TestClient) -> None:
-    answer = client.post("/api/merge", json={"images": []})
-
-    assert answer.status_code == UNPROCESSABLE
-
-
-def test_unmerge_splits_a_multi_disk_image(client: TestClient) -> None:
-    body = client.post("/api/unmerge", json={"data": ENCODED}).json()
-
-    assert body["files"]
-
-
 def test_export_writes_the_layout_a_target_expects(client: TestClient) -> None:
     body = client.post("/api/export", json={"data": ONE, "target": "mesen2"}).json()
 

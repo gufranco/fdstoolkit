@@ -53,12 +53,12 @@ def test_a_formatted_blank_declares_no_files() -> None:
 
 
 def test_a_formatted_blank_numbers_its_sides() -> None:
-    disk, _ = decode(blank_image(sides=4, headered=False, formatted=True))
+    disk, _ = decode(blank_image(sides=2, headered=False, formatted=True))
 
     sides = [DiskInfo.parse(side.blocks[0].payload) for side in disk.sides]
 
-    assert [info.side for info in sides] == [0, 1, 0, 1]
-    assert [info.disk_number for info in sides] == [0, 0, 1, 1]
+    assert [info.side for info in sides] == [0, 1]
+    assert [info.disk_number for info in sides] == [0, 0]
 
 
 def test_a_formatted_blank_carries_no_date_so_it_is_reproducible() -> None:
@@ -77,8 +77,8 @@ def test_a_formatted_blank_is_verified_by_the_bios_string() -> None:
 
 
 def test_two_builds_of_the_same_blank_are_identical() -> None:
-    assert blank_image(sides=3, headered=True, formatted=True) == blank_image(
-        sides=3, headered=True, formatted=True
+    assert blank_image(sides=2, headered=True, formatted=True) == blank_image(
+        sides=2, headered=True, formatted=True
     )
 
 
@@ -94,11 +94,11 @@ def test_a_game_name_longer_than_three_characters_is_rejected() -> None:
 
 
 def test_a_side_count_outside_the_supported_range_is_rejected() -> None:
-    with pytest.raises(ValueError, match="between 1 and 8"):
+    with pytest.raises(ValueError, match="1 or 2 sides, got 0"):
         blank_image(sides=0, headered=False, formatted=False)
 
-    with pytest.raises(ValueError, match="between 1 and 8"):
-        blank_image(sides=9, headered=False, formatted=False)
+    with pytest.raises(ValueError, match="1 or 2 sides, got 3"):
+        blank_image(sides=3, headered=False, formatted=False)
 
 
 def test_a_formatted_blank_carries_the_values_a_factory_disk_carries() -> None:

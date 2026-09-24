@@ -30,7 +30,6 @@ toolkit drives hardware attached to this machine and is never a public service.
 | Figure | Where it comes from |
 |---|---|
 | 96.4 kbit/s, ten percent either side | The rate the RAM adapter enforces. The only figure the hardware requires |
-| 62, 93 and 124 counts at 6 MHz | A real FDSStick capture, ratio one to one and a half to two |
 | 63.1, 27.9 and 9.0 percent pulse classes | The median of 120 real sides, gap runs stripped first |
 | 36 percent undocumented opcodes | The median across 10,105 real program files |
 | The formatted-blank disk info values | Measured across 1,729 never-rewritten sides |
@@ -42,15 +41,18 @@ a factor of two and carry no tolerance.
 
 ## Things that look like bugs and are not
 
-- A capture that carries pulse classes cannot measure speed, and the toolkit
-  refuses rather than inventing timing. An FDSStick rounds every pulse in
-  hardware, so this is the common case rather than an edge case.
+- An FDSStick capture carries pulse classes, never timing, so no command
+  measures speed from one. Speed comes only from the console through
+  `reading`, and the timing commands that once read other capture tools'
+  output are gone.
 - An FDSStick reports no drive state at all, so `DriveStatus` answers unknown.
   Unknown does not block a write; a state the drive reports as bad does. The
   safety of a write comes from the backup, the confirmation and the readback
   comparison, not from a status the stick cannot give.
 - Every game uses at most one disk, with one or two sides. No game spans a
   second disk.
+- Disk images are `.fds` and `.qd`, and nothing else. `raw03` captures and
+  IPS, UPS and BPS patches are read because neither is a disk image.
 - A drive that reaches one face at a time cannot select a side. Reading more
   than one side asks the operator to turn the disk over, and refuses rather
   than reading the same face twice.
@@ -107,8 +109,7 @@ behaviour.
 |---|---|
 | `core/` | The disk model, blocks, diagnostics, canonical identity |
 | `codecs/` | fds, qd, raw, ares, mgd1, foreign-image rejection |
-| `flux/` | Capture readers, pulse-family fitting, decoding |
-| `drive/` | Speed, stability, bracketing, fault classification, advice |
+| `drive/` | The pulse-class reading and the console speed reading |
 | `quality/` | Reads, confidence, grading, calibration, the surface test |
 | `master/` | Corpus consensus, splicing, reference sets |
 | `ui/` | The web surface: routes, schemas, derived forms, static page |
@@ -126,6 +127,6 @@ to validate the measurement layer against bytes the toolkit did not generate,
 and found four real defects before they were removed with every other path
 that needs hardware other than the FDSStick.
 
-Head alignment is not measurable from timing. Belt and motor faults are not
+Head alignment is not measurable from pulse classes. Belt and motor faults are not
 separable without the pulley ratio, which no trustworthy source states. Both
 are named in the README rather than guessed at.

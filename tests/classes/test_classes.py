@@ -17,7 +17,7 @@ def _values(short: int, medium: int, long_: int, invalid: int = 0) -> bytes:
     if not total:
         return b""
     stride = 7919 % total or 1
-    return bytes(pool[(index * stride) % total] for index in range(total))
+    return pack_raw03(bytes(pool[(index * stride) % total] for index in range(total)))
 
 
 def _healthy(total: int = 10_000) -> bytes:
@@ -77,12 +77,6 @@ def test_a_glitching_read_outranks_a_shifted_one() -> None:
 
 def test_the_drift_of_a_healthy_spread_is_near_zero() -> None:
     assert abs(measure_classes(_healthy()).drift) < 0.05
-
-
-def test_packed_values_are_accepted() -> None:
-    report = measure_classes(pack_raw03(_healthy()), packed=True)
-
-    assert report.reading is Reading.HEALTHY
 
 
 def test_a_stream_with_no_value_is_refused() -> None:

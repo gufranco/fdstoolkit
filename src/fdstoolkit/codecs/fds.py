@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import Final
 
 from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side
 from fdstoolkit.core.parse import parse_side
 
 MAGIC: Final = b"FDS\x1a"
 HEADER_SIZE: Final = 16
 SIDE_SIZE: Final = 65500
-MAX_SIDES: Final = 255
 
 
 def has_header(data: bytes) -> bool:
@@ -36,8 +35,8 @@ def _diagnostic(
 
 
 def build_header(side_count: int) -> bytes:
-    if not 1 <= side_count <= MAX_SIDES:
-        message = f"a side count must be between 1 and {MAX_SIDES}, got {side_count}"
+    if not 1 <= side_count <= SIDES_PER_DISK:
+        message = f"a side count must be 1 or {SIDES_PER_DISK}, got {side_count}"
         raise ValueError(message)
     return MAGIC + bytes([side_count]) + bytes(HEADER_SIZE - len(MAGIC) - 1)
 

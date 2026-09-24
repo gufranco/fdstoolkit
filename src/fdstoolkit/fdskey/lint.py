@@ -15,7 +15,6 @@ from fdstoolkit.core.diskinfo import VERIFICATION_STRING, DiskInfo
 CARD_FILE_SUFFIX: Final = ".fds"
 FIRMWARE_BUFFER: Final = EMULATION_BUFFER
 COPY_PROGRAM_MEMORY: Final = 29440
-MAX_SIDES: Final = 8
 MAX_NAME_LENGTH: Final = 255
 
 CODES: Final[Mapping[str, str]] = {
@@ -27,7 +26,6 @@ CODES: Final[Mapping[str, str]] = {
     "FK006": "a file is larger than the memory the copy program has for one block",
     "FK007": "the filename is not ASCII, so the card filesystem cannot show it",
     "FK008": f"the filename does not end in {CARD_FILE_SUFFIX}",
-    "FK009": f"more than {MAX_SIDES} sides",
 }
 
 
@@ -105,8 +103,6 @@ def lint_card_image(data: bytes, *, name: Path) -> tuple[LintFinding, ...]:
     findings.extend(_check_name(name))
 
     disk, _ = decode(data)
-    if disk.side_count > MAX_SIDES:
-        findings.append(_finding("FK009", detail={"sides": disk.side_count, "limit": MAX_SIDES}))
 
     body = data[HEADER_SIZE:] if len(data) % SIDE_SIZE == HEADER_SIZE else data
     for index, side in enumerate(disk.sides):

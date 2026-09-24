@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import binascii
 from collections.abc import Awaitable, Callable
 from hashlib import sha256
 from importlib import resources
@@ -14,19 +13,13 @@ from fastapi.staticfiles import StaticFiles
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs import fds, qd
-from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
 from fdstoolkit.codecs.qd import CrcMode
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, restore
-from fdstoolkit.core.diagnostics import Diagnostic, worst_severity
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.diagnostics import worst_severity
 from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
 from fdstoolkit.doctor import CheckStatus, diagnose
-from fdstoolkit.drive.advise import advise
 from fdstoolkit.drive.classes import measure_classes
 from fdstoolkit.drive.speed import from_cycles
-from fdstoolkit.flux.analysis import analyse_capture
-from fdstoolkit.flux.load import CaptureFormat, detect_format, load_capture
-from fdstoolkit.flux.model import FluxCapture
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
@@ -47,7 +40,6 @@ from fdstoolkit.ui.schemas import (
     DoctorCheck,
     DoctorResult,
     FileResult,
-    FluxResult,
     GradeResult,
     GradeSpec,
     HardwareResult,
@@ -58,14 +50,12 @@ from fdstoolkit.ui.schemas import (
     ReadsResult,
     ReadsSpec,
     SpeedView,
-    TuneResult,
     VerifyResult,
     VerifySpec,
 )
+from fdstoolkit.ui.shared import BAD_REQUEST, UNPROCESSABLE, bytes_of, decode_payload
 from fdstoolkit.version import VERSION
 
-BAD_REQUEST: Final = 400
-UNPROCESSABLE: Final = 422
 STATIC_DIR: Final = Path(str(resources.files("fdstoolkit.ui") / "static"))
 STAMP_LENGTH: Final = 12
 
@@ -112,8 +102,6 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "card": "/api/card",
     "split": "/api/split",
     "join": "/api/join",
-    "merge": "/api/merge",
-    "unmerge": "/api/unmerge",
     "export": "/api/export",
     "import-ares": "/api/import-ares",
     "extract": "/api/extract",
@@ -138,11 +126,7 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "calibrate": "/api/calibrate",
     "grade": "/api/grade",
     "reads": "/api/reads",
-    "flux": "/api/flux",
-    "flux-decode": "/api/flux-decode",
     "classes": "/api/classes",
-    "tune": "/api/tune",
-    "tune-sweep": "/api/tune-sweep",
     "reading": "/api/reading",
     "dump": "/api/dump",
     "write": "/api/write",
@@ -150,43 +134,11 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
 }
 
 
-def _bytes_of(encoded: str) -> bytes:
-    try:
-        data = base64.b64decode(encoded, validate=True)
-    except (binascii.Error, ValueError) as error:
-        message = f"the payload is not base64: {error}"
-        raise HTTPException(status_code=BAD_REQUEST, detail=message) from error
-    if not data:
-        message = "the payload carries no bytes"
-        raise HTTPException(status_code=BAD_REQUEST, detail=message)
-    return data
-
-
-def _decode(encoded: str) -> tuple[Disk, bytes, tuple[Diagnostic, ...]]:
-    data = _bytes_of(encoded)
-    try:
-        reject_foreign(data)
-    except ForeignImageError as error:
-        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    disk, findings = fds.decode(data)
-    return disk, data, findings
-
-
 def _profile(name: str) -> MaskProfile:
     try:
         return profile_by_name(name)
     except (KeyError, ValueError) as error:
         message = f"there is no identity profile called {name}"
-        raise HTTPException(status_code=BAD_REQUEST, detail=message) from error
-
-
-def _capture(spec: CaptureSpec) -> tuple[FluxCapture, str]:
-    data = _bytes_of(spec.data)
-    try:
-        fmt = CaptureFormat(spec.fmt) if spec.fmt else detect_format(data)
-        return load_capture(data, fmt=fmt), str(fmt)
-    except (ValueError, IndexError, KeyError) as error:
-        message = f"this capture could not be read: {error}"
         raise HTTPException(status_code=BAD_REQUEST, detail=message) from error
 
 
@@ -200,7 +152,6 @@ def catalogue() -> Catalogue:
     return Catalogue(
         version=VERSION,
         profiles=[ProfileView.of(name) for name in sorted(PROFILES)],
-        capture_formats=sorted(str(fmt) for fmt in CaptureFormat),
         export_targets=list(EXPORT_TARGETS),
         commands=sorted(ROUTE_FOR_COMMAND),
         forms=[entry.model_dump() for entry in forms()],
@@ -224,12 +175,12 @@ def hardware() -> HardwareResult:
 
 
 def info(spec: ImageSpec) -> DiskView:
-    disk, _, _ = _decode(spec.data)
+    disk, _, _ = decode_payload(spec.data)
     return DiskView.of(disk)
 
 
 def verify(spec: VerifySpec) -> VerifyResult:
-    _, _, findings = _decode(spec.data)
+    _, _, findings = decode_payload(spec.data)
     worst = worst_severity(findings)
     ok = not findings if spec.strict else str(worst) != "error"
     return VerifyResult(
@@ -240,7 +191,7 @@ def verify(spec: VerifySpec) -> VerifyResult:
 
 
 def hashes(spec: HashSpec) -> HashResult:
-    disk, data, _ = _decode(spec.data)
+    disk, data, _ = decode_payload(spec.data)
     canonical = canonicalise(disk, _profile(spec.profile))
     return HashResult(
         whole=DigestView.of(digests_of(data)),
@@ -251,10 +202,10 @@ def hashes(spec: HashSpec) -> HashResult:
 
 
 def grade(spec: GradeSpec) -> GradeResult:
-    disk, _, findings = _decode(spec.data)
-    others = [_decode(entry)[0] for entry in spec.reads]
+    disk, _, findings = decode_payload(spec.data)
+    others = [decode_payload(entry)[0] for entry in spec.reads]
     stats = compare_reads([disk, *others]) if others else None
-    confidence = score_disk(disk, reads=stats, margin=spec.margin)
+    confidence = score_disk(disk, reads=stats)
     return GradeResult.of(grade_disk(confidence=confidence, findings=findings, reads=stats))
 
 
@@ -262,24 +213,8 @@ def reads(spec: ReadsSpec) -> ReadsResult:
     if len(spec.images) < MIN_READS:
         message = "comparing reads needs at least two dumps of the same disk"
         raise HTTPException(status_code=UNPROCESSABLE, detail=message)
-    disks = [_decode(entry)[0] for entry in spec.images]
+    disks = [decode_payload(entry)[0] for entry in spec.images]
     return ReadsResult.of(compare_reads(disks))
-
-
-def flux(spec: CaptureSpec) -> FluxResult:
-    capture, fmt = _capture(spec)
-    return FluxResult.of(analyse_capture(capture), fmt)
-
-
-def tune(spec: CaptureSpec) -> TuneResult:
-    capture, _ = _capture(spec)
-    if capture.quantised:
-        message = (
-            "this capture carries pulse classes rather than timing, so it cannot "
-            "measure speed. Use the classes endpoint instead"
-        )
-        raise HTTPException(status_code=UNPROCESSABLE, detail=message)
-    return TuneResult.of(advise(capture.track(0).intervals()))
 
 
 def reading(spec: CyclesSpec) -> SpeedView:
@@ -287,8 +222,7 @@ def reading(spec: CyclesSpec) -> SpeedView:
 
 
 def classes(spec: CaptureSpec) -> ClassesResult:
-    data = _bytes_of(spec.data)
-    return ClassesResult.of(measure_classes(data, packed=(spec.fmt or "raw03") == "raw03"))
+    return ClassesResult.of(measure_classes(bytes_of(spec.capture)))
 
 
 def blank(spec: BlankSpec) -> FileResult:
@@ -306,7 +240,7 @@ def blank(spec: BlankSpec) -> FileResult:
 
 
 def canon(spec: CanonSpec) -> FileResult:
-    disk, _, _ = _decode(spec.data)
+    disk, _, _ = decode_payload(spec.data)
     canonical = canonicalise(disk, _profile(spec.profile))
     data = restore(canonical)
     return FileResult(
@@ -317,7 +251,7 @@ def canon(spec: CanonSpec) -> FileResult:
 
 
 def convert(spec: ConvertSpec) -> FileResult:
-    disk, _, _ = _decode(spec.data)
+    disk, _, _ = decode_payload(spec.data)
     stem = Path(spec.name).stem
     if spec.to_qd:
         body, _ = qd.encode(disk, crc_mode=CrcMode.PRESERVE)
@@ -344,8 +278,6 @@ def _register_core(app: FastAPI) -> None:
     app.add_api_route("/api/hash", hashes, methods=["POST"])
     app.add_api_route("/api/grade", grade, methods=["POST"])
     app.add_api_route("/api/reads", reads, methods=["POST"])
-    app.add_api_route("/api/flux", flux, methods=["POST"])
-    app.add_api_route("/api/tune", tune, methods=["POST"])
     app.add_api_route("/api/reading", reading, methods=["POST"])
     app.add_api_route("/api/classes", classes, methods=["POST"])
     app.add_api_route("/api/blank", blank, methods=["POST"])
@@ -372,8 +304,6 @@ def _register_image(app: FastAPI) -> None:
     app.add_api_route("/api/normalise-saves", image_routes.normalise, methods=["POST"])
     app.add_api_route("/api/split", image_routes.split, methods=["POST"])
     app.add_api_route("/api/join", image_routes.join, methods=["POST"])
-    app.add_api_route("/api/merge", image_routes.merge, methods=["POST"])
-    app.add_api_route("/api/unmerge", image_routes.unmerge, methods=["POST"])
     app.add_api_route("/api/export", image_routes.export, methods=["POST"])
     app.add_api_route("/api/import-ares", image_routes.import_ares, methods=["POST"])
     app.add_api_route("/api/build", image_routes.build, methods=["POST"])
@@ -392,8 +322,6 @@ def _register_analysis(app: FastAPI) -> None:
     app.add_api_route("/api/identify", analysis_routes.identify, methods=["POST"])
     app.add_api_route("/api/bios", analysis_routes.bios, methods=["POST"])
     app.add_api_route("/api/dat-cache", analysis_routes.dat_cache, methods=["GET"])
-    app.add_api_route("/api/flux-decode", analysis_routes.flux_decode, methods=["POST"])
-    app.add_api_route("/api/tune-sweep", analysis_routes.tune_sweep, methods=["POST"])
 
 
 def _register_hardware(app: FastAPI) -> None:

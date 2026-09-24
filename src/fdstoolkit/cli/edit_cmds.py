@@ -7,9 +7,7 @@ import typer
 
 from fdstoolkit.build.manifest import build_from_manifest, load_manifest
 from fdstoolkit.cli.common import (
-    FDS_SUFFIX,
     KIND_FOR_CHOICE,
-    QD_SUFFIX,
     Container,
     KindChoice,
     container_of,
@@ -25,8 +23,6 @@ from fdstoolkit.edit.clean import clean_trailing_data
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
 from fdstoolkit.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstoolkit.edit.files import FileSpec, extract_files, insert_file
-from fdstoolkit.edit.multidisk import merge as merge_disks
-from fdstoolkit.edit.multidisk import unmerge as unmerge_disk
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 from fdstoolkit.edit.recipes import load_recipes
 from fdstoolkit.edit.saves import normalise_saves
@@ -310,63 +306,6 @@ def normalise_saves_command(
     typer.echo(f"wrote {output} ({len(data)} bytes)")
 
 
-def merge(
-    images: Annotated[list[Path], typer.Argument(help="the disks of one set, in order")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the set")],
-    *,
-    header: Annotated[
-        bool, typer.Option("--header/--no-header", help="write an fwNES header")
-    ] = False,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Join the disks of a multi-disk game into one image."""
-    guard_output(output, force=force)
-    disks = [decode_image(path)[0] for path in images]
-
-    try:
-        merged, findings = merge_disks(disks)
-    except ValueError as error:
-        raise fail(str(error)) from error
-
-    if container_of(output) is Container.FDS:
-        data, encoding = fds.encode(merged, headered=header)
-    else:
-        data, encoding = qd.encode(merged)
-    output.write_bytes(data)
-
-    for finding in (*findings, *encoding):
-        typer.echo(f"  {finding.render()}")
-    typer.echo(f"wrote {output} ({merged.side_count} sides, {len(data)} bytes)")
-
-
-def unmerge(
-    image: Annotated[Path, typer.Argument(help="a merged multi-disk image")],
-    directory: Annotated[Path, typer.Option("-d", "--directory", help="where to write the disks")],
-    *,
-    force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
-) -> None:
-    """Split a merged multi-disk image back into one file per disk."""
-    disk, _, _, container = decode_image(image)
-    parts, findings = unmerge_disk(disk)
-    directory.mkdir(parents=True, exist_ok=True)
-
-    for finding in findings:
-        typer.echo(f"  {finding.render()}")
-
-    suffix = FDS_SUFFIX if container is Container.FDS else QD_SUFFIX
-    for index, part in enumerate(parts, start=1):
-        target = directory / f"{image.stem} (Disk {index}){suffix}"
-        if target.exists() and not force:
-            message = f"{target} exists, pass --force to overwrite"
-            raise fail(message)
-        if container is Container.FDS:
-            data, _ = fds.encode(part, headered=part.header_side_count is not None)
-        else:
-            data, _ = qd.encode(part)
-        target.write_bytes(data)
-        typer.echo(f"{target.name}  {part.side_count} side(s), {len(data)} bytes")
-
-
 def split(
     image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
     directory: Annotated[Path, typer.Option("-d", "--directory", help="where to write the sides")],
@@ -494,8 +433,6 @@ def register(app: typer.Typer) -> None:
     app.command(name="save-apply")(save_apply)
     app.command(name="save-extract")(save_extract)
     app.command(name="normalise-saves")(normalise_saves_command)
-    app.command()(merge)
-    app.command()(unmerge)
     app.command()(split)
     app.command()(join)
     app.command()(build)

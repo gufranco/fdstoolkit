@@ -17,8 +17,6 @@ from fdstoolkit.edit.clean import clean_trailing_data
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
 from fdstoolkit.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstoolkit.edit.files import FileSpec, extract_files, insert_file
-from fdstoolkit.edit.multidisk import merge as merge_disks
-from fdstoolkit.edit.multidisk import unmerge as unmerge_disk
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 from fdstoolkit.edit.recipes import load_recipes
 from fdstoolkit.edit.saves import find_save_candidates, normalise_saves
@@ -41,7 +39,6 @@ from fdstoolkit.ui.schemas import (
     ImageSpec,
     ImagesSpec,
     InsertSpec,
-    MergeSpec,
     PatchSpec,
     RebuildSpec,
     RecipeSpec,
@@ -268,22 +265,6 @@ def join(spec: ImagesSpec) -> FileResult:
         for name, payload in zip(names, spec.images, strict=False)
     ]
     return named_file("joined.fds", join_side_files(parts))
-
-
-def merge(spec: MergeSpec) -> FileResult:
-    if not spec.images:
-        refuse("merging needs at least one disk", status=UNPROCESSABLE)
-    disks = [decode_payload(entry)[0] for entry in spec.images]
-    merged, _ = merge_disks(disks)
-    return _emit(merged, "merged.fds", headered=spec.headered)
-
-
-def unmerge(spec: ImageSpec) -> FilesResult:
-    disks, _ = unmerge_disk(_disk(spec))
-    stem = Path(spec.name).stem
-    return FilesResult(
-        files=[_emit(item, f"{stem}.disk{index + 1}.fds") for index, item in enumerate(disks)]
-    )
 
 
 def export(spec: ExportSpec) -> FilesResult:

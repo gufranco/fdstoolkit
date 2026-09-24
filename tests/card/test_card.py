@@ -62,17 +62,17 @@ def test_a_blank_is_headerless_because_the_firmware_ignores_a_header() -> None:
     assert len(card_blank(sides=2, variant=FirmwareVariant.MASTER)) == 2 * SIDE_SIZE
 
 
-def test_a_blank_can_carry_up_to_eight_sides() -> None:
-    assert len(card_blank(sides=8, variant=FirmwareVariant.RELEASED)) == 8 * SIDE_SIZE
+def test_a_blank_carries_at_most_the_two_sides_of_one_disk() -> None:
+    assert len(card_blank(sides=2, variant=FirmwareVariant.RELEASED)) == 2 * SIDE_SIZE
 
 
-def test_a_blank_beyond_eight_sides_is_refused() -> None:
-    with pytest.raises(ValueError, match="between 1 and 8"):
-        card_blank(sides=9, variant=FirmwareVariant.RELEASED)
+def test_a_blank_beyond_one_disk_is_refused() -> None:
+    with pytest.raises(ValueError, match="1 or 2 sides, got 3"):
+        card_blank(sides=3, variant=FirmwareVariant.RELEASED)
 
 
 def test_two_blanks_of_the_same_shape_are_identical() -> None:
-    assert card_blank(sides=3, variant=FirmwareVariant.MASTER) == card_blank(
-        sides=3,
+    assert card_blank(sides=2, variant=FirmwareVariant.MASTER) == card_blank(
+        sides=2,
         variant=FirmwareVariant.MASTER,
     )

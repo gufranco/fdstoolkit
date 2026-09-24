@@ -113,8 +113,8 @@ def strip_gaps(values: bytes) -> bytes:
     return bytes(out)
 
 
-def measure_classes(data: bytes, *, packed: bool = False) -> ClassReport:
-    values = unpack_raw03(data) if packed else data
+def measure_classes(data: bytes) -> ClassReport:
+    values = unpack_raw03(data)
     if not values:
         message = "the capture carries no pulse class"
         raise ValueError(message)

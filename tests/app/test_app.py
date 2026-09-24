@@ -10,10 +10,9 @@ from fastapi.testclient import TestClient
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app as cli_app
 from fdstoolkit.codecs.fds import decode
+from fdstoolkit.codecs.raw import pack_raw03
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.doctor import CheckStatus, diagnose
-from fdstoolkit.drive.spec import NOMINAL_BIT_RATE_HZ, cell_from_bit_rate
-from fdstoolkit.flux.synth import synthesise
 from fdstoolkit.identify.hashes import digests_of
 from fdstoolkit.ui.app import (
     DEVICE_CHECK,
@@ -35,16 +34,6 @@ def client_fixture() -> TestClient:
     return TestClient(create_app())
 
 
-def counts_capture() -> str:
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True))
-    capture = synthesise(disk)
-    cell = cell_from_bit_rate(NOMINAL_BIT_RATE_HZ)
-    values = bytes(
-        min(255, max(1, round(value / cell * 62))) for value in capture.track(0).intervals()
-    )
-    return base64.b64encode(values).decode("ascii")
-
-
 def test_the_page_is_served(client: TestClient) -> None:
     answer = client.get("/")
 
@@ -57,12 +46,6 @@ def test_the_catalogue_lists_every_profile(client: TestClient) -> None:
 
     assert {entry["name"] for entry in body["profiles"]} == set(PROFILES)
     assert body["version"]
-
-
-def test_the_catalogue_lists_the_capture_formats(client: TestClient) -> None:
-    body = client.get("/api/catalogue").json()
-
-    assert body["capture_formats"] == ["counts", "raw03"]
 
 
 def test_the_catalogue_lists_every_command_the_page_covers(client: TestClient) -> None:
@@ -140,26 +123,6 @@ def test_reads_needs_more_than_one_image(client: TestClient) -> None:
     assert answer.status_code == UNPROCESSABLE
 
 
-def test_flux_measures_a_capture(client: TestClient) -> None:
-    body = client.post("/api/flux", json={"data": counts_capture(), "fmt": "counts"}).json()
-
-    assert body["tracks"]
-    assert body["tracks"][0]["bit_rate_hz"] > 0
-
-
-def test_a_capture_that_carries_nothing_is_refused(client: TestClient) -> None:
-    answer = client.post("/api/flux", json={"data": "", "fmt": "counts"})
-
-    assert answer.status_code == BAD_REQUEST
-
-
-def test_tune_reads_a_capture_and_says_what_to_turn(client: TestClient) -> None:
-    body = client.post("/api/tune", json={"data": counts_capture(), "fmt": "counts"}).json()
-
-    assert body["speed"]["verdict"]
-    assert isinstance(body["actions"], list)
-
-
 def test_reading_converts_a_console_cycle_count(client: TestClient) -> None:
     body = client.post("/api/reading", json={"cycles": 152}).json()
 
@@ -174,12 +137,23 @@ def test_a_cycle_count_of_nothing_is_refused(client: TestClient) -> None:
 
 
 def test_classes_judges_a_quantised_capture(client: TestClient) -> None:
-    values = base64.b64encode(bytes([0] * 700 + [1] * 200 + [2] * 100)).decode("ascii")
+    values = base64.b64encode(pack_raw03(bytes([0] * 700 + [1] * 200 + [2] * 100))).decode("ascii")
 
-    body = client.post("/api/classes", json={"data": values}).json()
+    body = client.post("/api/classes", json={"capture": values}).json()
 
     assert body["reading"]
     assert len(body["counts"]) == 4
+
+
+def test_an_image_bundling_more_than_one_disk_is_refused(client: TestClient) -> None:
+    three = blank_image(sides=2, headered=False, formatted=True) + blank_image(
+        sides=1, headered=False, formatted=True
+    )
+
+    answer = client.post("/api/verify", json={"data": base64.b64encode(three).decode("ascii")})
+
+    assert answer.status_code == BAD_REQUEST
+    assert "holds 3 sides" in answer.json()["detail"]
 
 
 def test_blank_builds_an_image(client: TestClient) -> None:
@@ -250,28 +224,26 @@ def test_the_api_documentation_is_served(client: TestClient) -> None:
     assert client.get("/docs").status_code == OK
 
 
-def test_a_capture_format_that_does_not_exist_is_refused(client: TestClient) -> None:
-    answer = client.post("/api/flux", json={"data": counts_capture(), "fmt": "nonsense"})
-
-    assert answer.status_code == BAD_REQUEST
-    assert "could not be read" in answer.json()["detail"]
-
-
-def test_tuning_refuses_a_capture_that_carries_only_classes(client: TestClient) -> None:
-    packed = base64.b64encode(bytes([0b00011011] * 64)).decode("ascii")
-
-    answer = client.post("/api/tune", json={"data": packed, "fmt": "raw03"})
-
-    assert answer.status_code == UNPROCESSABLE
-    assert "pulse classes rather than timing" in answer.json()["detail"]
-
-
 def test_classes_reads_a_packed_capture(client: TestClient) -> None:
     packed = base64.b64encode(bytes([0b00011011] * 64)).decode("ascii")
 
-    body = client.post("/api/classes", json={"data": packed, "fmt": "raw03"}).json()
+    body = client.post("/api/classes", json={"capture": packed}).json()
 
     assert sum(body["counts"]) > 0
+
+
+def test_classes_refuses_a_capture_that_carries_nothing(client: TestClient) -> None:
+    answer = client.post("/api/classes", json={"capture": ""})
+
+    assert answer.status_code == BAD_REQUEST
+    assert "carries no bytes" in answer.json()["detail"]
+
+
+def test_reading_says_which_way_to_adjust_without_naming_a_turn(client: TestClient) -> None:
+    body = client.post("/api/reading", json={"cycles": 152}).json()
+
+    assert "raise the motor speed" in body["advice"]
+    assert "clockwise" not in body["advice"]
 
 
 def test_convert_rewrites_an_fds_without_a_header(client: TestClient) -> None:

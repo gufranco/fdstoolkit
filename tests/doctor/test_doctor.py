@@ -7,7 +7,6 @@ import pytest
 
 from fdstoolkit import doctor as doctor_module
 from fdstoolkit.doctor import CheckStatus, DoctorReport, diagnose, firmware_text, load_hid
-from fdstoolkit.drive.speed import from_cycles
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
 from fdstoolkit.identify.cache import DatCache
 
@@ -233,13 +232,6 @@ def test_the_identity_path_is_proved_against_the_published_digests(tmp_path: Pat
     assert "published digests" in detail_of(report, "identity")
 
 
-def test_the_flux_path_measures_a_synthesised_capture_at_nominal(tmp_path: Path) -> None:
-    report = diagnose(load_hid=missing_hid, cache=DatCache(tmp_path))
-
-    assert status_of(report, "flux") is CheckStatus.OK
-    assert "kbit/s" in detail_of(report, "flux")
-
-
 def test_an_empty_report_has_no_verdict_rather_than_a_healthy_one() -> None:
     empty = DoctorReport(checks=())
 
@@ -296,36 +288,3 @@ def test_a_blank_that_misses_its_published_digest_is_reported(
 
     assert status_of(report, "identity") is CheckStatus.FAILED
     assert "not the published" in detail_of(report, "identity")
-
-
-def test_a_flux_path_that_raises_is_reported(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def boom(disk: object) -> object:
-        del disk
-        message = "no capture could be built"
-        raise ValueError(message)
-
-    monkeypatch.setattr(doctor_module, "synthesise", boom)
-
-    report = diagnose(load_hid=missing_hid, cache=DatCache(tmp_path))
-
-    assert status_of(report, "flux") is CheckStatus.FAILED
-    assert "did not run" in detail_of(report, "flux")
-
-
-def test_a_drive_measured_off_the_nominal_rate_is_reported(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def slow(intervals: object) -> object:
-        del intervals
-        return from_cycles(200)
-
-    monkeypatch.setattr(doctor_module, "measure_speed", slow)
-
-    report = diagnose(load_hid=missing_hid, cache=DatCache(tmp_path))
-
-    assert status_of(report, "flux") is CheckStatus.FAILED
-    assert "kbit/s" in detail_of(report, "flux")

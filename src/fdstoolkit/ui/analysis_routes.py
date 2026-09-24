@@ -9,10 +9,6 @@ from fastapi import HTTPException
 
 from fdstoolkit.core.canon import profile_by_name
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.drive.bracket import Setting, bracket_of
-from fdstoolkit.flux.analysis import analyse_capture
-from fdstoolkit.flux.decode import decode_capture
-from fdstoolkit.flux.load import CaptureFormat, detect_format, load_capture
 from fdstoolkit.identify.cache import DatCache
 from fdstoolkit.identify.dat import identify as identify_image
 from fdstoolkit.identify.dat import load_dat
@@ -29,7 +25,6 @@ from fdstoolkit.ui.schemas import (
     CalibrateSpec,
     CorpusSpec,
     DatBuildSpec,
-    DecodeSpec,
     FileResult,
     IdentifySpec,
     ImageSpec,
@@ -38,7 +33,6 @@ from fdstoolkit.ui.schemas import (
     ReferenceVerifySpec,
     RowsResult,
     SpliceSpec,
-    SweepSpec,
 )
 from fdstoolkit.ui.shared import (
     BAD_REQUEST,
@@ -62,22 +56,12 @@ def _corpus(spec: CorpusSpec) -> list[tuple[str, Disk]]:
     ]
 
 
-def _capture(payload: str, fmt: str | None):  # noqa: ANN202
-    data = bytes_of(payload)
-    try:
-        chosen = CaptureFormat(fmt) if fmt else detect_format(data)
-        return load_capture(data, fmt=chosen)
-    except (ValueError, IndexError, KeyError) as error:
-        message = f"this capture could not be read: {error}"
-        raise HTTPException(status_code=BAD_REQUEST, detail=message) from error
-
-
 def calibrate_drive(spec: CalibrateSpec) -> RowsResult:
     if not spec.reads:
         refuse("calibrating needs at least one read to compare", status=UNPROCESSABLE)
     reference, _, _ = decode_payload(spec.data)
     reads = [decode_payload(entry)[0] for entry in spec.reads]
-    profile = calibrate(reference, reads, flux_margin=spec.margin)
+    profile = calibrate(reference, reads)
     return RowsResult(rows=rows_of([asdict(profile)]))
 
 
@@ -181,42 +165,3 @@ def bios(spec: BiosSpec) -> RowsResult:
 def dat_cache() -> RowsResult:
     cache = DatCache()
     return RowsResult(rows=[{"path": str(cache.root), "catalogues": len(list(cache.entries()))}])
-
-
-def flux_decode(spec: DecodeSpec) -> FileResult:
-    capture = _capture(spec.data, spec.fmt)
-    try:
-        disk, _ = decode_capture(capture, adaptive=not spec.fixed)
-    except (ValueError, IndexError) as error:
-        message = f"this capture could not be decoded: {error}"
-        raise HTTPException(status_code=BAD_REQUEST, detail=message) from error
-    return named_file("decoded.fds", encoded(disk))
-
-
-def tune_sweep(spec: SweepSpec) -> RowsResult:
-    if not spec.captures:
-        refuse("a sweep needs at least one capture", status=UNPROCESSABLE)
-    settings: list[Setting] = []
-    for index, payload in enumerate(spec.captures):
-        capture = _capture(payload, spec.fmt)
-        report = analyse_capture(capture)
-        track = report.tracks[0]
-        settings.append(
-            Setting(
-                label=f"capture {index + 1}",
-                bit_rate_hz=track.revolutions[0].bit_rate_hz,
-                margin=track.worst_margin,
-                errors=0,
-            )
-        )
-    bracket = bracket_of(settings)
-    return RowsResult(
-        rows=[
-            {
-                "centre_hz": bracket.centre,
-                "width": bracket.width,
-                "health": bracket.health,
-                "best": bracket.best.label if bracket.best else "",
-            }
-        ]
-    )

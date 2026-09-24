@@ -4,9 +4,9 @@ from typing import Final
 
 from fdstoolkit.codecs.fds import SIDE_SIZE, build_header
 from fdstoolkit.core.blocks import DISK_INFO_SIZE
+from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, VERIFICATION_STRING
 
-MAX_SIDES: Final = 8
 GAME_NAME_LENGTH: Final = 3
 DEFAULT_GAME_NAME: Final = "   "
 DEFAULT_LICENSEE: Final = 0x00
@@ -73,8 +73,8 @@ def blank_image(
     formatted: bool,
     game_name: str = DEFAULT_GAME_NAME,
 ) -> bytes:
-    if not 1 <= sides <= MAX_SIDES:
-        message = f"a blank disk has between 1 and {MAX_SIDES} sides, got {sides}"
+    if not 1 <= sides <= SIDES_PER_DISK:
+        message = f"a disk has 1 or {SIDES_PER_DISK} sides, got {sides}"
         raise ValueError(message)
     if len(game_name) != GAME_NAME_LENGTH:
         message = f"a game name is exactly three characters, got {len(game_name)}"
@@ -86,8 +86,8 @@ def blank_image(
     for index in range(sides):
         if formatted:
             out += formatted_side(
-                side=index % 2,
-                disk_number=index // 2,
+                side=index,
+                disk_number=0,
                 game_name=game_name,
             )
         else:

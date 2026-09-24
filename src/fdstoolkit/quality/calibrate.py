@@ -31,7 +31,6 @@ class DriveProfile:
     passes: int
     blocks_compared: int
     blocks_wrong: int
-    flux_margin: float | None = None
 
     @property
     def error_rate(self) -> float:
@@ -56,8 +55,6 @@ def _shape(disk: Disk) -> tuple[int, ...]:
 def calibrate(
     reference: Disk,
     reads: Sequence[Disk],
-    *,
-    flux_margin: float | None = None,
 ) -> DriveProfile:
     if not reads:
         message = "a drive profile needs at least one read of the reference"
@@ -80,7 +77,6 @@ def calibrate(
         passes=len(reads),
         blocks_compared=compared,
         blocks_wrong=wrong,
-        flux_margin=flux_margin,
     )
 
 

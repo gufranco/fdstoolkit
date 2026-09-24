@@ -68,12 +68,6 @@ def test_a_read_of_another_shape_is_refused() -> None:
         calibrate(_disk(), [two])
 
 
-def test_a_flux_margin_is_carried_into_the_profile() -> None:
-    profile = calibrate(_disk(), [_disk()], flux_margin=0.8)
-
-    assert profile.flux_margin == 0.8
-
-
 def test_an_error_rate_within_the_drive_noise_is_blamed_on_the_drive() -> None:
     profile = calibrate(_disk(), [_disk()] * 9 + [_other()])
 

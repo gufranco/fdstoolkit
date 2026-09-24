@@ -41,7 +41,6 @@ This is an instrument, not an application. It assumes you know what a disk infor
   - [Saves](#saves)
   - [Identification](#identification)
   - [Quality measurement](#quality-measurement)
-  - [Flux captures](#flux-captures)
   - [Drive calibration](#drive-calibration)
   - [Masters and reference sets](#masters-and-reference-sets)
   - [Hardware](#hardware)
@@ -101,7 +100,9 @@ open without a udev rule; `doctor` fails that check and prints the rule to insta
 
 Digests print as `fdstoolkit:v1:<profile>/v1:<sha256>`. Under `release`, 142 of 144 groups in a 595-image corpus agree; under `content`, 125.
 
-**A capture is either timing or classes.** Interval counts carry the actual pulse lengths and can measure speed. Pulse classes have already been rounded to one of three nominal lengths by the capture device and cannot. The toolkit tracks which kind it holds and refuses to derive speed from the second.
+**An FDSStick capture carries classes, not timing.** The device rounds every pulse to one of three nominal lengths in hardware, and `dump --raw` keeps those classes as `raw03` files. They show how evenly the drive separates the three lengths, which `classes` measures. They cannot show speed, so speed comes from the console instead, through `reading`.
+
+**A game is one disk.** Every game uses a single disk, with one or two sides, and no game spans a second disk. An image holding more than two sides bundles several disks together, and every command refuses it.
 
 ## Command reference
 
@@ -257,7 +258,7 @@ Print the canonical digest, and with `-o` write the canonical image.
 #### `blank`
 
 ```bash
-fdstoolkit blank -o <out> [--sides N] [--formatted] [--header] [--game-name ABC] [--force]
+fdstoolkit blank -o <out> [--sides 1|2] [--formatted] [--header] [--game-name ABC] [--force]
 ```
 
 A blank image. `--formatted` writes a disk information block using values measured from 1,729 never-rewritten sides: country `49`, serial `ffff`, rewrite count `00`, filler `ff`.
@@ -283,7 +284,7 @@ A disk built from a JSON manifest naming the disk fields and the files to place.
 #### `card`
 
 ```bash
-fdstoolkit card -o <out> [--firmware <variant>] [--force]
+fdstoolkit card -o <out> [--sides 1|2] [--firmware <variant>] [--force]
 ```
 
 A blank an FDSKey card accepts.
@@ -309,24 +310,6 @@ One file per side in copier layout, and back. `--stem` sets the base name for th
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/join-dark.png">
 <img alt="The join command on the local web page" src="assets/screenshots/join-light.png">
-</picture>
-
-#### `merge` and `unmerge`
-
-```bash
-fdstoolkit merge <disks>... -o <out> [--header|--no-header] [--force]
-fdstoolkit unmerge <set> -d <dir> [--force]
-```
-
-The disks of a multi-disk game into one image, and back. Pass the disks in order. `--header` writes an fwNES header; the default is `--no-header`.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/merge-dark.png">
-<img alt="The merge command on the local web page" src="assets/screenshots/merge-light.png">
-</picture>
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/unmerge-dark.png">
-<img alt="The unmerge command on the local web page" src="assets/screenshots/unmerge-light.png">
 </picture>
 
 #### `export`
@@ -588,7 +571,7 @@ bits gained   0
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate <reference> --read <r>... [--margin <f>] [--json]
+fdstoolkit calibrate <reference> --read <r>... [--json]
 ```
 
 The drive's own error rate, measured against a disk you trust, so the drive is not blamed for the disk or the reverse. Verdict is `good`, `marginal` or `faulty`.
@@ -601,13 +584,13 @@ The drive's own error rate, measured against a disk you trust, so the drive is n
 #### `grade`
 
 ```bash
-fdstoolkit grade <image> [--read <r>...] [--margin <f>] [--map] [--json]
+fdstoolkit grade <image> [--read <r>...] [--map] [--json]
 ```
 
-A grade with the measurement behind it. `--read` folds in repeated dumps, `--margin` folds in a flux margin from `flux`, `--map` prints the per-block confidence and the basis for each.
+A grade with the measurement behind it. `--read` folds in repeated dumps, `--map` prints the per-block confidence and the basis for each.
 
 ```bash
-fdstoolkit grade disk.fds --read pass2.fds --margin 0.68
+fdstoolkit grade disk.fds --read pass2.fds
 ```
 
 ```
@@ -617,7 +600,7 @@ clean, confidence 0.97
   ok   read stability 1 within 1
 ```
 
-Confidence starts from the checksum state and is adjusted by read agreement and flux margin. A container that stores no checksums is treated as unproven rather than suspect, which is why a headerless `.fds` does not grade as unstable.
+Confidence starts from the checksum state and is adjusted by read agreement. A container that stores no checksums is treated as unproven rather than suspect, which is why a headerless `.fds` does not grade as unstable.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/grade-dark.png">
@@ -639,68 +622,17 @@ The opcode threshold is calibrated against 10,105 real program files, whose medi
 <img alt="The integrity command on the local web page" src="assets/screenshots/integrity-light.png">
 </picture>
 
-### Flux captures
+### Drive calibration
 
-#### `flux`
-
-```bash
-fdstoolkit flux <capture> [--format <f>] [--json]
-```
-
-Measures a capture: fitted bit cell, cluster centres and jitter, separation margin, stray count, outliers, speed, and which tracks carry no coherent data.
-
-```bash
-fdstoolkit flux capture.raw
-```
-
-```
-format        counts
-track 0       28344 pulses, bit cell 10400 ns (96157 Hz)
-  class 0     centre    10400 ns  jitter    159 ns  28239 pulses
-  class 1     centre    15600 ns  jitter    165 ns  78 pulses
-  class 2     centre    20870 ns  jitter    114 ns  27 pulses
-  0 to 1     margin 89.7% at boundary 13000 ns
-  1 to 2     margin 91.2% at boundary 18235 ns
-  speed       203.08 rpm
-worst margin  89.7% on track 0
-verdict       healthy
-```
-
-Formats read: FDSStick interval counts and packed pulse classes. A capture is read as counts unless `--format raw03` names it as classes.
-
-Three things this does that a fixed-threshold reader does not:
-
-- **The pulse family is fitted.** A Disk System or MFM stream runs on intervals of 1, 1.5 and 2 cells; a group-coded stream runs on 1, 2 and 3. Both are tried and the better fit kept, because assuming the wrong one makes clean media look broken.
-- **Separation is measured at the first percentile**, not at the single closest pulse. Every real capture carries a few strays, and one of them should not decide the verdict. The stray count is reported separately.
-- **Blank is distinguished from degraded.** A track whose relative cluster spread exceeds 15% carries no coherent data and is named blank rather than failing. Measured on a real image, formatted tracks sit at 1.1 to 2.9% and unformatted ones at 31.8 to 42.6%.
-
-A revolution that does not span a full rotation is marked partial and left out of the speed figures.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/flux-dark.png">
-<img alt="The flux command on the local web page" src="assets/screenshots/flux-light.png">
-</picture>
-
-#### `flux-decode`
-
-```bash
-fdstoolkit flux-decode <capture> -o <out> [--format <f>] [--fixed] [--force]
-```
-
-Decode a capture into a disk image. Thresholds are fitted to the capture, so a stream recorded well off nominal still decodes; `--fixed` uses nominal thresholds instead.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/flux-decode-dark.png">
-<img alt="The flux-decode command on the local web page" src="assets/screenshots/flux-decode-light.png">
-</picture>
+Everything here is measured against the bit rate, never a rotation speed. The RAM adapter expects 96.4 kbit/s and tolerates ten percent, and that is the only figure the hardware enforces. Published rotation speeds for this mechanism disagree by a factor of two and carry no tolerance.
 
 #### `classes`
 
 ```bash
-fdstoolkit classes <capture> [--format <f>] [--json]
+fdstoolkit classes <capture> [--json]
 ```
 
-For captures that carry pulse classes rather than timing. Reports the distribution across the three lengths and the count of pulses that fell outside all of them.
+Reads a `raw03` capture kept by `dump --raw`. Reports the distribution across the three lengths and the count of pulses that fell outside all of them.
 
 Gap runs are excluded before measuring, because a gap is a long run of short pulses and leaving it in makes the distribution a measure of how full the disk is rather than of how the drive reads. Over the remainder, 120 real sides give a median of 63.1, 27.9 and 9.0 percent, which is the reference used here. On a perfect drive those 120 sides spread from -5.4 to +3.0 percent, so the threshold sits at 6 percent and none of them trip it.
 
@@ -711,28 +643,26 @@ Two limits worth knowing. A capture with fewer than 512 pulses outside the gaps 
 <img alt="The classes command on the local web page" src="assets/screenshots/classes-light.png">
 </picture>
 
-### Drive calibration
-
-Everything here is measured against the bit rate, never a rotation speed. The RAM adapter expects 96.4 kbit/s and tolerates ten percent, and that is the only figure the hardware enforces. Published rotation speeds for this mechanism disagree by a factor of two and carry no tolerance.
-
 #### `reading`
 
 ```bash
 fdstoolkit reading <cycles> [--json]
 ```
 
-Interprets the average CPU cycles between bytes that a disk-lister tool displays on the console. This is the only speed measurement that needs no capture hardware.
+Interprets the average CPU cycles between bytes that a disk-lister tool displays on the console. An FDSStick sends pulse classes rather than timing, so this is the one speed measurement the toolkit can make.
 
 ```bash
 fdstoolkit reading 152
 ```
 
 ```
-94.20 kbit/s, cell 10616 ns (63.7 counts), -2.28% of nominal, in spec, run faster
-turn the motor trimmer counter-clockwise to run faster
+94.20 kbit/s, -2.28% of nominal, in spec
+the drive reads slow: raise the motor speed a little, then measure again
 ```
 
 The conversion is exact: the 2A03 runs at 1.7897725 MHz over eight bits, so cycles map to a rate directly. More cycles between bytes means a slower disk.
+
+The advice says whether to raise or lower the motor speed, never which way to turn the trimmer, because no source this toolkit trusts states the direction. Turn a small amount, measure again, and reverse if the figure moved the wrong way.
 
 | Reading | Rate | Error |
 |---|---|---|
@@ -746,58 +676,6 @@ Exact nominal is 148.53 cycles, so the integer display quantises at about 0.68% 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reading-dark.png">
 <img alt="The reading command on the local web page" src="assets/screenshots/reading-light.png">
-</picture>
-
-#### `tune`
-
-```bash
-fdstoolkit tune <capture> [--format <f>] [--json]
-```
-
-Measures a timing capture and reports what to adjust in two stages.
-
-```bash
-fdstoolkit tune slow.raw
-```
-
-```
-81.79 kbit/s, cell 12226 ns (73.4 counts), -15.15% of nominal, out of spec, run faster
-periodic, wow and flutter 3.42%, drift +0.26%, spread 9.69%
-score 6%
-  [coarse] motor speed: -15.15% of nominal, outside the band the adapter tolerates.
-           turn the motor trimmer counter-clockwise to run faster, then measure again
-  [coarse] belt and spindle: wow and flutter 3.42%, spread 9.69%.
-           replace or reseat the belt and check the spindle runs true, then measure again
-```
-
-| Stage | Band | Meaning |
-|---|---|---|
-| coarse | outside ±10% | the adapter will refuse the disk |
-| fine | outside ±1% | reads, and is not set up |
-| settled | within ±1%, wow under 0.2% | nothing left to adjust |
-
-Speed alone cannot separate a stretched belt from a misadjusted trimmer, so cell length is tracked across the capture. A drive that wanders reads as `periodic`, one that walks in one direction as `drifting`, one that holds as `steady`.
-
-Measurement resolution is 0.001% of the cell, from an analytic least-squares solve after a coarse-to-fine scan.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/tune-dark.png">
-<img alt="The tune command on the local web page" src="assets/screenshots/tune-light.png">
-</picture>
-
-#### `tune-sweep`
-
-```bash
-fdstoolkit tune-sweep <captures>... [--format <f>] [--json]
-```
-
-One capture per trimmer position, in any order. Finds the full range of speeds that read clean and reports the centre to settle on, plus the width of that window as a health figure. A healthy drive reads across a wide span; a tired one only at a point.
-
-Set the trimmer to the centre of the window rather than to the first position that works.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/tune-sweep-dark.png">
-<img alt="The tune-sweep command on the local web page" src="assets/screenshots/tune-sweep-light.png">
 </picture>
 
 ### Masters and reference sets
@@ -1012,8 +890,6 @@ The rule the design turns on is that the web layer decides nothing. Every route 
 | `POST /api/hash` | `hash` |
 | `POST /api/grade` | `grade` |
 | `POST /api/reads` | `reads` |
-| `POST /api/flux` | `flux` |
-| `POST /api/tune` | `tune` |
 | `POST /api/reading` | `reading` |
 | `POST /api/classes` | `classes` |
 | `POST /api/blank` | `blank` |
@@ -1022,9 +898,9 @@ The rule the design turns on is that the web layer decides nothing. Every route 
 
 Images and captures travel base64 encoded in the request body. `GET /docs` serves the generated API reference, so the page is one client of the endpoints rather than the only one.
 
-The choices the page offers come from `catalogue`, which is built over the enums. A profile or capture format added to the model appears in the page with no second edit.
+The choices the page offers come from `catalogue`, which is built over the enums. A profile added to the model appears in the page with no second edit.
 
-Nothing that writes to a disk is exposed. `dump`, `write` and `surface` stay on the command line, where the operator is in front of the drive and can answer a confirmation.
+`dump`, `write` and `surface` drive the FDSStick attached to this machine. When none is attached they answer 409 and name the cause, and `write` and `surface` refuse to start until the request confirms the erase.
 
 The interface is in English and Japanese. Both dictionaries carry the same keys, and the test suite proves it rather than trusting it: every key the markup or the script references must exist in both, and no Japanese string may be left as English.
 
@@ -1046,11 +922,9 @@ If the two disagree, `consensus` merges them by majority and names every block t
 ### Calibrating a drive, coarse then fine
 
 1. Clean the head before anything else. Contamination reads as a media fault.
-2. Run a disk-lister tool on the console, read the cycles figure, and pass it to `reading`. Turn the trimmer as instructed and repeat until it says to hold.
-3. For the fine pass, capture at several trimmer positions and run `tune-sweep`. Settle at the centre of the clean window, not at the first position that reads.
+2. Run a disk-lister tool on the console, read the cycles figure, and pass it to `reading`. Raise or lower the motor speed as it says, a little at a time, and repeat until it says to leave it alone.
+3. Dump a known-good disk with `--raw` and run `classes` on the kept captures. A glitching or shifted spread means the drive still separates the three pulse lengths badly.
 4. Confirm with a disk known to be hard to read. Community practice uses a specific side with 39 files; pass means all 39 with no checksum error.
-
-If `tune` reports `periodic` or `drifting` rather than `steady`, no trimmer position will fix it. That is the belt or the spindle.
 
 ### Deciding whether it is the drive or the disk
 
@@ -1083,8 +957,7 @@ A side is a sequence of blocks:
 | FDSKey card file | 65500 | No | Headerless within the firmware limits |
 | Copier per-side files | one per side | Depends | A side may exceed the nominal length |
 | ares side files | 73728 | Yes | Gaps and sync marks included |
-| Interval counts | variable | Yes | One byte per pulse interval |
-| Packed pulse classes | variable | Yes | Two bits per pulse, already quantised |
+| Packed pulse classes, `raw03` | variable | Yes | Two bits per pulse, already quantised by the FDSStick |
 
 What each conversion costs:
 
@@ -1094,27 +967,26 @@ What each conversion costs:
 | `.qd` | `.fds` | Every stored checksum |
 | `.fds` | `.qd` | Nothing, but the checksums are synthesised |
 | any | canonical | Everything the profile masks |
-| interval counts | pulse classes | All timing, and with it any speed measurement |
 
 ## Exit codes and scripting
 
-`0` means nothing failed, `1` means something did. What counts as failure is command-specific and documented above: an unrepaired block for `splice`, a contested game for `masters`, a drive outside the fine band for `tune`, a mismatch for `reference-verify`.
+`0` means nothing failed, `1` means something did. What counts as failure is command-specific and documented above: an unrepaired block for `splice`, a contested game for `masters`, a drive outside the fine band for `reading`, a mismatch for `reference-verify`.
 
 Every reporting command takes `--json`, and the JSON is the same data the human output renders. Commands that write files refuse to overwrite without `--force`.
 
 ```bash
 fdstoolkit verify disk.fds --json | jq -r '.findings[] | "\(.code) \(.message)"'
 fdstoolkit masters ~/dumps --json | jq '.contested[].game'
-fdstoolkit tune capture.raw --json | jq -r '.actions[] | "\(.stage) \(.subject)"'
+fdstoolkit reading 152 --json | jq -r '.advice'
 ```
 
 ## What this cannot do
 
-**No FDS flux capture exists.** Quick Disk is one continuous spiral with no index hole and no standard stepping, so KryoFlux and Greaseweazle cannot read this medium at all. This toolkit reads only what an FDSStick produces. The measurement layer is therefore checked against captures it synthesises itself, and against real FDSStick captures when one is at hand.
+**No FDS flux capture exists.** Quick Disk is one continuous spiral with no index hole and no standard stepping, so KryoFlux and Greaseweazle cannot read this medium at all. This toolkit reads only what an FDSStick produces.
 
-**An FDSStick cannot measure drive speed.** The device rounds every pulse to one of three lengths in hardware and sends classes, not timing. Speed must come from a console-side reading via `reading`, or from a capture device that preserves intervals.
+**An FDSStick cannot measure drive speed.** The device rounds every pulse to one of three lengths in hardware and sends classes, not timing. Speed must come from a console-side reading via `reading`.
 
-**Head alignment is not measurable from timing alone.** It needs signal amplitude, or error density compared across several disks. `tune` says nothing about it.
+**Head alignment is not measurable from pulse classes.** It needs signal amplitude, or error density compared across several disks.
 
 **Belt and motor faults are not separable** without the pulley ratio, which no trustworthy source states.
 

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import SIDE_SIZE
+from fdstoolkit.core.disk import TooManySidesError
 from fdstoolkit.fdskey.lint import CARD_FILE_SUFFIX, FIRMWARE_BUFFER, lint_card_image
 
 
@@ -104,10 +107,11 @@ def test_a_wrong_extension_is_rejected() -> None:
     assert CARD_FILE_SUFFIX == ".fds"
 
 
-def test_more_than_eight_sides_is_rejected() -> None:
-    raw = blank_image(sides=8, headered=False, formatted=True) + formatted()
+def test_an_image_bundling_more_than_one_disk_is_refused() -> None:
+    raw = blank_image(sides=2, headered=False, formatted=True) + formatted()
 
-    assert "FK009" in codes(lint_card_image(raw, name=Path("big.fds")))
+    with pytest.raises(TooManySidesError, match="3 sides"):
+        lint_card_image(raw, name=Path("big.fds"))
 
 
 def test_every_finding_explains_itself() -> None:

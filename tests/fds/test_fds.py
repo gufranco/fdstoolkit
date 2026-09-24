@@ -138,8 +138,10 @@ def test_encode_rejects_a_disk_with_no_sides() -> None:
 
 
 def test_build_header_rejects_a_side_count_out_of_range() -> None:
-    with pytest.raises(ValueError, match="between 1 and 255"):
+    with pytest.raises(ValueError, match="1 or 2, got 0"):
         build_header(0)
+    with pytest.raises(ValueError, match="1 or 2, got 3"):
+        build_header(3)
 
 
 def test_decode_of_an_empty_image_yields_no_sides() -> None:

@@ -72,24 +72,6 @@ def test_disagreeing_reads_lower_the_confidence() -> None:
     assert Basis.READS_DISAGREE in report.blocks[0].basis
 
 
-def test_a_clear_flux_margin_raises_the_confidence() -> None:
-    plain = score_disk(_disk())
-
-    clear = score_disk(_disk(), margin=0.9)
-
-    assert clear.blocks[0].confidence > plain.blocks[0].confidence
-    assert Basis.FLUX_CLEAR in clear.blocks[0].basis
-
-
-def test_a_narrow_flux_margin_lowers_the_confidence() -> None:
-    plain = score_disk(_disk())
-
-    narrow = score_disk(_disk(), margin=0.05)
-
-    assert narrow.blocks[0].confidence < plain.blocks[0].confidence
-    assert Basis.FLUX_MARGINAL in narrow.blocks[0].basis
-
-
 def test_a_single_read_is_named_in_the_basis() -> None:
     report = score_disk(_disk())
 

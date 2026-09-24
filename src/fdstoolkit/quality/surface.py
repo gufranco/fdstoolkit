@@ -127,8 +127,8 @@ def pattern_disk(pattern: int, *, sides: int, fill: bool = True) -> Disk:
             Block(
                 kind=BlockKind.DISK_INFO,
                 payload=disk_info_block(
-                    side=index % 2,
-                    disk_number=index // 2,
+                    side=index,
+                    disk_number=0,
                     game_name="TST",
                 ),
             ),
@@ -158,8 +158,8 @@ def blank_disk(*, sides: int, game_name: str = DEFAULT_GAME_NAME) -> Disk:
                     Block(
                         kind=BlockKind.DISK_INFO,
                         payload=disk_info_block(
-                            side=index % 2,
-                            disk_number=index // 2,
+                            side=index,
+                            disk_number=0,
                             game_name=game_name,
                         ),
                     ),

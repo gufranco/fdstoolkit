@@ -9,11 +9,15 @@ from fdstoolkit.core.diskinfo import DiskInfo
 SIDES_PER_DISK: Final = 2
 
 
+class TooManySidesError(ValueError):
+    pass
+
+
 def require_readable_sides(sides: int) -> None:
     if not 1 <= sides <= SIDES_PER_DISK:
         message = (
-            f"a disk card has {SIDES_PER_DISK} faces, so one pass covers 1 or "
-            f"{SIDES_PER_DISK} sides, not {sides}. Read each card separately and merge them"
+            f"a disk has {SIDES_PER_DISK} faces, so a read covers 1 or {SIDES_PER_DISK} "
+            f"sides, not {sides}"
         )
         raise ValueError(message)
 
@@ -75,6 +79,13 @@ class Disk:
     header_side_count: int | None = None
 
     def __post_init__(self) -> None:
+        if len(self.sides) > SIDES_PER_DISK:
+            message = (
+                f"this image holds {len(self.sides)} sides, but a disk has at most "
+                f"{SIDES_PER_DISK} and no game uses more than one disk, so the file "
+                "bundles several disks together. fdstoolkit reads one disk per image"
+            )
+            raise TooManySidesError(message)
         if self.header_side_count is not None and self.header_side_count != len(self.sides):
             message = (
                 f"header declares {self.header_side_count} sides "

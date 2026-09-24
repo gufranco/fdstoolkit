@@ -22,8 +22,6 @@ CODES: Final[Mapping[str, str]] = {
     "FDS013": "header side count disagrees with the data present",
     "FDS014": "no block was recovered from the pulse stream",
     "FDS015": "a decoded region does not start with the sync mark",
-    "FDS016": "the merged images carry different game codes, which a disk set normally does",
-    "FDS017": "a side carries no disk number, so the split fell back on order",
 }
 
 

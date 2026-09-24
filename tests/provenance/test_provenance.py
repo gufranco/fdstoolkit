@@ -74,9 +74,9 @@ def test_an_unformatted_side_has_no_provenance() -> None:
 
 
 def test_the_report_covers_every_side() -> None:
-    disk, _ = decode(blank_image(sides=4, headered=False, formatted=True))
+    disk, _ = decode(blank_image(sides=2, headered=False, formatted=True))
 
-    assert len(provenance_of(disk).sides) == 4
+    assert len(provenance_of(disk).sides) == 2
 
 
 def test_the_report_renders_as_data() -> None:

@@ -14,10 +14,7 @@ MEASUREMENT_NAMES = (
     "canonical_digest",
     "grade_disk",
     "compare_reads",
-    "load_capture",
-    "analyse_capture",
-    "measure_speed",
-    "advise",
+    "from_cycles",
     "measure_classes",
     "score_disk",
 )

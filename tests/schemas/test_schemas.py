@@ -4,14 +4,11 @@ import pytest
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
+from fdstoolkit.codecs.raw import pack_raw03
 from fdstoolkit.core.diagnostics import Diagnostic, Severity
 from fdstoolkit.core.diskinfo import PROFILES
-from fdstoolkit.drive.advise import advise
 from fdstoolkit.drive.classes import measure_classes
-from fdstoolkit.drive.spec import NOMINAL_BIT_RATE_HZ, cell_from_bit_rate
-from fdstoolkit.drive.speed import measure_speed
-from fdstoolkit.flux.analysis import analyse_capture
-from fdstoolkit.flux.synth import synthesise
+from fdstoolkit.drive.speed import from_cycles
 from fdstoolkit.identify.hashes import digests_of
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
@@ -21,12 +18,10 @@ from fdstoolkit.ui.schemas import (
     DiagnosticView,
     DigestView,
     DiskView,
-    FluxResult,
     GradeResult,
     ProfileView,
     ReadsResult,
     SpeedView,
-    TuneResult,
 )
 
 IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
@@ -35,11 +30,6 @@ IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
 def sample_disk():  # noqa: ANN201
     disk, _ = decode(IMAGE)
     return disk
-
-
-def nominal_intervals(pulses: int = 3_000) -> tuple[int, ...]:
-    cell = cell_from_bit_rate(NOMINAL_BIT_RATE_HZ)
-    return tuple(round(cell * ratio) for ratio in (1.0, 1.5, 2.0) for _ in range(pulses))
 
 
 @pytest.mark.parametrize("name", sorted(PROFILES))
@@ -108,34 +98,16 @@ def test_a_reads_view_carries_the_decay_direction() -> None:
     assert view.decay
 
 
-def test_a_flux_view_carries_every_track_and_its_clusters() -> None:
-    capture = synthesise(sample_disk())
+def test_a_speed_view_carries_the_verdict_the_direction_and_the_advice() -> None:
+    view = SpeedView.of(from_cycles(152))
 
-    view = FluxResult.of(analyse_capture(capture), "counts")
-
-    assert view.fmt == "counts"
-    assert len(view.tracks) == 2
-    assert len(view.tracks[0].clusters) == 3
-
-
-def test_a_speed_view_carries_the_verdict_and_the_direction() -> None:
-    view = SpeedView.of(measure_speed(nominal_intervals()))
-
-    assert view.bit_rate_hz == pytest.approx(NOMINAL_BIT_RATE_HZ, rel=0.01)
-    assert view.verdict
-    assert view.direction
-
-
-def test_a_tune_view_carries_the_actions_it_recommends() -> None:
-    view = TuneResult.of(advise(nominal_intervals()))
-
-    assert view.settled
-    assert view.speed.verdict
-    assert isinstance(view.actions, list)
+    assert view.verdict == "in spec"
+    assert view.direction == "faster"
+    assert "raise the motor speed" in view.advice
 
 
 def test_a_classes_view_carries_the_distribution() -> None:
-    values = bytes([0] * 700 + [1] * 200 + [2] * 100)
+    values = pack_raw03(bytes([0] * 700 + [1] * 200 + [2] * 100))
 
     view = ClassesResult.of(measure_classes(values))
 

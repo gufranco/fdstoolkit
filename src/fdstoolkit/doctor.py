@@ -15,9 +15,6 @@ from fdstoolkit.build.blank import (
     blank_image,
 )
 from fdstoolkit.codecs import fds
-from fdstoolkit.drive.speed import Verdict, measure_speed
-from fdstoolkit.flux.analysis import analyse_capture
-from fdstoolkit.flux.synth import synthesise
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
 from fdstoolkit.identify.cache import DatCache
 from fdstoolkit.version import VERSION
@@ -193,30 +190,6 @@ def _identity_check() -> Check:
     )
 
 
-def _flux_check() -> Check:
-    built = blank_image(sides=SELF_TEST_SIDES, headered=False, formatted=True)
-    try:
-        disk, _ = fds.decode(built)
-        capture = synthesise(disk)
-        report = analyse_capture(capture)
-        speed = measure_speed(capture.track(0).intervals())
-    except (ValueError, IndexError) as error:
-        return Check("flux", CheckStatus.FAILED, f"the measurement path did not run: {error}")
-    if speed.verdict is not Verdict.FINE:
-        return Check(
-            "flux",
-            CheckStatus.FAILED,
-            f"a capture synthesised at the nominal rate measured {speed.bit_rate_hz / 1000:.2f} "
-            f"kbit/s, which reads as {speed.verdict}",
-        )
-    return Check(
-        "flux",
-        CheckStatus.OK,
-        f"a synthesised capture measures {speed.bit_rate_hz / 1000:.2f} kbit/s, "
-        f"margin {report.worst_margin:.1%}",
-    )
-
-
 def _cache_check(cache: DatCache) -> Check:
     count = len(list(cache.entries()))
     return Check("dat cache", CheckStatus.OK, f"{cache.root}, {count} catalogue(s)")
@@ -237,7 +210,6 @@ def diagnose(
             *_hardware_checks(load_hid),
             _codec_check(),
             _identity_check(),
-            _flux_check(),
             _cache_check(cache if cache is not None else DatCache()),
         )
     )

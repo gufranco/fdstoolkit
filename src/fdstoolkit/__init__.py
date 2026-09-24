@@ -6,13 +6,8 @@ from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import Diagnostic, Severity
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.drive.advise import Advice, advise
 from fdstoolkit.drive.classes import ClassReport, measure_classes
-from fdstoolkit.drive.speed import SpeedReport, Verdict, from_cycles, measure_speed
-from fdstoolkit.drive.stability import measure_stability
-from fdstoolkit.flux.analysis import CaptureReport, analyse_capture
-from fdstoolkit.flux.load import CaptureFormat, detect_format, load_capture
-from fdstoolkit.flux.model import FluxCapture
+from fdstoolkit.drive.speed import SpeedReport, Verdict, from_cycles
 from fdstoolkit.identify.hashes import Digests, digests_of, side_digests
 from fdstoolkit.quality.confidence import ConfidenceReport, score_disk
 from fdstoolkit.quality.grade import GradedReport, grade_disk
@@ -36,18 +31,14 @@ def canonical_digest(disk: Disk, profile: str) -> str:
 
 
 __all__ = [
-    "Advice",
     "Block",
     "BlockKind",
-    "CaptureFormat",
-    "CaptureReport",
     "ClassReport",
     "ConfidenceReport",
     "Diagnostic",
     "Digests",
     "Disk",
     "FileKind",
-    "FluxCapture",
     "GradedReport",
     "ReadStatistics",
     "Severity",
@@ -55,20 +46,14 @@ __all__ = [
     "SpeedReport",
     "Verdict",
     "__version__",
-    "advise",
-    "analyse_capture",
     "canonical_digest",
     "compare_reads",
     "decode_image",
-    "detect_format",
     "digests_of",
     "encode_disk",
     "from_cycles",
     "grade_disk",
-    "load_capture",
     "measure_classes",
-    "measure_speed",
-    "measure_stability",
     "score_disk",
     "side_digests",
 ]

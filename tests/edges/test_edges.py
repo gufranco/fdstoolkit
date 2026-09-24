@@ -11,17 +11,12 @@ from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.flux.analysis import IntervalReport, TrackReport, analyse_capture, analyse_intervals
-from fdstoolkit.flux.counts import write_counts
-from fdstoolkit.flux.model import FluxCapture, FluxTrack, Revolution
-from fdstoolkit.flux.synth import synthesise
 from fdstoolkit.identify.datfile import build_dat
 from fdstoolkit.identify.integrity import CodeReport
 from fdstoolkit.master.corpus import GameKey, GroupMaster, build_masters
 from fdstoolkit.master.reference import ReferenceSet, reference_from
 from fdstoolkit.quality.calibrate import DriveProfile
-from fdstoolkit.quality.confidence import ConfidenceReport, score_disk
-from fdstoolkit.quality.grade import grade_disk
+from fdstoolkit.quality.confidence import ConfidenceReport
 from fdstoolkit.quality.reads import ReadStatistics
 
 runner = CliRunner()
@@ -62,31 +57,6 @@ def test_a_foreign_image_is_refused(tmp_path: Path) -> None:
         decode_image(path)
 
 
-def test_an_empty_cluster_set_has_no_margin() -> None:
-    empty = IntervalReport(pulses=0, clusters=(), separations=(), outliers=0, rpm=None)
-
-    assert empty.worst_margin == 0.0
-
-
-def test_a_track_of_one_revolution_has_no_speed_spread() -> None:
-    report = TrackReport(
-        index=0,
-        revolutions=(IntervalReport(pulses=0, clusters=(), separations=(), outliers=0, rpm=96.0),),
-    )
-
-    assert report.rpm_spread == 0.0
-
-
-def test_several_revolutions_give_a_speed_spread() -> None:
-    capture = synthesise(_disk(), revolutions=2, jitter_ns=200, seed=4)
-
-    assert analyse_capture(capture).tracks[0].rpm_spread >= 0.0
-
-
-def test_a_single_interval_still_fits() -> None:
-    assert analyse_intervals((10_400,)).base_ns > 0
-
-
 def test_an_empty_confidence_report_scores_nothing() -> None:
     assert ConfidenceReport(blocks=()).mean == 0.0
 
@@ -115,57 +85,10 @@ def test_an_empty_code_report_has_no_share() -> None:
     assert CodeReport(examined=0, illegal=0).share == 0.0
 
 
-def test_a_flux_report_adds_a_reason_to_the_grade() -> None:
-    capture = synthesise(_disk())
-    flux = analyse_capture(capture)
-
-    report = grade_disk(confidence=score_disk(_disk()), flux=flux)
-
-    assert any(reason.metric == "flux margin" for reason in report.reasons)
-
-
 def test_a_homepage_is_written_into_the_dat() -> None:
     text = build_dat([("A.fds", b"x")], name="F", version="1", homepage="https://example.test")
 
     assert "https://example.test" in text
-
-
-def test_the_flux_command_prints_speed_and_outliers(tmp_path: Path) -> None:
-    path = tmp_path / "capture.counts"
-    capture = synthesise(_disk())
-    stretched = FluxCapture(
-        source=capture.source,
-        tracks=(
-            FluxTrack(
-                index=0,
-                revolutions=(Revolution(intervals=(*capture.track(0).intervals(), 900_000)),),
-            ),
-        ),
-    )
-    path.write_bytes(write_counts(stretched))
-
-    result = runner.invoke(app, ["flux", str(path)])
-
-    assert "speed" in result.stdout
-    assert "outliers" in result.stdout
-
-
-def test_decoding_a_capture_with_no_pulse_is_refused(tmp_path: Path) -> None:
-    path = tmp_path / "capture.raw"
-    path.write_bytes(bytes(1))
-
-    result = runner.invoke(app, ["flux-decode", str(path), "-o", str(tmp_path / "o.fds")])
-
-    assert result.exit_code == 1
-
-
-def test_decoding_prints_a_finding(tmp_path: Path) -> None:
-    path = tmp_path / "capture.raw"
-    path.write_bytes(bytes([60]) * 4000)
-
-    result = runner.invoke(app, ["flux-decode", str(path), "-o", str(tmp_path / "o.fds")])
-
-    assert "[FDS014]" in result.stdout
 
 
 def test_splicing_a_donor_of_another_shape_is_refused(tmp_path: Path) -> None:
@@ -324,33 +247,6 @@ def test_a_reference_set_from_an_empty_corpus_holds_nothing() -> None:
     assert ReferenceSet.from_json(reference.to_json()).entries == ()
 
 
-def test_a_stream_of_zero_intervals_still_reports() -> None:
-    report = analyse_intervals((0, 0, 0))
-
-    assert report.base_ns == 0.0
-    assert report.bit_rate_hz == 0.0
-
-
-def test_a_capture_holding_no_pulse_is_refused_by_decode(tmp_path: Path) -> None:
-    path = tmp_path / "empty.counts"
-    path.write_bytes(b"")
-
-    result = runner.invoke(app, ["flux-decode", str(path), "-o", str(tmp_path / "o.fds")])
-
-    assert result.exit_code == 1
-    assert "empty" in result.stdout
-
-
-def test_measuring_a_capture_holding_no_pulse_is_refused(tmp_path: Path) -> None:
-    path = tmp_path / "empty.counts"
-    path.write_bytes(b"")
-
-    result = runner.invoke(app, ["flux", str(path)])
-
-    assert result.exit_code == 1
-    assert "empty" in result.stdout
-
-
 def test_an_unknown_image_prints_no_game(tmp_path: Path) -> None:
     root = tmp_path / "corpus"
     root.mkdir()
@@ -378,12 +274,3 @@ def test_an_unknown_image_prints_no_game(tmp_path: Path) -> None:
     assert result.exit_code == 1
     assert "unknown" in result.stdout
     assert "game " not in result.stdout
-
-
-def test_a_capture_with_no_elapsed_time_reports_no_speed(tmp_path: Path) -> None:
-    path = tmp_path / "flat.raw"
-    path.write_bytes(bytes(64))
-
-    result = runner.invoke(app, ["flux", str(path)])
-
-    assert "speed" not in result.stdout

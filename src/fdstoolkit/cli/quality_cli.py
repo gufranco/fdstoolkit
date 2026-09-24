@@ -64,10 +64,6 @@ def grade(
         list[Path] | None,
         typer.Option("--read", help="another dump of the same disk, repeatable"),
     ] = None,
-    margin: Annotated[
-        float | None,
-        typer.Option("--margin", help="a flux margin measured by the flux command"),
-    ] = None,
     *,
     block_map: Annotated[
         bool, typer.Option("--map", help="print the per-block confidence")
@@ -85,7 +81,7 @@ def grade(
         except ValueError as error:
             raise fail(str(error)) from error
 
-    confidence = score_disk(disk, reads=stats, margin=margin)
+    confidence = score_disk(disk, reads=stats)
 
     report = grade_disk(confidence=confidence, findings=findings, reads=stats)
 
@@ -128,9 +124,6 @@ def calibrate_command(
         list[Path] | None,
         typer.Option("--read", help="a dump of that same disk, repeatable"),
     ] = None,
-    margin: Annotated[
-        float | None, typer.Option("--margin", help="a flux margin for the same run")
-    ] = None,
     *,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
@@ -139,7 +132,7 @@ def calibrate_command(
     dumps = [decode_image(path)[0] for path in read or []]
 
     try:
-        profile = calibrate(expected, dumps, flux_margin=margin)
+        profile = calibrate(expected, dumps)
     except ValueError as error:
         raise fail(str(error)) from error
 

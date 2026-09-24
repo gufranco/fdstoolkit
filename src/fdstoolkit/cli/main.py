@@ -10,7 +10,6 @@ from fdstoolkit.cli import (
     convert_cmds,
     drive_cli,
     edit_cmds,
-    flux_cli,
     hardware_cmds,
     identify_cmds,
     inspect_cmds,
@@ -30,7 +29,6 @@ edit_cmds.register(app)
 inspect_cmds.register(app)
 identify_cmds.register(app)
 hardware_cmds.register(app)
-flux_cli.register(app)
 quality_cli.register(app)
 master_cli.register(app)
 drive_cli.register(app)
