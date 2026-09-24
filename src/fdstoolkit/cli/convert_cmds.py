@@ -8,6 +8,7 @@ import typer
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.common import (
     Container,
+    Family,
     container_of,
     decode_image,
     fail,
@@ -103,6 +104,6 @@ def blank(
 
 
 def register(app: typer.Typer) -> None:
-    app.command()(convert)
-    app.command()(canon)
-    app.command()(blank)
+    app.command(rich_help_panel=Family.CONTAINER)(convert)
+    app.command(rich_help_panel=Family.IDENTIFY)(canon)
+    app.command(rich_help_panel=Family.CONTAINER)(blank)

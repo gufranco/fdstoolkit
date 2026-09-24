@@ -5,11 +5,11 @@ from typing import Annotated
 
 import typer
 
-from fdstoolkit.cli.common import decode_image, fail
+from fdstoolkit.cli.common import Family, decode_image, fail
 from fdstoolkit.identify.integrity import inspect_disk
-from fdstoolkit.quality.calibrate import DriveVerdict, calibrate
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
+from fdstoolkit.quality.health import DriveVerdict, measure_health
 from fdstoolkit.quality.reads import compare_reads
 from fdstoolkit.report import as_json
 
@@ -118,7 +118,7 @@ def grade(
     raise typer.Exit(code=0 if report.grade.value == "clean" else 1)
 
 
-def calibrate_command(
+def health(
     reference: Annotated[Path, typer.Argument(help="an image of a known-good disk")],
     read: Annotated[
         list[Path] | None,
@@ -132,7 +132,7 @@ def calibrate_command(
     dumps = [decode_image(path)[0] for path in read or []]
 
     try:
-        profile = calibrate(expected, dumps)
+        profile = measure_health(expected, dumps)
     except ValueError as error:
         raise fail(str(error)) from error
 
@@ -194,7 +194,7 @@ def integrity(
 
 
 def register(app: typer.Typer) -> None:
-    app.command()(reads)
-    app.command()(grade)
-    app.command(name="calibrate")(calibrate_command)
-    app.command()(integrity)
+    app.command(rich_help_panel=Family.CHECK)(reads)
+    app.command(rich_help_panel=Family.CHECK)(grade)
+    app.command(rich_help_panel=Family.HARDWARE)(health)
+    app.command(rich_help_panel=Family.CHECK)(integrity)

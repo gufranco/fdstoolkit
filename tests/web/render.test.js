@@ -14,6 +14,19 @@ beforeEach(() => {
 });
 
 describe('renderResult', () => {
+  it('offers the file and reports what came with it', () => {
+    renderResult(target, {
+      headline: '1 block(s) disagree across the dumps',
+      file: { name: 'consensus.fds', data: 'AA==', size: 10 },
+      rows: [{ side: 0, block: 3 }],
+      ok: false,
+    });
+
+    expect(target.querySelector('.banner').textContent).toBe('1 block(s) disagree across the dumps');
+    expect(target.querySelector('a').download).toBe('consensus.fds');
+    expect(target.textContent).toContain('block');
+  });
+
   it('offers a download when the payload carries bytes', () => {
     renderResult(target, { name: 'demo.fds', data: 'AA==', size: 131000 });
 

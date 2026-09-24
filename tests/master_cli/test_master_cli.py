@@ -78,7 +78,7 @@ def _corpus(tmp_path: Path) -> Path:
 
 
 def test_a_corpus_of_agreeing_dumps_is_unanimous(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["masters", str(_corpus(tmp_path))])
+    result = runner.invoke(app, ["consensus", str(_corpus(tmp_path))])
 
     assert result.exit_code == 0
     assert "unanimous     1 of 1" in result.stdout
@@ -88,7 +88,7 @@ def test_a_contested_game_is_named(tmp_path: Path) -> None:
     root = _corpus(tmp_path)
     _write_fds(root / "c.fds", _disk(licensee=0x99))
 
-    result = runner.invoke(app, ["masters", str(root), "--json"])
+    result = runner.invoke(app, ["consensus", str(root), "--json"])
 
     payload = json.loads(result.stdout)
     assert result.exit_code == 1
@@ -99,21 +99,61 @@ def test_an_empty_directory_is_refused(tmp_path: Path) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
 
-    result = runner.invoke(app, ["masters", str(empty)])
+    result = runner.invoke(app, ["consensus", str(empty)])
 
     assert result.exit_code == 1
     assert "no image found" in result.stdout
 
 
-def test_a_missing_directory_is_refused(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["masters", str(tmp_path / "nowhere")])
+def test_a_missing_path_is_refused_by_name(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["consensus", str(tmp_path / "nowhere")])
 
     assert result.exit_code == 1
-    assert "directory not found" in result.stdout
+    assert "not found:" in result.stdout
+    assert "nowhere" in result.stdout
+
+
+def test_a_corpus_refuses_an_output_file(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["consensus", str(_corpus(tmp_path)), "-o", str(tmp_path / "x.fds")]
+    )
+
+    assert result.exit_code == 1
+    assert "-o and --map do not apply" in result.stdout
+
+
+def test_a_corpus_refuses_a_block_map(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["consensus", str(_corpus(tmp_path)), "--map"])
+
+    assert result.exit_code == 1
+    assert "-o and --map do not apply" in result.stdout
+
+
+def test_dumps_of_one_disk_need_an_output(tmp_path: Path) -> None:
+    root = _corpus(tmp_path)
+
+    result = runner.invoke(app, ["consensus", str(root / "a.fds"), str(root / "b.fds")])
+
+    assert result.exit_code == 1
+    assert "pass -o" in result.stdout
+
+
+def test_dumps_of_one_disk_can_report_json(tmp_path: Path) -> None:
+    root = _corpus(tmp_path)
+    output = tmp_path / "merged.fds"
+
+    result = runner.invoke(
+        app, ["consensus", str(root / "a.fds"), str(root / "a.fds"), "-o", str(output), "--json"]
+    )
+
+    payload = json.loads(result.stdout)
+    assert result.exit_code == 0
+    assert payload["disagreements"] == []
+    assert output.is_file()
 
 
 def test_an_unknown_profile_is_refused(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["masters", str(_corpus(tmp_path)), "--profile", "nope"])
+    result = runner.invoke(app, ["consensus", str(_corpus(tmp_path)), "--profile", "nope"])
 
     assert result.exit_code == 1
     assert "unknown profile" in result.stdout
@@ -224,3 +264,20 @@ def test_a_block_with_no_good_donor_is_reported(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "no donor carries a good copy" in result.stdout
+
+
+def test_a_reference_from_a_missing_directory_is_refused(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "reference-build",
+            str(tmp_path / "nowhere"),
+            "-o",
+            str(tmp_path / "set.json"),
+            "--set-version",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "directory not found" in result.stdout

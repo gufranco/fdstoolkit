@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Final
 from xml.etree.ElementTree import ParseError
 
 from fastapi import HTTPException
 
 from fdstoolkit.core.canon import profile_by_name
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.identify.cache import DatCache
 from fdstoolkit.identify.dat import identify as identify_image
 from fdstoolkit.identify.dat import load_dat
 from fdstoolkit.identify.datfile import build_dat
@@ -18,19 +18,20 @@ from fdstoolkit.identify.integrity import inspect_disk
 from fdstoolkit.master.corpus import build_masters
 from fdstoolkit.master.reference import ReferenceSet, reference_from
 from fdstoolkit.master.splice import splice
-from fdstoolkit.quality.calibrate import calibrate
 from fdstoolkit.quality.consensus import build_consensus
+from fdstoolkit.quality.health import measure_health
 from fdstoolkit.ui.schemas import (
     BiosSpec,
-    CalibrateSpec,
+    ConsensusSpec,
     CorpusSpec,
     DatBuildSpec,
     FileResult,
+    HealthSpec,
     IdentifySpec,
     ImageSpec,
-    ImagesSpec,
     ReferenceBuildSpec,
     ReferenceVerifySpec,
+    ReportedFile,
     RowsResult,
     SpliceSpec,
 )
@@ -45,6 +46,10 @@ from fdstoolkit.ui.shared import (
     rows_of,
 )
 
+ACROSS_DISK: Final = "disk"
+ACROSS_CORPUS: Final = "corpus"
+ACROSS: Final = (ACROSS_DISK, ACROSS_CORPUS)
+
 
 def _corpus(spec: CorpusSpec) -> list[tuple[str, Disk]]:
     if not spec.images:
@@ -56,12 +61,12 @@ def _corpus(spec: CorpusSpec) -> list[tuple[str, Disk]]:
     ]
 
 
-def calibrate_drive(spec: CalibrateSpec) -> RowsResult:
+def health(spec: HealthSpec) -> RowsResult:
     if not spec.reads:
-        refuse("calibrating needs at least one read to compare", status=UNPROCESSABLE)
+        refuse("measuring the drive needs at least one read to compare", status=UNPROCESSABLE)
     reference, _, _ = decode_payload(spec.data)
     reads = [decode_payload(entry)[0] for entry in spec.reads]
-    profile = calibrate(reference, reads)
+    profile = measure_health(reference, reads)
     return RowsResult(rows=rows_of([asdict(profile)]))
 
 
@@ -80,14 +85,29 @@ def splice_blocks(spec: SpliceSpec) -> FileResult:
     return named_file(spec.name, encoded(result.disk))
 
 
-def consensus(spec: ImagesSpec) -> FileResult:
+def consensus(spec: ConsensusSpec) -> ReportedFile | RowsResult:
+    if spec.across not in ACROSS:
+        refuse(f"consensus runs across {' or '.join(ACROSS)}, not {spec.across}")
+    if spec.across == ACROSS_CORPUS:
+        return _masters(spec)
     if not spec.images:
         refuse("a consensus needs at least one dump", status=UNPROCESSABLE)
-    disks = [decode_payload(entry)[0] for entry in spec.images]
-    return named_file("consensus.fds", encoded(build_consensus(disks).disk))
+    result = build_consensus([decode_payload(entry)[0] for entry in spec.images])
+    rows = [{"side": side, "block": block} for side, block in result.disagreements]
+    headline = (
+        f"{len(rows)} block(s) disagree across the dumps"
+        if rows
+        else "every dump agrees on every block"
+    )
+    return ReportedFile(
+        headline=headline,
+        file=named_file("consensus.fds", encoded(result.disk)),
+        rows=rows,
+        ok=not rows,
+    )
 
 
-def masters(spec: CorpusSpec) -> RowsResult:
+def _masters(spec: CorpusSpec) -> RowsResult:
     report = build_masters(_corpus(spec), profile=profile_by_name(spec.profile))
     rows = [
         {
@@ -98,7 +118,11 @@ def masters(spec: CorpusSpec) -> RowsResult:
         }
         for group in report.groups
     ]
-    return RowsResult(rows=rows, ok=all(group.variants <= 1 for group in report.groups))
+    return RowsResult(
+        headline=f"{len(report.unanimous)} of {len(report.groups)} game(s) unanimous",
+        rows=rows,
+        ok=not report.contested,
+    )
 
 
 def reference_build(spec: ReferenceBuildSpec) -> FileResult:
@@ -160,8 +184,3 @@ def bios(spec: BiosSpec) -> RowsResult:
     rows = [{"revision": str(report.revision), "exact_size": report.exact_size}]
     rows.extend({"emulator": name, "note": note} for name, note in sorted(notes.items()))
     return RowsResult(rows=rows)
-
-
-def dat_cache() -> RowsResult:
-    cache = DatCache()
-    return RowsResult(rows=[{"path": str(cache.root), "catalogues": len(list(cache.entries()))}])

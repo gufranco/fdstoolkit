@@ -8,6 +8,7 @@ from typing import Annotated, Final
 import typer
 
 from fdstoolkit.cli.common import (
+    Family,
     decode_image,
     fail,
     guard_output,
@@ -15,6 +16,7 @@ from fdstoolkit.cli.common import (
 )
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.disk import SIDES_PER_DISK
+from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
@@ -35,6 +37,7 @@ from fdstoolkit.quality.surface import (
     SurfaceTestRefusedError,
     surface_test,
 )
+from fdstoolkit.report import as_json
 
 DEFAULT_SIDES: Final = 1
 
@@ -56,6 +59,39 @@ def open_drive() -> FdsStick:
         return open_fdsstick()
     except HardwareFaultError as error:
         raise fail(str(error)) from error
+
+
+STATUS_NOTE: Final = (
+    "the stick reports nothing about the disk itself: not whether one is inserted, "
+    "whether it is write protected, or whether the battery holds"
+)
+
+
+def status(
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
+) -> None:
+    """Report whether an FDSStick is attached, what it says about itself, and whether it opens."""
+    checks = hardware_checks()
+    ready = all(check.status is CheckStatus.OK for check in checks)
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "ready": ready,
+                    "checks": [
+                        {"name": check.name, "status": str(check.status), "detail": check.detail}
+                        for check in checks
+                    ],
+                }
+            )
+        )
+        raise typer.Exit(code=0 if ready else 1)
+    for check in checks:
+        marker = "" if check.status is CheckStatus.OK else f" [{check.status}]"
+        typer.echo(f"{check.name:<17} {check.detail}{marker}")
+    typer.echo(STATUS_NOTE)
+    raise typer.Exit(code=0 if ready else 1)
 
 
 def dump(
@@ -348,7 +384,8 @@ def web(
 
 
 def register(app: typer.Typer) -> None:
-    app.command()(dump)
-    app.command()(write)
-    app.command()(surface)
+    app.command(rich_help_panel=Family.HARDWARE)(status)
+    app.command(rich_help_panel=Family.HARDWARE)(dump)
+    app.command(rich_help_panel=Family.HARDWARE)(write)
+    app.command(rich_help_panel=Family.HARDWARE)(surface)
     app.command()(web)

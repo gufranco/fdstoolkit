@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { bytes, describeLimits, explain, isDownload, named, scalar, typed, words } from
+import { bytes, describeLimits, explain, isDownload, named, orderFamilies, scalar, typed, words } from
   '../../src/fdstoolkit/ui/static/app.js';
 
 describe('named', () => {
@@ -114,6 +114,18 @@ describe('describeLimits', () => {
     expect(describeLimits({ minimum: null, maximum: 65535 })).toBe('65535 or less.');
   });
 
+  it('states an exclusive lower bound as more than', () => {
+    expect(describeLimits({ above: 0 })).toBe('More than 0.');
+  });
+
+  it('states an exclusive upper bound as less than', () => {
+    expect(describeLimits({ below: 10 })).toBe('Less than 10.');
+  });
+
+  it('joins an exclusive bound with an inclusive one', () => {
+    expect(describeLimits({ above: 0, maximum: 20 })).toBe('More than 0. 20 or less.');
+  });
+
   it('states an exact length when both lengths agree', () => {
     expect(describeLimits({ min_length: 3, max_length: 3 })).toBe('Exactly 3 characters.');
   });
@@ -147,5 +159,24 @@ describe('typed', () => {
 
   it('leaves an empty value out of the request', () => {
     expect(typed('choice', '', true)).toBeUndefined();
+  });
+});
+
+
+describe('orderFamilies', () => {
+  it('keeps the order the catalogue declares', () => {
+    expect(orderFamilies(['hardware', 'check', 'inspect'], ['inspect', 'check', 'hardware'])).toEqual([
+      'inspect',
+      'check',
+      'hardware',
+    ]);
+  });
+
+  it('puts a family the catalogue does not name last', () => {
+    expect(orderFamilies(['other', 'inspect'], ['inspect'])).toEqual(['inspect', 'other']);
+  });
+
+  it('falls back to alphabetical order with no declared order', () => {
+    expect(orderFamilies(['repair', 'check'], [])).toEqual(['check', 'repair']);
   });
 });

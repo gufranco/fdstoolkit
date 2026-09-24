@@ -9,6 +9,7 @@ from fdstoolkit.build.manifest import build_from_manifest, load_manifest
 from fdstoolkit.cli.common import (
     KIND_FOR_CHOICE,
     Container,
+    Family,
     KindChoice,
     container_of,
     decode_image,
@@ -28,7 +29,6 @@ from fdstoolkit.edit.saves import normalise_saves
 from fdstoolkit.fdskey.card import FirmwareVariant, card_blank
 from fdstoolkit.patch.apply import apply_patch
 from fdstoolkit.patch.formats import PatchError
-from fdstoolkit.quality.consensus import build_consensus
 
 
 def extract(
@@ -345,49 +345,15 @@ def card(
     typer.echo(f"wrote {output} ({len(data)} bytes, for {variant} firmware)")
 
 
-def consensus(
-    images: Annotated[list[Path], typer.Argument(help="two or more dumps of one disk")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the merge")],
-    *,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-    stability_map: Annotated[
-        bool, typer.Option("--map", help="print the per-block stability map")
-    ] = False,
-) -> None:
-    """Merge several dumps of one disk, block by block, and report every disagreement."""
-    guard_output(output, force=force)
-    disks = [decode_image(path)[0] for path in images]
-
-    try:
-        result = build_consensus(disks)
-    except ValueError as error:
-        raise fail(str(error)) from error
-
-    data, _ = fds.encode(result.disk, headered=False)
-    output.write_bytes(data)
-
-    if stability_map:
-        for entry in result.stability:
-            typer.echo(
-                f"side {entry.side} block {entry.block:3d}  {entry.kind:<11} "
-                f"{entry.agreement:6.1%}  {entry.variants} variant(s)  {entry.verdict}"
-            )
-    for side_index, block_index in result.disagreements:
-        typer.echo(f"side {side_index} block {block_index}: the dumps disagree")
-    typer.echo(f"wrote {output} ({len(data)} bytes)")
-    raise typer.Exit(code=0 if not result.disagreements else 1)
-
-
 def register(app: typer.Typer) -> None:
-    app.command()(extract)
-    app.command(name="insert")(insert_command)
-    app.command(name="patch")(patch_command)
-    app.command()(clean)
-    app.command(name="rebuild")(rebuild_command)
-    app.command(name="set")(set_command)
-    app.command(name="save-apply")(save_apply)
-    app.command(name="save-extract")(save_extract)
-    app.command(name="normalise-saves")(normalise_saves_command)
-    app.command()(build)
-    app.command()(card)
-    app.command()(consensus)
+    app.command(rich_help_panel=Family.REPAIR)(extract)
+    app.command(name="insert", rich_help_panel=Family.REPAIR)(insert_command)
+    app.command(name="patch", rich_help_panel=Family.REPAIR)(patch_command)
+    app.command(rich_help_panel=Family.REPAIR)(clean)
+    app.command(name="rebuild", rich_help_panel=Family.REPAIR)(rebuild_command)
+    app.command(name="set", rich_help_panel=Family.REPAIR)(set_command)
+    app.command(name="save-apply", rich_help_panel=Family.REPAIR)(save_apply)
+    app.command(name="save-extract", rich_help_panel=Family.REPAIR)(save_extract)
+    app.command(name="normalise-saves", rich_help_panel=Family.REPAIR)(normalise_saves_command)
+    app.command(rich_help_panel=Family.CONTAINER)(build)
+    app.command(rich_help_panel=Family.CONTAINER)(card)

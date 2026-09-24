@@ -116,7 +116,7 @@ def _python_check(version: tuple[int, int, int]) -> Check:
     return Check("python", CheckStatus.OK, text)
 
 
-def _hardware_checks(loader: Callable[[], Enumerator]) -> tuple[Check, ...]:
+def hardware_checks(loader: Callable[[], Enumerator] = load_hid) -> tuple[Check, ...]:
     try:
         hid = loader()
     except ImportError:
@@ -209,7 +209,7 @@ def diagnose(
             Check("fdstoolkit", CheckStatus.OK, VERSION),
             _python_check(interpreter),
             Check("platform", CheckStatus.OK, f"{platform.system()} {platform.machine()}"),
-            *_hardware_checks(load_hid),
+            *hardware_checks(load_hid),
             _codec_check(),
             _identity_check(),
             _cache_check(cache if cache is not None else DatCache()),

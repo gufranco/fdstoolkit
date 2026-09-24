@@ -123,28 +123,6 @@ def test_reads_needs_more_than_one_image(client: TestClient) -> None:
     assert answer.status_code == UNPROCESSABLE
 
 
-def test_reading_converts_a_console_cycle_count(client: TestClient) -> None:
-    body = client.post("/api/reading", json={"cycles": 152}).json()
-
-    assert body["bit_rate_hz"] == pytest.approx(94_200, rel=0.01)
-    assert body["direction"]
-
-
-def test_a_cycle_count_of_nothing_is_refused(client: TestClient) -> None:
-    answer = client.post("/api/reading", json={"cycles": 0})
-
-    assert answer.status_code == UNPROCESSABLE
-
-
-def test_classes_judges_a_quantised_capture(client: TestClient) -> None:
-    values = base64.b64encode(pack_raw03(bytes([0] * 700 + [1] * 200 + [2] * 100))).decode("ascii")
-
-    body = client.post("/api/classes", json={"capture": values}).json()
-
-    assert body["reading"]
-    assert len(body["counts"]) == 4
-
-
 def test_an_image_bundling_more_than_one_disk_is_refused(client: TestClient) -> None:
     three = blank_image(sides=2, headered=False, formatted=True) + blank_image(
         sides=1, headered=False, formatted=True
@@ -222,28 +200,6 @@ def test_a_damaged_image_is_reported_rather_than_refused(client: TestClient) -> 
 
 def test_the_api_documentation_is_served(client: TestClient) -> None:
     assert client.get("/docs").status_code == OK
-
-
-def test_classes_reads_a_packed_capture(client: TestClient) -> None:
-    packed = base64.b64encode(bytes([0b00011011] * 64)).decode("ascii")
-
-    body = client.post("/api/classes", json={"capture": packed}).json()
-
-    assert sum(body["counts"]) > 0
-
-
-def test_classes_refuses_a_capture_that_carries_nothing(client: TestClient) -> None:
-    answer = client.post("/api/classes", json={"capture": ""})
-
-    assert answer.status_code == BAD_REQUEST
-    assert "carries no bytes" in answer.json()["detail"]
-
-
-def test_reading_says_which_way_to_adjust_without_naming_a_turn(client: TestClient) -> None:
-    body = client.post("/api/reading", json={"cycles": 152}).json()
-
-    assert "raise the motor speed" in body["advice"]
-    assert "clockwise" not in body["advice"]
 
 
 def test_convert_rewrites_an_fds_without_a_header(client: TestClient) -> None:
@@ -325,3 +281,61 @@ def test_every_marked_commandopens_a_drive_in_the_cli() -> None:
     }
 
     assert {form.command for form in forms() if form.needs_hardware} == opens
+
+
+def packed_capture() -> str:
+    return base64.b64encode(pack_raw03(bytes([0] * 700 + [1] * 200 + [2] * 100))).decode("ascii")
+
+
+def test_calibrate_converts_a_console_cycle_count(client: TestClient) -> None:
+    body = client.post("/api/calibrate", json={"cycles": 152}).json()
+
+    assert body["speed"]["bit_rate_hz"] == pytest.approx(94_200, rel=0.01)
+    assert "raise the motor speed" in body["speed"]["advice"]
+    assert "clockwise" not in body["speed"]["advice"]
+    assert body["classes"] is None
+    assert body["headline"] == "speed in spec"
+    assert not body["ok"]
+
+
+def test_calibrate_judges_a_capture(client: TestClient) -> None:
+    body = client.post("/api/calibrate", json={"capture": packed_capture()}).json()
+
+    assert len(body["classes"]["counts"]) == 4
+    assert body["speed"] is None
+    assert body["headline"].startswith("pulse classes ")
+
+
+def test_calibrate_reports_both_measurements_together(client: TestClient) -> None:
+    body = client.post("/api/calibrate", json={"cycles": 148, "capture": packed_capture()}).json()
+
+    assert body["headline"].startswith("speed fine, pulse classes ")
+
+
+def test_calibrate_needs_something_to_measure(client: TestClient) -> None:
+    answer = client.post("/api/calibrate", json={})
+
+    assert answer.status_code == UNPROCESSABLE
+    assert "a cycle count, a capture, or both" in answer.json()["detail"]
+
+
+def test_calibrate_refuses_a_cycle_count_of_nothing(client: TestClient) -> None:
+    answer = client.post("/api/calibrate", json={"cycles": 0})
+
+    assert answer.status_code == UNPROCESSABLE
+
+
+def test_calibrate_refuses_a_capture_that_carries_nothing(client: TestClient) -> None:
+    answer = client.post("/api/calibrate", json={"capture": ""})
+
+    assert answer.status_code == BAD_REQUEST
+    assert "carries no bytes" in answer.json()["detail"]
+
+
+def test_status_reports_only_the_device_checks(client: TestClient) -> None:
+    body = client.get("/api/status").json()
+
+    names = {check["name"] for check in body["checks"]}
+    assert "fdsstick" in names
+    assert "python" not in names
+    assert isinstance(body["healthy"], bool)

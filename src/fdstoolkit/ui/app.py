@@ -18,23 +18,23 @@ from fdstoolkit.codecs.qd import CrcMode
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, restore
 from fdstoolkit.core.diagnostics import worst_severity
 from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
-from fdstoolkit.doctor import CheckStatus, diagnose
-from fdstoolkit.drive.classes import measure_classes
-from fdstoolkit.drive.speed import from_cycles
+from fdstoolkit.doctor import CheckStatus, diagnose, hardware_checks
+from fdstoolkit.drive.classes import Reading, measure_classes
+from fdstoolkit.drive.speed import Verdict, from_cycles
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.quality.reads import compare_reads
 from fdstoolkit.ui import analysis_routes, hardware_routes, image_routes
-from fdstoolkit.ui.forms import forms
+from fdstoolkit.ui.forms import FAMILY_ORDER, forms
 from fdstoolkit.ui.schemas import (
     BlankSpec,
+    CalibrateSpec,
+    CalibrationResult,
     CanonSpec,
-    CaptureSpec,
     Catalogue,
     ClassesResult,
     ConvertSpec,
-    CyclesSpec,
     DiagnosticView,
     DigestView,
     DiskView,
@@ -79,6 +79,7 @@ EXPORT_TARGETS: Final = tuple(TARGETS)
 
 ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "doctor": "/api/doctor",
+    "status": "/api/status",
     "info": "/api/info",
     "ls": "/api/ls",
     "verify": "/api/verify",
@@ -106,19 +107,16 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "normalise-saves": "/api/normalise-saves",
     "splice": "/api/splice",
     "consensus": "/api/consensus",
-    "masters": "/api/masters",
     "reference-build": "/api/reference-build",
     "reference-verify": "/api/reference-verify",
     "dat-build": "/api/dat-build",
     "identify": "/api/identify",
     "bios": "/api/bios",
-    "dat-cache": "/api/dat-cache",
     "integrity": "/api/integrity",
-    "calibrate": "/api/calibrate",
+    "health": "/api/health",
     "grade": "/api/grade",
     "reads": "/api/reads",
-    "classes": "/api/classes",
-    "reading": "/api/reading",
+    "calibrate": "/api/calibrate",
     "dump": "/api/dump",
     "write": "/api/write",
     "surface": "/api/surface",
@@ -146,6 +144,7 @@ def catalogue() -> Catalogue:
         export_targets=list(EXPORT_TARGETS),
         commands=sorted(ROUTE_FOR_COMMAND),
         forms=[entry.model_dump() for entry in forms()],
+        families=list(FAMILY_ORDER),
     )
 
 
@@ -161,8 +160,19 @@ def doctor() -> DoctorResult:
 
 
 def hardware() -> HardwareResult:
-    found = next(check for check in diagnose().checks if check.name == DEVICE_CHECK)
+    found = next(check for check in hardware_checks() if check.name == DEVICE_CHECK)
     return HardwareResult(connected=found.status is CheckStatus.OK, detail=found.detail)
+
+
+def status() -> DoctorResult:
+    checks = hardware_checks()
+    return DoctorResult(
+        checks=[
+            DoctorCheck(name=check.name, status=str(check.status), detail=check.detail)
+            for check in checks
+        ],
+        healthy=all(check.status is CheckStatus.OK for check in checks),
+    )
 
 
 def info(spec: ImageSpec) -> DiskView:
@@ -208,12 +218,23 @@ def reads(spec: ReadsSpec) -> ReadsResult:
     return ReadsResult.of(compare_reads(disks))
 
 
-def reading(spec: CyclesSpec) -> SpeedView:
-    return SpeedView.of(from_cycles(spec.cycles))
-
-
-def classes(spec: CaptureSpec) -> ClassesResult:
-    return ClassesResult.of(measure_classes(bytes_of(spec.capture)))
+def calibrate(spec: CalibrateSpec) -> CalibrationResult:
+    if spec.cycles is None and spec.capture is None:
+        message = "calibrating needs a cycle count, a capture, or both"
+        raise HTTPException(status_code=UNPROCESSABLE, detail=message)
+    speed = None if spec.cycles is None else from_cycles(spec.cycles)
+    classes = None if spec.capture is None else measure_classes(bytes_of(spec.capture))
+    parts = (
+        None if speed is None else f"speed {speed.verdict.value}",
+        None if classes is None else f"pulse classes {classes.reading.value}",
+    )
+    return CalibrationResult(
+        headline=", ".join(part for part in parts if part is not None),
+        speed=None if speed is None else SpeedView.of(speed),
+        classes=None if classes is None else ClassesResult.of(classes),
+        ok=(speed is None or speed.verdict is Verdict.FINE)
+        and (classes is None or classes.reading is Reading.HEALTHY),
+    )
 
 
 def blank(spec: BlankSpec) -> FileResult:
@@ -264,13 +285,13 @@ def _register_core(app: FastAPI) -> None:
     app.add_api_route("/api/catalogue", catalogue, methods=["GET"])
     app.add_api_route("/api/doctor", doctor, methods=["GET"])
     app.add_api_route("/api/hardware", hardware, methods=["GET"])
+    app.add_api_route("/api/status", status, methods=["GET"])
     app.add_api_route("/api/info", info, methods=["POST"])
     app.add_api_route("/api/verify", verify, methods=["POST"])
     app.add_api_route("/api/hash", hashes, methods=["POST"])
     app.add_api_route("/api/grade", grade, methods=["POST"])
     app.add_api_route("/api/reads", reads, methods=["POST"])
-    app.add_api_route("/api/reading", reading, methods=["POST"])
-    app.add_api_route("/api/classes", classes, methods=["POST"])
+    app.add_api_route("/api/calibrate", calibrate, methods=["POST"])
     app.add_api_route("/api/blank", blank, methods=["POST"])
     app.add_api_route("/api/canon", canon, methods=["POST"])
     app.add_api_route("/api/convert", convert, methods=["POST"])
@@ -299,17 +320,15 @@ def _register_image(app: FastAPI) -> None:
 
 
 def _register_analysis(app: FastAPI) -> None:
-    app.add_api_route("/api/calibrate", analysis_routes.calibrate_drive, methods=["POST"])
+    app.add_api_route("/api/health", analysis_routes.health, methods=["POST"])
     app.add_api_route("/api/integrity", analysis_routes.integrity, methods=["POST"])
     app.add_api_route("/api/splice", analysis_routes.splice_blocks, methods=["POST"])
     app.add_api_route("/api/consensus", analysis_routes.consensus, methods=["POST"])
-    app.add_api_route("/api/masters", analysis_routes.masters, methods=["POST"])
     app.add_api_route("/api/reference-build", analysis_routes.reference_build, methods=["POST"])
     app.add_api_route("/api/reference-verify", analysis_routes.reference_verify, methods=["POST"])
     app.add_api_route("/api/dat-build", analysis_routes.dat_build, methods=["POST"])
     app.add_api_route("/api/identify", analysis_routes.identify, methods=["POST"])
     app.add_api_route("/api/bios", analysis_routes.bios, methods=["POST"])
-    app.add_api_route("/api/dat-cache", analysis_routes.dat_cache, methods=["GET"])
 
 
 def _register_hardware(app: FastAPI) -> None:

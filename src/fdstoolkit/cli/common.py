@@ -17,6 +17,15 @@ FDS_SUFFIX: Final = ".fds"
 QD_SUFFIX: Final = ".qd"
 
 
+class Family(StrEnum):
+    INSPECT = "Inspect"
+    CHECK = "Check"
+    REPAIR = "Repair"
+    CONTAINER = "Container"
+    IDENTIFY = "Identify"
+    HARDWARE = "Hardware"
+
+
 class Container(StrEnum):
     FDS = "fds"
     QD = "qd"

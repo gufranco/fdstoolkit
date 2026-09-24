@@ -35,14 +35,11 @@ This is an instrument, not an application. It assumes you know what a disk infor
 - [Install](#install)
 - [Concepts you need first](#concepts-you-need-first)
 - [Command reference](#command-reference)
-  - [Inspection](#inspection)
-  - [Conversion and construction](#conversion-and-construction)
-  - [Editing and repair](#editing-and-repair)
-  - [Saves](#saves)
-  - [Identification](#identification)
-  - [Quality measurement](#quality-measurement)
-  - [Drive calibration](#drive-calibration)
-  - [Masters and reference sets](#masters-and-reference-sets)
+  - [Inspect](#inspect)
+  - [Check](#check)
+  - [Repair](#repair)
+  - [Container](#container)
+  - [Identify](#identify)
   - [Hardware](#hardware)
 - [Web interface](#web-interface)
 - [Procedures](#procedures)
@@ -100,7 +97,7 @@ open without a udev rule; `doctor` fails that check and prints the rule to insta
 
 Digests print as `fdstoolkit:v1:<profile>/v1:<sha256>`. Under `release`, 142 of 144 groups in a 595-image corpus agree; under `content`, 125.
 
-**An FDSStick capture carries classes, not timing.** The device rounds every pulse to one of three nominal lengths in hardware, and `dump --raw` keeps those classes as `raw03` files. They show how evenly the drive separates the three lengths, which `classes` measures. They cannot show speed, so speed comes from the console instead, through `reading`.
+**An FDSStick capture carries classes, not timing.** The device rounds every pulse to one of three nominal lengths in hardware, and `dump --raw` keeps those classes as `raw03` files. They show how evenly the drive separates the three lengths, which `calibrate --capture` measures. They cannot show speed, so speed comes from the console instead, through `calibrate --cycles`.
 
 **A game is one disk.** Every game uses a single disk, with one or two sides, and no game spans a second disk. An image holding more than two sides bundles several disks together, and every command refuses it.
 
@@ -108,20 +105,7 @@ Digests print as `fdstoolkit:v1:<profile>/v1:<sha256>`. Under `release`, 142 of 
 
 Notation: `<>` is a value, `[]` is optional, `...` repeats.
 
-### Inspection
-
-#### `doctor`
-
-```bash
-fdstoolkit doctor [--json]
-```
-
-Version, Python, platform, whether hardware support is installed, which devices are attached and whether they open, and the state of the DAT cache. Run this first when something behaves unexpectedly.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/doctor-dark.png">
-<img alt="The doctor command on the local web page" src="assets/screenshots/doctor-light.png">
-</picture>
+### Inspect
 
 #### `info`
 
@@ -149,43 +133,17 @@ Every file on every side: number, id, name, load address, kind, size, and whethe
 <img alt="The ls command on the local web page" src="assets/screenshots/ls-light.png">
 </picture>
 
-#### `verify`
+#### `layout`
 
 ```bash
-fdstoolkit verify <image> [--strict] [--json]
+fdstoolkit layout <image> [--json]
 ```
 
-Structural and checksum findings, each with a code. `--strict` fails on warnings as well as errors.
+Byte offset of each file along the spiral and the time the drive spends reaching it, at the nominal bit rate.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/verify-dark.png">
-<img alt="The verify command on the local web page" src="assets/screenshots/verify-light.png">
-</picture>
-
-#### `hash`
-
-```bash
-fdstoolkit hash <image> [--profile <name>] [--json]
-```
-
-CRC32, MD5, SHA-1 and SHA-256 of the whole image and of each side, plus the canonical digest and the RetroAchievements MD5.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/hash-dark.png">
-<img alt="The hash command on the local web page" src="assets/screenshots/hash-light.png">
-</picture>
-
-#### `diff`
-
-```bash
-fdstoolkit diff <a> <b> [--explain] [--json]
-```
-
-Which blocks differ. `--explain` names the disk-info fields and the files instead of block indices.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/diff-dark.png">
-<img alt="The diff command on the local web page" src="assets/screenshots/diff-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/layout-dark.png">
+<img alt="The layout command on the local web page" src="assets/screenshots/layout-light.png">
 </picture>
 
 #### `boot`
@@ -201,17 +159,17 @@ What the BIOS does with each side: which file it loads, whether approval data is
 <img alt="The boot command on the local web page" src="assets/screenshots/boot-light.png">
 </picture>
 
-#### `layout`
+#### `hash`
 
 ```bash
-fdstoolkit layout <image> [--json]
+fdstoolkit hash <image> [--profile <name>] [--json]
 ```
 
-Byte offset of each file along the spiral and the time the drive spends reaching it, at the nominal bit rate.
+CRC32, MD5, SHA-1 and SHA-256 of the whole image and of each side, plus the canonical digest and the RetroAchievements MD5.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/layout-dark.png">
-<img alt="The layout command on the local web page" src="assets/screenshots/layout-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/hash-dark.png">
+<img alt="The hash command on the local web page" src="assets/screenshots/hash-light.png">
 </picture>
 
 #### `provenance`
@@ -227,125 +185,128 @@ Factory, kiosk rewrite, or unknown, per side, with the dates, serial and rewrite
 <img alt="The provenance command on the local web page" src="assets/screenshots/provenance-light.png">
 </picture>
 
-### Conversion and construction
+### Check
 
-#### `convert`
+A checksum answers one bit about a 65,500-byte side. These answer more.
+
+#### `verify`
 
 ```bash
-fdstoolkit convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|compute|null] [--force]
+fdstoolkit verify <image> [--strict] [--json]
 ```
 
-Between `.fds` and `.qd`. `--crc-mode` decides what goes in the CRC fields when writing `.qd`: keep what the source had, recompute, or zero them. `preserve` is the default because a round trip that recomputes silently repairs corruption you may be trying to study.
+Structural and checksum findings, each with a code. `--strict` fails on warnings as well as errors.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/convert-dark.png">
-<img alt="The convert command on the local web page" src="assets/screenshots/convert-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/verify-dark.png">
+<img alt="The verify command on the local web page" src="assets/screenshots/verify-light.png">
 </picture>
 
-#### `canon`
+#### `grade`
 
 ```bash
-fdstoolkit canon <image> --profile <name> [-o <out>] [--force]
+fdstoolkit grade <image> [--read <r>...] [--map] [--json]
 ```
 
-Print the canonical digest, and with `-o` write the canonical image.
+A grade with the measurement behind it. `--read` folds in repeated dumps, `--map` prints the per-block confidence and the basis for each.
+
+```bash
+fdstoolkit grade disk.fds --read pass2.fds
+```
+
+```
+clean, confidence 0.97
+  ok   errors 0 within 0
+  ok   confidence 0.97 within 0.6
+  ok   read stability 1 within 1
+```
+
+Confidence starts from the checksum state and is adjusted by read agreement. A container that stores no checksums is treated as unproven rather than suspect, which is why a headerless `.fds` does not grade as unstable.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/canon-dark.png">
-<img alt="The canon command on the local web page" src="assets/screenshots/canon-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/grade-dark.png">
+<img alt="The grade command on the local web page" src="assets/screenshots/grade-light.png">
 </picture>
 
-#### `blank`
+#### `reads`
 
 ```bash
-fdstoolkit blank -o <out> [--sides 1|2] [--formatted] [--header] [--game-name ABC] [--force]
+fdstoolkit reads <images>... [--json]
 ```
 
-A blank image. `--formatted` writes a disk information block using values measured from 1,729 never-rewritten sides: country `49`, serial `ffff`, rewrite count `00`, filler `ff`.
+Compares repeated dumps of one physical disk block by block. Reports stability, which blocks move, and the direction of the bit flips. Magnetic decay loses transitions, so ones fall to zeros; the report names that as `loss`, the opposite as `gain`, and both as `mixed`.
+
+```bash
+fdstoolkit reads pass1.fds pass2.fds pass3.fds
+```
+
+```
+passes        3
+stability     99.88%
+decay         loss
+bits lost     14
+bits gained   0
+```
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/blank-dark.png">
-<img alt="The blank command on the local web page" src="assets/screenshots/blank-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reads-dark.png">
+<img alt="The reads command on the local web page" src="assets/screenshots/reads-light.png">
 </picture>
 
-#### `build`
+#### `integrity`
 
 ```bash
-fdstoolkit build <manifest> -o <out> [--force]
+fdstoolkit integrity <image> [--original-crcs] [--json]
 ```
 
-A disk built from a JSON manifest naming the disk fields and the files to place.
+Finds images that pass every checksum and are still wrong: a file body that is almost entirely undocumented opcodes, a body whose length disagrees with its header, and, with `--original-crcs`, a dump whose stored checksums all recompute exactly when they should not.
+
+The opcode threshold is calibrated against 10,105 real program files, whose median is 36% undocumented opcodes because these files routinely carry graphics and tables. Only a file that is almost entirely non-code is reported. Names like `SAVEDATA` and `JMP-TBL.` surface that way and are working as intended.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/build-dark.png">
-<img alt="The build command on the local web page" src="assets/screenshots/build-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/integrity-dark.png">
+<img alt="The integrity command on the local web page" src="assets/screenshots/integrity-light.png">
 </picture>
 
-#### `card`
+#### `diff`
 
 ```bash
-fdstoolkit card -o <out> [--sides 1|2] [--firmware <variant>] [--force]
+fdstoolkit diff <a> <b> [--explain] [--json]
 ```
 
-A blank an FDSKey card accepts.
+Which blocks differ. `--explain` names the disk-info fields and the files instead of block indices.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/card-dark.png">
-<img alt="The card command on the local web page" src="assets/screenshots/card-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/diff-dark.png">
+<img alt="The diff command on the local web page" src="assets/screenshots/diff-light.png">
 </picture>
 
-#### `export`
+#### `lint`
 
 ```bash
-fdstoolkit export <image> --target <t> -d <dir> [--bios <file>] [--force]
+fdstoolkit lint <image> [--json]
 ```
 
-The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`. Each writes a headerless `.fds`. `--bios` also places the BIOS where that target looks for it.
+Whether FDSKey will load the image, before it reaches the card.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
-<img alt="The export command on the local web page" src="assets/screenshots/export-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/lint-dark.png">
+<img alt="The lint command on the local web page" src="assets/screenshots/lint-light.png">
 </picture>
 
-### Editing and repair
+### Repair
 
-#### `extract`
-
-```bash
-fdstoolkit extract <image> -d <dir> [--force]
-```
-
-Every file to disk, including files past the declared count.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/extract-dark.png">
-<img alt="The extract command on the local web page" src="assets/screenshots/extract-light.png">
-</picture>
-
-#### `insert`
+#### `rebuild`
 
 ```bash
-fdstoolkit insert <image> --file <f> --name <n> -o <out> [--address <hex>] [--kind program|character|nametable] [--side N] [--force]
+fdstoolkit rebuild <image> -o <out> [--keep-tail] [--reveal-hidden] [--drop-hidden] [--renumber] [--force]
 ```
 
-Adds a file and raises the declared count. `--address` defaults to `6000`.
+Re-emit from the parsed model: recompute checksums, correct declared sizes, drop trailing data. Hidden files are kept by default; `--reveal-hidden` raises the declared count to match, `--drop-hidden` removes them.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/insert-dark.png">
-<img alt="The insert command on the local web page" src="assets/screenshots/insert-light.png">
-</picture>
-
-#### `set`
-
-```bash
-fdstoolkit set <image> --set field=value... -o <out> [--side N] [--force]
-```
-
-Change disk information fields. Repeatable. Field names are the ones `info --json` prints.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/set-dark.png">
-<img alt="The set command on the local web page" src="assets/screenshots/set-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/rebuild-dark.png">
+<img alt="The rebuild command on the local web page" src="assets/screenshots/rebuild-light.png">
 </picture>
 
 #### `clean`
@@ -361,17 +322,43 @@ Remove non-zero bytes after the last block.
 <img alt="The clean command on the local web page" src="assets/screenshots/clean-light.png">
 </picture>
 
-#### `rebuild`
+#### `set`
 
 ```bash
-fdstoolkit rebuild <image> -o <out> [--keep-tail] [--reveal-hidden] [--drop-hidden] [--renumber] [--force]
+fdstoolkit set <image> --set field=value... -o <out> [--side N] [--force]
 ```
 
-Re-emit from the parsed model: recompute checksums, correct declared sizes, drop trailing data. Hidden files are kept by default; `--reveal-hidden` raises the declared count to match, `--drop-hidden` removes them.
+Change disk information fields. Repeatable. Field names are the ones `info --json` prints.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/rebuild-dark.png">
-<img alt="The rebuild command on the local web page" src="assets/screenshots/rebuild-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/set-dark.png">
+<img alt="The set command on the local web page" src="assets/screenshots/set-light.png">
+</picture>
+
+#### `insert`
+
+```bash
+fdstoolkit insert <image> --file <f> --name <n> -o <out> [--address <hex>] [--kind program|character|nametable] [--side N] [--force]
+```
+
+Adds a file and raises the declared count. `--address` defaults to `6000`.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/insert-dark.png">
+<img alt="The insert command on the local web page" src="assets/screenshots/insert-light.png">
+</picture>
+
+#### `extract`
+
+```bash
+fdstoolkit extract <image> -d <dir> [--force]
+```
+
+Every file to disk, including files past the declared count.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/extract-dark.png">
+<img alt="The extract command on the local web page" src="assets/screenshots/extract-light.png">
 </picture>
 
 #### `patch`
@@ -400,7 +387,32 @@ Replace blocks whose CRC fails with the same block from a donor dump that has it
 <img alt="The splice command on the local web page" src="assets/screenshots/splice-light.png">
 </picture>
 
-### Saves
+#### `consensus`
+
+```bash
+fdstoolkit consensus <dumps>... -o <out> [--map] [--json] [--force]
+fdstoolkit consensus <directory> [--profile <name>] [--json]
+```
+
+Agreement across dumps, decided by what you pass. Several dumps of one disk are merged block by block by majority into one image, and every disagreement is reported; `--map` prints the per-block agreement. One directory is read as a corpus of many games, and each game gets one master by agreement across every dump of it, with the dissenters reported rather than hidden; `--profile` picks the identity profile games are grouped by.
+
+The web page cannot be handed a directory, so there the same choice is the `across` field.
+
+```bash
+fdstoolkit consensus ~/dumps
+```
+
+```
+profile       release
+dumps         595
+games         242
+unanimous     210 of 242
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/consensus-dark.png">
+<img alt="The consensus command on the local web page" src="assets/screenshots/consensus-light.png">
+</picture>
 
 #### `saves`
 
@@ -454,7 +466,76 @@ Blank a declared save region so two played copies compare equal. `--recipes` nam
 <img alt="The normalise-saves command on the local web page" src="assets/screenshots/normalise-saves-light.png">
 </picture>
 
-### Identification
+### Container
+
+#### `convert`
+
+```bash
+fdstoolkit convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|compute|null] [--force]
+```
+
+Between `.fds` and `.qd`. `--crc-mode` decides what goes in the CRC fields when writing `.qd`: keep what the source had, recompute, or zero them. `preserve` is the default because a round trip that recomputes silently repairs corruption you may be trying to study.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/convert-dark.png">
+<img alt="The convert command on the local web page" src="assets/screenshots/convert-light.png">
+</picture>
+
+#### `export`
+
+```bash
+fdstoolkit export <image> --target <t> -d <dir> [--bios <file>] [--force]
+```
+
+The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`. Each writes a headerless `.fds`. `--bios` also places the BIOS where that target looks for it.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
+<img alt="The export command on the local web page" src="assets/screenshots/export-light.png">
+</picture>
+
+#### `blank`
+
+```bash
+fdstoolkit blank -o <out> [--sides 1|2] [--formatted] [--header] [--game-name ABC] [--force]
+```
+
+A blank image. `--formatted` writes a disk information block using values measured from 1,729 never-rewritten sides: country `49`, serial `ffff`, rewrite count `00`, filler `ff`.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/blank-dark.png">
+<img alt="The blank command on the local web page" src="assets/screenshots/blank-light.png">
+</picture>
+
+#### `build`
+
+```bash
+fdstoolkit build <manifest> -o <out> [--force]
+```
+
+A disk built from a JSON manifest naming the disk fields and the files to place.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/build-dark.png">
+<img alt="The build command on the local web page" src="assets/screenshots/build-light.png">
+</picture>
+
+#### `card`
+
+```bash
+fdstoolkit card -o <out> [--sides 1|2] [--firmware <variant>] [--force]
+```
+
+A blank an FDSKey card accepts.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/card-dark.png">
+<img alt="The card command on the local web page" src="assets/screenshots/card-light.png">
+</picture>
+
+### Identify
+
+No Nintendo master image exists. Disks were sold blank and written at a kiosk that stamped each one, so two copies of a game differ in bytes. The closest thing to a master is what every surviving dump agrees on once that stamp is set aside.
 
 #### `identify`
 
@@ -467,19 +548,6 @@ The matching DAT entry and which digest matched. With `--reference`, a miss repo
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/identify-dark.png">
 <img alt="The identify command on the local web page" src="assets/screenshots/identify-light.png">
-</picture>
-
-#### `dat-cache`
-
-```bash
-fdstoolkit dat-cache [--clear]
-```
-
-Show or clear the parsed-DAT cache.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dat-cache-dark.png">
-<img alt="The dat-cache command on the local web page" src="assets/screenshots/dat-cache-light.png">
 </picture>
 
 #### `bios`
@@ -495,184 +563,17 @@ BIOS revision and which emulators accept the file. `--extract` pulls the 8 KB im
 <img alt="The bios command on the local web page" src="assets/screenshots/bios-light.png">
 </picture>
 
-#### `lint`
+#### `canon`
 
 ```bash
-fdstoolkit lint <image> [--json]
+fdstoolkit canon <image> --profile <name> [-o <out>] [--force]
 ```
 
-Whether FDSKey will load the image, before it reaches the card.
+Print the canonical digest, and with `-o` write the canonical image.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/lint-dark.png">
-<img alt="The lint command on the local web page" src="assets/screenshots/lint-light.png">
-</picture>
-
-### Quality measurement
-
-A checksum answers one bit about a 65,500-byte side. These answer more.
-
-#### `reads`
-
-```bash
-fdstoolkit reads <images>... [--json]
-```
-
-Compares repeated dumps of one physical disk block by block. Reports stability, which blocks move, and the direction of the bit flips. Magnetic decay loses transitions, so ones fall to zeros; the report names that as `loss`, the opposite as `gain`, and both as `mixed`.
-
-```bash
-fdstoolkit reads pass1.fds pass2.fds pass3.fds
-```
-
-```
-passes        3
-stability     99.88%
-decay         loss
-bits lost     14
-bits gained   0
-```
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reads-dark.png">
-<img alt="The reads command on the local web page" src="assets/screenshots/reads-light.png">
-</picture>
-
-#### `calibrate`
-
-```bash
-fdstoolkit calibrate <reference> --read <r>... [--json]
-```
-
-The drive's own error rate, measured against a disk you trust, so the drive is not blamed for the disk or the reverse. Verdict is `good`, `marginal` or `faulty`.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
-<img alt="The calibrate command on the local web page" src="assets/screenshots/calibrate-light.png">
-</picture>
-
-#### `grade`
-
-```bash
-fdstoolkit grade <image> [--read <r>...] [--map] [--json]
-```
-
-A grade with the measurement behind it. `--read` folds in repeated dumps, `--map` prints the per-block confidence and the basis for each.
-
-```bash
-fdstoolkit grade disk.fds --read pass2.fds
-```
-
-```
-clean, confidence 0.97
-  ok   errors 0 within 0
-  ok   confidence 0.97 within 0.6
-  ok   read stability 1 within 1
-```
-
-Confidence starts from the checksum state and is adjusted by read agreement. A container that stores no checksums is treated as unproven rather than suspect, which is why a headerless `.fds` does not grade as unstable.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/grade-dark.png">
-<img alt="The grade command on the local web page" src="assets/screenshots/grade-light.png">
-</picture>
-
-#### `integrity`
-
-```bash
-fdstoolkit integrity <image> [--original-crcs] [--json]
-```
-
-Finds images that pass every checksum and are still wrong: a file body that is almost entirely undocumented opcodes, a body whose length disagrees with its header, and, with `--original-crcs`, a dump whose stored checksums all recompute exactly when they should not.
-
-The opcode threshold is calibrated against 10,105 real program files, whose median is 36% undocumented opcodes because these files routinely carry graphics and tables. Only a file that is almost entirely non-code is reported. Names like `SAVEDATA` and `JMP-TBL.` surface that way and are working as intended.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/integrity-dark.png">
-<img alt="The integrity command on the local web page" src="assets/screenshots/integrity-light.png">
-</picture>
-
-### Drive calibration
-
-Everything here is measured against the bit rate, never a rotation speed. The RAM adapter expects 96.4 kbit/s and tolerates ten percent, and that is the only figure the hardware enforces. Published rotation speeds for this mechanism disagree by a factor of two and carry no tolerance.
-
-#### `classes`
-
-```bash
-fdstoolkit classes <capture> [--json]
-```
-
-Reads a `raw03` capture kept by `dump --raw`. Reports the distribution across the three lengths and the count of pulses that fell outside all of them.
-
-Gap runs are excluded before measuring, because a gap is a long run of short pulses and leaving it in makes the distribution a measure of how full the disk is rather than of how the drive reads. Over the remainder, 120 real sides give a median of 63.1, 27.9 and 9.0 percent, which is the reference used here. On a perfect drive those 120 sides spread from -5.4 to +3.0 percent, so the threshold sits at 6 percent and none of them trip it.
-
-Two limits worth knowing. A capture with fewer than 512 pulses outside the gaps is reported as sparse rather than judged. And the invalid-pulse count is the only figure here that is independent of what is on the disk, so it is the one to trust when the two disagree.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/classes-dark.png">
-<img alt="The classes command on the local web page" src="assets/screenshots/classes-light.png">
-</picture>
-
-#### `reading`
-
-```bash
-fdstoolkit reading <cycles> [--json]
-```
-
-Interprets the average CPU cycles between bytes that a disk-lister tool displays on the console. An FDSStick sends pulse classes rather than timing, so this is the one speed measurement the toolkit can make.
-
-```bash
-fdstoolkit reading 152
-```
-
-```
-94.20 kbit/s, -2.28% of nominal, in spec
-the drive reads slow: raise the motor speed a little, then measure again
-```
-
-The conversion is exact: the 2A03 runs at 1.7897725 MHz over eight bits, so cycles map to a rate directly. More cycles between bytes means a slower disk.
-
-The advice says whether to raise or lower the motor speed, never which way to turn the trimmer, because no source this toolkit trusts states the direction. Turn a small amount, measure again, and reverse if the figure moved the wrong way.
-
-| Reading | Rate | Error |
-|---|---|---|
-| 146 | 98.07 kbit/s | +1.73% |
-| 148 | 96.74 kbit/s | +0.36% |
-| 149 | 96.10 kbit/s | -0.32% |
-| 152 | 94.20 kbit/s | -2.28% |
-
-Exact nominal is 148.53 cycles, so the integer display quantises at about 0.68% per count.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reading-dark.png">
-<img alt="The reading command on the local web page" src="assets/screenshots/reading-light.png">
-</picture>
-
-### Masters and reference sets
-
-No Nintendo master image exists. Disks were sold blank and written at a kiosk that stamped each one, so two copies of a game differ in bytes. The closest thing to a master is what every surviving dump agrees on once that stamp is set aside.
-
-#### `masters`
-
-```bash
-fdstoolkit masters <corpus> [--profile <name>] [--json]
-```
-
-One master per game by agreement across every dump in a directory. Reports the dissenters rather than hiding them.
-
-```bash
-fdstoolkit masters ~/dumps
-```
-
-```
-profile       release
-dumps         595
-games         242
-unanimous     210 of 242
-```
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/masters-dark.png">
-<img alt="The masters command on the local web page" src="assets/screenshots/masters-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/canon-dark.png">
+<img alt="The canon command on the local web page" src="assets/screenshots/canon-light.png">
 </picture>
 
 #### `reference-build`
@@ -714,20 +615,41 @@ A Logiqx DAT, so the results reach the tools the community already uses.
 <img alt="The dat-build command on the local web page" src="assets/screenshots/dat-build-light.png">
 </picture>
 
-#### `consensus`
+### Hardware
+
+#### `status`
 
 ```bash
-fdstoolkit consensus <images>... -o <out> [--map] [--force]
+fdstoolkit status [--json]
 ```
 
-Merge several dumps of one disk block by block by majority, and report every disagreement. `--map` prints per-block agreement.
+Whether an FDSStick is attached, what it reports about itself, and whether it opens, using the same checks as `doctor` and nothing else. It also says what the stick cannot tell you: nothing about the disk itself.
+
+```
+hardware support  hidapi is installed
+fdsstick          none connected at 16D0:0AAA. Connect the FDSStick over USB before dumping or writing [warning]
+the stick reports nothing about the disk itself: not whether one is inserted, whether it is write protected, or whether the battery holds
+```
+
+Exits 0 only when every check passes.
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/consensus-dark.png">
-<img alt="The consensus command on the local web page" src="assets/screenshots/consensus-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/status-dark.png">
+<img alt="The status command on the local web page" src="assets/screenshots/status-light.png">
 </picture>
 
-### Hardware
+#### `doctor`
+
+```bash
+fdstoolkit doctor [--clear-cache] [--json]
+```
+
+Version, Python, platform, whether hardware support is installed, which devices are attached and whether they open, and the state of the DAT cache. Run this first when something behaves unexpectedly. `--clear-cache` removes every cached DAT catalogue before the checks run.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/doctor-dark.png">
+<img alt="The doctor command on the local web page" src="assets/screenshots/doctor-light.png">
+</picture>
 
 #### `dump`
 
@@ -853,6 +775,64 @@ Exit status is 0 only when every pattern held and the finish verified. Like `wri
 <img alt="The surface command on the local web page" src="assets/screenshots/surface-light.png">
 </picture>
 
+#### `calibrate`
+
+```bash
+fdstoolkit calibrate [--cycles <n>] [--capture <file>] [--json]
+```
+
+Checks the drive in the two ways this toolkit can measure it, either or both at once. It passes only when every measurement given passes: the speed inside the fine band, and the pulse classes healthy.
+
+Everything here is measured against the bit rate, never a rotation speed. The RAM adapter expects 96.4 kbit/s and tolerates ten percent, and that is the only figure the hardware enforces. Published rotation speeds for this mechanism disagree by a factor of two and carry no tolerance.
+
+`--cycles` takes the average CPU cycles between bytes that a disk-lister tool displays on the console. An FDSStick sends pulse classes rather than timing, so this is the one speed measurement the toolkit can make.
+
+```bash
+fdstoolkit calibrate --cycles 152
+```
+
+```
+speed    94.20 kbit/s, -2.28% of nominal, in spec
+         the drive reads slow: raise the motor speed a little, then measure again
+```
+
+The conversion is exact: the 2A03 runs at 1.7897725 MHz over eight bits, so cycles map to a rate directly. More cycles between bytes means a slower disk.
+
+The advice says whether to raise or lower the motor speed, never which way to turn the trimmer, because no source this toolkit trusts states the direction. Turn a small amount, measure again, and reverse if the figure moved the wrong way.
+
+| Reading | Rate | Error |
+|---|---|---|
+| 146 | 98.07 kbit/s | +1.73% |
+| 148 | 96.74 kbit/s | +0.36% |
+| 149 | 96.10 kbit/s | -0.32% |
+| 152 | 94.20 kbit/s | -2.28% |
+
+Exact nominal is 148.53 cycles, so the integer display quantises at about 0.68% per count.
+
+`--capture` takes a `raw03` capture kept by `dump --raw`, and reports the distribution across the three pulse lengths and the count of pulses that fell outside all of them.
+
+Gap runs are excluded before measuring, because a gap is a long run of short pulses and leaving it in makes the distribution a measure of how full the disk is rather than of how the drive reads. Over the remainder, 120 real sides give a median of 63.1, 27.9 and 9.0 percent, which is the reference used here. On a perfect drive those 120 sides spread from -5.4 to +3.0 percent, so the threshold sits at 6 percent and none of them trip it.
+
+Two limits worth knowing. A capture with fewer than 512 pulses outside the gaps is reported as sparse rather than judged. And the invalid-pulse count is the only figure here that is independent of what is on the disk, so it is the one to trust when the two disagree.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
+<img alt="The calibrate command on the local web page" src="assets/screenshots/calibrate-light.png">
+</picture>
+
+#### `health`
+
+```bash
+fdstoolkit health <reference> --read <r>... [--json]
+```
+
+The drive's own error rate, measured against a disk you trust, so the drive is not blamed for the disk or the reverse. Verdict is `good`, `marginal` or `faulty`.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/health-dark.png">
+<img alt="The health command on the local web page" src="assets/screenshots/health-light.png">
+</picture>
+
 #### `web`
 
 ```bash
@@ -882,8 +862,8 @@ The rule the design turns on is that the web layer decides nothing. Every route 
 | `POST /api/hash` | `hash` |
 | `POST /api/grade` | `grade` |
 | `POST /api/reads` | `reads` |
-| `POST /api/reading` | `reading` |
-| `POST /api/classes` | `classes` |
+| `POST /api/calibrate` | `calibrate` |
+| `GET /api/status` | `status` |
 | `POST /api/blank` | `blank` |
 | `POST /api/canon` | `canon` |
 | `POST /api/convert` | `convert` |
@@ -914,8 +894,8 @@ If the two disagree, `consensus` merges them by majority and names every block t
 ### Calibrating a drive, coarse then fine
 
 1. Clean the head before anything else. Contamination reads as a media fault.
-2. Run a disk-lister tool on the console, read the cycles figure, and pass it to `reading`. Raise or lower the motor speed as it says, a little at a time, and repeat until it says to leave it alone.
-3. Dump a known-good disk with `--raw` and run `classes` on the kept captures. A glitching or shifted spread means the drive still separates the three pulse lengths badly.
+2. Run a disk-lister tool on the console, read the cycles figure, and pass it to `calibrate --cycles`. Raise or lower the motor speed as it says, a little at a time, and repeat until it says to leave it alone.
+3. Dump a known-good disk with `--raw` and run `calibrate --capture` on the kept captures. A glitching or shifted spread means the drive still separates the three pulse lengths badly.
 4. Confirm with a disk known to be hard to read. Community practice uses a specific side with 39 files; pass means all 39 with no checksum error.
 
 ### Deciding whether it is the drive or the disk
@@ -925,7 +905,7 @@ One disk cannot answer this. Read several and compare where they failed: a place
 ### Building a reference set
 
 ```bash
-fdstoolkit masters ~/dumps
+fdstoolkit consensus ~/dumps
 fdstoolkit reference-build ~/dumps -o fds-reference.json --set-version 2026-09-22
 fdstoolkit reference-verify mine.fds --set fds-reference.json
 ```
@@ -960,21 +940,21 @@ What each conversion costs:
 
 ## Exit codes and scripting
 
-`0` means nothing failed, `1` means something did. What counts as failure is command-specific and documented above: an unrepaired block for `splice`, a contested game for `masters`, a drive outside the fine band for `reading`, a mismatch for `reference-verify`.
+`0` means nothing failed, `1` means something did. What counts as failure is command-specific and documented above: an unrepaired block for `splice`, a contested game for `consensus` across a corpus, a drive outside the fine band for `calibrate`, a mismatch for `reference-verify`.
 
 Every reporting command takes `--json`, and the JSON is the same data the human output renders. Commands that write files refuse to overwrite without `--force`.
 
 ```bash
 fdstoolkit verify disk.fds --json | jq -r '.findings[] | "\(.code) \(.message)"'
-fdstoolkit masters ~/dumps --json | jq '.contested[].game'
-fdstoolkit reading 152 --json | jq -r '.advice'
+fdstoolkit consensus ~/dumps --json | jq '.contested[].game'
+fdstoolkit calibrate --cycles 152 --json | jq -r '.speed.advice'
 ```
 
 ## What this cannot do
 
 **No FDS flux capture exists.** Quick Disk is one continuous spiral with no index hole and no standard stepping, so KryoFlux and Greaseweazle cannot read this medium at all. This toolkit reads only what an FDSStick produces.
 
-**An FDSStick cannot measure drive speed.** The device rounds every pulse to one of three lengths in hardware and sends classes, not timing. Speed must come from a console-side reading via `reading`.
+**An FDSStick cannot measure drive speed.** The device rounds every pulse to one of three lengths in hardware and sends classes, not timing. Speed must come from a console-side reading via `calibrate --cycles`.
 
 **Head alignment is not measurable from pulse classes.** It needs signal amplitude, or error density compared across several disks.
 

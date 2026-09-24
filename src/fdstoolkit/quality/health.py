@@ -52,7 +52,7 @@ def _shape(disk: Disk) -> tuple[int, ...]:
     return (disk.side_count, *(len(side.blocks) for side in disk.sides))
 
 
-def calibrate(
+def measure_health(
     reference: Disk,
     reads: Sequence[Disk],
 ) -> DriveProfile:

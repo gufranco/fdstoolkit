@@ -3,6 +3,7 @@ import { DICTIONARIES, FALLBACK, initialLanguage, rememberLanguage } from './i18
 let state = {
   language: initialLanguage(),
   forms: [],
+  order: [],
   filter: '',
   family: '',
   command: '',
@@ -21,8 +22,14 @@ function label(key, fallback) {
   return t(key) || fallback;
 }
 
+export function orderFamilies(present, order) {
+  const known = order.filter((family) => present.includes(family));
+  const rest = present.filter((family) => !order.includes(family)).toSorted();
+  return [...known, ...rest];
+}
+
 function families() {
-  return [...new Set(state.forms.map((form) => form.family))].toSorted();
+  return orderFamilies([...new Set(state.forms.map((form) => form.family))], state.order);
 }
 
 function visible() {
@@ -286,6 +293,13 @@ export function renderResult(target, payload) {
     target.replaceChildren(banner('good', t('state.file')), download(payload));
     return;
   }
+  if (payload && isDownload(payload.file)) {
+    const { file, ...rest } = payload;
+    const shown = reported(rest);
+    const middle = Object.keys(shown).length ? [pairs(shown)] : [];
+    target.replaceChildren(verdict(payload), download(file), ...middle);
+    return;
+  }
   if (payload && Array.isArray(payload.files) && payload.files.length && payload.files.every(isDownload)) {
     target.replaceChildren(banner('good', t('state.files').replace('{n}', String(payload.files.length))));
     target.append(...payload.files.map(download));
@@ -416,17 +430,22 @@ export function problemFor(node, field) {
   return state.valueMissing ? t('bad.missing') : node.validationMessage;
 }
 
+function present(value) {
+  return value !== null && value !== undefined;
+}
+
 export function describeLimits(field) {
-  const low = field.minimum !== null && field.minimum !== undefined;
-  const high = field.maximum !== null && field.maximum !== undefined;
-  if (low && high) {
+  if (present(field.minimum) && present(field.maximum)) {
     return t('limit.range').replace('{min}', field.minimum).replace('{max}', field.maximum);
   }
-  if (low) {
-    return t('limit.min').replace('{min}', field.minimum);
-  }
-  if (high) {
-    return t('limit.max').replace('{max}', field.maximum);
+  const parts = [
+    present(field.minimum) ? t('limit.min').replace('{min}', field.minimum) : '',
+    present(field.above) ? t('limit.above').replace('{min}', field.above) : '',
+    present(field.maximum) ? t('limit.max').replace('{max}', field.maximum) : '',
+    present(field.below) ? t('limit.below').replace('{max}', field.below) : '',
+  ].filter(Boolean);
+  if (parts.length) {
+    return parts.join(' ');
   }
   if (field.min_length && field.min_length === field.max_length) {
     return t('limit.exact').replace('{n}', field.min_length);
@@ -763,7 +782,7 @@ export async function start() {
   applyLanguage();
   try {
     const catalogue = await call('/api/catalogue', 'GET');
-    update({ forms: catalogue.forms });
+    update({ forms: catalogue.forms, order: catalogue.families || [] });
     show(window.location.hash.replace('#', ''));
     render();
   } catch (error) {

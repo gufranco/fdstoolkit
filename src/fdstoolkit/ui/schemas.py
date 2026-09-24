@@ -226,6 +226,13 @@ class ClassesResult(BaseModel):
         )
 
 
+class CalibrationResult(BaseModel):
+    headline: str
+    speed: SpeedView | None = None
+    classes: ClassesResult | None = None
+    ok: bool = True
+
+
 class ImageSpec(BaseModel):
     data: str = Field(description="the image, base64 encoded")
     name: str = "disk.fds"
@@ -247,12 +254,11 @@ class ReadsSpec(BaseModel):
     images: list[str] = Field(default_factory=list)
 
 
-class CaptureSpec(BaseModel):
-    capture: str = Field(description="a raw03 capture kept by dump --raw, base64 encoded")
-
-
-class CyclesSpec(BaseModel):
-    cycles: float = Field(..., gt=0)
+class CalibrateSpec(BaseModel):
+    cycles: float | None = Field(None, gt=0)
+    capture: str | None = Field(
+        None, description="a raw03 capture kept by dump --raw, base64 encoded"
+    )
 
 
 class BlankSpec(BaseModel):
@@ -304,6 +310,7 @@ def _no_files() -> list[FileResult]:
 class Catalogue(BaseModel):
     version: str
     forms: list[dict[str, Any]] = Field(default_factory=_no_rows)
+    families: list[str] = Field(default_factory=list)
     profiles: list[ProfileView]
     export_targets: list[str]
     commands: list[str]
@@ -369,11 +376,7 @@ class SpliceSpec(ImageSpec):
     donors: list[str] = Field(default_factory=list)
 
 
-class ConsensusSpec(ImagesSpec):
-    pass
-
-
-class CalibrateSpec(ImageSpec):
+class HealthSpec(ImageSpec):
     reads: list[str] = Field(default_factory=list)
 
 
@@ -404,6 +407,10 @@ class CorpusSpec(BaseModel):
     images: list[str] = Field(default_factory=list)
     names: list[str] = Field(default_factory=list)
     profile: str = "release"
+
+
+class ConsensusSpec(CorpusSpec):
+    across: str = "disk"
 
 
 class ReferenceBuildSpec(CorpusSpec):
@@ -459,6 +466,13 @@ class DiffResult(BaseModel):
     blocks: list[dict[str, Any]] = Field(default_factory=_no_rows)
     differences: list[dict[str, Any]] = Field(default_factory=_no_rows)
     file_changes: list[dict[str, Any]] = Field(default_factory=_no_rows)
+    ok: bool = True
+
+
+class ReportedFile(BaseModel):
+    headline: str
+    file: FileResult
+    rows: list[dict[str, Any]] = Field(default_factory=_no_rows)
     ok: bool = True
 
 

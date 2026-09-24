@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
 from fdstoolkit.build.targets import TARGETS
+from fdstoolkit.cli.common import Family
 from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.quality.surface import Finish
@@ -35,11 +36,14 @@ FILE_FIELDS: Final = frozenset(
     }
 )
 
+UNGROUPED: Final = "other"
+FAMILY_ORDER: Final = tuple(family.value.lower() for family in Family)
 FILE_LIST_FIELDS: Final = frozenset({"images", "reads", "donors"})
 
 CHOICES: Final[dict[str, tuple[str, ...]]] = {
     "profile": tuple(sorted(PROFILES)),
     "save_as": ("ips", "ups", "image"),
+    "across": ("disk", "corpus"),
     "finish": tuple(str(item) for item in Finish),
     "kind": ("program", "character", "nametable"),
     "target": tuple(TARGETS),
@@ -78,6 +82,8 @@ class FormField(BaseModel):
     options: list[str] = []
     minimum: float | None = None
     maximum: float | None = None
+    above: float | None = None
+    below: float | None = None
     step: float | None = None
     min_length: int | None = None
     max_length: int | None = None
@@ -103,11 +109,13 @@ def opens_a_drive(callback: Callable[..., object]) -> bool:
 class Bounds(BaseModel):
     minimum: float | None = None
     maximum: float | None = None
+    above: float | None = None
+    below: float | None = None
     min_length: int | None = None
     max_length: int | None = None
 
 
-NUMERIC_RULES: Final = (("ge", "minimum"), ("gt", "minimum"), ("le", "maximum"), ("lt", "maximum"))
+NUMERIC_RULES: Final = (("ge", "minimum"), ("gt", "above"), ("le", "maximum"), ("lt", "below"))
 
 LENGTH_RULES: Final = (("min_length", "min_length"), ("max_length", "max_length"))
 
@@ -203,8 +211,7 @@ def _described() -> dict[str, tuple[str, str, bool]]:
         callback = cast("Callable[..., object]", registered.callback)
         name = registered.name or callback.__name__.replace("_", "-")
         spoken = registered.help or callback.__doc__ or ""
-        module = callback.__module__.rsplit(".", maxsplit=1)[-1]
-        family = module.removesuffix("_cmds").removesuffix("_cli")
+        family = str(registered.rich_help_panel or UNGROUPED).lower()
         found[name] = (family, " ".join(spoken.split()), opens_a_drive(callback))
     return found
 
@@ -215,7 +222,7 @@ def form_for(command: str) -> CommandForm:
     route = ROUTE_FOR_COMMAND[command]
     endpoint = _endpoints().get(route)
     model = model_for(endpoint) if endpoint is not None else None
-    family, summary, hardware = _described().get(command, ("other", "", False))
+    family, summary, hardware = _described().get(command, (UNGROUPED, "", False))
     return CommandForm(
         command=command,
         route=route,

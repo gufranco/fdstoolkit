@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Final
+from typing import Annotated, Final, NoReturn
 
 import typer
 
-from fdstoolkit.cli.common import decode_image, fail, guard_output
+from fdstoolkit.cli.common import Family, decode_image, fail, guard_output
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.canon import profile_by_name
 from fdstoolkit.core.disk import Disk
@@ -13,6 +13,7 @@ from fdstoolkit.identify.datfile import build_dat
 from fdstoolkit.master.corpus import build_masters
 from fdstoolkit.master.reference import ReferenceSet, Verdict, reference_from
 from fdstoolkit.master.splice import splice
+from fdstoolkit.quality.consensus import build_consensus
 from fdstoolkit.report import as_json
 
 SUFFIXES: Final = (".fds", ".qd")
@@ -66,21 +67,90 @@ def splice_command(
     raise typer.Exit(code=0 if result.complete else 1)
 
 
-def masters(
-    corpus: Annotated[Path, typer.Argument(help="a directory of dumps")],
+def consensus(
+    paths: Annotated[
+        list[Path],
+        typer.Argument(help="dumps of one disk, or one directory holding a whole corpus"),
+    ],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "-o", "--output", help="where to write the merged disk, for dumps of one disk"
+        ),
+    ] = None,
     profile: Annotated[
-        str, typer.Option("--profile", help="the identity profile to agree on")
+        str, typer.Option("--profile", help="the identity profile a corpus is grouped by")
     ] = "release",
     *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    stability_map: Annotated[
+        bool, typer.Option("--map", help="print the per-block agreement, for dumps of one disk")
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
-    """Build one master per game by agreement across every dump in a corpus."""
+    """Agree across dumps: merge dumps of one disk block by block, or pick a master per game."""
+    missing = [path for path in paths if not path.exists()]
+    if missing:
+        message = f"not found: {', '.join(str(path) for path in missing)}"
+        raise fail(message)
+    if len(paths) == 1 and paths[0].is_dir():
+        if output is not None or stability_map:
+            message = "a corpus gives a report per game, so -o and --map do not apply to it"
+            raise fail(message)
+        _corpus_consensus(paths[0], profile=profile, json_output=json_output)
+    if output is None:
+        message = "merging dumps of one disk writes an image, so pass -o"
+        raise fail(message)
+    _disk_consensus(
+        paths, output, force=force, stability_map=stability_map, json_output=json_output
+    )
+
+
+def _disk_consensus(
+    paths: list[Path], output: Path, *, force: bool, stability_map: bool, json_output: bool
+) -> NoReturn:
+    guard_output(output, force=force)
+    try:
+        result = build_consensus([decode_image(path)[0] for path in paths])
+    except ValueError as error:
+        raise fail(str(error)) from error
+
+    data, _ = fds.encode(result.disk, headered=False)
+    output.write_bytes(data)
+    code = 0 if not result.disagreements else 1
+
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "output": str(output),
+                    "bytes": len(data),
+                    "disagreements": [list(item) for item in result.disagreements],
+                }
+            )
+        )
+        raise typer.Exit(code=code)
+
+    if stability_map:
+        for entry in result.stability:
+            typer.echo(
+                f"side {entry.side} block {entry.block:3d}  {entry.kind:<11} "
+                f"{entry.agreement:6.1%}  {entry.variants} variant(s)  {entry.verdict}"
+            )
+    for side_index, block_index in result.disagreements:
+        typer.echo(f"side {side_index} block {block_index}: the dumps disagree")
+    typer.echo(f"wrote {output} ({len(data)} bytes)")
+    raise typer.Exit(code=code)
+
+
+def _corpus_consensus(corpus: Path, *, profile: str, json_output: bool) -> NoReturn:
     try:
         chosen = profile_by_name(profile)
     except ValueError as error:
         raise fail(str(error)) from error
 
     report = build_masters(_collect(corpus), profile=chosen)
+    code = 0 if not report.contested else 1
 
     if json_output:
         typer.echo(
@@ -103,7 +173,7 @@ def masters(
                 }
             )
         )
-        raise typer.Exit(code=0 if not report.contested else 1)
+        raise typer.Exit(code=code)
 
     typer.echo(f"profile       {chosen.name}")
     typer.echo(f"dumps         {report.dumps}")
@@ -114,7 +184,7 @@ def masters(
             f"{group.key.label}: {group.variants} variants, "
             f"{group.agreement:.0%} agree, dissenting {', '.join(group.dissenters)}"
         )
-    raise typer.Exit(code=0 if not report.contested else 1)
+    raise typer.Exit(code=code)
 
 
 def reference_build(
@@ -209,8 +279,8 @@ def dat_build(
 
 
 def register(app: typer.Typer) -> None:
-    app.command(name="splice")(splice_command)
-    app.command()(masters)
-    app.command(name="reference-build")(reference_build)
-    app.command(name="reference-verify")(reference_verify)
-    app.command(name="dat-build")(dat_build)
+    app.command(name="splice", rich_help_panel=Family.REPAIR)(splice_command)
+    app.command(rich_help_panel=Family.REPAIR)(consensus)
+    app.command(name="reference-build", rich_help_panel=Family.IDENTIFY)(reference_build)
+    app.command(name="reference-verify", rich_help_panel=Family.IDENTIFY)(reference_verify)
+    app.command(name="dat-build", rich_help_panel=Family.IDENTIFY)(dat_build)

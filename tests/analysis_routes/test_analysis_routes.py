@@ -20,14 +20,14 @@ def client_fixture() -> TestClient:
     return TestClient(create_app())
 
 
-def test_calibrate_measures_the_drive_against_a_known_disk(client: TestClient) -> None:
-    body = client.post("/api/calibrate", json={"data": ONE, "reads": [ONE]}).json()
+def test_health_measures_the_drive_against_a_known_disk(client: TestClient) -> None:
+    body = client.post("/api/health", json={"data": ONE, "reads": [ONE]}).json()
 
     assert body["rows"]
 
 
-def test_calibrate_needs_a_read_to_compare(client: TestClient) -> None:
-    answer = client.post("/api/calibrate", json={"data": ONE, "reads": []})
+def test_health_needs_a_read_to_compare(client: TestClient) -> None:
+    answer = client.post("/api/health", json={"data": ONE, "reads": []})
 
     assert answer.status_code == UNPROCESSABLE
 
@@ -50,29 +50,8 @@ def test_splice_repairs_from_a_donor(client: TestClient) -> None:
     assert body["size"] == len(ONE_SIDE)
 
 
-def test_consensus_merges_several_dumps(client: TestClient) -> None:
-    body = client.post("/api/consensus", json={"images": [ONE, ONE]}).json()
-
-    assert body["size"] == len(ONE_SIDE)
-
-
 def test_consensus_needs_a_dump(client: TestClient) -> None:
     answer = client.post("/api/consensus", json={"images": []})
-
-    assert answer.status_code == UNPROCESSABLE
-
-
-def test_masters_builds_one_master_per_game(client: TestClient) -> None:
-    body = client.post(
-        "/api/masters",
-        json={"images": [ONE, ONE], "names": ["a.fds", "b.fds"]},
-    ).json()
-
-    assert body["rows"]
-
-
-def test_masters_needs_a_corpus(client: TestClient) -> None:
-    answer = client.post("/api/masters", json={"images": []})
 
     assert answer.status_code == UNPROCESSABLE
 
@@ -135,7 +114,45 @@ def test_bios_identifies_a_firmware_image(client: TestClient) -> None:
     assert body["rows"]
 
 
-def test_the_dat_cache_reports_what_it_holds(client: TestClient) -> None:
-    body = client.get("/api/dat-cache").json()
+def test_consensus_of_one_disk_returns_the_merge_and_its_verdict(client: TestClient) -> None:
+    body = client.post("/api/consensus", json={"images": [ONE, ONE]}).json()
 
-    assert isinstance(body["rows"], list)
+    assert body["file"]["size"] == len(ONE_SIDE)
+    assert body["headline"] == "every dump agrees on every block"
+    assert body["rows"] == []
+    assert body["ok"]
+
+
+def test_consensus_of_one_disk_names_the_blocks_that_disagree(client: TestClient) -> None:
+    other = bytearray(ONE_SIDE)
+    other[0x20] ^= 0xFF
+    changed = base64.b64encode(bytes(other)).decode("ascii")
+
+    body = client.post("/api/consensus", json={"images": [ONE, changed]}).json()
+
+    assert body["rows"]
+    assert "disagree" in body["headline"]
+    assert not body["ok"]
+
+
+def test_consensus_across_a_corpus_picks_one_master_per_game(client: TestClient) -> None:
+    body = client.post(
+        "/api/consensus",
+        json={"images": [ONE, ONE], "names": ["a.fds", "b.fds"], "across": "corpus"},
+    ).json()
+
+    assert body["rows"]
+    assert body["headline"] == "1 of 1 game(s) unanimous"
+
+
+def test_consensus_across_an_empty_corpus_is_refused(client: TestClient) -> None:
+    answer = client.post("/api/consensus", json={"images": [], "across": "corpus"})
+
+    assert answer.status_code == UNPROCESSABLE
+
+
+def test_consensus_across_something_else_is_refused(client: TestClient) -> None:
+    answer = client.post("/api/consensus", json={"images": [ONE], "across": "galaxy"})
+
+    assert answer.status_code == BAD_REQUEST
+    assert "disk or corpus" in answer.json()["detail"]

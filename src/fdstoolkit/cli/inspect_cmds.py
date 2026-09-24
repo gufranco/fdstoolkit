@@ -7,6 +7,7 @@ import typer
 
 from fdstoolkit.cli.common import (
     Container,
+    Family,
     decode_image,
     exit_code,
     fail,
@@ -19,6 +20,7 @@ from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import worst_severity
 from fdstoolkit.doctor import CheckStatus, diagnose
 from fdstoolkit.fdskey.lint import lint_card_image
+from fdstoolkit.identify.cache import DatCache
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.identify.provenance import provenance_of
 from fdstoolkit.quality.layout import layout_of
@@ -332,9 +334,15 @@ def lint(
 
 def doctor(
     *,
+    clear_cache: Annotated[
+        bool, typer.Option("--clear-cache", help="remove every cached DAT catalogue first")
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Check the installation: version, Python, hardware support and caches."""
+    if clear_cache:
+        cache = DatCache()
+        typer.echo(f"removed {cache.clear()} cached catalogue(s) from {cache.root}")
     report = diagnose()
     if json_output:
         typer.echo(
@@ -356,12 +364,12 @@ def doctor(
 
 
 def register(app: typer.Typer) -> None:
-    app.command()(info)
-    app.command()(ls)
-    app.command()(verify)
-    app.command(name="hash")(hash_command)
-    app.command()(provenance)
-    app.command()(layout)
-    app.command()(boot)
-    app.command()(lint)
-    app.command()(doctor)
+    app.command(rich_help_panel=Family.INSPECT)(info)
+    app.command(rich_help_panel=Family.INSPECT)(ls)
+    app.command(rich_help_panel=Family.CHECK)(verify)
+    app.command(name="hash", rich_help_panel=Family.INSPECT)(hash_command)
+    app.command(rich_help_panel=Family.INSPECT)(provenance)
+    app.command(rich_help_panel=Family.INSPECT)(layout)
+    app.command(rich_help_panel=Family.INSPECT)(boot)
+    app.command(rich_help_panel=Family.CHECK)(lint)
+    app.command(rich_help_panel=Family.HARDWARE)(doctor)

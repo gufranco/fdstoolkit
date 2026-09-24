@@ -7,7 +7,7 @@ from fdstoolkit.ui.app import ROUTE_FOR_COMMAND, create_app
 from fdstoolkit.ui.forms import FIELD_KINDS, form_for, forms, model_for
 from fdstoolkit.ui.schemas import ImageSpec
 
-GET_ONLY = {"doctor", "dat-cache"}
+GET_ONLY = {"doctor", "status"}
 
 
 @pytest.fixture(name="client")
@@ -123,3 +123,10 @@ def test_a_handler_with_a_plain_parameter_skips_it_and_finds_the_model() -> None
         return ""
 
     assert model_for(handler) is ImageSpec
+
+
+def test_an_exclusive_lower_bound_is_not_offered_as_an_inclusive_one() -> None:
+    cycles = next(field for field in form_for("calibrate").fields if field.name == "cycles")
+
+    assert cycles.above == 0
+    assert cycles.minimum is None

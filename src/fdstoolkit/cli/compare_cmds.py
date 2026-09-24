@@ -6,6 +6,7 @@ from typing import Annotated
 import typer
 
 from fdstoolkit.cli.common import (
+    Family,
     decode_image,
     fail,
 )
@@ -149,5 +150,5 @@ def saves(
 
 
 def register(app: typer.Typer) -> None:
-    app.command(name="diff")(diff_command)
-    app.command()(saves)
+    app.command(name="diff", rich_help_panel=Family.CHECK)(diff_command)
+    app.command(rich_help_panel=Family.REPAIR)(saves)

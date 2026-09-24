@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from fdstoolkit.cli.common import Family
 from fdstoolkit.cli.main import app
 
 READMES = ("README.md", "README.ja.md")
@@ -128,3 +129,29 @@ def test_the_formula_description_meets_the_homebrew_rules() -> None:
     assert not text.endswith(".")
     assert not text.lower().startswith(("a ", "an ", "the "))
     assert len(text) <= HOMEBREW_DESC_LIMIT
+
+
+def reference_headings(name: str, start: str) -> list[str]:
+    lines = Path(name).read_text(encoding="utf-8").splitlines()
+    begin = lines.index(start)
+    end = next(index for index in range(begin + 1, len(lines)) if lines[index].startswith("## "))
+    return [line[4:] for line in lines[begin:end] if line.startswith("### ")]
+
+
+def japanese_labels() -> dict[str, str]:
+    text = Path("src/fdstoolkit/ui/static/i18n.js").read_text(encoding="utf-8")
+    japanese = text[text.index("  ja: {") :]
+    return dict(re.findall(r"'family\.([a-z]+)': '([^']+)'", japanese))
+
+
+def test_the_command_reference_is_grouped_by_the_declared_families() -> None:
+    headings = reference_headings("README.md", "## Command reference")
+
+    assert headings == [family.value for family in Family]
+
+
+def test_the_japanese_command_reference_uses_the_page_labels() -> None:
+    headings = reference_headings("README.ja.md", "## コマンドリファレンス")
+    labels = japanese_labels()
+
+    assert headings == [labels[family.value.lower()] for family in Family]

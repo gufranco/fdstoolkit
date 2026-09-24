@@ -15,8 +15,8 @@ from fdstoolkit.identify.datfile import build_dat
 from fdstoolkit.identify.integrity import CodeReport
 from fdstoolkit.master.corpus import GameKey, GroupMaster, build_masters
 from fdstoolkit.master.reference import ReferenceSet, reference_from
-from fdstoolkit.quality.calibrate import DriveProfile
 from fdstoolkit.quality.confidence import ConfidenceReport
+from fdstoolkit.quality.health import DriveProfile
 from fdstoolkit.quality.reads import ReadStatistics
 
 runner = CliRunner()
@@ -121,7 +121,7 @@ def test_a_contested_corpus_prints_the_dissenters(tmp_path: Path) -> None:
     _write(root / "a.fds")
     _write(root / "b.fds", _disk(licensee=0x99))
 
-    result = runner.invoke(app, ["masters", str(root)])
+    result = runner.invoke(app, ["consensus", str(root)])
 
     assert "dissenting" in result.stdout
 
@@ -204,11 +204,11 @@ def test_grading_against_a_dump_of_another_shape_is_refused(tmp_path: Path) -> N
     assert "different shapes" in result.stdout
 
 
-def test_calibration_can_print_json(tmp_path: Path) -> None:
+def test_health_can_print_json(tmp_path: Path) -> None:
     reference = _write(tmp_path / "ref.fds")
     read = _write(tmp_path / "r.fds")
 
-    result = runner.invoke(app, ["calibrate", str(reference), "--read", str(read), "--json"])
+    result = runner.invoke(app, ["health", str(reference), "--read", str(read), "--json"])
 
     assert result.exit_code == 0
     assert '"verdict": "good"' in result.stdout

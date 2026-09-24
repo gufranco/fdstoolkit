@@ -7,6 +7,7 @@ import typer
 
 from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
 from fdstoolkit.cli.common import (
+    Family,
     TargetChoice,
     decode_image,
     fail,
@@ -109,19 +110,6 @@ def _print_identification(result: Identification, near: NearMatch | None) -> Non
         typer.echo("    more runs not shown")
 
 
-def dat_cache(
-    *,
-    clear: Annotated[bool, typer.Option("--clear", help="remove every cached catalogue")] = False,
-) -> None:
-    """Show or clear the parsed DAT cache."""
-    cache = DatCache()
-    if clear:
-        typer.echo(f"removed {cache.clear()} cached catalogue(s) from {cache.root}")
-        return
-    entries = list(cache.entries())
-    typer.echo(f"{cache.root}: {len(entries)} cached catalogue(s)")
-
-
 def bios(
     file: Annotated[Path, typer.Argument(help="a BIOS file, 8 KB or wrapped in a larger dump")],
     *,
@@ -220,7 +208,6 @@ def export(
 
 
 def register(app: typer.Typer) -> None:
-    app.command()(identify)
-    app.command(name="dat-cache")(dat_cache)
-    app.command()(bios)
-    app.command()(export)
+    app.command(rich_help_panel=Family.IDENTIFY)(identify)
+    app.command(rich_help_panel=Family.IDENTIFY)(bios)
+    app.command(rich_help_panel=Family.CONTAINER)(export)

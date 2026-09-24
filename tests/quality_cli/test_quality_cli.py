@@ -106,7 +106,7 @@ def test_a_drive_reading_the_reference_back_is_good(tmp_path: Path) -> None:
     reference = _write(tmp_path / "ref.fds")
     read = _write(tmp_path / "r1.fds")
 
-    result = runner.invoke(app, ["calibrate", str(reference), "--read", str(read)])
+    result = runner.invoke(app, ["health", str(reference), "--read", str(read)])
 
     assert result.exit_code == 0
     assert "good" in result.stdout
@@ -116,14 +116,14 @@ def test_a_drive_that_misreads_is_reported(tmp_path: Path) -> None:
     reference = _write(tmp_path / "ref.fds")
     read = _write(tmp_path / "r1.fds", tail=bytes([0xAA]) + bytes(40))
 
-    result = runner.invoke(app, ["calibrate", str(reference), "--read", str(read)])
+    result = runner.invoke(app, ["health", str(reference), "--read", str(read)])
 
     assert result.exit_code == 1
     assert "faulty" in result.stdout
 
 
-def test_calibration_needs_a_read(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["calibrate", str(_write(tmp_path / "ref.fds"))])
+def test_health_needs_a_read(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["health", str(_write(tmp_path / "ref.fds"))])
 
     assert result.exit_code == 1
     assert "at least one read" in result.stdout

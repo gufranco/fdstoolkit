@@ -43,7 +43,7 @@ a factor of two and carry no tolerance.
 
 - An FDSStick capture carries pulse classes, never timing, so no command
   measures speed from one. Speed comes only from the console through
-  `reading`, and the timing commands that once read other capture tools'
+  `calibrate --cycles`, and the timing commands that once read other capture tools'
   output are gone.
 - An FDSStick reports no drive state at all, so `DriveStatus` answers unknown.
   Unknown does not block a write; a state the drive reports as bad does. The

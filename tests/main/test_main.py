@@ -1613,26 +1613,6 @@ def test_identify_prints_every_differing_run(
     assert "more runs not shown" in result.stdout
 
 
-def test_dat_cache_reports_what_it_holds(image: Path, tmp_path: Path) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-    runner.invoke(app, ["identify", str(image), "--dat", str(dat)])
-
-    result = runner.invoke(app, ["dat-cache"])
-
-    assert result.exit_code == 0
-    assert "1 cached catalogue(s)" in result.stdout
-
-
-def test_dat_cache_can_be_cleared(image: Path, tmp_path: Path) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-    runner.invoke(app, ["identify", str(image), "--dat", str(dat)])
-
-    result = runner.invoke(app, ["dat-cache", "--clear"])
-
-    assert "removed 1 cached catalogue(s)" in result.stdout
-    assert "0 cached catalogue(s)" in runner.invoke(app, ["dat-cache"]).stdout
-
-
 def test_diff_explains_two_identical_images(image: Path) -> None:
     result = runner.invoke(app, ["diff", str(image), str(image), "--explain"])
 
@@ -2419,3 +2399,59 @@ def test_a_published_bind_warns_instead_of_claiming_privacy(
 
     assert "nothing leaves this machine" not in result.stdout
     assert "there is no password" in result.stdout
+
+
+def test_doctor_can_clear_the_dat_cache_first(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+
+    result = runner.invoke(app, ["doctor", "--clear-cache"])
+
+    assert "removed 0 cached catalogue(s)" in result.stdout
+
+
+def ready_checks() -> tuple[Check, ...]:
+    return (
+        Check("hardware support", CheckStatus.OK, "hidapi is installed"),
+        Check("fdsstick", CheckStatus.OK, "1 device(s) connected"),
+    )
+
+
+def absent_checks() -> tuple[Check, ...]:
+    return (
+        Check("hardware support", CheckStatus.OK, "hidapi is installed"),
+        Check("fdsstick", CheckStatus.WARNING, "none connected at 16D0:0AAA"),
+    )
+
+
+def test_status_reports_a_ready_stick_and_what_it_cannot_say(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hardware_cmds, "hardware_checks", ready_checks)
+
+    result = runner.invoke(app, ["status"])
+
+    assert result.exit_code == 0
+    assert "1 device(s) connected" in result.stdout
+    assert "reports nothing about the disk itself" in result.stdout
+
+
+def test_status_fails_and_marks_a_missing_stick(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hardware_cmds, "hardware_checks", absent_checks)
+
+    result = runner.invoke(app, ["status"])
+
+    assert result.exit_code == 1
+    assert "none connected at 16D0:0AAA [warning]" in result.stdout
+
+
+def test_status_can_print_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hardware_cmds, "hardware_checks", absent_checks)
+
+    result = runner.invoke(app, ["status", "--json"])
+
+    payload = json.loads(result.stdout)
+    assert result.exit_code == 1
+    assert payload["ready"] is False
+    assert [check["name"] for check in payload["checks"]] == ["hardware support", "fdsstick"]
