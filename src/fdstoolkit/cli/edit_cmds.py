@@ -17,7 +17,6 @@ from fdstoolkit.cli.common import (
     read_image,
 )
 from fdstoolkit.codecs import fds, qd
-from fdstoolkit.codecs.mgd1 import SideFile, join_side_files, split_into_side_files
 from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.edit.clean import clean_trailing_data
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
@@ -306,50 +305,6 @@ def normalise_saves_command(
     typer.echo(f"wrote {output} ({len(data)} bytes)")
 
 
-def split(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    directory: Annotated[Path, typer.Option("-d", "--directory", help="where to write the sides")],
-    *,
-    stem: Annotated[str, typer.Option("--stem", help="base name for the side files")] = "fc1234",
-    force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
-) -> None:
-    """Split an image into one file per side, the way a Game Doctor stores it."""
-    data, _ = read_image(image)
-    directory.mkdir(parents=True, exist_ok=True)
-
-    for entry in split_into_side_files(data, stem=stem):
-        target = directory / entry.name
-        if target.exists() and not force:
-            message = f"{target} exists, pass --force to overwrite"
-            raise fail(message)
-        target.write_bytes(entry.data)
-        typer.echo(f"{entry.name}  {len(entry.data)} bytes")
-
-
-def join(
-    files: Annotated[list[Path], typer.Argument(help="the side files, in any order")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the image")],
-    *,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Join per-side files back into one image."""
-    guard_output(output, force=force)
-    sides: list[SideFile] = []
-    for path in files:
-        if not path.is_file():
-            message = f"file not found: {path}"
-            raise fail(message)
-        sides.append(SideFile(name=path.name, data=path.read_bytes()))
-
-    try:
-        data = join_side_files(sides)
-    except ValueError as error:
-        raise fail(str(error)) from error
-
-    output.write_bytes(data)
-    typer.echo(f"wrote {output} ({len(data)} bytes)")
-
-
 def build(
     manifest: Annotated[Path, typer.Argument(help="a JSON manifest describing the disk")],
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the image")],
@@ -433,8 +388,6 @@ def register(app: typer.Typer) -> None:
     app.command(name="save-apply")(save_apply)
     app.command(name="save-extract")(save_extract)
     app.command(name="normalise-saves")(normalise_saves_command)
-    app.command()(split)
-    app.command()(join)
     app.command()(build)
     app.command()(card)
     app.command()(consensus)

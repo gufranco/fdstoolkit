@@ -313,7 +313,6 @@ class Catalogue(BaseModel):
 
 class ImagesSpec(BaseModel):
     images: list[str] = Field(default_factory=list)
-    names: list[str] = Field(default_factory=list)
 
 
 class StrictSpec(ImageSpec):
@@ -386,10 +385,6 @@ class IdentifySpec(ImageSpec):
 class BiosSpec(BaseModel):
     data: str
     extract: bool = False
-
-
-class SplitSpec(ImageSpec):
-    stem: str = "fc1234"
 
 
 class ExportSpec(ImageSpec):

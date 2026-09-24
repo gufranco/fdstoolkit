@@ -34,7 +34,6 @@ class TargetChoice(StrEnum):
     EVERDRIVE_N8_PRO = "everdrive-n8-pro"
     MESEN2 = "mesen2"
     FCEUX = "fceux"
-    ARES = "ares"
 
 
 KIND_FOR_CHOICE: Final[dict[KindChoice, FileKind]] = {

@@ -7,17 +7,12 @@ import typer
 
 from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
 from fdstoolkit.cli.common import (
-    Container,
     TargetChoice,
-    container_of,
     decode_image,
     fail,
     guard_output,
     read_image,
 )
-from fdstoolkit.codecs import fds, qd
-from fdstoolkit.codecs.ares import decode_side
-from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.identify.cache import DatCache
 from fdstoolkit.identify.dat import Catalogue, Identification, MatchKind, load_dat
 from fdstoolkit.identify.dat import identify as identify_image
@@ -224,36 +219,8 @@ def export(
         typer.echo(f"  {warning}")
 
 
-def import_ares(
-    files: Annotated[list[Path], typer.Argument(help="ares side files, in side order")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the image")],
-    *,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Rebuild an image from ares per-side files, including any save they carry."""
-    guard_output(output, force=force)
-    sides: list[Side] = []
-    for path in files:
-        if not path.is_file():
-            message = f"file not found: {path}"
-            raise fail(message)
-        try:
-            sides.append(decode_side(path.read_bytes()))
-        except ValueError as error:
-            raise fail(str(error)) from error
-
-    disk = Disk(sides=tuple(sides))
-    if container_of(output) is Container.FDS:
-        data, _ = fds.encode(disk, headered=False)
-    else:
-        data, _ = qd.encode(disk)
-    output.write_bytes(data)
-    typer.echo(f"wrote {output} ({len(sides)} side(s), {len(data)} bytes)")
-
-
 def register(app: typer.Typer) -> None:
     app.command()(identify)
     app.command(name="dat-cache")(dat_cache)
     app.command()(bios)
     app.command()(export)
-    app.command(name="import-ares")(import_ares)

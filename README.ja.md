@@ -288,48 +288,17 @@ FDSKey が受け付ける空のイメージ。
 <img alt="ローカル Web ページの card コマンド" src="assets/screenshots/card-light.png">
 </picture>
 
-#### `split` and `join`
-
-```bash
-fdstoolkit split <image> -d <dir> [--stem <s>] [--force]
-fdstoolkit join <files>... -o <out> [--force]
-```
-
-コピア形式の 1 面 1 ファイルへの分割と、その逆。`--stem` は面ファイルの基本名で、既定は `fc1234` です。`join` はファイルの順序を問いません。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/split-dark.png">
-<img alt="ローカル Web ページの split コマンド" src="assets/screenshots/split-light.png">
-</picture>
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/join-dark.png">
-<img alt="ローカル Web ページの join コマンド" src="assets/screenshots/join-light.png">
-</picture>
-
 #### `export`
 
 ```bash
 fdstoolkit export <image> --target <t> -d <dir> [--bios <file>] [--force]
 ```
 
-機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`、`ares`。`--bios` を付けると BIOS もその対象が探す場所へ配置します。
+機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`。いずれもヘッダなしの `.fds` を書き出します。`--bios` を付けると BIOS もその対象が探す場所へ配置します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
 <img alt="ローカル Web ページの export コマンド" src="assets/screenshots/export-light.png">
-</picture>
-
-#### `import-ares`
-
-```bash
-fdstoolkit import-ares <files>... -o <out> [--force]
-```
-
-ares の面別ファイルから、そこに含まれるセーブデータごとイメージを再構成します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/import-ares-dark.png">
-<img alt="ローカル Web ページの import-ares コマンド" src="assets/screenshots/import-ares-light.png">
 </picture>
 
 ### 編集と修復
@@ -934,8 +903,6 @@ fdstoolkit reference-verify mine.fds --set fds-reference.json
 | `.fds` fwNES ヘッダ付き | 16 + 面ごとに 65500 | なし | ヘッダが面数を保持します |
 | `.qd` | 65536 | あり | バーチャルコンソールの吸い出しと Quick Disk のダンプ |
 | FDSKey カードファイル | 65500 | なし | ファームウェアの制約内でヘッダなし |
-| コピアの面別ファイル | 面ごとに 1 つ | 場合による | 面が公称長を超えることがあります |
-| ares の面別ファイル | 73728 | あり | ギャップと同期マークを含みます |
 | パック済みパルスクラス、`raw03` | 可変 | あり | 1 パルスにつき 2 ビット、FDSStick が量子化済み |
 
 各変換で失われるもの。

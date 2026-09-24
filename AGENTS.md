@@ -108,7 +108,7 @@ behaviour.
 | Path | Holds |
 |---|---|
 | `core/` | The disk model, blocks, diagnostics, canonical identity |
-| `codecs/` | fds, qd, raw, ares, mgd1, foreign-image rejection |
+| `codecs/` | fds, qd, the raw03 pulse classes, foreign-image rejection |
 | `drive/` | The pulse-class reading and the console speed reading |
 | `quality/` | Reads, confidence, grading, calibration, the surface test |
 | `master/` | Corpus consensus, splicing, reference sets |

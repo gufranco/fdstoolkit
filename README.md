@@ -294,48 +294,17 @@ A blank an FDSKey card accepts.
 <img alt="The card command on the local web page" src="assets/screenshots/card-light.png">
 </picture>
 
-#### `split` and `join`
-
-```bash
-fdstoolkit split <image> -d <dir> [--stem <s>] [--force]
-fdstoolkit join <files>... -o <out> [--force]
-```
-
-One file per side in copier layout, and back. `--stem` sets the base name for the side files, defaulting to `fc1234`. `join` accepts the files in any order.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/split-dark.png">
-<img alt="The split command on the local web page" src="assets/screenshots/split-light.png">
-</picture>
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/join-dark.png">
-<img alt="The join command on the local web page" src="assets/screenshots/join-light.png">
-</picture>
-
 #### `export`
 
 ```bash
 fdstoolkit export <image> --target <t> -d <dir> [--bios <file>] [--force]
 ```
 
-The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`, `ares`. `--bios` also places the BIOS where that target looks for it.
+The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`. Each writes a headerless `.fds`. `--bios` also places the BIOS where that target looks for it.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
 <img alt="The export command on the local web page" src="assets/screenshots/export-light.png">
-</picture>
-
-#### `import-ares`
-
-```bash
-fdstoolkit import-ares <files>... -o <out> [--force]
-```
-
-An image rebuilt from ares per-side files, including any save they carry.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/import-ares-dark.png">
-<img alt="The import-ares command on the local web page" src="assets/screenshots/import-ares-light.png">
 </picture>
 
 ### Editing and repair
@@ -955,8 +924,6 @@ A side is a sequence of blocks:
 | `.fds` with fwNES header | 16 + 65500 per side | No | Header carries the side count |
 | `.qd` | 65536 | Yes | Virtual Console rips and Quick Disk dumps |
 | FDSKey card file | 65500 | No | Headerless within the firmware limits |
-| Copier per-side files | one per side | Depends | A side may exceed the nominal length |
-| ares side files | 73728 | Yes | Gaps and sync marks included |
 | Packed pulse classes, `raw03` | variable | Yes | Two bits per pulse, already quantised by the FDSStick |
 
 What each conversion costs:

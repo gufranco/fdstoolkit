@@ -7,6 +7,7 @@ import pytest
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
+from fdstoolkit.cli.common import TargetChoice
 from fdstoolkit.codecs.fds import SIDE_SIZE, decode
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
@@ -49,13 +50,6 @@ def test_the_nt_mini_gets_a_headerless_image(tmp_path: Path) -> None:
     assert len(image.read_bytes()) == 2 * SIDE_SIZE
 
 
-def test_ares_gets_one_file_per_side(tmp_path: Path) -> None:
-    written = export_for(game(), target="ares", directory=tmp_path, stem="Game")
-
-    assert sorted(path.name for path in written) == ["disk1.sideA", "disk1.sideB"]
-    assert all(path.parent == tmp_path / "Game" for path in written)
-
-
 def test_the_bios_goes_where_the_nt_mini_looks(tmp_path: Path, bios: bytes) -> None:
     export_for(game(), target="nt-mini", directory=tmp_path, stem="Game", bios=bios)
 
@@ -86,11 +80,6 @@ def test_a_bios_inside_a_larger_dump_is_extracted_first(tmp_path: Path, bios: by
 def test_an_unknown_bios_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no known BIOS"):
         export_for(game(), target="mister", directory=tmp_path, stem="Game", bios=bytes(0x2000))
-
-
-def test_a_target_with_no_bios_location_refuses_a_bios(tmp_path: Path, bios: bytes) -> None:
-    with pytest.raises(ValueError, match="does not take a BIOS"):
-        export_for(game(), target="ares", directory=tmp_path, stem="Game", bios=bios)
 
 
 def test_an_unknown_target_is_refused(tmp_path: Path) -> None:
@@ -129,4 +118,8 @@ def test_a_title_off_the_list_has_no_warning() -> None:
 
 
 def test_a_target_without_a_list_has_no_warning() -> None:
-    assert swap_warnings("Doremikko (Japan)", target="ares") == ()
+    assert swap_warnings("Doremikko (Japan)", target="fceux") == ()
+
+
+def test_the_command_line_offers_exactly_the_targets_the_exporter_knows() -> None:
+    assert [choice.value for choice in TargetChoice] == list(TARGETS)

@@ -1134,50 +1134,6 @@ def test_card_refuses_to_overwrite(tmp_path: Path) -> None:
     assert "--force" in result.stdout
 
 
-def test_split_then_join_round_trips(image: Path, tmp_path: Path) -> None:
-    sides = tmp_path / "sides"
-    rebuilt = tmp_path / "rebuilt.fds"
-
-    split_result = runner.invoke(app, ["split", str(image), "-d", str(sides), "--stem", "game"])
-    files = sorted(str(path) for path in sides.iterdir())
-    join_result = runner.invoke(app, ["join", *files, "-o", str(rebuilt)])
-
-    assert split_result.exit_code == 0
-    assert join_result.exit_code == 0
-    assert rebuilt.read_bytes() == image.read_bytes()
-
-
-def test_split_refuses_to_overwrite(image: Path, tmp_path: Path) -> None:
-    sides = tmp_path / "sides"
-    sides.mkdir()
-    (sides / "game.A").write_bytes(b"old")
-
-    result = runner.invoke(app, ["split", str(image), "-d", str(sides), "--stem", "game"])
-
-    assert result.exit_code == 1
-    assert "--force" in result.stdout
-
-
-def test_join_reports_a_missing_file(tmp_path: Path) -> None:
-    result = runner.invoke(
-        app,
-        ["join", str(tmp_path / "nope.A"), "-o", str(tmp_path / "out.fds")],
-    )
-
-    assert result.exit_code == 1
-    assert "not found" in result.stdout
-
-
-def test_join_reports_a_file_without_a_side_letter(tmp_path: Path) -> None:
-    odd = tmp_path / "game.zzz"
-    odd.write_bytes(bytes(SIDE_SIZE))
-
-    result = runner.invoke(app, ["join", str(odd), "-o", str(tmp_path / "out.fds")])
-
-    assert result.exit_code == 1
-    assert "side letter" in result.stdout
-
-
 def test_build_writes_a_disk_from_a_manifest(tmp_path: Path) -> None:
     payload = tmp_path / "main.prg"
     payload.write_bytes(bytes([0x11]) * 32)
@@ -2010,6 +1966,29 @@ def _game_with_a_file(tmp_path: Path, name: str = "Game") -> Path:
     return built
 
 
+def test_export_refuses_a_bios_it_does_not_recognise(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path)
+    bios_file = tmp_path / "bios.bin"
+    bios_file.write_bytes(bytes(0x2000))
+
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            str(source),
+            "--target",
+            "mister",
+            "-d",
+            str(tmp_path / "out"),
+            "--bios",
+            str(bios_file),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "no known BIOS" in result.stdout
+
+
 def test_export_writes_a_headerless_image_for_the_nt_mini(tmp_path: Path) -> None:
     source = _game_with_a_file(tmp_path)
     card = tmp_path / "card"
@@ -2074,81 +2053,6 @@ def test_export_reports_a_missing_bios(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "not found" in result.stdout
-
-
-def test_export_refuses_a_bios_for_ares(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    source = _game_with_a_file(tmp_path)
-    bios_file = tmp_path / "bios.bin"
-    bios_file.write_bytes(_known_bios(monkeypatch))
-
-    result = runner.invoke(
-        app,
-        [
-            "export",
-            str(source),
-            "--target",
-            "ares",
-            "-d",
-            str(tmp_path / "out"),
-            "--bios",
-            str(bios_file),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "does not take a BIOS" in result.stdout
-
-
-def test_ares_files_round_trip_through_import(tmp_path: Path) -> None:
-    source = _game_with_a_file(tmp_path)
-    out = tmp_path / "ares"
-    runner.invoke(app, ["export", str(source), "--target", "ares", "-d", str(out)])
-    rebuilt = tmp_path / "rebuilt.fds"
-
-    result = runner.invoke(
-        app,
-        [
-            "import-ares",
-            str(out / "Game" / "disk1.sideA"),
-            str(out / "Game" / "disk1.sideB"),
-            "-o",
-            str(rebuilt),
-        ],
-    )
-
-    assert result.exit_code == 0
-    assert rebuilt.read_bytes() == source.read_bytes()
-
-
-def test_import_ares_can_write_a_qd(tmp_path: Path) -> None:
-    source = _game_with_a_file(tmp_path)
-    out = tmp_path / "ares"
-    runner.invoke(app, ["export", str(source), "--target", "ares", "-d", str(out)])
-
-    result = runner.invoke(
-        app,
-        ["import-ares", str(out / "Game" / "disk1.sideA"), "-o", str(tmp_path / "one.qd")],
-    )
-
-    assert result.exit_code == 0
-
-
-def test_import_ares_reports_a_missing_file(tmp_path: Path) -> None:
-    result = runner.invoke(
-        app, ["import-ares", str(tmp_path / "nope"), "-o", str(tmp_path / "x.fds")]
-    )
-
-    assert result.exit_code == 1
-
-
-def test_import_ares_refuses_a_file_of_the_wrong_size(tmp_path: Path) -> None:
-    bad = tmp_path / "disk1.sideA"
-    bad.write_bytes(bytes(10))
-
-    result = runner.invoke(app, ["import-ares", str(bad), "-o", str(tmp_path / "x.fds")])
-
-    assert result.exit_code == 1
-    assert "73728" in result.stdout
 
 
 def test_a_sharp_mz_disk_is_refused_by_name(tmp_path: Path) -> None:

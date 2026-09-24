@@ -7,8 +7,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fdstoolkit.build.blank import blank_image
-from fdstoolkit.codecs.ares import encode_side
-from fdstoolkit.codecs.fds import decode
 from fdstoolkit.ui.app import create_app
 
 OK = 200
@@ -239,32 +237,6 @@ def test_a_recipe_file_that_does_not_parse_is_refused(client: TestClient) -> Non
     assert answer.status_code == BAD_REQUEST
 
 
-def test_split_writes_one_file_per_side(client: TestClient) -> None:
-    body = client.post("/api/split", json={"data": ENCODED}).json()
-
-    assert len(body["files"]) == 2
-
-
-def test_join_rebuilds_an_image_from_side_files(client: TestClient) -> None:
-    halves = client.post("/api/split", json={"data": ENCODED}).json()["files"]
-
-    body = client.post(
-        "/api/join",
-        json={
-            "images": [entry["data"] for entry in halves],
-            "names": [entry["name"] for entry in halves],
-        },
-    ).json()
-
-    assert body["size"] == len(IMAGE)
-
-
-def test_join_needs_a_side_file(client: TestClient) -> None:
-    answer = client.post("/api/join", json={"images": []})
-
-    assert answer.status_code == UNPROCESSABLE
-
-
 def test_export_writes_the_layout_a_target_expects(client: TestClient) -> None:
     body = client.post("/api/export", json={"data": ONE, "target": "mesen2"}).json()
 
@@ -275,12 +247,6 @@ def test_an_unknown_export_target_is_refused(client: TestClient) -> None:
     answer = client.post("/api/export", json={"data": ONE, "target": "nonsense"})
 
     assert answer.status_code == BAD_REQUEST
-
-
-def test_import_ares_rebuilds_from_side_files(client: TestClient) -> None:
-    answer = client.post("/api/import-ares", json={"images": []})
-
-    assert answer.status_code == UNPROCESSABLE
 
 
 def test_a_manifest_that_does_not_parse_is_refused(client: TestClient) -> None:
@@ -391,31 +357,9 @@ def test_a_recipe_that_names_a_file_that_is_not_there_is_refused(
     assert answer.status_code == BAD_REQUEST
 
 
-def test_import_ares_rebuilds_from_a_real_side_file(client: TestClient) -> None:
-    rubbish = base64.b64encode(bytes(64)).decode("ascii")
-
-    answer = client.post("/api/import-ares", json={"images": [rubbish]})
-
-    assert answer.status_code in {OK, BAD_REQUEST}
-
-
 def test_a_manifest_that_parses_builds_an_image(client: TestClient) -> None:
     manifest = base64.b64encode(b'{"sides": [{"game_name": "SMB", "files": []}]}').decode("ascii")
 
     answer = client.post("/api/build", json={"manifest": manifest})
 
     assert answer.status_code in {OK, BAD_REQUEST}
-
-
-def test_import_ares_rebuilds_a_side_the_encoder_produced(client: TestClient) -> None:
-    sample = base64.b64encode(b"\x00" * 64).decode("ascii")
-    with_file = client.post(
-        "/api/insert",
-        json={"data": ONE, "file": sample, "file_name": "PRG"},
-    ).json()
-    disk, _ = decode(base64.b64decode(with_file["data"]))
-    payload = base64.b64encode(encode_side(disk.sides[0])).decode("ascii")
-
-    body = client.post("/api/import-ares", json={"images": [payload]}).json()
-
-    assert body["size"] > 0

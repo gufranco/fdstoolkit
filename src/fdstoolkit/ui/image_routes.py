@@ -8,8 +8,6 @@ from fastapi import HTTPException
 
 from fdstoolkit.build.manifest import build_from_manifest, load_manifest
 from fdstoolkit.build.targets import export_for
-from fdstoolkit.codecs.ares import decode_side
-from fdstoolkit.codecs.mgd1 import SideFile, join_side_files, split_into_side_files
 from fdstoolkit.core.bios import predict_boot
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
@@ -45,7 +43,6 @@ from fdstoolkit.ui.schemas import (
     RowsResult,
     SaveExtractSpec,
     SaveSpec,
-    SplitSpec,
 )
 from fdstoolkit.ui.shared import (
     BAD_REQUEST,
@@ -250,23 +247,6 @@ def normalise(spec: RecipeSpec) -> FileResult:
     return _emit(updated, spec.name)
 
 
-def split(spec: SplitSpec) -> FilesResult:
-    _, data, _ = decode_payload(spec.data)
-    parts = split_into_side_files(data, stem=spec.stem)
-    return FilesResult(files=[named_file(item.name, item.data) for item in parts])
-
-
-def join(spec: ImagesSpec) -> FileResult:
-    if not spec.images:
-        refuse("joining needs at least one side file", status=UNPROCESSABLE)
-    names = spec.names or [f"side{index}" for index in range(len(spec.images))]
-    parts = [
-        SideFile(name=name, data=bytes_of(payload))
-        for name, payload in zip(names, spec.images, strict=False)
-    ]
-    return named_file("joined.fds", join_side_files(parts))
-
-
 def export(spec: ExportSpec) -> FilesResult:
     bios = bytes_of(spec.bios) if spec.bios else None
     with TemporaryDirectory(prefix="fdstoolkit-ui-") as directory:
@@ -284,16 +264,6 @@ def export(spec: ExportSpec) -> FilesResult:
         return FilesResult(
             files=[named_file(str(path.relative_to(root)), path.read_bytes()) for path in written]
         )
-
-
-def import_ares(spec: ImagesSpec) -> FileResult:
-    if not spec.images:
-        refuse("rebuilding needs at least one side file", status=UNPROCESSABLE)
-    try:
-        sides = [decode_side(bytes_of(entry)) for entry in spec.images]
-    except (ValueError, IndexError) as error:
-        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    return _emit(Disk(sides=tuple(sides)), "imported.fds")
 
 
 def build(spec: BuildSpec) -> FileResult:

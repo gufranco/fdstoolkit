@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.targets import TARGETS
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.qd import CrcMode
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, restore
@@ -74,14 +75,7 @@ ASSET_ROOT: Final = f"/assets/{ASSET_STAMP}"
 A_YEAR: Final = 31536000
 SIDE_SIZE: Final = fds.SIDE_SIZE
 MIN_READS: Final = 2
-EXPORT_TARGETS: Final = (
-    "nt-mini",
-    "mister",
-    "everdrive-n8-pro",
-    "mesen2",
-    "fceux",
-    "ares",
-)
+EXPORT_TARGETS: Final = tuple(TARGETS)
 
 ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "doctor": "/api/doctor",
@@ -100,10 +94,7 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "blank": "/api/blank",
     "build": "/api/build",
     "card": "/api/card",
-    "split": "/api/split",
-    "join": "/api/join",
     "export": "/api/export",
-    "import-ares": "/api/import-ares",
     "extract": "/api/extract",
     "insert": "/api/insert",
     "set": "/api/set",
@@ -302,10 +293,7 @@ def _register_image(app: FastAPI) -> None:
     app.add_api_route("/api/save-apply", image_routes.save_apply, methods=["POST"])
     app.add_api_route("/api/save-extract", image_routes.save_extract, methods=["POST"])
     app.add_api_route("/api/normalise-saves", image_routes.normalise, methods=["POST"])
-    app.add_api_route("/api/split", image_routes.split, methods=["POST"])
-    app.add_api_route("/api/join", image_routes.join, methods=["POST"])
     app.add_api_route("/api/export", image_routes.export, methods=["POST"])
-    app.add_api_route("/api/import-ares", image_routes.import_ares, methods=["POST"])
     app.add_api_route("/api/build", image_routes.build, methods=["POST"])
     app.add_api_route("/api/card", image_routes.card, methods=["POST"])
 
