@@ -17,10 +17,23 @@ WRITE_PAYLOAD: Final = 0xFF
 WRITE_REPORT_LENGTH: Final = 0x100
 RAW_SIDE_LIMIT: Final = 0x23F02
 HEADER_BYTES: Final = 2
-SEQUENCE_WRAP: Final = 0xFF
+SEQUENCE_MASK: Final = 0xFF
+FIRST_SEQUENCE: Final = 1
 MODE_READ: Final = 0x00
 MODE_WRITE: Final = 0x01
 SETTLED_PACKETS: Final = 400
+
+LEGACY_REPORTS: Final = (0x11, 0x12, 0x13, 0x14)
+
+OLDER_FIRMWARE_HINT: Final = (
+    "the device answered but sent no disk data. Firmware from 2015 numbers these "
+    f"reports {LEGACY_REPORTS} and takes no mode byte, which this driver does not "
+    "speak. Check the firmware version doctor reports"
+)
+
+
+def _after(sequence: int) -> int:
+    return (sequence + 1) & SEQUENCE_MASK
 
 
 class ReportId(IntEnum):
@@ -47,11 +60,16 @@ class FdsStick:
     def __init__(self, transport: HidTransport, *, assume_writable: bool = False) -> None:
         self._transport = transport
         self._captures: list[bytes] = []
+        self._resyncs: list[tuple[int, int]] = []
         self._assume_writable = assume_writable
 
     @property
     def captures(self) -> tuple[bytes, ...]:
         return tuple(self._captures)
+
+    @property
+    def resyncs(self) -> tuple[tuple[int, int], ...]:
+        return tuple(self._resyncs)
 
     def close(self) -> None:
         self._transport.close()
@@ -71,7 +89,8 @@ class FdsStick:
     def read_raw_side(self) -> bytes:
         self._start(MODE_READ)
         out = bytearray()
-        expected = 1
+        expected = FIRST_SEQUENCE
+        opening = True
 
         while len(out) < RAW_SIDE_LIMIT:
             packet = self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
@@ -81,10 +100,20 @@ class FdsStick:
 
             sequence = packet[1]
             payload = packet[HEADER_BYTES : HEADER_BYTES + CHUNK_PAYLOAD]
+            if not payload:
+                if not out:
+                    raise HardwareFaultError(OLDER_FIRMWARE_HINT, kind=FaultKind.MEDIA)
+                break
+
+            if opening and sequence != FIRST_SEQUENCE:
+                expected = _after(sequence)
+                opening = False
+                continue
+            opening = False
+
             if sequence != expected:
-                message = f"data was lost: expected packet {expected}, the device sent {sequence}"
-                raise HardwareFaultError(message, kind=FaultKind.MEDIA)
-            expected = 1 if sequence == SEQUENCE_WRAP else sequence + 1
+                self._resyncs.append((expected, sequence))
+            expected = _after(sequence)
 
             out += payload
             if len(payload) < CHUNK_PAYLOAD:

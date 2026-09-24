@@ -65,6 +65,15 @@ a factor of two and carry no tolerance.
 - How a physical write ends is unknown. The one set of notes taken from the
   official binary lists the write-to-adapter terminator and its acknowledgement
   as never traced, so the driver streams the side and stops.
+- The report map changed between firmware generations. A console app that opened
+  this same device in 2015 started a read with `0x11` and took data from `0x12`,
+  with separate `0x13` and `0x14` for writing and no mode byte anywhere. The two
+  tools tested against a unit in 2026 start with `0x10` plus a mode byte and read
+  from `0x11`. The whole map is shifted by one. This driver speaks the later one,
+  and a read that comes back empty says so rather than reporting a dead disk.
+- The sequence counter wraps with an add, so `0xFF` is followed by `0x00`. Mapping
+  it back to `1` aborts every side, because 255 chunks carry 64,770 bytes and a
+  gapped side is about 66,560.
 - Nothing in the hardware path has run against a device. Every driver test drives
   a recording stand-in, so it can prove which bytes we send and cannot prove the
   device accepts them.
