@@ -16,8 +16,10 @@ BAD_REQUEST = 400
 UNPROCESSABLE = 422
 IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
 ONE_SIDE = blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+RENAMED_IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="ZLD")
 ENCODED = base64.b64encode(IMAGE).decode("ascii")
 ONE = base64.b64encode(ONE_SIDE).decode("ascii")
+RENAMED = base64.b64encode(RENAMED_IMAGE).decode("ascii")
 
 
 @pytest.fixture(name="client")
@@ -29,6 +31,7 @@ def test_ls_lists_every_file(client: TestClient) -> None:
     body = client.post("/api/ls", json={"data": ENCODED}).json()
 
     assert isinstance(body["rows"], list)
+    assert body["headline"] == f"{len(body['rows'])} file(s) across 2 side(s)"
 
 
 def test_diff_reports_no_difference_between_one_image_and_itself(
@@ -36,8 +39,58 @@ def test_diff_reports_no_difference_between_one_image_and_itself(
 ) -> None:
     body = client.post("/api/diff", json={"left": ENCODED, "right": ENCODED}).json()
 
-    assert body["rows"] == []
+    assert body["blocks"] == []
+    assert body["headline"] == "identical"
     assert body["ok"]
+
+
+def test_diff_says_why_two_unlike_disks_cannot_be_compared_block_by_block(
+    client: TestClient,
+) -> None:
+    body = client.post("/api/diff", json={"left": ENCODED, "right": ONE}).json()
+
+    assert body["blocks"] == []
+    assert body["headline"] == "different disks: 2 side(s) against 1"
+    assert not body["ok"]
+
+
+def test_diff_counts_the_sides_when_not_asked_to_explain(client: TestClient) -> None:
+    body = client.post(
+        "/api/diff",
+        json={"left": ENCODED, "right": ONE, "explain": False},
+    ).json()
+
+    assert body["headline"] == "side count differs: 2 against 1"
+
+
+def test_diff_names_the_block_that_differs(client: TestClient) -> None:
+    body = client.post(
+        "/api/diff",
+        json={"left": ENCODED, "right": RENAMED, "explain": False},
+    ).json()
+
+    assert body["blocks"] == [{"side": 0, "block": 0}, {"side": 1, "block": 0}]
+    assert body["headline"] == "2 block(s) differ"
+
+
+def test_diff_names_the_field_that_differs_without_being_asked(
+    client: TestClient,
+) -> None:
+    body = client.post("/api/diff", json={"left": ENCODED, "right": RENAMED}).json()
+
+    assert [entry["field"] for entry in body["differences"]] == ["game_name", "game_name"]
+    assert [entry["side"] for entry in body["differences"]] == [0, 1]
+    assert body["same_software"] is False
+
+
+def test_diff_reports_nothing_extra_when_explaining_is_turned_off(client: TestClient) -> None:
+    body = client.post(
+        "/api/diff",
+        json={"left": ENCODED, "right": RENAMED, "explain": False},
+    ).json()
+
+    assert body["differences"] == []
+    assert body["file_changes"] == []
 
 
 def test_boot_predicts_what_the_console_does(client: TestClient) -> None:
@@ -64,10 +117,23 @@ def test_lint_checks_an_image_against_the_card(client: TestClient) -> None:
     assert isinstance(body["rows"], list)
 
 
+def test_lint_says_the_card_accepts_a_clean_image(client: TestClient) -> None:
+    body = client.post("/api/lint", json={"data": ONE, "name": "disk.fds"}).json()
+
+    assert body["headline"] == "the card accepts this image as it stands"
+    assert body["ok"]
+
+
 def test_saves_compares_dumps_of_one_release(client: TestClient) -> None:
     body = client.post("/api/saves", json={"images": [ENCODED, ENCODED]}).json()
 
     assert isinstance(body["rows"], list)
+
+
+def test_saves_says_so_when_every_dump_agrees(client: TestClient) -> None:
+    body = client.post("/api/saves", json={"images": [ENCODED, ENCODED]}).json()
+
+    assert body["headline"] == "no save candidate: every file agrees across the dumps"
 
 
 def test_saves_needs_at_least_one_dump(client: TestClient) -> None:
@@ -150,7 +216,7 @@ def test_a_save_that_does_not_apply_is_refused(client: TestClient) -> None:
 def test_save_extract_reports_the_difference(client: TestClient) -> None:
     body = client.post(
         "/api/save-extract",
-        json={"data": ONE, "played": ONE, "fmt": "ips"},
+        json={"data": ONE, "played": ONE, "save_as": "ips"},
     ).json()
 
     assert body["name"].endswith(".ips")
@@ -159,7 +225,7 @@ def test_save_extract_reports_the_difference(client: TestClient) -> None:
 def test_an_unknown_save_format_is_refused(client: TestClient) -> None:
     answer = client.post(
         "/api/save-extract",
-        json={"data": ONE, "played": ONE, "fmt": "nonsense"},
+        json={"data": ONE, "played": ONE, "save_as": "nonsense"},
     )
 
     assert answer.status_code == BAD_REQUEST

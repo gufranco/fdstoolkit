@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import inspect
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,7 +21,7 @@ from fdstoolkit.ui.app import (
     TOO_LARGE,
     create_app,
 )
-from fdstoolkit.ui.forms import forms
+from fdstoolkit.ui.forms import forms, opens_a_drive
 
 OK = 200
 BAD_REQUEST = 400
@@ -195,6 +196,19 @@ def test_a_blank_with_no_sides_is_refused(client: TestClient) -> None:
     assert answer.status_code == UNPROCESSABLE
 
 
+@pytest.mark.parametrize("sides", [3, -1, 2.0, "2", True, 1.5])
+def test_a_blank_takes_only_the_integer_one_or_two(client: TestClient, sides: object) -> None:
+    answer = client.post("/api/blank", json={"sides": sides})
+
+    assert answer.status_code == UNPROCESSABLE
+
+
+def test_a_two_side_blank_is_built(client: TestClient) -> None:
+    body = client.post("/api/blank", json={"sides": 2, "formatted": True}).json()
+
+    assert body["size"] == len(blank_image(sides=2, headered=False, formatted=True))
+
+
 def test_canon_writes_the_canonical_image(client: TestClient) -> None:
     body = client.post("/api/canon", json={"data": ENCODED, "profile": "release"}).json()
 
@@ -331,7 +345,15 @@ def test_only_the_commands_that_open_a_drive_are_marked() -> None:
     assert marked == {"dump", "write", "surface"}
 
 
-def test_every_marked_command_opens_a_drive_in_the_cli() -> None:
+def test_a_command_whose_source_is_unreadable_is_marked_rather_than_cleared() -> None:
+    def hidden() -> None:
+        """A command installed without its source beside it."""
+
+    with patch("fdstoolkit.ui.forms.inspect.getsource", side_effect=OSError):
+        assert opens_a_drive(hidden)
+
+
+def test_every_marked_commandopens_a_drive_in_the_cli() -> None:
     opens = {
         registered.name or registered.callback.__name__
         for registered in cli_app.registered_commands

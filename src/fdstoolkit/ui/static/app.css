@@ -7,6 +7,8 @@
   --accent-soft: #fdeaea;
   --good: #1f7a3d;
   --good-soft: #e9f7ee;
+  --warn: #6e4200;
+  --warn-soft: #fdf2dd;
   --muted: #62626d;
   --radius: 10px;
 }
@@ -21,6 +23,8 @@
     --accent-soft: #2a1618;
     --good: #6cd08c;
     --good-soft: #14251a;
+    --warn: #e0b055;
+    --warn-soft: #2a2114;
     --muted: #9a9aa6;
   }
 }
@@ -146,8 +150,6 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   list-style: none;
   margin: 12px 0 0;
   padding: 0;
-  max-height: 27rem;
-  overflow-y: auto;
 }
 
 .command-list button {
@@ -176,10 +178,7 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   color: var(--muted);
   font-size: 0.75rem;
   line-height: 1.35;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 
 .no-match {
@@ -289,10 +288,12 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   min-height: 42px;
 }
 
-.fields .offscreen {
+.fields input.offscreen {
   position: absolute;
+  left: 0;
   width: 1px;
   height: 1px;
+  min-height: 0;
   padding: 0;
   margin: -1px;
   overflow: hidden;
@@ -326,9 +327,8 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
 .file-name {
   color: var(--muted);
   font-size: 0.875rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .fields .offscreen:focus-visible + .file-box {
@@ -371,7 +371,6 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px;
-  overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 0.8125rem;
@@ -409,6 +408,12 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   color: var(--accent);
 }
 
+.banner.warn {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
 .banner.busy {
   background: var(--paper);
   color: var(--muted);
@@ -437,8 +442,7 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
 .pairs dd {
   margin: 0;
   min-width: 0;
-  overflow-x: auto;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .pairs .pairs {
@@ -447,9 +451,99 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   border-left: 2px solid var(--line);
 }
 
+.pairs dt.wide,
+.pairs dd.wide {
+  grid-column: 1 / -1;
+}
+
+.pairs dt.wide {
+  margin-top: 6px;
+}
+
+.changes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.change {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.change p {
+  margin: 0;
+}
+
+.change-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.change-note {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.chip-key {
+  color: var(--muted);
+}
+
+.chip-flag {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.chip-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.change-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+
+.side {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.side-key {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.side-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
 .grid {
   border-collapse: collapse;
   width: 100%;
+  table-layout: fixed;
   font-size: 0.8125rem;
 }
 
@@ -459,13 +553,13 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   padding: 5px 8px;
   text-align: left;
   vertical-align: top;
+  overflow-wrap: anywhere;
 }
 
 .grid th {
   background: var(--paper);
   color: var(--muted);
   font-weight: 600;
-  white-space: nowrap;
 }
 
 .raw {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { bytes, describeLimits, explain, isDownload, named, scalar, words } from
+import { bytes, describeLimits, explain, isDownload, named, scalar, typed, words } from
   '../../src/fdstoolkit/ui/static/app.js';
 
 describe('named', () => {
@@ -124,5 +124,28 @@ describe('describeLimits', () => {
 
   it('says nothing when the field is unbounded', () => {
     expect(describeLimits({})).toBe('');
+  });
+});
+
+
+describe('typed', () => {
+  it('sends a choice on a whole-number field as a number', () => {
+    expect(typed('choice', '2', true)).toBe(2);
+  });
+
+  it('keeps a choice on a text field as text', () => {
+    expect(typed('choice', 'release', false)).toBe('release');
+  });
+
+  it('sends a number field as a number', () => {
+    expect(typed('number', '3', false)).toBe(3);
+  });
+
+  it('keeps a text field as text', () => {
+    expect(typed('text', '12', false)).toBe('12');
+  });
+
+  it('leaves an empty value out of the request', () => {
+    expect(typed('choice', '', true)).toBeUndefined();
   });
 });

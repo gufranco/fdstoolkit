@@ -195,6 +195,19 @@ def test_blank_writes_the_reference_image(tmp_path: Path) -> None:
     assert out.stat().st_size == 16 + SIDE_SIZE
 
 
+@pytest.mark.parametrize("command", ["blank", "card", "dump", "surface"])
+@pytest.mark.parametrize("sides", ["0", "3", "-1", "1.5", "2.0", "two"])
+def test_a_side_count_other_than_one_or_two_is_refused(
+    command: str, sides: str, tmp_path: Path
+) -> None:
+    output = ["-o", str(tmp_path / "x.fds")] if command != "surface" else []
+
+    result = runner.invoke(app, [command, *output, "--sides", sides])
+
+    assert result.exit_code == 2
+    assert "--sides" in result.output
+
+
 def test_blank_can_write_a_formatted_disk(tmp_path: Path) -> None:
     out = tmp_path / "formatted.fds"
 

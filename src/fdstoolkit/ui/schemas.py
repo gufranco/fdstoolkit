@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Final, Self
+from typing import Annotated, Any, Final, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, Strict
 
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
@@ -21,8 +21,9 @@ MAX_RETRIES: Final = 20
 MAX_ADDRESS: Final = 0xFFFF
 MAX_NAME: Final = 120
 GAME_NAME_LENGTH: Final = 3
-MAX_SET_SIDES: Final = 8
 FILE_NAME_LENGTH: Final = 8
+
+SideCount = Annotated[int, Strict(), Field(ge=1, le=SIDES_PER_DISK)]
 
 
 class ProfileView(BaseModel):
@@ -364,7 +365,7 @@ class CyclesSpec(BaseModel):
 
 
 class BlankSpec(BaseModel):
-    sides: int = Field(1, ge=1, le=MAX_SET_SIDES)
+    sides: SideCount = 1
     formatted: bool = False
     headered: bool = False
     game_name: str = Field("   ", min_length=GAME_NAME_LENGTH, max_length=GAME_NAME_LENGTH)
@@ -431,7 +432,7 @@ class StrictSpec(ImageSpec):
 class DiffSpec(BaseModel):
     left: str
     right: str
-    explain: bool = False
+    explain: bool = True
 
 
 class SideSpec(ImageSpec):
@@ -468,7 +469,7 @@ class SaveSpec(ImageSpec):
 
 class SaveExtractSpec(ImageSpec):
     played: str
-    fmt: str = "ips"
+    save_as: str = "ips"
 
 
 class RecipeSpec(ImageSpec):
@@ -511,7 +512,7 @@ class ExportSpec(ImageSpec):
 
 
 class CardSpec(BaseModel):
-    sides: int = Field(1, ge=1, le=MAX_SET_SIDES)
+    sides: SideCount = 1
     firmware: str = "released"
 
 
@@ -561,7 +562,7 @@ class DecodeSpec(CaptureSpec):
 
 class DumpSpec(BaseModel):
     source: str
-    sides: int = Field(1, ge=1, le=SIDES_PER_DISK)
+    sides: SideCount = 1
     passes: int = Field(1, ge=1, le=MAX_PASSES)
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
     confirm: bool = False
@@ -577,7 +578,7 @@ class WriteSpec(BaseModel):
 
 class SurfaceSpec(BaseModel):
     source: str
-    sides: int = Field(1, ge=1, le=SIDES_PER_DISK)
+    sides: SideCount = 1
     passes: int = Field(1, ge=1, le=MAX_PASSES)
     quick: bool = False
     finish: str = "leave"
@@ -598,7 +599,18 @@ class TextResult(BaseModel):
 
 
 class RowsResult(BaseModel):
+    headline: str = ""
     rows: list[dict[str, Any]] = Field(default_factory=_no_rows)
+    ok: bool = True
+
+
+class DiffResult(BaseModel):
+    headline: str
+    identical: bool
+    same_software: bool | None = None
+    blocks: list[dict[str, Any]] = Field(default_factory=_no_rows)
+    differences: list[dict[str, Any]] = Field(default_factory=_no_rows)
+    file_changes: list[dict[str, Any]] = Field(default_factory=_no_rows)
     ok: bool = True
 
 

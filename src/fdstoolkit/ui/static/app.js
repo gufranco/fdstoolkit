@@ -137,10 +137,78 @@ function table(rows) {
   return node;
 }
 
+const PROSE_LENGTH = 24;
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function isChange(rows) {
+  return rows.every((row) => isRecord(row) && 'left' in row && 'right' in row);
+}
+
+export function isProse(value) {
+  return typeof value === 'string' && (value.includes(' ') || value.length > PROSE_LENGTH);
+}
+
+function chip(key, value) {
+  const node = element('span', { className: 'chip' });
+  if (typeof value === 'boolean') {
+    node.append(element('span', { className: 'chip-flag', textContent: words(key) }));
+    return node;
+  }
+  node.append(
+    element('span', { className: 'chip-key', textContent: words(key) }),
+    element('span', { className: 'chip-value', textContent: scalar(value) }),
+  );
+  return node;
+}
+
+function side(key, value) {
+  const node = element('span', { className: 'side' });
+  node.append(
+    element('span', { className: 'side-key', textContent: words(key) }),
+    element('span', { className: 'side-value', textContent: scalar(value) }),
+  );
+  return node;
+}
+
+function change(row) {
+  const item = element('li', { className: 'change' });
+  const rest = Object.entries(row)
+    .filter(([key]) => key !== 'left' && key !== 'right')
+    .filter(([, value]) => value !== false);
+  const marks = rest.filter(([, value]) => !isProse(value));
+  const prose = rest.filter(([, value]) => isProse(value));
+  if (marks.length) {
+    const head = element('p', { className: 'change-marks' });
+    head.append(...marks.map(([key, value]) => chip(key, value)));
+    item.append(head);
+  }
+  prose.forEach(([, value]) => {
+    item.append(element('p', { className: 'change-note', textContent: scalar(value) }));
+  });
+  const values = element('p', { className: 'change-values' });
+  values.append(side('left', row.left), side('right', row.right));
+  item.append(values);
+  return item;
+}
+
+function changes(rows) {
+  const list = element('ul', { className: 'changes' });
+  list.append(...rows.map(change));
+  return list;
+}
+
 function pairs(value) {
   const list = element('dl', { className: 'pairs' });
   Object.entries(value).forEach(([key, item]) => {
-    list.append(element('dt', { textContent: words(key) }), describe(item));
+    const body = describe(item);
+    const label = element('dt', { textContent: words(key) });
+    if (body.classList.contains('wide')) {
+      label.classList.add('wide');
+    }
+    list.append(label, body);
   });
   return list;
 }
@@ -159,8 +227,9 @@ export function describe(value) {
       holder.append(element('span', { textContent: value.map(scalar).join(', ') }));
       return holder;
     }
-    if (value.every((item) => !Array.isArray(item) && typeof item === 'object')) {
-      holder.append(table(value));
+    if (value.every(isRecord)) {
+      holder.classList.add('wide');
+      holder.append(isChange(value) ? changes(value) : table(value));
       return holder;
     }
   }
@@ -181,6 +250,30 @@ function banner(kind, message) {
   return element('p', { className: `banner ${kind}`, textContent: message });
 }
 
+const SAID_IN_BANNER = new Set(['headline', 'ok']);
+
+export function verdict(payload) {
+  const negative = Boolean(payload) && payload.ok === false;
+  const headline = payload && typeof payload.headline === 'string' ? payload.headline.trim() : '';
+  if (headline) {
+    return banner(negative ? 'warn' : 'good', headline);
+  }
+  return banner(negative ? 'warn' : 'good', t(negative ? 'state.findings' : 'state.done'));
+}
+
+function carries(value) {
+  return value !== null && value !== undefined && !(Array.isArray(value) && !value.length);
+}
+
+export function reported(payload) {
+  const spoken = typeof payload.headline === 'string' && payload.headline.trim();
+  return Object.fromEntries(
+    Object.entries(payload)
+      .filter(([key]) => !SAID_IN_BANNER.has(key))
+      .filter(([, value]) => !spoken || carries(value)),
+  );
+}
+
 export function isDownload(entry) {
   return Boolean(entry)
     && typeof entry.data === 'string'
@@ -199,11 +292,13 @@ export function renderResult(target, payload) {
     return;
   }
   if (payload && typeof payload.text === 'string') {
-    target.replaceChildren(banner('good', t('state.done')), element('pre', { textContent: payload.text }));
+    target.replaceChildren(verdict(payload), element('pre', { textContent: payload.text }));
     return;
   }
   if (payload && typeof payload === 'object') {
-    target.replaceChildren(banner('good', t('state.done')), pairs(payload), raw(payload));
+    const rest = reported(payload);
+    const middle = Object.keys(rest).length ? [pairs(rest)] : [];
+    target.replaceChildren(verdict(payload), ...middle, raw(payload));
     return;
   }
   target.replaceChildren(
@@ -359,6 +454,7 @@ function control(field) {
   const node = chooser ? chooser.node : input(field);
   node.dataset.field = field.name;
   node.dataset.kind = field.kind;
+  node.dataset.whole = String(field.step === 1);
 
   const wrap = element('label', { className: field.kind === 'flag' ? 'field checkbox' : 'field' });
   if (chooser) {
@@ -410,10 +506,15 @@ async function valueOf(node) {
   if (kind === 'flag') {
     return node.checked;
   }
-  if (node.value === '') {
+  return typed(kind, node.value, node.dataset.whole === 'true');
+}
+
+export function typed(kind, raw, whole) {
+  if (raw === '') {
     return undefined;
   }
-  return kind === 'number' ? Number(node.value) : node.value;
+  const numeric = kind === 'number' || (kind === 'choice' && whole);
+  return numeric ? Number(raw) : raw;
 }
 
 function firstChosenName(panel) {

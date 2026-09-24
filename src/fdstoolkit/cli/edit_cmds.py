@@ -20,6 +20,7 @@ from fdstoolkit.cli.common import (
 )
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.mgd1 import SideFile, join_side_files, split_into_side_files
+from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.edit.clean import clean_trailing_data
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
 from fdstoolkit.edit.emulator import SaveFormat, extract_save, merge_save
@@ -434,7 +435,9 @@ def build(
 def card(
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the blank")],
     *,
-    sides: Annotated[int, typer.Option("--sides", min=1, max=8, help="side count")] = 1,
+    sides: Annotated[
+        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="1 or 2 sides")
+    ] = 1,
     variant: Annotated[
         FirmwareVariant,
         typer.Option("--firmware", help="released accepts an all-zero blank, master does not"),

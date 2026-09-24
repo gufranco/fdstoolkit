@@ -59,9 +59,19 @@ def test_a_flag_is_offered_as_a_checkbox() -> None:
 
 
 def test_a_number_is_offered_as_a_number() -> None:
-    kinds = {field.name: field.kind for field in form_for("blank").fields}
+    kinds = {field.name: field.kind for field in form_for("dump").fields}
 
-    assert kinds["sides"] == "number"
+    assert kinds["retries"] == "number"
+
+
+@pytest.mark.parametrize("command", ["blank", "card", "dump", "surface"])
+def test_a_side_count_is_offered_as_one_or_two(command: str) -> None:
+    field = next(entry for entry in form_for(command).fields if entry.name == "sides")
+
+    assert field.kind == "choice"
+    assert field.options == ["1", "2"]
+    assert field.default == 1
+    assert field.step == 1
 
 
 def test_a_profile_field_carries_its_choices() -> None:

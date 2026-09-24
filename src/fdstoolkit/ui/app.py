@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 from collections.abc import Awaitable, Callable
+from hashlib import sha256
 from importlib import resources
 from pathlib import Path
 from typing import Final
@@ -66,6 +67,21 @@ from fdstoolkit.version import VERSION
 BAD_REQUEST: Final = 400
 UNPROCESSABLE: Final = 422
 STATIC_DIR: Final = Path(str(resources.files("fdstoolkit.ui") / "static"))
+STAMP_LENGTH: Final = 12
+
+
+def asset_stamp() -> str:
+    digest = sha256()
+    for path in sorted(STATIC_DIR.iterdir()):
+        if path.is_file():
+            digest.update(path.name.encode("utf-8"))
+            digest.update(path.read_bytes())
+    return digest.hexdigest()[:STAMP_LENGTH]
+
+
+ASSET_STAMP: Final = asset_stamp()
+ASSET_ROOT: Final = f"/assets/{ASSET_STAMP}"
+A_YEAR: Final = 31536000
 SIDE_SIZE: Final = fds.SIDE_SIZE
 MIN_READS: Final = 2
 EXPORT_TARGETS: Final = (
@@ -179,7 +195,8 @@ def _capture(spec: CaptureSpec) -> tuple[FluxCapture, str]:
 
 def index() -> HTMLResponse:
     markup = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    return HTMLResponse(markup)
+    stamped = markup.replace("/static/", f"{ASSET_ROOT}/")
+    return HTMLResponse(stamped, headers={"cache-control": "no-store"})
 
 
 def catalogue() -> Catalogue:
@@ -415,12 +432,27 @@ async def _reject_oversized(
     return await call_next(request)
 
 
+async def _label_asset_lifetime(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    answer = await call_next(request)
+    path = request.url.path
+    if path.startswith(f"{ASSET_ROOT}/"):
+        answer.headers["cache-control"] = f"public, max-age={A_YEAR}, immutable"
+    elif path.startswith("/static/"):
+        answer.headers["cache-control"] = "no-cache"
+    return answer
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="fdstoolkit", version=VERSION, docs_url="/docs")
+    app.middleware("http")(_label_asset_lifetime)
     app.middleware("http")(_reject_oversized)
     _register_core(app)
     _register_image(app)
     _register_analysis(app)
     _register_hardware(app)
+    app.mount(ASSET_ROOT, StaticFiles(directory=STATIC_DIR), name="assets")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

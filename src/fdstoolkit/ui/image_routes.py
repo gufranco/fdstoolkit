@@ -27,10 +27,12 @@ from fdstoolkit.fdskey.lint import lint_card_image
 from fdstoolkit.identify.provenance import provenance_of
 from fdstoolkit.patch.apply import apply_patch
 from fdstoolkit.quality.consensus import compare_images
+from fdstoolkit.quality.explain import explain
 from fdstoolkit.quality.layout import layout_of
 from fdstoolkit.ui.schemas import (
     BuildSpec,
     CardSpec,
+    DiffResult,
     DiffSpec,
     EditSpec,
     ExportSpec,
@@ -77,7 +79,8 @@ def _emit(disk: Disk, name: str, *, headered: bool = False) -> FileResult:
 
 def ls(spec: ImageSpec) -> RowsResult:
     rows: list[dict[str, Any]] = []
-    for index, side in enumerate(_disk(spec).sides):
+    sides = _disk(spec).sides
+    for index, side in enumerate(sides):
         declared = side.declared_file_count
         rows.extend(
             {
@@ -92,14 +95,34 @@ def ls(spec: ImageSpec) -> RowsResult:
             }
             for position, header in enumerate(side.file_headers)
         )
-    return RowsResult(rows=rows)
+    return RowsResult(
+        headline=f"{len(rows)} file(s) across {len(sides)} side(s)",
+        rows=rows,
+    )
 
 
-def diff(spec: DiffSpec) -> RowsResult:
+def diff(spec: DiffSpec) -> DiffResult:
     left, _, _ = decode_payload(spec.left)
     right, _, _ = decode_payload(spec.right)
     report = compare_images(left, right)
-    return RowsResult(rows=rows_of(report.differing_blocks), ok=report.identical)
+    blocks = [{"side": side, "block": block} for side, block in report.differing_blocks]
+    if not spec.explain:
+        return DiffResult(
+            headline=report.summary,
+            identical=report.identical,
+            blocks=blocks,
+            ok=report.identical,
+        )
+    reading = explain(left, right)
+    return DiffResult(
+        headline=reading.headline,
+        identical=reading.identical,
+        same_software=reading.same_software,
+        blocks=blocks,
+        differences=rows_of(reading.fields),
+        file_changes=rows_of(reading.files),
+        ok=reading.identical,
+    )
 
 
 def boot(spec: ImageSpec) -> RowsResult:
@@ -117,14 +140,25 @@ def provenance(spec: ImageSpec) -> RowsResult:
 def lint(spec: ImageSpec) -> RowsResult:
     _, data, _ = decode_payload(spec.data)
     findings = lint_card_image(data, name=Path(spec.name))
-    return RowsResult(rows=rows_of(findings), ok=not findings)
+    headline = (
+        "the card accepts this image as it stands"
+        if not findings
+        else f"{len(findings)} thing(s) would stop the card accepting this image"
+    )
+    return RowsResult(headline=headline, rows=rows_of(findings), ok=not findings)
 
 
 def saves(spec: ImagesSpec) -> RowsResult:
     if not spec.images:
         refuse("comparing saves needs at least one dump", status=UNPROCESSABLE)
     disks = [decode_payload(entry)[0] for entry in spec.images]
-    return RowsResult(rows=rows_of(find_save_candidates(disks)))
+    candidates = find_save_candidates(disks)
+    headline = (
+        "no save candidate: every file agrees across the dumps"
+        if not candidates
+        else f"{len(candidates)} file(s) differ across the dumps and could hold the save"
+    )
+    return RowsResult(headline=headline, rows=rows_of(candidates))
 
 
 def extract(spec: ImageSpec) -> FilesResult:
@@ -198,10 +232,10 @@ def save_apply(spec: SaveSpec) -> FileResult:
 def save_extract(spec: SaveExtractSpec) -> FileResult:
     _, data, _ = decode_payload(spec.data)
     try:
-        body = extract_save(data, bytes_of(spec.played), fmt=SaveFormat(spec.fmt))
+        body = extract_save(data, bytes_of(spec.played), fmt=SaveFormat(spec.save_as))
     except (ValueError, IndexError, KeyError) as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    return named_file(f"{Path(spec.name).stem}.{spec.fmt}", body)
+    return named_file(f"{Path(spec.name).stem}.{spec.save_as}", body)
 
 
 def normalise(spec: RecipeSpec) -> FileResult:

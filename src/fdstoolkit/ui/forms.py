@@ -7,6 +7,7 @@ from typing import Any, Final, cast, get_type_hints
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
+from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.flux.load import CaptureFormat
 from fdstoolkit.quality.surface import Finish
@@ -41,10 +42,12 @@ FILE_LIST_FIELDS: Final = frozenset({"images", "reads", "donors", "captures"})
 CHOICES: Final[dict[str, tuple[str, ...]]] = {
     "profile": tuple(sorted(PROFILES)),
     "fmt": ("", *sorted(str(item) for item in CaptureFormat)),
+    "save_as": ("ips", "ups", "image"),
     "finish": tuple(str(item) for item in Finish),
     "kind": ("program", "character", "nametable"),
     "target": ("nt-mini", "mister", "everdrive-n8-pro", "mesen2", "fceux", "ares"),
     "firmware": ("released", "master"),
+    "sides": tuple(str(count) for count in range(1, SIDES_PER_DISK + 1)),
 }
 
 
@@ -96,8 +99,11 @@ class CommandForm(BaseModel):
     fields: list[FormField] = []
 
 
-def _opens_a_drive(callback: Callable[..., object]) -> bool:
-    return "open_drive(" in inspect.getsource(callback)
+def opens_a_drive(callback: Callable[..., object]) -> bool:
+    try:
+        return "open_drive(" in inspect.getsource(callback)
+    except OSError:
+        return True
 
 
 class Bounds(BaseModel):
@@ -211,7 +217,7 @@ def _described() -> dict[str, tuple[str, str, bool]]:
         spoken = registered.help or callback.__doc__ or ""
         module = callback.__module__.rsplit(".", maxsplit=1)[-1]
         family = module.removesuffix("_cmds").removesuffix("_cli")
-        found[name] = (family, " ".join(spoken.split()), _opens_a_drive(callback))
+        found[name] = (family, " ".join(spoken.split()), opens_a_drive(callback))
     return found
 
 

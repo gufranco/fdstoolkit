@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from fdstoolkit.ui.app import ROUTE_FOR_COMMAND, STATIC_DIR, create_app
+from fdstoolkit.ui.app import (
+    ASSET_ROOT,
+    ROUTE_FOR_COMMAND,
+    STATIC_DIR,
+    asset_stamp,
+    create_app,
+)
 
 OK = 200
 MARKUP = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
@@ -27,6 +35,68 @@ def test_every_static_file_is_present() -> None:
 @pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
 def test_the_static_files_are_served(client: TestClient, name: str) -> None:
     assert client.get(f"/static/{name}").status_code == OK
+
+
+@pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
+def test_an_upgraded_asset_is_not_served_from_a_stale_cache(client: TestClient, name: str) -> None:
+    assert client.get(f"/static/{name}").headers["cache-control"] == "no-cache"
+
+
+def test_an_answer_that_is_not_an_asset_is_left_cacheable(client: TestClient) -> None:
+    assert "cache-control" not in client.get("/api/forms").headers
+
+
+def test_the_page_asks_for_assets_under_a_stamp_the_content_decides(client: TestClient) -> None:
+    markup = client.get("/").text
+
+    assert f"{ASSET_ROOT}/app.js" in markup
+    assert "/static/" not in markup
+
+
+def test_the_page_itself_is_never_cached_so_a_new_stamp_always_arrives(
+    client: TestClient,
+) -> None:
+    assert client.get("/").headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
+def test_a_stamped_asset_is_served_and_may_be_kept_forever(client: TestClient, name: str) -> None:
+    answer = client.get(f"{ASSET_ROOT}/{name}")
+
+    assert answer.status_code == OK
+    assert "immutable" in answer.headers["cache-control"]
+
+
+def test_the_stamp_follows_the_bytes_of_every_asset(tmp_path: Path) -> None:
+    before = _stamp_over(tmp_path, {"app.js": b"one"})
+    after = _stamp_over(tmp_path, {"app.js": b"two"})
+
+    assert before != after
+
+
+def test_the_stamp_holds_still_while_the_assets_do(tmp_path: Path) -> None:
+    once = _stamp_over(tmp_path, {"app.js": b"one"})
+    again = _stamp_over(tmp_path, {"app.js": b"one"})
+
+    assert once == again
+
+
+def test_a_folder_beside_the_assets_does_not_move_the_stamp(tmp_path: Path) -> None:
+    plain = _stamp_over(tmp_path, {"app.js": b"one"})
+    with_folder = _stamp_over(tmp_path, {"app.js": b"one"}, folders=("cache",))
+
+    assert plain == with_folder
+
+
+def _stamp_over(root: Path, files: dict[str, bytes], folders: tuple[str, ...] = ()) -> str:
+    folder = root / str(len(list(root.iterdir())))
+    folder.mkdir()
+    for name, body in files.items():
+        (folder / name).write_bytes(body)
+    for name in folders:
+        (folder / name).mkdir()
+    with patch("fdstoolkit.ui.app.STATIC_DIR", folder):
+        return asset_stamp()
 
 
 def test_the_markup_is_a_complete_document() -> None:
