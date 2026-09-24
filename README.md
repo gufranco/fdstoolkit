@@ -676,9 +676,30 @@ Every read and write runs against a deadline. Before anything has been measured 
 fdstoolkit write <image> [--backup <p>] [--retries N] [--yes]
 ```
 
-Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`. One side at a time: a two-side image is refused until the command can walk you through turning the disk over.
+Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`.
 
 An FDSStick does not report whether a disk is write protected, whether the battery holds, or whether a disk is even present, so the toolkit cannot check any of them before writing. What protects the disk instead is the sequence around the write. The side is read once before anything is written, and that one read is both the backup `--backup` saves and the baseline for the check afterwards. The command asks before it starts unless you pass `--yes`, and reads everything back afterwards to compare it with what was meant to be written. If the readback is identical to the read taken before, the disk did not take the write at all, and the command stops and says so rather than listing mismatched blocks.
+
+A two-side image takes one turn of the disk. Side A is read, written and read back, then the command asks you to turn the disk over and does the same for side B. The first read of side B is also the check that the disk was turned: if it returns what was just written to side A, the head is still on side A, and the command stops before writing anything there. The backup is saved again after each side is read, so a write that stops on side B still leaves the original side A in the backup file.
+
+```bash
+fdstoolkit write game.fds --backup before.fds
+```
+
+```
+overwrite the disk in the drive with 2 side(s) of new data, destroying whatever it holds now [y/N]: y
+  reading side 0 before writing it
+  writing side 0
+  reading side 0 back
+turn the disk over so side B faces the head, then confirm. This drive reads one face at a time and cannot select a side on its own [y/N]: y
+  reading side 1 before writing it
+  writing side 1
+  reading side 1 back
+verified True, grade clean
+  verified on this drive only: a drive with misaligned heads writes disks that it reads back and other drives cannot, so read the disk on a second drive before trusting it
+```
+
+The lines indented by two spaces are progress, printed as each step starts, so a slow side is visible while it runs rather than only at the end.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">
@@ -742,33 +763,48 @@ The test stops as soon as its verdict is decided, because every further pass onl
 
 A stopped test skips its `--finish`. A block that fails once does not stop anything, since one failure is the marginal case more passes are meant to separate.
 
+With `--sides 2` every pass runs on side A, then the command asks you to turn the disk over once and runs every pass on side B. The finish then works backwards, side B first while it still faces the head, then one more turn for side A, so the whole test costs two turns. The check that the disk was really turned is the same one `write` makes.
+
 ```bash
-fdstoolkit surface --passes 3 --backup before.fds --finish blank --yes
+fdstoolkit surface --sides 2 --passes 3 --backup before.fds --finish blank
 ```
 
 ```
-59145 data bytes per side, 100.0% of the physical track, 12 pattern pass(es) run
-pass 1 pattern 0x00: held
-pass 1 pattern 0xff: held
+a surface test destroys every byte on 2 side(s) of the disk in the drive. Use a scratch disk, never an original [y/N]: y
+  side 0 pass 1 pattern 0x00
+  side 0 pass 1 pattern 0xff
+  ...
+  side 0 pass 3 pattern 0x55
+turn the disk over so side B faces the head, then confirm. This drive reads one face at a time and cannot select a side on its own [y/N]: y
+  side 1 pass 1 pattern 0x00
+  ...
+  side 1 pass 3 pattern 0x55
+  finishing side 1
+turn the disk over so side A faces the head, then confirm. This drive reads one face at a time and cannot select a side on its own [y/N]: y
+  finishing side 0
+59145 data bytes per side, 100.0% of the physical track, 24 pattern pass(es) run
+side 0 pass 1 pattern 0x00: held
+side 0 pass 1 pattern 0xff: held
 ...
-pass 3 pattern 0x55: held
+side 1 pass 3 pattern 0x55: held
 left the disk formatted as it leaves the kiosk, verified
 grade clean
 ```
 
-The same command on a disk with one bad spot:
+The same command on a disk with one bad spot on side A. It stops on the second pattern, before asking for a turn, because the verdict is already known:
 
 ```
+  side 0 pass 1 pattern 0x00
+  side 0 pass 1 pattern 0xff
 59145 data bytes per side, 100.0% of the physical track, 2 pattern pass(es) run
-pass 1 pattern 0x00: did not hold
-pass 1 pattern 0xff: did not hold
+side 0 pass 1 pattern 0x00: did not hold
+side 0 pass 1 pattern 0xff: did not hold
 1 block(s) failed on more than one pattern, which is the surface itself
 stopped early: a block failed on two patterns, so the surface is damaged
-the finish was skipped because the test stopped early
 grade failed
 ```
 
-Exit status is 0 only when every pattern held and the finish verified. Like `write`, the test runs on one side at a time for now.
+Exit status is 0 only when every pattern held and the finish verified.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/surface-dark.png">
@@ -867,12 +903,26 @@ The rule the design turns on is that the web layer decides nothing. Every route 
 | `POST /api/blank` | `blank` |
 | `POST /api/canon` | `canon` |
 | `POST /api/convert` | `convert` |
+| `POST /api/jobs/dump` | `dump` |
+| `POST /api/jobs/write` | `write` |
+| `POST /api/jobs/surface` | `surface` |
+| `GET /api/jobs/current` | the disk job still running, if any |
+| `GET /api/jobs/{id}` | one job's state, progress lines, prompt and result |
+| `POST /api/jobs/{id}/answer` | the answer to a job's prompt |
 
 Images and captures travel base64 encoded in the request body. `GET /docs` serves the generated API reference, so the page is one client of the endpoints rather than the only one.
 
 The choices the page offers come from `catalogue`, which is built over the enums. A profile added to the model appears in the page with no second edit.
 
-`dump`, `write` and `surface` drive the FDSStick attached to this machine. When none is attached they answer 409 and name the cause, and `write` and `surface` refuse to start until the request confirms the erase.
+`dump`, `write` and `surface` drive the FDSStick attached to this machine, and a side takes seconds, so they run as jobs rather than as one request. Starting one answers at once with a job id, and the page then polls the job and shows each progress line the command would print. Only one disk job runs at a time; a second answers 409 and names the job holding the drive. When no FDSStick is attached they also answer 409 and name the cause.
+
+The page adds what a terminal gives for free:
+
+- `write` and `surface` open a dialog that names what will be destroyed before anything starts. Focus lands on Cancel, so pressing Enter by reflex does not erase a disk. A request that skips the dialog is refused until it confirms the erase.
+- When a job needs the disk turned over, the page shows the prompt with two buttons, The disk is turned over and Stop. An unanswered prompt is taken as no after 10 minutes, and the drive is released.
+- Closing or reloading the tab while a job runs asks first, since closing it does not stop the drive. A page opened while a job is running picks that job up rather than starting a second one.
+- `write` and `surface` offer the read taken before writing as `before.fds`, whatever the outcome.
+- A job that stalls while writing says the side may be half written, as the command does.
 
 The interface is in English and Japanese. Both dictionaries carry the same keys, and the test suite proves it rather than trusting it: every key the markup or the script references must exist in both, and no Japanese string may be left as English.
 

@@ -27,6 +27,7 @@ from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.quality.reads import compare_reads
 from fdstoolkit.ui import analysis_routes, hardware_routes, image_routes
 from fdstoolkit.ui.forms import FAMILY_ORDER, forms
+from fdstoolkit.ui.jobs import JobBoard
 from fdstoolkit.ui.schemas import (
     BlankSpec,
     CalibrateSpec,
@@ -117,9 +118,9 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "grade": "/api/grade",
     "reads": "/api/reads",
     "calibrate": "/api/calibrate",
-    "dump": "/api/dump",
-    "write": "/api/write",
-    "surface": "/api/surface",
+    "dump": "/api/jobs/dump",
+    "write": "/api/jobs/write",
+    "surface": "/api/jobs/surface",
 }
 
 
@@ -332,9 +333,12 @@ def _register_analysis(app: FastAPI) -> None:
 
 
 def _register_hardware(app: FastAPI) -> None:
-    app.add_api_route("/api/dump", hardware_routes.dump_route, methods=["POST"])
-    app.add_api_route("/api/write", hardware_routes.write_route, methods=["POST"])
-    app.add_api_route("/api/surface", hardware_routes.surface_route, methods=["POST"])
+    app.add_api_route("/api/jobs/dump", hardware_routes.dump_job, methods=["POST"])
+    app.add_api_route("/api/jobs/write", hardware_routes.write_job, methods=["POST"])
+    app.add_api_route("/api/jobs/surface", hardware_routes.surface_job, methods=["POST"])
+    app.add_api_route("/api/jobs/current", hardware_routes.current_job, methods=["GET"])
+    app.add_api_route("/api/jobs/{job_id}", hardware_routes.job_status, methods=["GET"])
+    app.add_api_route("/api/jobs/{job_id}/answer", hardware_routes.job_answer, methods=["POST"])
 
 
 DEVICE_CHECK: Final = "fdsstick"
@@ -376,6 +380,7 @@ async def _label_asset_lifetime(
 
 def create_app() -> FastAPI:
     app = FastAPI(title="fdstoolkit", version=VERSION, docs_url="/docs")
+    app.state.jobs = JobBoard()
     app.middleware("http")(_label_asset_lifetime)
     app.middleware("http")(_reject_oversized)
     _register_core(app)

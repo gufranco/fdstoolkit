@@ -338,7 +338,7 @@ function emptyResult(form) {
 }
 
 function chosen(node) {
-  const files = Array.from(node.files || []);
+  const files = Array.from(node.files);
   return files.length ? files.map((file) => file.name).join(', ') : t('file.none');
 }
 
@@ -399,7 +399,7 @@ function input(field) {
     const select = element('select', { value: shown });
     select.append(...field.options.map((option) => element('option', {
       value: option,
-      textContent: option === '' ? t('flux.auto') : option,
+      textContent: option,
       selected: option === shown,
     })));
     return select;
@@ -456,7 +456,11 @@ export function describeLimits(field) {
   return '';
 }
 
-function control(field) {
+export function helpFor(command, field) {
+  return t(`field.${command}.${field.name}`) || t(`field.${field.name}`);
+}
+
+function control(field, command) {
   const caption = element('span', { className: 'field-name', textContent: words(field.name) });
   if (field.required) {
     caption.append(element('span', { className: 'required', textContent: ` ${t('field.required')}` }));
@@ -493,7 +497,7 @@ function control(field) {
     wrap.append(element('span', { className: 'field-help quiet', textContent: limits }));
   }
 
-  const help = t(`field.${field.name}`);
+  const help = helpFor(command, field);
   if (help) {
     wrap.append(element('span', { className: 'field-help', textContent: help }));
   }
@@ -509,11 +513,11 @@ function control(field) {
 async function valueOf(node) {
   const kind = node.dataset.kind;
   if (kind === 'file') {
-    const file = node.files && node.files[0];
+    const file = node.files[0];
     return file ? await encodeFile(file) : undefined;
   }
   if (kind === 'files') {
-    const many = await Promise.all(Array.from(node.files || [], encodeFile));
+    const many = await Promise.all(Array.from(node.files, encodeFile));
     return many.length ? many : undefined;
   }
   if (kind === 'flag') {
@@ -532,7 +536,7 @@ export function typed(kind, raw, whole) {
 
 function firstChosenName(panel) {
   const source = Array.from(panel.querySelectorAll('[data-kind=file], [data-kind=files]'))
-    .find((node) => node.files && node.files.length);
+    .find((node) => node.files.length);
   return source ? source.files[0].name : '';
 }
 
@@ -567,7 +571,7 @@ export function named(chosen, fallback) {
 
 function blank(node) {
   return node.dataset.kind === 'file' || node.dataset.kind === 'files'
-    ? !(node.files && node.files.length)
+    ? !node.files.length
     : node.value === '';
 }
 
@@ -576,8 +580,7 @@ function invalid(panel, form) {
   return Array.from(panel.querySelectorAll('[data-field]'))
     .filter((node) => typeof node.checkValidity === 'function' && !node.checkValidity())
     .map((node) => {
-      const field = byName.get(node.dataset.field) || {};
-      return `${words(node.dataset.field)}: ${problemFor(node, field)}`;
+      return `${words(node.dataset.field)}: ${problemFor(node, byName.get(node.dataset.field))}`;
     });
 }
 
@@ -608,20 +611,176 @@ function summaryOf(form) {
   return label(`summary.${form.command}`, form.summary);
 }
 
-function hardwareNotice(form) {
+export function sentence(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function hardwareNotice() {
   const notice = element('p', { className: 'banner busy', textContent: t('hardware.checking') });
   call('/api/hardware', 'GET')
     .then((state) => {
       notice.className = `banner ${state.connected ? 'good' : 'bad'}`;
       notice.textContent = state.connected
-        ? `${t('hardware.present')} ${state.detail}`
-        : `${t('hardware.absent')} ${state.detail}`;
+        ? `${t('hardware.present')} ${sentence(state.detail)}`
+        : `${t('hardware.absent')} ${sentence(state.detail)}`;
     })
     .catch((error) => {
       notice.className = 'banner bad';
-      notice.textContent = `${t('hardware.unknown')} ${error.message}`;
+      notice.textContent = `${t('hardware.unknown')} ${sentence(error.message)}`;
     });
   return notice;
+}
+
+const POLL_MS = 500;
+const POLL_LIMIT = 7200;
+const ERASING = new Set(['write', 'surface']);
+
+function pause(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+export function isJobRoute(route) {
+  return route.startsWith('/api/jobs/');
+}
+
+export function confirmErase(command) {
+  return new Promise((resolve) => {
+    const dialog = element('dialog', { className: 'erase' });
+    dialog.setAttribute('aria-labelledby', 'erase-title');
+    dialog.setAttribute('aria-describedby', 'erase-body');
+    const cancel = element('button', { type: 'button', className: 'plain', textContent: t('confirm.cancel') });
+    const go = element('button', { type: 'button', className: 'danger', textContent: t('confirm.go') });
+    const actions = element('div', { className: 'dialog-actions' });
+    actions.append(cancel, go);
+    dialog.append(
+      element('h2', { id: 'erase-title', textContent: t('confirm.title') }),
+      element('p', { id: 'erase-body', textContent: t(`confirm.${command}`) }),
+      actions,
+    );
+    const finish = (answer) => {
+      dialog.close();
+      dialog.remove();
+      resolve(answer);
+    };
+    cancel.addEventListener('click', () => finish(false));
+    go.addEventListener('click', () => finish(true));
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      finish(false);
+    });
+    document.body.append(dialog);
+    dialog.showModal();
+    cancel.focus();
+  });
+}
+
+function turnPrompt(job, answer) {
+  const box = element('div', { className: 'turn' });
+  box.setAttribute('role', 'alert');
+  const yes = element('button', { type: 'button', className: 'run', textContent: t('job.turned') });
+  const no = element('button', { type: 'button', className: 'plain', textContent: t('job.stop') });
+  const reply = (given) => {
+    yes.disabled = true;
+    no.disabled = true;
+    answer(job.id, given);
+  };
+  yes.addEventListener('click', () => reply(true));
+  no.addEventListener('click', () => reply(false));
+  const actions = element('div', { className: 'dialog-actions' });
+  actions.append(no, yes);
+  box.append(element('p', { className: 'prompt', textContent: job.prompt }), actions);
+  return box;
+}
+
+const JOB_BANNER = { running: 'busy', waiting: 'warn', failed: 'bad', done: 'good' };
+
+export function jobView(job, answer) {
+  const box = element('div', { className: 'job' });
+  box.append(banner(JOB_BANNER[job.state], t(`job.${job.state}`)));
+  if (job.writes && job.state !== 'failed') {
+    box.append(element('p', { className: 'quiet', textContent: t('job.keep') }));
+  }
+  const steps = element('ol', { className: 'steps' });
+  steps.setAttribute('aria-live', 'polite');
+  steps.append(...job.steps.map((step) => element('li', { textContent: step })));
+  box.append(steps);
+  if (job.state === 'waiting') {
+    box.append(turnPrompt(job, answer));
+  }
+  if (job.state === 'failed') {
+    box.append(element('p', { className: 'reason', textContent: job.error }));
+  }
+  return box;
+}
+
+function keepPageOpen(event) {
+  event.preventDefault();
+}
+
+export async function follow(
+  first,
+  out,
+  { fetchJob = (id) => call(`/api/jobs/${id}`, 'GET'), polls = POLL_LIMIT } = {},
+) {
+  const answer = (id, yes) =>
+    call(`/api/jobs/${id}/answer`, 'POST', { yes }).catch((error) => {
+      out.append(banner('bad', error.message));
+    });
+  if (first.writes) {
+    window.addEventListener('beforeunload', keepPageOpen);
+  }
+  let job = first;
+  let shown = '';
+  try {
+    for (let poll = 0; poll < polls; poll += 1) {
+      if (job.state === 'done') {
+        renderResult(out, job.result);
+        return job;
+      }
+      const seen = JSON.stringify(job);
+      if (seen !== shown) {
+        out.replaceChildren(jobView(job, answer));
+        shown = seen;
+      }
+      if (job.state === 'failed') {
+        return job;
+      }
+      await pause(POLL_MS);
+      job = await fetchJob(job.id);
+    }
+    out.replaceChildren(banner('warn', t('job.lost')));
+    return job;
+  } finally {
+    window.removeEventListener('beforeunload', keepPageOpen);
+  }
+}
+
+async function startJob(form, out, body) {
+  const erasing = ERASING.has(form.command);
+  if (erasing && !(await confirmErase(form.command))) {
+    out.replaceChildren(banner('warn', t('state.cancelled')));
+    return;
+  }
+  const job = await call(form.route, 'POST', erasing ? { ...body, confirm: true } : body);
+  await follow(job, out);
+}
+
+async function resume() {
+  const { job } = await call('/api/jobs/current', 'GET');
+  if (!job) {
+    return;
+  }
+  const form = state.forms.find((entry) => entry.command === job.command);
+  if (!form) {
+    return;
+  }
+  update({ command: form.command, family: form.family });
+  render();
+  const out = document.querySelector('#panel .output');
+  out.replaceChildren(banner('warn', t('job.resumed')));
+  await follow(job, out);
 }
 
 function runner(host, form, out) {
@@ -644,7 +803,12 @@ function runner(host, form, out) {
     run.textContent = t('state.running');
     out.replaceChildren(banner('busy', t('state.running')));
     try {
-      renderResult(out, await call(form.route, form.method, await collect(host, form)));
+      const body = await collect(host, form);
+      if (isJobRoute(form.route)) {
+        await startJob(form, out, body);
+      } else {
+        renderResult(out, await call(form.route, form.method, body));
+      }
     } catch (error) {
       out.replaceChildren(
         banner('bad', t('state.failed')),
@@ -674,9 +838,9 @@ function renderPanel() {
 
   const left = element('div', { className: 'fields' });
   left.append(element('p', { className: 'group-label', textContent: t('group.inputs') }));
-  const shownFields = form.fields.filter((field) => field.kind !== 'auto');
+  const shownFields = form.fields.filter((field) => field.kind !== 'auto' && !field.hidden);
   left.append(...(shownFields.length
-    ? shownFields.map(control)
+    ? shownFields.map((field) => control(field, form.command))
     : [element('p', { className: 'field-help', textContent: t('group.nothing') })]));
   left.append(runner(host, form, out));
 
@@ -689,7 +853,7 @@ function renderPanel() {
   host.append(
     heading(form),
     element('p', { className: 'summary', textContent: summaryOf(form) }),
-    ...(form.needs_hardware ? [hardwareNotice(form)] : []),
+    ...(form.needs_hardware ? [hardwareNotice()] : []),
     columns,
   );
 }
@@ -700,7 +864,7 @@ function familyButton(family) {
   button.setAttribute('aria-pressed', String(family === state.family));
   button.addEventListener('click', () => {
     const first = state.forms.find((form) => form.family === family);
-    update({ family, filter: '', command: first ? first.command : '' });
+    update({ family, filter: '', command: first.command });
     document.getElementById('search').value = '';
     remember();
     render();
@@ -785,6 +949,7 @@ export async function start() {
     update({ forms: catalogue.forms, order: catalogue.families || [] });
     show(window.location.hash.replace('#', ''));
     render();
+    await resume();
   } catch (error) {
     document.getElementById('panel').replaceChildren(
       banner('bad', t('state.failed')),

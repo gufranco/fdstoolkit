@@ -431,7 +431,6 @@ class DumpSpec(BaseModel):
     sides: SideCount = 1
     passes: int = Field(1, ge=1, le=MAX_PASSES)
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
-    confirm: bool = False
 
 
 class WriteSpec(BaseModel):
@@ -474,6 +473,25 @@ class ReportedFile(BaseModel):
     file: FileResult
     rows: list[dict[str, Any]] = Field(default_factory=_no_rows)
     ok: bool = True
+
+
+class JobView(BaseModel):
+    id: str
+    command: str
+    writes: bool
+    state: str
+    steps: list[str] = Field(default_factory=list)
+    prompt: str = ""
+    result: dict[str, Any] | None = None
+    error: str = ""
+
+
+class CurrentJob(BaseModel):
+    job: JobView | None = None
+
+
+class AnswerSpec(BaseModel):
+    yes: bool
 
 
 class FilesResult(BaseModel):

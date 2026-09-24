@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import pytest
-from drive_double import FaultPlan, SimulatedDrive
+from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image, formatted_side
 from fdstoolkit.codecs.fds import decode, encode
-from fdstoolkit.hardware.session import Grade
+from fdstoolkit.hardware.session import Grade, SideFlipError
 from fdstoolkit.quality.surface import (
     PATTERNS,
     Finish,
@@ -21,6 +21,13 @@ from fdstoolkit.quality.surface import (
 )
 
 BLANK_BLOCKS = 2
+
+
+class FinishNoisyDrive(SimulatedDrive):
+    def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+        super().write_side(side, blocks)
+        if self.write_count > len(PATTERNS):
+            self._plan = FaultPlan(unstable_blocks=frozenset({1}))
 
 
 class FinishRefusingDrive(SimulatedDrive):
@@ -337,3 +344,108 @@ def test_a_finish_that_does_not_stick_is_reported() -> None:
     assert report.finish_ran
     assert not report.finish_verified
     assert not report.passed
+
+
+def two_sided_scratch():  # noqa: ANN201
+    disk, _ = decode(blank_image(sides=2, headered=False, formatted=True, game_name="SMB"))
+    return disk
+
+
+def test_a_two_side_surface_test_turns_the_disk_once() -> None:
+    drive = FacingDrive(two_sided_scratch())
+
+    report = surface_test(drive, drive, sides=2, confirm=lambda _: True, flip=drive.turn)
+
+    assert drive.turns == 1
+    assert len(report.passes) == 2 * len(PATTERNS)
+    assert {entry.side for entry in report.passes} == {0, 1}
+    assert report.passed
+
+
+def test_a_two_side_blank_finish_turns_back_and_leaves_both_faces_blank() -> None:
+    drive = FacingDrive(two_sided_scratch())
+
+    report = surface_test(
+        drive,
+        drive,
+        sides=2,
+        confirm=lambda _: True,
+        flip=drive.turn,
+        plan=SurfacePlan(finish=Finish.BLANK),
+    )
+
+    assert report.finish_verified
+    assert drive.turns == 2
+    assert drive.disk is not None
+    assert drive.disk.sides == blank_disk(sides=2).sides
+
+
+def test_a_second_side_that_was_not_turned_over_stops_the_test() -> None:
+    drive = FacingDrive(two_sided_scratch())
+
+    with pytest.raises(SideFlipError, match="not turned over"):
+        surface_test(drive, drive, sides=2, confirm=lambda _: True, flip=lambda _: True)
+
+    assert drive.write_count == len(PATTERNS)
+
+
+def test_a_two_side_test_with_nobody_to_turn_the_disk_is_refused_before_writing() -> None:
+    drive = FacingDrive(two_sided_scratch())
+
+    with pytest.raises(SurfaceTestRefusedError, match="turned over"):
+        surface_test(drive, drive, sides=2, confirm=lambda _: True)
+
+    assert drive.write_count == 0
+
+
+def test_a_two_side_backup_holds_both_faces() -> None:
+    drive = FacingDrive(two_sided_scratch())
+    saved: list[bytes] = []
+
+    surface_test(
+        drive, drive, sides=2, confirm=lambda _: True, flip=drive.turn, backup=saved.append
+    )
+
+    assert decode(saved[-1])[0].side_count == 2
+
+
+def test_a_surface_test_reports_each_pattern_as_it_starts() -> None:
+    drive = FacingDrive(two_sided_scratch())
+    steps: list[str] = []
+
+    surface_test(
+        drive, drive, sides=2, confirm=lambda _: True, flip=drive.turn, progress=steps.append
+    )
+
+    assert steps == [
+        f"side {side} pass 1 pattern {pattern:#04x}" for side in (0, 1) for pattern in PATTERNS
+    ]
+
+
+def test_a_surface_finish_reports_each_side_it_finishes() -> None:
+    drive = FacingDrive(two_sided_scratch())
+    steps: list[str] = []
+
+    surface_test(
+        drive,
+        drive,
+        sides=2,
+        confirm=lambda _: True,
+        flip=drive.turn,
+        progress=steps.append,
+        plan=SurfacePlan(finish=Finish.BLANK),
+    )
+
+    assert steps[-2:] == ["finishing side 1", "finishing side 0"]
+
+
+def test_a_finish_that_reads_back_wrong_is_reported() -> None:
+    drive = FinishNoisyDrive(scratch_disk())
+
+    report = surface_test(
+        drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(finish=Finish.BLANK)
+    )
+
+    assert report.stopped is None
+    assert report.finish_ran
+    assert not report.finish_verified

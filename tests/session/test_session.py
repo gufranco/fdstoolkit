@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from drive_double import FaultPlan, SimulatedDrive
+from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -232,11 +232,130 @@ def test_a_write_stops_on_a_write_protected_disk() -> None:
         write_verified(drive, drive, sample_disk(), confirm=lambda _: True, backup=None)
 
 
-def test_a_write_stops_when_the_image_has_more_sides_than_the_disk() -> None:
-    drive = SimulatedDrive(sample_disk(sides=1))
+def two_sided_game() -> Disk:
+    disk, _ = decode(blank_image(sides=2, headered=False, formatted=True, game_name="ZEL"))
+    return disk
 
-    with pytest.raises(WriteRefusedError, match="2 side"):
-        write_verified(drive, drive, sample_disk(sides=2), confirm=lambda _: True, backup=None)
+
+def blank_scratch() -> Disk:
+    disk, _ = decode(blank_image(sides=2, headered=False, formatted=False))
+    return disk
+
+
+def test_a_two_side_image_is_written_with_one_turn_of_the_disk() -> None:
+    drive = FacingDrive(sample_disk(sides=2))
+    saved: list[bytes] = []
+
+    report = write_verified(
+        drive,
+        drive,
+        two_sided_game(),
+        confirm=lambda _: True,
+        backup=saved.append,
+        flip=drive.turn,
+    )
+
+    assert report.verified
+    assert drive.turns == 1
+    assert drive.disk is not None
+    assert drive.disk.sides == two_sided_game().sides
+    assert decode(saved[-1])[0].side_count == 2
+
+
+def test_a_two_side_write_onto_a_blank_disk_still_tells_the_faces_apart() -> None:
+    drive = FacingDrive(blank_scratch())
+
+    report = write_verified(
+        drive, drive, two_sided_game(), confirm=lambda _: True, backup=None, flip=drive.turn
+    )
+
+    assert report.verified
+
+
+def test_a_disk_that_was_not_turned_over_stops_before_the_second_side() -> None:
+    drive = FacingDrive(sample_disk(sides=2))
+
+    with pytest.raises(SideFlipError, match="not turned over"):
+        write_verified(
+            drive, drive, two_sided_game(), confirm=lambda _: True, backup=None, flip=lambda _: True
+        )
+
+    assert drive.write_count == 1
+
+
+def test_a_declined_turn_stops_the_write_after_the_first_side() -> None:
+    drive = FacingDrive(sample_disk(sides=2))
+
+    with pytest.raises(SideFlipError, match="declined"):
+        write_verified(
+            drive,
+            drive,
+            two_sided_game(),
+            confirm=lambda _: True,
+            backup=None,
+            flip=lambda _: False,
+        )
+
+    assert drive.write_count == 1
+
+
+def test_a_two_side_write_with_nobody_to_turn_the_disk_is_refused_before_writing() -> None:
+    drive = FacingDrive(sample_disk(sides=2))
+
+    with pytest.raises(SideFlipError, match="turned over"):
+        write_verified(drive, drive, two_sided_game(), confirm=lambda _: True, backup=None)
+
+    assert drive.write_count == 0
+
+
+def test_a_drive_that_selects_sides_writes_both_without_being_asked() -> None:
+    drive = SimulatedDrive(sample_disk(sides=2))
+    asked: list[str] = []
+
+    report = write_verified(
+        drive,
+        drive,
+        two_sided_game(),
+        confirm=lambda _: True,
+        backup=None,
+        flip=lambda message: bool(asked.append(message)) or True,
+    )
+
+    assert report.verified
+    assert asked == []
+
+
+def test_a_write_reports_each_step_as_it_goes() -> None:
+    drive = FacingDrive(sample_disk(sides=2))
+    steps: list[str] = []
+
+    write_verified(
+        drive,
+        drive,
+        two_sided_game(),
+        confirm=lambda _: True,
+        backup=None,
+        flip=drive.turn,
+        progress=steps.append,
+    )
+
+    assert steps == [
+        "reading side 0 before writing it",
+        "writing side 0",
+        "reading side 0 back",
+        "reading side 1 before writing it",
+        "writing side 1",
+        "reading side 1 back",
+    ]
+
+
+def test_a_dump_reports_each_side_as_it_reads_it() -> None:
+    drive = FacingDrive(sample_disk(sides=2))
+    steps: list[str] = []
+
+    dump(drive, sides=2, flip=drive.turn, progress=steps.append)
+
+    assert steps == ["reading side 0", "reading side 1"]
 
 
 def test_a_verified_write_reads_the_disk_back() -> None:

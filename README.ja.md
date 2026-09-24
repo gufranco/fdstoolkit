@@ -670,9 +670,30 @@ fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [-
 fdstoolkit write <image> [--backup <p>] [--retries N] [--yes]
 ```
 
-ディスクへ書き込み、読み戻して比較します。`--backup` は書き込む前に現在の内容を保存します。`--yes` がなければ確認を求めます。書き込みは片面ずつです。両面のイメージは、ディスクを裏返す手順をコマンドが案内できるようになるまで拒否します。
+ディスクへ書き込み、読み戻して比較します。`--backup` は書き込む前に現在の内容を保存します。`--yes` がなければ確認を求めます。
 
 FDSStick は、ディスクが書き込み禁止かどうかも、電池が保っているかどうかも、そもそもディスクが入っているかどうかも報告しないため、本ツールは書き込み前にそれらを確認できません。その代わりにディスクを守るのは書き込みの前後の手順です。書き込む前に面を 1 回だけ読み、その 1 回の読み取りが `--backup` で保存するバックアップであり、書き込み後の確認の基準にもなります。`--yes` を指定しない限り開始前に確認し、書き込み後にはすべてを読み戻して書き込むはずだった内容と比較します。読み戻した内容が書き込み前の読み取りとまったく同じなら、ディスクは書き込みを受け付けていません。その場合、コマンドは不一致のブロックを列挙するのではなく、その旨を伝えて中止します。
+
+両面のイメージでは、ディスクを 1 回だけ裏返します。A 面を読み、書き、読み戻したあと、コマンドはディスクを裏返すよう求め、B 面に同じことを行います。B 面の最初の読み取りは、ディスクが本当に裏返されたかの確認も兼ねています。直前に A 面へ書いた内容が返ってきた場合、ヘッドはまだ A 面にあるので、コマンドはそこへ何も書かずに止まります。バックアップは各面を読むたびに保存し直すため、B 面で止まった書き込みでも、元の A 面はバックアップファイルに残ります。
+
+```bash
+fdstoolkit write game.fds --backup before.fds
+```
+
+```
+overwrite the disk in the drive with 2 side(s) of new data, destroying whatever it holds now [y/N]: y
+  reading side 0 before writing it
+  writing side 0
+  reading side 0 back
+turn the disk over so side B faces the head, then confirm. This drive reads one face at a time and cannot select a side on its own [y/N]: y
+  reading side 1 before writing it
+  writing side 1
+  reading side 1 back
+verified True, grade clean
+  verified on this drive only: a drive with misaligned heads writes disks that it reads back and other drives cannot, so read the disk on a second drive before trusting it
+```
+
+2 文字分字下げされた行は進行状況で、各手順の開始時に表示されます。そのため、時間のかかる面も終わってからではなく、実行中に見えます。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">
@@ -721,33 +742,48 @@ recovered の数が、修復にあたる部分です。閾値へ近づいてい�
 
 止まったテストは `--finish` を行いません。1 回だけ失敗したブロックでは止まりません。1 回の失敗はパスを重ねて切り分けるべき境界的なケースだからです。
 
+`--sides 2` では、すべてのパスを A 面で行ったあと、ディスクを 1 回裏返すよう求め、すべてのパスを B 面で行います。終了処理は逆順に進みます。まだヘッドに向いている B 面を先に処理し、もう 1 回裏返して A 面を処理するので、テスト全体で裏返すのは 2 回です。ディスクが本当に裏返されたかの確認は `write` と同じです。
+
 ```bash
-fdstoolkit surface --passes 3 --backup before.fds --finish blank --yes
+fdstoolkit surface --sides 2 --passes 3 --backup before.fds --finish blank
 ```
 
 ```
-59145 data bytes per side, 100.0% of the physical track, 12 pattern pass(es) run
-pass 1 pattern 0x00: held
-pass 1 pattern 0xff: held
+a surface test destroys every byte on 2 side(s) of the disk in the drive. Use a scratch disk, never an original [y/N]: y
+  side 0 pass 1 pattern 0x00
+  side 0 pass 1 pattern 0xff
+  ...
+  side 0 pass 3 pattern 0x55
+turn the disk over so side B faces the head, then confirm. This drive reads one face at a time and cannot select a side on its own [y/N]: y
+  side 1 pass 1 pattern 0x00
+  ...
+  side 1 pass 3 pattern 0x55
+  finishing side 1
+turn the disk over so side A faces the head, then confirm. This drive reads one face at a time and cannot select a side on its own [y/N]: y
+  finishing side 0
+59145 data bytes per side, 100.0% of the physical track, 24 pattern pass(es) run
+side 0 pass 1 pattern 0x00: held
+side 0 pass 1 pattern 0xff: held
 ...
-pass 3 pattern 0x55: held
+side 1 pass 3 pattern 0x55: held
 left the disk formatted as it leaves the kiosk, verified
 grade clean
 ```
 
-同じコマンドを、1 か所が壊れたディスクで実行した場合:
+同じコマンドを、A 面の 1 か所が壊れたディスクで実行した場合です。判定がすでに決まっているため、裏返しを求める前、2 つ目のパターンで止まります。
 
 ```
+  side 0 pass 1 pattern 0x00
+  side 0 pass 1 pattern 0xff
 59145 data bytes per side, 100.0% of the physical track, 2 pattern pass(es) run
-pass 1 pattern 0x00: did not hold
-pass 1 pattern 0xff: did not hold
+side 0 pass 1 pattern 0x00: did not hold
+side 0 pass 1 pattern 0xff: did not hold
 1 block(s) failed on more than one pattern, which is the surface itself
 stopped early: a block failed on two patterns, so the surface is damaged
-the finish was skipped because the test stopped early
 grade failed
 ```
 
-すべてのパターンが保持され、かつ終了処理が検証できた場合にのみ終了コード 0 を返します。`write` と同じく、当面は片面ずつのテストです。
+すべてのパターンが保持され、かつ終了処理が検証できた場合にのみ終了コード 0 を返します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/surface-dark.png">
@@ -846,12 +882,26 @@ fdstoolkit web
 | `POST /api/blank` | `blank` |
 | `POST /api/canon` | `canon` |
 | `POST /api/convert` | `convert` |
+| `POST /api/jobs/dump` | `dump` |
+| `POST /api/jobs/write` | `write` |
+| `POST /api/jobs/surface` | `surface` |
+| `GET /api/jobs/current` | 実行中のディスク操作があれば、その操作 |
+| `GET /api/jobs/{id}` | 1 つの操作の状態、進行状況の行、問いかけ、結果 |
+| `POST /api/jobs/{id}/answer` | 操作の問いかけへの回答 |
 
 イメージとキャプチャは base64 で符号化してリクエストボディに載せます。`GET /docs` は生成された API リファレンスを提供するため、このページはエンドポイントの唯一の利用者ではなく、その 1 つにすぎません。
 
 ページが提示する選択肢は `catalogue` から取得され、これは列挙型の上に構築されています。モデルにプロファイルを追加すれば、二度目の編集をせずともページに現れます。
 
-`dump`、`write`、`surface` はこの端末に接続された FDSStick を操作します。接続されていない場合は 409 を返して原因を示し、`write` と `surface` はリクエストが消去を確認するまで開始しません。
+`dump`、`write`、`surface` はこの端末に接続された FDSStick を操作します。1 面に数秒かかるため、1 回のリクエストではなく操作として実行されます。開始すると操作の ID がすぐに返り、ページはその操作を定期的に問い合わせて、コマンドが表示するのと同じ進行状況の行を 1 行ずつ表示します。ディスク操作は同時に 1 つだけ実行でき、2 つ目は 409 を返して、ドライブを使用中の操作を示します。FDSStick が接続されていない場合も 409 を返して原因を示します。
+
+端末なら自然に得られるものを、ページが補います。
+
+- `write` と `surface` は、開始前に何が消えるかを示すダイアログを開きます。フォーカスは「キャンセル」に置かれるため、反射的に Enter を押してもディスクは消えません。ダイアログを経ないリクエストは、消去を確認するまで拒否されます。
+- 操作がディスクの裏返しを必要とすると、ページは「ディスクを裏返しました」と「中止」の 2 つのボタンとともに問いかけを表示します。10 分間回答がなければ「いいえ」とみなし、ドライブを解放します。
+- 操作の実行中にタブを閉じたり再読み込みしたりすると、先に確認を求めます。タブを閉じてもドライブは止まらないからです。操作の実行中に開いたページは、2 つ目を始めるのではなく、その操作を引き継ぎます。
+- `write` と `surface` は、結果にかかわらず、書き込み前の読み取りを `before.fds` として提供します。
+- 書き込み中に止まった操作は、コマンドと同じく、その面が書きかけの可能性があると伝えます。
 
 インターフェースは英語と日本語で提供されます。両方の辞書は同じキーを持ち、テストスイートがそれを信用ではなく検証します。マークアップまたはスクリプトが参照するキーは両方に存在しなければならず、日本語側に英語のまま残った文字列があってはなりません。
 

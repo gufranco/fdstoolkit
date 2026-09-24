@@ -45,8 +45,8 @@ jobs:
       - name: Install the page test tooling
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Test the page
-        run: pnpm test
+      - name: Test the page, every line of its script
+        run: pnpm test:coverage
 
       - name: Lint the workflows
         uses: raven-actions/actionlint@v2
@@ -56,6 +56,35 @@ jobs:
 
       - name: Format the JSON and YAML
         run: npx --yes prettier@3.9.6 --check "**/*.{json,yml,yaml}"
+
+  browser:
+    name: The page in a browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --all-extras --dev
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install the page test tooling
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run the page against the simulated drive
+        run: pnpm e2e
 
   test:
     name: Python ${{ matrix.python }} on ${{ matrix.os }}

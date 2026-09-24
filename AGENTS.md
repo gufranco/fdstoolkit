@@ -93,11 +93,21 @@ uv run ruff format .
 uv run ruff check .
 uv run pyright
 uv run pytest
+pnpm test:coverage
+pnpm e2e
 ```
 
 Coverage is measured on every `pytest` run, not on request, and the floor is
-100 percent of lines and branches. When a branch cannot be reached by any
-input, delete it rather than excuse it.
+100 percent of lines and branches. The page script carries the same floor
+under `pnpm test:coverage`. When a branch cannot be reached by any input,
+delete it rather than excuse it.
+
+`pnpm e2e` drives the page in Chromium against a simulated two-sided drive
+served by `tests/e2e/serve.py`, at desktop width and at 320 pixels. It checks
+what only a browser can answer: every control is at least 44 pixels tall, the
+erase dialog is modal and starts on a visible Cancel, and nothing overflows.
+The first run needs `pnpm exec playwright install chromium`. A change to the
+page is not done until this suite passes.
 
 Tests carry no comments and no section labels. Three blocks separated by one
 blank line each, one call to the thing under test, and a name that states the

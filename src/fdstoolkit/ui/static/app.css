@@ -69,7 +69,7 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   border: 0;
   border-radius: 999px;
   padding: 7px 16px;
-  min-height: 38px;
+  min-height: 44px;
   background: transparent;
   color: var(--muted);
   font: inherit;
@@ -143,7 +143,7 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px 10px;
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .command-list {
@@ -284,7 +284,7 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px 10px;
-  min-height: 42px;
+  min-height: 44px;
 }
 
 .fields input.offscreen {
@@ -309,7 +309,7 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 5px 10px 5px 5px;
-  min-height: 42px;
+  min-height: 44px;
   cursor: pointer;
 }
 
@@ -569,7 +569,7 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
 .raw summary {
   cursor: pointer;
   color: var(--muted);
-  min-height: 32px;
+  min-height: 44px;
 }
 
 .raw pre { margin-top: 8px; }
@@ -596,6 +596,80 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   opacity: 0.6;
   cursor: progress;
 }
+
+.plain,
+.danger {
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 700;
+  padding: 11px 22px;
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
+}
+
+.plain {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.danger {
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+}
+
+.plain:disabled,
+.danger:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+dialog.erase {
+  width: min(32rem, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  padding: 24px;
+}
+
+dialog.erase::backdrop { background: rgb(0 0 0 / 55%); }
+
+dialog.erase button:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+dialog.erase h2 { margin: 0 0 8px; font-size: 1.125rem; }
+
+dialog.erase p { margin: 0; }
+
+.job .steps {
+  margin: 0 0 12px;
+  padding-left: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.job .steps li { margin: 2px 0; }
+
+.job .turn {
+  border: 1px solid var(--warn);
+  background: var(--warn-soft);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.job .turn .prompt { margin: 0; color: var(--ink); }
 
 a { color: var(--accent); }
 

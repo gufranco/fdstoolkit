@@ -227,12 +227,20 @@ def _read_side_with_retries(reader: DiskReader, side: int, retries: int) -> tupl
     return tuple(resolved)
 
 
+Progress = Callable[[str], None]
+
+
+def _quiet(message: str) -> None:
+    del message
+
+
 def dump(
     reader: DiskReader,
     *,
     sides: int,
     retries: int = DEFAULT_RETRIES,
     flip: Callable[[str], bool] | None = None,
+    progress: Progress = _quiet,
 ) -> DumpResult:
     require_readable_sides(sides)
     _require_readable(reader)
@@ -240,6 +248,7 @@ def dump(
     for side in range(sides):
         if side:
             _ask_for_flip(reader, side, flip)
+        progress(f"reading side {side}")
         dumped.append(SideDump(index=side, blocks=_read_side_with_retries(reader, side, retries)))
         if side and not selects_sides(reader):
             _reject_unflipped(dumped, side)
@@ -253,6 +262,7 @@ def dump_repeated(
     passes: int = MIN_PASSES,
     retries: int = DEFAULT_RETRIES,
     flip: Callable[[str], bool] | None = None,
+    progress: Progress = _quiet,
 ) -> StabilityReport:
     if passes < MIN_PASSES:
         message = f"a stability check needs at least two passes, got {passes}"
@@ -264,7 +274,7 @@ def dump_repeated(
         if rewind and (flip is None or not flip(_rewind_message())):
             message = "the disk was not returned to side A, so the passes cannot be compared"
             raise SideFlipError(message)
-        collected.append(dump(reader, sides=sides, retries=retries, flip=flip))
+        collected.append(dump(reader, sides=sides, retries=retries, flip=flip, progress=progress))
     results = tuple(collected)
     unstable: list[tuple[int, int]] = []
     first = results[0]
@@ -280,21 +290,65 @@ def dump_repeated(
     return StabilityReport(passes=results, unstable_blocks=tuple(unstable))
 
 
-def _compare(disk: Disk, readback: DumpResult) -> tuple[tuple[int, int], ...]:
-    mismatched: list[tuple[int, int]] = []
-    for side_index, side in enumerate(disk.sides):
-        written = readback.sides[side_index].blocks
-        for block_index, block in enumerate(side.blocks):
-            if block_index >= len(written) or written[block_index].payload != block.payload:
-                mismatched.append((side_index, block_index))
-    return tuple(mismatched)
-
-
 def _confirmation_message(disk: Disk) -> str:
     return (
         f"overwrite the disk in the drive with {disk.side_count} side(s) of new data, "
         "destroying whatever it holds now"
     )
+
+
+@dataclass(frozen=True, slots=True)
+class SideWrite:
+    before: SideDump
+    after: SideDump
+    mismatched: tuple[int, ...]
+
+
+def write_side_verified(
+    writer: DiskWriter,
+    reader: DiskReader,
+    index: int,
+    side: Side,
+    *,
+    retries: int = DEFAULT_RETRIES,
+    progress: Progress = _quiet,
+    before_write: Callable[[SideDump], None] = lambda _: None,
+) -> SideWrite:
+    progress(f"reading side {index} before writing it")
+    before = SideDump(index=index, blocks=_read_side_with_retries(reader, index, retries))
+    before_write(before)
+    progress(f"writing side {index}")
+    try:
+        writer.write_side(index, [block.payload for block in side.blocks])
+    except HardwareFaultError as fault:
+        message = f"the write stopped at side {index}: {fault}"
+        raise WriteRefusedError(message) from fault
+    progress(f"reading side {index} back")
+    after = SideDump(index=index, blocks=_read_side_with_retries(reader, index, retries))
+    if _same_blocks(after, before) and _payloads(side) != _dumped(before):
+        raise WriteNotTakenError(REFUSED_WRITE)
+    written = after.blocks
+    mismatched = tuple(
+        block_index
+        for block_index, block in enumerate(side.blocks)
+        if block_index >= len(written) or written[block_index].payload != block.payload
+    )
+    return SideWrite(before=before, after=after, mismatched=mismatched)
+
+
+def refuse_unturned(reader: DiskReader, present: SideDump, previous: SideDump | None) -> None:
+    if previous is None or selects_sides(reader) or not _same_blocks(present, previous):
+        return
+    message = (
+        f"side {present.index} reads back exactly what was just written to side "
+        f"{previous.index}, so the disk was not turned over. Nothing was written to side "
+        f"{present.index}"
+    )
+    raise SideFlipError(message)
+
+
+def ask_for_flip(reader: DiskReader, side: int, flip: Callable[[str], bool] | None) -> None:
+    _ask_for_flip(reader, side, flip)
 
 
 def write_verified(
@@ -305,12 +359,53 @@ def write_verified(
     confirm: Callable[[str], bool],
     backup: Callable[[bytes], None] | None,
     retries: int = DEFAULT_RETRIES,
+    flip: Callable[[str], bool] | None = None,
+    progress: Progress = _quiet,
 ) -> WriteReport:
+    _require_writable(writer, disk)
+    if disk.side_count > 1 and not selects_sides(reader) and flip is None:
+        message = (
+            f"the image has {disk.side_count} sides and the disk has to be turned over "
+            "between them, but nobody is here to do it. Nothing was written"
+        )
+        raise SideFlipError(message)
+    if not confirm(_confirmation_message(disk)):
+        message = "the operator declined the write"
+        raise WriteRefusedError(message)
+
+    before: list[SideDump] = []
+    writes: list[SideWrite] = []
+
+    def keep(present: SideDump) -> None:
+        refuse_unturned(reader, present, writes[-1].after if writes else None)
+        before.append(present)
+        if backup is not None:
+            data, _ = fds.encode(DumpResult(sides=tuple(before)).as_disk(), headered=False)
+            backup(data)
+
+    for index, side in enumerate(disk.sides):
+        if index:
+            _ask_for_flip(reader, index, flip)
+        writes.append(
+            write_side_verified(
+                writer, reader, index, side, retries=retries, progress=progress, before_write=keep
+            )
+        )
+
+    return WriteReport(
+        verified=not any(item.mismatched for item in writes),
+        mismatched_blocks=tuple(
+            (item.after.index, block) for item in writes for block in item.mismatched
+        ),
+        dump=DumpResult(sides=tuple(item.after for item in writes)),
+    )
+
+
+def _require_writable(writer: DiskWriter, disk: Disk) -> None:
     status = writer.status()
     if not status.can_write:
         message = f"cannot write: {', '.join(status.blockers)}"
         raise WriteRefusedError(message)
-
     oversized = [
         index
         for index, side in enumerate(disk.sides)
@@ -324,43 +419,14 @@ def write_verified(
         )
         raise WriteRefusedError(message)
 
-    if disk.side_count > 1:
-        message = (
-            f"the image has {disk.side_count} sides; write them one side at a time, "
-            "turning the disk over between writes"
-        )
-        raise WriteRefusedError(message)
 
-    before = dump(reader, sides=1, retries=retries)
-    if backup is not None:
-        data, _ = fds.encode(before.as_disk(), headered=False)
-        backup(data)
-
-    if not confirm(_confirmation_message(disk)):
-        message = "the operator declined the write"
-        raise WriteRefusedError(message)
-
-    for index, side in enumerate(disk.sides):
-        payloads = [block.payload for block in side.blocks]
-        try:
-            writer.write_side(index, payloads)
-        except HardwareFaultError as fault:
-            message = f"the write stopped at side {index}: {fault}"
-            raise WriteRefusedError(message) from fault
-
-    readback = dump(reader, sides=disk.side_count, retries=retries)
-    mismatched = _compare(disk, readback)
-    if mismatched and _same_first_side(before, readback):
-        raise WriteNotTakenError(REFUSED_WRITE)
-
-    return WriteReport(
-        verified=not mismatched,
-        mismatched_blocks=tuple(mismatched),
-        dump=readback,
-    )
+def _same_blocks(first: SideDump, second: SideDump) -> bool:
+    return _dumped(first) == _dumped(second)
 
 
-def _same_first_side(before: DumpResult, after: DumpResult) -> bool:
-    first = [block.payload for block in before.sides[0].blocks]
-    second = [block.payload for block in after.sides[0].blocks]
-    return first == second
+def _payloads(side: Side) -> list[bytes]:
+    return [block.payload for block in side.blocks]
+
+
+def _dumped(side: SideDump) -> list[bytes]:
+    return [block.payload for block in side.blocks]

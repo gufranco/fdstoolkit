@@ -16,6 +16,7 @@ from fdstoolkit.core.disk import Disk
 from fdstoolkit.ui.schemas import FileResult
 
 BAD_REQUEST: Final = 400
+NOT_FOUND: Final = 404
 CONFLICT: Final = 409
 UNPROCESSABLE: Final = 422
 

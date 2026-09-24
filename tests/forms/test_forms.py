@@ -130,3 +130,10 @@ def test_an_exclusive_lower_bound_is_not_offered_as_an_inclusive_one() -> None:
 
     assert cycles.above == 0
     assert cycles.minimum is None
+
+
+@pytest.mark.parametrize("command", ["write", "surface"])
+def test_the_erase_confirmation_is_asked_by_the_page_not_offered_as_a_field(command: str) -> None:
+    confirm = next(field for field in form_for(command).fields if field.name == "confirm")
+
+    assert confirm.hidden

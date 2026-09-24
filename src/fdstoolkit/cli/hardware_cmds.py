@@ -67,6 +67,20 @@ STATUS_NOTE: Final = (
 )
 
 
+def prompter(*, yes: bool) -> Callable[[str], bool]:
+    def ask(message: str) -> bool:
+        if yes:
+            typer.echo(message)
+            return True
+        return typer.confirm(message)
+
+    return ask
+
+
+def step(message: str) -> None:
+    typer.echo(f"  {message}")
+
+
 def status(
     *,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
@@ -126,11 +140,7 @@ def dump(
     guard_output(output, force=force)
     drive = open_drive()
 
-    def flip(message: str) -> bool:
-        if yes:
-            typer.echo(message)
-            return True
-        return typer.confirm(message)
+    flip = prompter(yes=yes)
 
     try:
         if passes > 1:
@@ -140,13 +150,14 @@ def dump(
                 passes=passes,
                 retries=retries,
                 flip=flip,
+                progress=step,
             )
             result = report.passes[0]
             grade = report.grade
             for side_index, block_index in report.unstable_blocks:
                 typer.echo(f"side {side_index}: block {block_index} differs between passes")
         else:
-            result = dump_disk(drive, sides=sides, retries=retries, flip=flip)
+            result = dump_disk(drive, sides=sides, retries=retries, flip=flip, progress=step)
             grade = result.grade
     except KeyboardInterrupt:
         message = "stopped on interrupt, nothing was written"
@@ -213,24 +224,23 @@ def write(
     disk, _, _, _ = decode_image(image)
     drive = open_drive()
 
-    def confirm(message: str) -> bool:
-        if yes:
-            return True
-        return typer.confirm(message)
+    ask = prompter(yes=yes)
 
     try:
         report = write_verified(
             drive,
             drive,
             disk,
-            confirm=confirm,
+            confirm=ask,
+            flip=ask,
+            progress=step,
             backup=None if backup is None else writer_for(backup),
             retries=retries,
         )
     except KeyboardInterrupt:
         message = "stopped on interrupt, the disk may be half written, dump it before using it"
         raise fail(message) from None
-    except (HardwareFaultError, WriteRefusedError) as error:
+    except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
         raise fail(str(error)) from error
 
     for side_index, block_index in report.mismatched_blocks:
@@ -269,10 +279,7 @@ def surface(
     """Write and read back complementary patterns to grade a scratch disk."""
     drive = open_drive()
 
-    def confirm(message: str) -> bool:
-        if yes:
-            return True
-        return typer.confirm(message)
+    ask = prompter(yes=yes)
 
     sink = None if backup is None else writer_for(backup)
 
@@ -281,11 +288,13 @@ def surface(
             drive,
             drive,
             sides=sides,
-            confirm=confirm,
+            confirm=ask,
+            flip=ask,
+            progress=step,
             backup=sink,
             plan=SurfacePlan(rounds=passes, fill=not quick, finish=finish),
         )
-    except (HardwareFaultError, WriteRefusedError, SurfaceTestRefusedError) as error:
+    except (HardwareFaultError, WriteRefusedError, SideFlipError, SurfaceTestRefusedError) as error:
         raise fail(str(error)) from error
 
     report_surface(report)
@@ -300,7 +309,7 @@ def report_surface(report: SurfaceReport) -> None:
     )
     for entry in report.passes:
         state = "held" if entry.verified else "did not hold"
-        typer.echo(f"pass {entry.round} pattern {entry.pattern:#04x}: {state}")
+        typer.echo(f"side {entry.side} pass {entry.round} pattern {entry.pattern:#04x}: {state}")
 
     if report.hard_blocks:
         typer.echo(

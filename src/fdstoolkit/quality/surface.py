@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final
 
@@ -11,8 +11,17 @@ from fdstoolkit.core.bitstream import EMULATION_BUFFER, emulated_side_size
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import Disk, Side, require_readable_sides
 from fdstoolkit.edit.files import FileSpec, insert_file
-from fdstoolkit.hardware.ports import DiskReader, DiskWriter
-from fdstoolkit.hardware.session import Grade, WriteNotTakenError, write_verified
+from fdstoolkit.hardware.ports import DiskReader, DiskWriter, selects_sides
+from fdstoolkit.hardware.session import (
+    Grade,
+    Progress,
+    SideDump,
+    SideWrite,
+    WriteNotTakenError,
+    ask_for_flip,
+    refuse_unturned,
+    write_side_verified,
+)
 
 PATTERNS: Final = (0x00, 0xFF, 0xAA, 0x55)
 PATTERN_FILE_SIZE: Final = 4096
@@ -56,6 +65,7 @@ class PatternPass:
     mismatched_blocks: tuple[tuple[int, int], ...]
     grade: Grade
     round: int = 1
+    side: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,55 +204,100 @@ def erased_disk(*, sides: int) -> Disk:
     )
 
 
-def _run_patterns(
-    writer: DiskWriter,
-    reader: DiskReader,
-    *,
-    plan: SurfacePlan,
-    sides: int,
-    backup: Callable[[bytes], None] | None,
-    results: list[PatternPass],
-) -> tuple[StopReason | None, str]:
+def _no_passes() -> list[PatternPass]:
+    return []
+
+
+def _no_sides() -> list[SideDump]:
+    return []
+
+
+@dataclass(slots=True)
+class _Run:
+    writer: DiskWriter
+    reader: DiskReader
+    plan: SurfacePlan
+    sides: int
+    backup: Callable[[bytes], None] | None
+    flip: Callable[[str], bool] | None
+    progress: Progress
+    results: list[PatternPass] = field(default_factory=_no_passes)
+    originals: list[SideDump] = field(default_factory=_no_sides)
+    last: SideDump | None = None
+
+    def turn_to(self, side: int) -> None:
+        ask_for_flip(self.reader, side, self.flip)
+
+    def write(self, index: int, side: Side, *, keep: bool) -> SideWrite:
+        def check(present: SideDump) -> None:
+            refuse_unturned(self.reader, present, self.last if keep else None)
+            if keep:
+                self.originals.append(present)
+                if self.backup is not None:
+                    disk = Disk(sides=tuple(item.as_side(SIDE_CAPACITY) for item in self.originals))
+                    data, _ = fds.encode(disk, headered=False)
+                    self.backup(data)
+
+        result = write_side_verified(
+            self.writer,
+            self.reader,
+            index,
+            side,
+            retries=self.plan.retries,
+            before_write=check,
+        )
+        self.last = result.after
+        return result
+
+
+def _run_patterns(run: _Run) -> tuple[StopReason | None, str]:
     failures: dict[tuple[int, int], int] = {}
-    for index in range(plan.rounds):
-        for pattern in PATTERNS:
-            try:
-                report = write_verified(
-                    writer,
-                    reader,
-                    pattern_disk(pattern, sides=sides, fill=plan.fill),
-                    confirm=lambda _: True,
-                    backup=backup if not results else None,
-                    retries=plan.retries,
+    for side_index in range(run.sides):
+        if side_index:
+            run.turn_to(side_index)
+        targets = {
+            pattern: pattern_disk(pattern, sides=run.sides, fill=run.plan.fill).sides[side_index]
+            for pattern in PATTERNS
+        }
+        for index in range(run.plan.rounds):
+            for position, pattern in enumerate(PATTERNS):
+                run.progress(f"side {side_index} pass {index + 1} pattern {pattern:#04x}")
+                keep = not index and not position
+                try:
+                    result = run.write(side_index, targets[pattern], keep=keep)
+                except WriteNotTakenError as refused:
+                    return StopReason.REFUSED, str(refused)
+                blocks = tuple((side_index, block) for block in result.mismatched)
+                run.results.append(
+                    PatternPass(
+                        pattern=pattern,
+                        verified=not result.mismatched,
+                        mismatched_blocks=blocks,
+                        grade=Grade.FAILED if result.mismatched else result.after.grade,
+                        round=index + 1,
+                        side=side_index,
+                    ),
                 )
-            except WriteNotTakenError as refused:
-                return StopReason.REFUSED, str(refused)
-            results.append(
-                PatternPass(
-                    pattern=pattern,
-                    verified=report.verified,
-                    mismatched_blocks=report.mismatched_blocks,
-                    grade=report.grade,
-                    round=index + 1,
-                ),
-            )
-            for block in report.mismatched_blocks:
-                failures[block] = failures.get(block, 0) + 1
-            if any(count >= HARD_FAILURES for count in failures.values()):
-                return StopReason.DAMAGED, ""
+                for block in blocks:
+                    failures[block] = failures.get(block, 0) + 1
+                if any(count >= HARD_FAILURES for count in failures.values()):
+                    return StopReason.DAMAGED, ""
     return None, ""
 
 
-def _finish(
-    writer: DiskWriter, reader: DiskReader, *, finish: Finish, sides: int, retries: int
-) -> bool:
-    final = blank_disk(sides=sides) if finish is Finish.BLANK else erased_disk(sides=sides)
+def _finish(run: _Run, finish: Finish) -> bool:
+    final = blank_disk(sides=run.sides) if finish is Finish.BLANK else erased_disk(sides=run.sides)
+    order = tuple(reversed(range(run.sides)))
     try:
-        return write_verified(
-            writer, reader, final, confirm=lambda _: True, backup=None, retries=retries
-        ).verified
+        for position, side_index in enumerate(order):
+            if position:
+                run.turn_to(side_index)
+            run.progress(f"finishing side {side_index}")
+            if run.write(side_index, final.sides[side_index], keep=False).mismatched:
+                return False
     except WriteNotTakenError:
         return False
+    return True
 
 
 def _confirmation_message(sides: int) -> str:
@@ -260,39 +315,50 @@ def surface_test(
     confirm: Callable[[str], bool],
     backup: Callable[[bytes], None] | None = None,
     plan: SurfacePlan | None = None,
+    flip: Callable[[str], bool] | None = None,
+    progress: Progress = lambda _: None,
 ) -> SurfaceReport:
     require_readable_sides(sides)
     plan = plan or SurfacePlan()
-    rounds, fill, finish, retries = plan.rounds, plan.fill, plan.finish, plan.retries
-    if rounds < 1:
+    if plan.rounds < 1:
         message = "a surface test runs at least one round"
         raise SurfaceTestRefusedError(message)
     status = writer.status()
     if not status.can_write:
         message = f"cannot run a surface test: {', '.join(status.blockers)}"
         raise SurfaceTestRefusedError(message)
+    if sides > 1 and not selects_sides(reader) and flip is None:
+        message = (
+            f"a {sides}-side test needs the disk turned over between sides, "
+            "but nobody is here to do it. Nothing was written"
+        )
+        raise SurfaceTestRefusedError(message)
 
     if not confirm(_confirmation_message(sides)):
         message = "the operator declined the surface test"
         raise SurfaceTestRefusedError(message)
 
-    results: list[PatternPass] = []
-    written = pattern_disk(PATTERNS[0], sides=sides, fill=fill).sides[0]
-    coverage = emulated_side_size(written) / EMULATION_BUFFER
-    data_bytes = written.content_size
-    stopped, refusal = _run_patterns(
-        writer, reader, plan=plan, sides=sides, backup=backup, results=results
+    run = _Run(
+        writer=writer,
+        reader=reader,
+        plan=plan,
+        sides=sides,
+        backup=backup,
+        flip=flip,
+        progress=progress,
     )
+    written = pattern_disk(PATTERNS[0], sides=sides, fill=plan.fill).sides[0]
+    stopped, refusal = _run_patterns(run)
 
     finished, ran = True, False
-    if finish is not Finish.LEAVE and stopped is None:
-        finished, ran = _finish(writer, reader, finish=finish, sides=sides, retries=retries), True
+    if plan.finish is not Finish.LEAVE and stopped is None:
+        finished, ran = _finish(run, plan.finish), True
 
     return SurfaceReport(
-        passes=tuple(results),
-        coverage=coverage,
-        data_bytes=data_bytes,
-        finish=finish,
+        passes=tuple(run.results),
+        coverage=emulated_side_size(written) / EMULATION_BUFFER,
+        data_bytes=written.content_size,
+        finish=plan.finish,
         finish_verified=finished,
         finish_ran=ran,
         stopped=stopped,

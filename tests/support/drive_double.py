@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Final
 
 from fdstoolkit.codecs.raw import encode_block_stream
 from fdstoolkit.core.blocks import Block, BlockKind
@@ -41,7 +40,11 @@ class SimulatedDrive:
         self._reads: dict[tuple[int, int], int] = {}
         self.read_count = 0
         self.write_count = 0
+        self.closed = False
         self._captures: list[bytes] = []
+
+    def close(self) -> None:
+        self.closed = True
 
     @property
     def captures(self) -> tuple[bytes, ...]:
@@ -58,7 +61,7 @@ class SimulatedDrive:
             ready=self._ready,
         )
 
-    selects_sides: Final = True
+    selects_sides: bool = True
 
     @property
     def disk(self) -> Disk | None:
@@ -128,3 +131,26 @@ class SimulatedDrive:
         sides = list(self._disk.sides)
         sides[side] = written
         self._disk = Disk(sides=tuple(sides), header_side_count=self._disk.header_side_count)
+
+
+class FacingDrive(SimulatedDrive):
+    selects_sides = False
+
+    def __init__(self, disk: Disk | None, *, plan: FaultPlan | None = None) -> None:
+        super().__init__(disk, plan=plan)
+        self.facing = 0
+        self.turns = 0
+
+    def turn(self, message: str) -> bool:
+        del message
+        self.facing ^= 1
+        self.turns += 1
+        return True
+
+    def read_side(self, side: int) -> Iterator[BlockRead]:
+        del side
+        return super().read_side(self.facing)
+
+    def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+        del side
+        super().write_side(self.facing, blocks)

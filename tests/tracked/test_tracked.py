@@ -49,7 +49,8 @@ def test_no_python_file_is_hidden_from_a_clean_checkout() -> None:
 def test_the_page_tests_run_in_continuous_integration() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "pnpm test" in workflow
+    assert "pnpm test:coverage" in workflow
+    assert "pnpm e2e" in workflow
 
 
 def test_every_page_script_is_covered_by_a_test_file() -> None:
@@ -58,4 +59,4 @@ def test_every_page_script_is_covered_by_a_test_file() -> None:
         path.read_text(encoding="utf-8") for path in (ROOT / "tests/web").glob("*.test.js")
     )
 
-    assert {name for name in scripts if f"static/{name}.js" not in exercised} == {"i18n"}
+    assert {name for name in scripts if f"static/{name}.js" not in exercised} == set()

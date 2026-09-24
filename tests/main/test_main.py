@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 from device import FakeFdsStick
-from drive_double import FaultPlan, SimulatedDrive
+from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
@@ -422,15 +422,60 @@ def test_write_stops_when_the_confirmation_is_declined(
     assert "declined" in result.stdout
 
 
-def test_write_refuses_a_multi_side_image_in_one_pass(
+def attach_facing(monkeypatch: pytest.MonkeyPatch, source: Path) -> FacingDrive:
+    disk, _, _, _ = common.decode_image(source)
+    drive = FacingDrive(disk)
+    monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.open_fdsstick", lambda: drive)
+    return drive
+
+
+def operator(drive: FacingDrive, *, turns: bool) -> Callable[..., Callable[[str], bool]]:
+    def answer(message: str) -> bool:
+        if "turn the disk over" in message:
+            if turns:
+                drive.turn(message)
+            return turns
+        return True
+
+    def build(*, yes: bool) -> Callable[[str], bool]:
+        del yes
+        return answer
+
+    return build
+
+
+def test_write_turns_the_disk_once_for_a_two_side_image(
     image: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    attach(monkeypatch, image)
+    drive = attach_facing(monkeypatch, image)
+    monkeypatch.setattr(hardware_cmds, "prompter", operator(drive, turns=True))
 
-    result = runner.invoke(app, ["write", str(image), "--yes"])
+    result = runner.invoke(app, ["write", str(image)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "  writing side 1" in result.stdout
+    assert drive.turns == 1
+
+
+def test_write_stops_when_the_turn_is_declined(
+    image: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drive = attach_facing(monkeypatch, image)
+    monkeypatch.setattr(hardware_cmds, "prompter", operator(drive, turns=False))
+
+    result = runner.invoke(app, ["write", str(image)])
 
     assert result.exit_code == 1
-    assert "one side at a time" in result.stdout
+    assert "declined to turn the disk over" in result.stdout
+
+
+def test_a_prompt_answered_by_yes_is_still_shown(capsys: pytest.CaptureFixture[str]) -> None:
+    ask = hardware_cmds.prompter(yes=True)
+
+    answered = ask("turn the disk over")
+
+    assert answered
+    assert "turn the disk over" in capsys.readouterr().out
 
 
 def _dat_for(path: Path, image: Path) -> Path:

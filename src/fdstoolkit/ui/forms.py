@@ -37,6 +37,7 @@ FILE_FIELDS: Final = frozenset(
 )
 
 UNGROUPED: Final = "other"
+ANSWERED_BY_DIALOG: Final = frozenset({"confirm"})
 FAMILY_ORDER: Final = tuple(family.value.lower() for family in Family)
 FILE_LIST_FIELDS: Final = frozenset({"images", "reads", "donors"})
 
@@ -87,6 +88,7 @@ class FormField(BaseModel):
     step: float | None = None
     min_length: int | None = None
     max_length: int | None = None
+    hidden: bool = False
 
 
 class CommandForm(BaseModel):
@@ -175,6 +177,7 @@ def _fields(model: type[BaseModel]) -> list[FormField]:
                 default=default,
                 options=list(CHOICES.get(name, ())),
                 step=1 if "int" in str(info.annotation) else None,
+                hidden=name in ANSWERED_BY_DIALOG,
                 **_bounds(info).model_dump(),
             )
         )
