@@ -7,6 +7,7 @@ from typing import Final, Protocol, cast, runtime_checkable
 
 from fdstoolkit.codecs.raw import decode_raw03, encode_block_stream, unpack_raw03
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
+from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, Watchdog
 
 VENDOR_ID: Final = 0x16D0
 PRODUCT_ID: Final = 0x0AAA
@@ -57,8 +58,9 @@ class FdsStick:
     reports_write_protection: Final = False
     selects_sides: Final = False
 
-    def __init__(self, transport: HidTransport) -> None:
+    def __init__(self, transport: HidTransport, *, ceiling: float = UNMEASURED_CEILING_S) -> None:
         self._transport = transport
+        self._watchdog = Watchdog(on_stall=self.close, ceiling=ceiling)
         self._captures: list[bytes] = []
         self._resyncs: list[tuple[int, int]] = []
 
@@ -81,17 +83,31 @@ class FdsStick:
             ready=None,
         )
 
-    def _start(self, mode: int) -> None:
-        self._transport.send_feature(bytes([ReportId.DISK_START, mode]))
+    @property
+    def watchdog(self) -> Watchdog:
+        return self._watchdog
 
-    def read_raw_side(self) -> bytes:
+    def _start(self, mode: int) -> None:
+        start = bytes([ReportId.DISK_START, mode])
+        self._watchdog.call(lambda: self._transport.send_feature(start))
+
+    def _chunk(self) -> bytes:
+        return self._watchdog.call(
+            lambda: self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
+        )
+
+    def read_raw_side(self, *, what: str = "reading a side") -> bytes:
+        with self._watchdog.side(what):
+            return self._read_raw()
+
+    def _read_raw(self) -> bytes:
         self._start(MODE_READ)
         out = bytearray()
         expected = FIRST_SEQUENCE
         opening = True
 
         while len(out) < RAW_SIDE_LIMIT:
-            packet = self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
+            packet = self._chunk()
             if len(packet) < HEADER_BYTES:
                 message = "the device stopped answering during the read"
                 raise HardwareFaultError(message, kind=FaultKind.LINK)
@@ -119,13 +135,17 @@ class FdsStick:
 
         return bytes(out)
 
-    def write_raw_side(self, values: bytes) -> None:
+    def write_raw_side(self, values: bytes, *, what: str = "writing a side") -> None:
+        with self._watchdog.side(what, writing=True):
+            self._write_raw(values)
+
+    def _write_raw(self, values: bytes) -> None:
         self._start(MODE_WRITE)
         for index, start in enumerate(range(0, len(values), WRITE_PAYLOAD)):
             chunk = values[start : start + WRITE_PAYLOAD]
             packet = bytes([ReportId.DISK_WRITE]) + chunk.ljust(WRITE_PAYLOAD, b"\0")
             try:
-                self._transport.write_output(packet)
+                self._watchdog.call(lambda packet=packet: self._transport.write_output(packet))
             except OSError as error:
                 if index < SETTLED_PACKETS:
                     message = f"the device stopped accepting data after {index} packet(s)"
@@ -133,8 +153,7 @@ class FdsStick:
                 break
 
     def read_side(self, side: int) -> Iterator[BlockRead]:
-        del side
-        packed = self.read_raw_side()
+        packed = self.read_raw_side(what=f"reading side {side}")
         self._captures.append(packed)
         values = unpack_raw03(packed)
         decoded, _ = decode_raw03(values)
@@ -147,8 +166,7 @@ class FdsStick:
             )
 
     def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
-        del side
-        self.write_raw_side(encode_block_stream(blocks))
+        self.write_raw_side(encode_block_stream(blocks), what=f"writing side {side}")
 
 
 @runtime_checkable
@@ -199,7 +217,7 @@ def open_fdsstick() -> FdsStick:
     except ImportError as error:
         message = (
             "hidapi is not installed, so an FDSStick cannot be opened. "
-            "Install the hardware extra: uv pip install 'fdstoolkit[hardware]'"
+            "Homebrew installs it with the toolkit: brew reinstall gufranco/fdstoolkit/fdstoolkit"
         )
         raise HardwareFaultError(message, kind=FaultKind.LINK) from error
 

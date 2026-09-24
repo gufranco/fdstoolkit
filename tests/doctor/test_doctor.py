@@ -70,7 +70,7 @@ def test_a_missing_hardware_extra_is_reported_with_the_fix(tmp_path: Path) -> No
     report = diagnose(load_hid=missing_hid, cache=DatCache(tmp_path))
 
     assert status_of(report, "hardware support") is CheckStatus.MISSING
-    assert "fdstoolkit[hardware]" in detail_of(report, "hardware support")
+    assert "brew reinstall gufranco/fdstoolkit/fdstoolkit" in detail_of(report, "hardware support")
 
 
 def test_no_connected_fdsstick_is_a_warning_not_a_failure(tmp_path: Path) -> None:

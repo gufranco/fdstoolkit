@@ -20,7 +20,9 @@ from fdstoolkit.identify.cache import DatCache
 from fdstoolkit.version import VERSION
 
 MIN_PYTHON: Final = (3, 12)
-HARDWARE_HINT: Final = "install the hardware extra: uv tool install 'fdstoolkit[hardware]'"
+HARDWARE_HINT: Final = (
+    "Homebrew installs it with the toolkit: brew reinstall gufranco/fdstoolkit/fdstoolkit"
+)
 UDEV_HINT: Final = (
     "the device is present but cannot be opened, which on Linux means a missing udev rule: "
     'write SUBSYSTEM=="hidraw", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="0aaa", MODE="0666" '

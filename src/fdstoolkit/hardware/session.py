@@ -9,7 +9,6 @@ from fdstoolkit.codecs import fds
 from fdstoolkit.core.bitstream import emulated_side_size
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side, require_readable_sides
-from fdstoolkit.hardware.deadline import Deadline, guard
 from fdstoolkit.hardware.ports import (
     BlockRead,
     DiskReader,
@@ -20,7 +19,6 @@ from fdstoolkit.hardware.ports import (
 
 DEFAULT_RETRIES = 3
 MIN_PASSES = 2
-DEFAULT_TIMEOUT = 120.0
 EMULATED_CAPACITY = 66560
 
 
@@ -209,7 +207,6 @@ def dump(
     *,
     sides: int,
     retries: int = DEFAULT_RETRIES,
-    timeout: float = DEFAULT_TIMEOUT,
     flip: Callable[[str], bool] | None = None,
 ) -> DumpResult:
     require_readable_sides(sides)
@@ -218,10 +215,7 @@ def dump(
     for side in range(sides):
         if side:
             _ask_for_flip(reader, side, flip)
-        deadline = Deadline(seconds=timeout)
-        first_pass = guard(
-            deadline, f"reading side {side}", lambda side=side: list(reader.read_side(side))
-        )
+        first_pass = list(reader.read_side(side))
         blocks = tuple(
             _read_block_with_retries(reader, side, index, block, retries)
             for index, block in enumerate(first_pass)

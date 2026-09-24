@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import threading
 from collections import deque
+from collections.abc import Iterator
 
 import pytest
 
@@ -17,7 +19,8 @@ from fdstoolkit.hardware.fdsstick import (
     ReportId,
     open_fdsstick,
 )
-from fdstoolkit.hardware.ports import HardwareFaultError
+from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, StallError
 
 
 class FakeTransport:
@@ -41,6 +44,40 @@ class FakeTransport:
 
     def close(self) -> None:
         self.closed = True
+
+
+BRIEF = 0.05
+
+
+class HangingTransport(FakeTransport):
+    def __init__(self, gate: threading.Event, *, answers: int) -> None:
+        super().__init__({ReportId.DISK_CHUNK: read_packets(bytes(CHUNK_PAYLOAD * 4))})
+        self.gate = gate
+        self.answers = answers
+        self.closed_event = threading.Event()
+
+    def get_feature(self, report_id: int, length: int) -> bytes:
+        if self.answers <= 0:
+            self.gate.wait()
+        self.answers -= 1
+        return super().get_feature(report_id, length)
+
+    def write_output(self, data: bytes) -> None:
+        if self.answers <= 0:
+            self.gate.wait()
+        self.answers -= 1
+        super().write_output(data)
+
+    def close(self) -> None:
+        super().close()
+        self.closed_event.set()
+
+
+@pytest.fixture(name="gate")
+def gate_fixture() -> Iterator[threading.Event]:
+    gate = threading.Event()
+    yield gate
+    gate.set()
 
 
 def sample_disk():  # noqa: ANN201
@@ -156,14 +193,14 @@ def test_the_transport_closes_the_device() -> None:
     assert device.closed
 
 
-def test_opening_without_hidapi_explains_the_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_opening_without_hidapi_says_how_to_reinstall(monkeypatch: pytest.MonkeyPatch) -> None:
     def refuse() -> object:
         message = "no module named hid"
         raise ImportError(message)
 
     monkeypatch.setattr(fdsstick_module, "_load_hid", refuse)
 
-    with pytest.raises(HardwareFaultError, match="hardware extra"):
+    with pytest.raises(HardwareFaultError, match="brew reinstall gufranco/fdstoolkit/fdstoolkit"):
         open_fdsstick()
 
 
@@ -243,3 +280,38 @@ def test_the_stick_allows_a_write_it_cannot_vouch_for() -> None:
 
 def test_the_stick_reads_one_face_and_says_so() -> None:
     assert FdsStick.selects_sides is False
+
+
+def test_a_stick_that_stops_answering_mid_read_is_a_stall(gate: threading.Event) -> None:
+    transport = HangingTransport(gate, answers=2)
+    stick = FdsStick(transport, ceiling=BRIEF)
+
+    with pytest.raises(StallError) as caught:
+        list(stick.read_side(0))
+
+    assert caught.value.kind is FaultKind.TIMEOUT
+    assert "reading side 0" in str(caught.value)
+    assert "half written" not in str(caught.value)
+    assert stick.captures == ()
+    assert transport.closed_event.wait(1.0)
+
+
+def test_a_stick_that_stops_accepting_a_write_is_a_stall(gate: threading.Event) -> None:
+    transport = HangingTransport(gate, answers=3)
+    stick = FdsStick(transport, ceiling=BRIEF)
+
+    with pytest.raises(StallError, match="writing side 1") as caught:
+        stick.write_side(1, [block.payload for block in sample_disk().sides[0].blocks])
+
+    assert "half written" in str(caught.value)
+
+    assert transport.closed_event.wait(1.0)
+
+
+def test_a_side_that_reads_in_time_sets_the_limit_for_the_next() -> None:
+    stick = FdsStick(FakeTransport({ReportId.DISK_CHUNK: read_packets(bytes(CHUNK_PAYLOAD * 2))}))
+
+    stick.read_raw_side()
+
+    assert stick.watchdog.measured is not None
+    assert stick.watchdog.limit < UNMEASURED_CEILING_S

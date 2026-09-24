@@ -116,7 +116,7 @@ Notation: `<>` is a value, `[]` is optional, `...` repeats.
 fdstoolkit doctor [--json]
 ```
 
-Version, Python, platform, whether hardware support is installed, which devices are attached and whether they open, and the state of the DAT cache. Run this first when something behaves unexpectedly. The device detail it prints is what a dump submission needs under "hardware, firmware, software version".
+Version, Python, platform, whether hardware support is installed, which devices are attached and whether they open, and the state of the DAT cache. Run this first when something behaves unexpectedly.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/doctor-dark.png">
@@ -739,6 +739,8 @@ Read a disk. `--passes` reads each side more than once, `--retries` sets per-blo
 
 The drive reaches one face at a time and cannot select a side, so reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
 
+Every read and write runs against a deadline. Before anything has been measured a side gets 20 seconds; after the first side, the limit is three times as long as that side took, and never under 2 seconds. A side that overruns stops the command and closes the device, and is never retried, because a drive that has stalled once only wears the disk further. A dump that stalls writes no file. A write that stalls says the side may be half written, since only a fresh dump can show what landed. A side at the rate the adapter expects takes about 5.5 seconds. These limits come from that figure rather than from a measured drive, and are the first thing to revisit on real hardware.
+
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dump-dark.png">
 <img alt="The dump command on the local web page" src="assets/screenshots/dump-light.png">
@@ -971,7 +973,7 @@ MIT. See [LICENSE](LICENSE).
 
 Famicom Disk System / ファミコン ディスクシステム / ディスクカード preservation, dumping
 (吸い出し), disk quality measurement, drive calibration (ドライブ調整), belt replacement
-(ベルト交換), FDSStick, FDSKey, No-Intro submission.
+(ベルト交換), FDSStick, FDSKey.
 
 Japanese documentation: <a href="README.ja.md">README.ja.md</a>
 

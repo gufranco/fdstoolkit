@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import zlib
 from collections.abc import Callable
 from pathlib import Path
@@ -28,6 +29,7 @@ from fdstoolkit.identify import firmware
 from fdstoolkit.quality.surface import Finish, PatternPass, SurfaceReport
 
 runner = CliRunner()
+STALL_CEILING = 0.05
 PUBLISHED_HOST = "0.0.0.0"  # noqa: S104 -- the host this test asserts a warning for
 
 
@@ -279,7 +281,6 @@ def attach(
     source: Path | None = None,
     plan: FaultPlan | None = None,
 ) -> SimulatedDrive:
-    """Stand a drive in for the FDSStick the hardware commands open."""
     disk = None
     if source is not None:
         disk, _, _, _ = common.decode_image(source)
@@ -290,6 +291,43 @@ def attach(
 
     monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.open_fdsstick", opener)
     return drive
+
+
+class SilentStick:
+    def __init__(self) -> None:
+        self.released = threading.Event()
+
+    def send_feature(self, data: bytes) -> None:
+        del data
+
+    def get_feature(self, report_id: int, length: int) -> bytes:
+        del report_id, length
+        self.released.wait()
+        return b""
+
+    def write_output(self, data: bytes) -> None:
+        del data
+
+    def close(self) -> None:
+        self.released.set()
+
+
+def test_a_dump_that_stalls_stops_and_writes_no_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    transport = SilentStick()
+    monkeypatch.setattr(
+        "fdstoolkit.cli.hardware_cmds.open_fdsstick",
+        lambda: FdsStick(transport, ceiling=STALL_CEILING),
+    )
+    output = tmp_path / "stalled.fds"
+
+    result = runner.invoke(app, ["dump", "-o", str(output)])
+
+    assert result.exit_code == 1
+    assert "reading side 0 did not finish within" in result.output
+    assert not output.exists()
+    assert transport.released.wait(1.0)
 
 
 def detach(monkeypatch: pytest.MonkeyPatch, message: str = "no FDSStick is attached") -> None:
