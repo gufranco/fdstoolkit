@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import threading
 from collections.abc import Callable
@@ -77,7 +76,7 @@ def test_json_output_has_no_timestamp(image: Path) -> None:
     assert "generated_at" not in payload
 
 
-def test_ls_lists_files(tmp_path: Path) -> None:
+def test_info_lists_files(tmp_path: Path) -> None:
     source = tmp_path / "with-file.fds"
     content = bytearray(blank_image(sides=1, headered=False, formatted=True))
     content[56:58] = bytes([0x02, 0x01])
@@ -92,7 +91,7 @@ def test_ls_lists_files(tmp_path: Path) -> None:
     content[58 + len(header) : 58 + len(header) + 5] = bytes([0x04]) + bytes(4)
     source.write_bytes(bytes(content))
 
-    result = runner.invoke(app, ["ls", str(source)])
+    result = runner.invoke(app, ["info", str(source), "--files"])
 
     assert result.exit_code == 0
     assert "KYODAKU-" in result.stdout
@@ -166,28 +165,32 @@ def test_convert_overwrites_when_forced(image: Path, tmp_path: Path) -> None:
     assert out.read_bytes() != b"existing"
 
 
-def test_canon_writes_the_canonical_image(image: Path, tmp_path: Path) -> None:
+def test_hash_writes_the_canonical_image(image: Path, tmp_path: Path) -> None:
     out = tmp_path / "canon.fds"
 
-    result = runner.invoke(app, ["canon", str(image), "-o", str(out)])
+    result = runner.invoke(app, ["hash", str(image), "-o", str(out)])
 
     assert result.exit_code == 0
     assert out.stat().st_size == 2 * SIDE_SIZE
     assert "fdstoolkit:v1:content/v1:" in result.stdout
+    assert f"wrote {out}" in result.stdout
 
 
-def test_canon_accepts_a_profile(image: Path) -> None:
-    result = runner.invoke(app, ["canon", str(image), "--profile", "data"])
+def test_hash_refuses_to_overwrite_the_canonical_image(image: Path, tmp_path: Path) -> None:
+    out = tmp_path / "canon.fds"
+    out.write_bytes(b"x")
+
+    result = runner.invoke(app, ["hash", str(image), "-o", str(out)])
+
+    assert result.exit_code == 1
+    assert out.read_bytes() == b"x"
+
+
+def test_hash_accepts_a_profile(image: Path) -> None:
+    result = runner.invoke(app, ["hash", str(image), "--profile", "data"])
 
     assert result.exit_code == 0
     assert "data/v1" in result.stdout
-
-
-def test_canon_rejects_an_unknown_profile(image: Path) -> None:
-    result = runner.invoke(app, ["canon", str(image), "--profile", "nope"])
-
-    assert result.exit_code == 1
-    assert "unknown profile" in result.stdout
 
 
 @pytest.mark.parametrize("suffix", [".fds", ".qd"])
@@ -219,7 +222,7 @@ def test_blank_writes_the_reference_image(tmp_path: Path) -> None:
     assert out.stat().st_size == 16 + SIDE_SIZE
 
 
-@pytest.mark.parametrize("command", ["blank", "card", "dump", "surface"])
+@pytest.mark.parametrize("command", ["blank", "dump", "surface"])
 @pytest.mark.parametrize("sides", ["0", "3", "-1", "1.5", "2.0", "two"])
 def test_a_side_count_other_than_one_or_two_is_refused(
     command: str, sides: str, tmp_path: Path
@@ -255,23 +258,6 @@ def test_an_unknown_extension_is_reported(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "format" in result.stdout
-
-
-def test_lint_passes_a_plain_image(image: Path) -> None:
-    result = runner.invoke(app, ["lint", str(image)])
-
-    assert result.exit_code == 0
-    assert "ok" in result.stdout
-
-
-def test_lint_rejects_an_all_zero_image(tmp_path: Path) -> None:
-    path = tmp_path / "blank.fds"
-    path.write_bytes(bytes(SIDE_SIZE))
-
-    result = runner.invoke(app, ["lint", str(path)])
-
-    assert result.exit_code == 1
-    assert "FK002" in result.stdout
 
 
 def attach(
@@ -476,44 +462,6 @@ def test_a_prompt_answered_by_yes_is_still_shown(capsys: pytest.CaptureFixture[s
     assert "turn the disk over" in capsys.readouterr().out
 
 
-def _dat_for(path: Path, image: Path) -> Path:
-    data = image.read_bytes()
-    path.write_text(
-        "<?xml version='1.0'?>\n<datafile>\n"
-        "<header><name>Test DAT</name><version>1</version></header>\n"
-        '<game name="Known (Japan)"><rom name="Known (Japan).fds" '
-        f'size="{len(data)}" sha1="{hashlib.sha1(data, usedforsecurity=False).hexdigest()}"/>'
-        "</game>\n</datafile>\n",
-        encoding="utf-8",
-    )
-    return path
-
-
-def test_identify_matches_a_known_image(image: Path, tmp_path: Path) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-
-    result = runner.invoke(app, ["identify", str(image), "--dat", str(dat)])
-
-    assert result.exit_code == 0
-    assert "Known (Japan)" in result.stdout
-
-
-def test_identify_reports_an_unknown_image(single_side: Path, image: Path, tmp_path: Path) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-
-    result = runner.invoke(app, ["identify", str(single_side), "--dat", str(dat)])
-
-    assert result.exit_code == 1
-    assert "no match" in result.stdout
-
-
-def test_identify_reports_a_missing_dat(image: Path, tmp_path: Path) -> None:
-    result = runner.invoke(app, ["identify", str(image), "--dat", str(tmp_path / "nope.dat")])
-
-    assert result.exit_code == 1
-    assert "not found" in result.stdout
-
-
 def test_extract_writes_every_file(tmp_path: Path) -> None:
     content = bytearray(blank_image(sides=1, headered=False, formatted=True))
     content[56:58] = bytes([0x02, 0x01])
@@ -556,7 +504,7 @@ def test_insert_adds_a_file(single_side: Path, tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
-    listing = runner.invoke(app, ["ls", str(out)])
+    listing = runner.invoke(app, ["info", str(out), "--files"])
     assert "NEW" in listing.stdout
 
 
@@ -646,20 +594,6 @@ def test_provenance_as_json_lists_every_side(image: Path) -> None:
     assert payload["sides"][0]["origin"] == "factory"
 
 
-def test_saves_reports_no_candidate_for_identical_dumps(single_side: Path) -> None:
-    result = runner.invoke(app, ["saves", str(single_side), str(single_side)])
-
-    assert result.exit_code == 0
-    assert "no save candidate" in result.stdout
-
-
-def test_saves_needs_two_dumps(single_side: Path) -> None:
-    result = runner.invoke(app, ["saves", str(single_side)])
-
-    assert result.exit_code == 1
-    assert "at least two" in result.stdout
-
-
 def test_dump_reports_a_missing_fdsstick(tmp_path: Path) -> None:
     result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.fds")])
 
@@ -672,20 +606,6 @@ def test_write_reports_a_missing_fdsstick(single_side: Path) -> None:
 
     assert result.exit_code == 1
     assert "FDSStick" in result.stdout or "hidapi" in result.stdout
-
-
-def test_clean_removes_trailing_data(tmp_path: Path) -> None:
-    raw = bytearray(blank_image(sides=1, headered=False, formatted=True))
-    raw[70:74] = bytes([0xDE, 0xAD, 0xBE, 0xEF])
-    source = tmp_path / "stale.fds"
-    source.write_bytes(bytes(raw))
-    out = tmp_path / "clean.fds"
-
-    result = runner.invoke(app, ["clean", str(source), "-o", str(out)])
-
-    assert result.exit_code == 0
-    assert "removed 16 trailing byte" in result.stdout
-    assert out.read_bytes() == blank_image(sides=1, headered=False, formatted=True)
 
 
 def test_diff_reports_identical_images(single_side: Path) -> None:
@@ -721,62 +641,6 @@ def test_consensus_needs_two_dumps(single_side: Path, tmp_path: Path) -> None:
     assert "at least two" in result.stdout
 
 
-def test_save_extract_then_apply_round_trips(single_side: Path, tmp_path: Path) -> None:
-    played = tmp_path / "played.fds"
-    data = bytearray(single_side.read_bytes())
-    data[70:78] = bytes([0x22]) * 8
-    played.write_bytes(bytes(data))
-    save = tmp_path / "save.ips"
-    merged = tmp_path / "merged.fds"
-
-    extracted = runner.invoke(
-        app,
-        ["save-extract", str(single_side), "--played", str(played), "-o", str(save)],
-    )
-    applied = runner.invoke(
-        app,
-        ["save-apply", str(single_side), "--save", str(save), "-o", str(merged)],
-    )
-
-    assert extracted.exit_code == 0
-    assert applied.exit_code == 0
-    assert merged.read_bytes() == played.read_bytes()
-
-
-def test_save_apply_reports_a_missing_save(single_side: Path, tmp_path: Path) -> None:
-    result = runner.invoke(
-        app,
-        [
-            "save-apply",
-            str(single_side),
-            "--save",
-            str(tmp_path / "nope.ips"),
-            "-o",
-            str(tmp_path / "out.fds"),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "not found" in result.stdout
-
-
-def test_save_extract_reports_a_missing_played_image(single_side: Path, tmp_path: Path) -> None:
-    result = runner.invoke(
-        app,
-        [
-            "save-extract",
-            str(single_side),
-            "--played",
-            str(tmp_path / "nope.fds"),
-            "-o",
-            str(tmp_path / "out.ips"),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "not found" in result.stdout
-
-
 @pytest.fixture
 def hidden_file_image(tmp_path: Path) -> Path:
     content = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
@@ -801,15 +665,17 @@ def test_info_prints_its_findings(damaged: Path) -> None:
     assert "FDS008" in result.stdout
 
 
-def test_ls_can_emit_json(hidden_file_image: Path) -> None:
-    payload = json.loads(runner.invoke(app, ["ls", str(hidden_file_image), "--json"]).stdout)
+def test_info_lists_files_as_json(hidden_file_image: Path) -> None:
+    payload = json.loads(
+        runner.invoke(app, ["info", str(hidden_file_image), "--files", "--json"]).stdout
+    )
 
     assert payload["files"][0]["name"] == "SECRET"
     assert payload["files"][0]["hidden"] is True
 
 
-def test_ls_marks_a_hidden_file(hidden_file_image: Path) -> None:
-    result = runner.invoke(app, ["ls", str(hidden_file_image)])
+def test_info_marks_a_hidden_file(hidden_file_image: Path) -> None:
+    result = runner.invoke(app, ["info", str(hidden_file_image), "--files"])
 
     assert "(hidden)" in result.stdout
 
@@ -932,37 +798,6 @@ def test_provenance_prints_its_notes(tmp_path: Path) -> None:
     assert "rewrite count" in result.stdout
 
 
-def test_saves_can_emit_json(single_side: Path) -> None:
-    payload = json.loads(
-        runner.invoke(app, ["saves", str(single_side), str(single_side), "--json"]).stdout
-    )
-
-    assert payload["candidates"] == []
-
-
-def test_saves_reports_a_candidate(tmp_path: Path) -> None:
-    def with_save(fill: int) -> Path:
-        content = bytearray(blank_image(sides=1, headered=False, formatted=True))
-        content[56:58] = bytes([0x02, 0x01])
-        header = (
-            bytes([0x03, 0x00, 0x00])
-            + b"FC_SAVE "
-            + (0x6000).to_bytes(2, "little")
-            + (4).to_bytes(2, "little")
-            + bytes([0x00])
-        )
-        content[58:74] = header
-        content[74:79] = bytes([0x04]) + bytes([fill]) * 4
-        path = tmp_path / f"save{fill}.fds"
-        path.write_bytes(bytes(content))
-        return path
-
-    result = runner.invoke(app, ["saves", str(with_save(1)), str(with_save(2))])
-
-    assert "FC_SAVE" in result.stdout
-    assert "name reads like a save" in result.stdout
-
-
 def test_dump_reports_unstable_blocks(
     image: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -981,15 +816,6 @@ def test_dump_reports_a_drive_fault(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     result = runner.invoke(app, ["dump", "-o", str(tmp_path / "d.fds"), "--sides", "2"])
 
     assert result.exit_code == 1
-
-
-def test_clean_can_write_a_qd(single_side: Path, tmp_path: Path) -> None:
-    out = tmp_path / "clean.qd"
-
-    result = runner.invoke(app, ["clean", str(single_side), "-o", str(out)])
-
-    assert result.exit_code == 0
-    assert out.stat().st_size == 65536
 
 
 def test_diff_can_emit_json(single_side: Path) -> None:
@@ -1027,67 +853,6 @@ def test_consensus_reports_a_disagreement(single_side: Path, tmp_path: Path) -> 
     assert "disagree" in result.stdout
 
 
-def test_identify_can_emit_json(image: Path, tmp_path: Path) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-
-    payload = json.loads(
-        runner.invoke(app, ["identify", str(image), "--dat", str(dat), "--json"]).stdout
-    )
-
-    assert payload["kind"] == "exact"
-
-
-def test_identify_lists_entries_of_the_same_size(image: Path, tmp_path: Path) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-    other = tmp_path / "other.fds"
-    data = bytearray(image.read_bytes())
-    data[0x10:0x13] = b"XYZ"
-    other.write_bytes(bytes(data))
-
-    result = runner.invoke(app, ["identify", str(other), "--dat", str(dat)])
-
-    assert "same size" in result.stdout
-
-
-def test_save_apply_reports_an_unusable_save(single_side: Path, tmp_path: Path) -> None:
-    save = tmp_path / "save.bin"
-    save.write_bytes(bytes([0x01, 0x02, 0x03]))
-
-    result = runner.invoke(
-        app,
-        [
-            "save-apply",
-            str(single_side),
-            "--save",
-            str(save),
-            "-o",
-            str(tmp_path / "out.fds"),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "not a save" in result.stdout
-
-
-def test_save_extract_refuses_an_unknown_format(single_side: Path, tmp_path: Path) -> None:
-    result = runner.invoke(
-        app,
-        [
-            "save-extract",
-            str(single_side),
-            "--played",
-            str(single_side),
-            "-o",
-            str(tmp_path / "out.bin"),
-            "--format",
-            "unknown",
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "cannot write" in result.stdout
-
-
 def test_blank_reports_an_invalid_game_name(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
@@ -1096,30 +861,6 @@ def test_blank_reports_an_invalid_game_name(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "three characters" in result.stdout
-
-
-def test_saves_as_json_lists_a_candidate(tmp_path: Path) -> None:
-    def with_save(fill: int) -> Path:
-        content = bytearray(blank_image(sides=1, headered=False, formatted=True))
-        content[56:58] = bytes([0x02, 0x01])
-        header = (
-            bytes([0x03, 0x00, 0x00])
-            + b"FC_SAVE "
-            + (0x6000).to_bytes(2, "little")
-            + (4).to_bytes(2, "little")
-            + bytes([0x00])
-        )
-        content[58:74] = header
-        content[74:79] = bytes([0x04]) + bytes([fill]) * 4
-        path = tmp_path / f"json-save{fill}.fds"
-        path.write_bytes(bytes(content))
-        return path
-
-    payload = json.loads(
-        runner.invoke(app, ["saves", str(with_save(3)), str(with_save(4)), "--json"]).stdout
-    )
-
-    assert payload["candidates"][0]["name"] == "FC_SAVE"
 
 
 def test_dump_names_a_block_that_differs_between_passes(
@@ -1146,16 +887,6 @@ def test_write_names_a_block_that_did_not_stick(
     result = runner.invoke(app, ["write", str(source), "--yes"])
 
     assert "did not read back as written" in result.stdout
-
-
-def test_identify_reports_a_file_that_is_not_a_dat(image: Path, tmp_path: Path) -> None:
-    dat = tmp_path / "wrong.xml"
-    dat.write_text("<other/>", encoding="utf-8")
-
-    result = runner.invoke(app, ["identify", str(image), "--dat", str(dat)])
-
-    assert result.exit_code == 1
-    assert "not a DAT" in result.stdout
 
 
 def test_insert_reports_a_finding_from_the_encoder(tmp_path: Path) -> None:
@@ -1203,41 +934,6 @@ def test_insert_reports_a_finding_from_the_encoder(tmp_path: Path) -> None:
     assert "FDS011" in result.stdout
 
 
-def test_lint_can_emit_json(image: Path) -> None:
-    payload = json.loads(runner.invoke(app, ["lint", str(image), "--json"]).stdout)
-
-    assert payload["ok"] is True
-    assert payload["findings"] == []
-
-
-def test_card_writes_a_blank_the_firmware_accepts(tmp_path: Path) -> None:
-    out = tmp_path / "blank.fds"
-
-    result = runner.invoke(app, ["card", "-o", str(out), "--sides", "2"])
-
-    assert result.exit_code == 0
-    assert runner.invoke(app, ["lint", str(out)]).exit_code == 0
-
-
-def test_card_can_write_the_released_firmware_variant(tmp_path: Path) -> None:
-    out = tmp_path / "zeros.fds"
-
-    result = runner.invoke(app, ["card", "-o", str(out), "--firmware", "released"])
-
-    assert result.exit_code == 0
-    assert out.read_bytes() == bytes(SIDE_SIZE)
-
-
-def test_card_refuses_to_overwrite(tmp_path: Path) -> None:
-    out = tmp_path / "blank.fds"
-    out.write_bytes(b"old")
-
-    result = runner.invoke(app, ["card", "-o", str(out)])
-
-    assert result.exit_code == 1
-    assert "--force" in result.stdout
-
-
 def test_build_writes_a_disk_from_a_manifest(tmp_path: Path) -> None:
     payload = tmp_path / "main.prg"
     payload.write_bytes(bytes([0x11]) * 32)
@@ -1262,7 +958,7 @@ def test_build_writes_a_disk_from_a_manifest(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert runner.invoke(app, ["verify", str(out), "--strict"]).exit_code == 0
-    assert "MAIN" in runner.invoke(app, ["ls", str(out)]).stdout
+    assert "MAIN" in runner.invoke(app, ["info", str(out), "--files"]).stdout
 
 
 def test_build_reports_a_missing_manifest(tmp_path: Path) -> None:
@@ -1352,156 +1048,6 @@ def test_surface_runs_without_a_backup(single_side: Path, monkeypatch: pytest.Mo
     assert result.exit_code == 0
 
 
-def _save_disk(tmp_path: Path, fill: int, name: str) -> Path:
-    content = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
-    content[56:58] = bytes([0x02, 0x01])
-    header = (
-        bytes([0x03, 0x00, 0x00])
-        + b"FC_SAVE "
-        + (0x6000).to_bytes(2, "little")
-        + (4).to_bytes(2, "little")
-        + bytes([0x00])
-    )
-    content[58:74] = header
-    content[74:79] = bytes([0x04]) + bytes([fill]) * 4
-    path = tmp_path / name
-    path.write_bytes(bytes(content))
-    return path
-
-
-def _recipes(tmp_path: Path) -> Path:
-    path = tmp_path / "recipes.json"
-    path.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "recipes": [
-                    {
-                        "game_name": "SMB",
-                        "game_version": 0,
-                        "side": 0,
-                        "position": 0,
-                        "fill": 0,
-                        "source": "two dumps of one release differ only here",
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    return path
-
-
-def test_normalise_saves_makes_two_played_copies_agree(tmp_path: Path) -> None:
-    one = _save_disk(tmp_path, 0x11, "one.fds")
-    two = _save_disk(tmp_path, 0x22, "two.fds")
-    recipes = _recipes(tmp_path)
-
-    first = runner.invoke(
-        app,
-        ["normalise-saves", str(one), "-o", str(tmp_path / "a.fds"), "--recipes", str(recipes)],
-    )
-    second = runner.invoke(
-        app,
-        ["normalise-saves", str(two), "-o", str(tmp_path / "b.fds"), "--recipes", str(recipes)],
-    )
-
-    assert first.exit_code == 0
-    assert "FC_SAVE" in first.stdout
-    assert second.exit_code == 0
-    assert (tmp_path / "a.fds").read_bytes() == (tmp_path / "b.fds").read_bytes()
-
-
-def test_normalise_saves_says_when_nothing_matched(single_side: Path, tmp_path: Path) -> None:
-    recipes = tmp_path / "other.json"
-    recipes.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "recipes": [
-                    {
-                        "game_name": "ZEL",
-                        "game_version": 0,
-                        "side": 0,
-                        "position": 0,
-                        "fill": 0,
-                        "source": "x",
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    result = runner.invoke(
-        app,
-        [
-            "normalise-saves",
-            str(single_side),
-            "-o",
-            str(tmp_path / "out.fds"),
-            "--recipes",
-            str(recipes),
-        ],
-    )
-
-    assert result.exit_code == 0
-    assert "no recipe matched" in result.stdout
-
-
-def test_normalise_saves_reports_a_missing_recipe_file(single_side: Path, tmp_path: Path) -> None:
-    result = runner.invoke(
-        app,
-        [
-            "normalise-saves",
-            str(single_side),
-            "-o",
-            str(tmp_path / "out.fds"),
-            "--recipes",
-            str(tmp_path / "nope.json"),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "not found" in result.stdout
-
-
-def test_normalise_saves_reports_a_recipe_file_that_does_not_parse(
-    single_side: Path,
-    tmp_path: Path,
-) -> None:
-    recipes = tmp_path / "bad.json"
-    recipes.write_text(json.dumps({"version": 99, "recipes": []}), encoding="utf-8")
-
-    result = runner.invoke(
-        app,
-        [
-            "normalise-saves",
-            str(single_side),
-            "-o",
-            str(tmp_path / "out.fds"),
-            "--recipes",
-            str(recipes),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "version" in result.stdout
-
-
-def test_normalise_saves_can_write_a_qd(tmp_path: Path) -> None:
-    source = _save_disk(tmp_path, 0x33, "played.fds")
-    out = tmp_path / "clean.qd"
-
-    result = runner.invoke(
-        app,
-        ["normalise-saves", str(source), "-o", str(out), "--recipes", str(_recipes(tmp_path))],
-    )
-
-    assert result.exit_code == 0
-    assert out.stat().st_size == 65536
-
-
 def test_the_version_flag_prints_the_version() -> None:
     result = runner.invoke(app, ["--version"])
 
@@ -1552,108 +1098,6 @@ def test_write_warns_when_an_interrupt_lands_mid_write(
 
     assert result.exit_code == 1
     assert "half written" in result.stdout
-
-
-def test_identify_reads_the_cache_on_a_second_run(image: Path, tmp_path: Path) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-    runner.invoke(app, ["identify", str(image), "--dat", str(dat), "--json"])
-
-    payload = json.loads(
-        runner.invoke(app, ["identify", str(image), "--dat", str(dat), "--json"]).stdout
-    )
-
-    assert payload["cached"]
-
-
-def test_identify_can_skip_the_cache(image: Path, tmp_path: Path) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-
-    payload = json.loads(
-        runner.invoke(
-            app, ["identify", str(image), "--dat", str(dat), "--no-cache", "--json"]
-        ).stdout
-    )
-
-    assert not payload["cached"]
-
-
-def test_identify_without_the_cache_still_reports_a_missing_dat(
-    image: Path, tmp_path: Path
-) -> None:
-    result = runner.invoke(
-        app, ["identify", str(image), "--dat", str(tmp_path / "nope.dat"), "--no-cache"]
-    )
-
-    assert result.exit_code == 1
-    assert "not found" in result.stdout
-
-
-def test_identify_reports_the_nearest_reference_image(
-    single_side: Path, image: Path, tmp_path: Path
-) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-    references = tmp_path / "known"
-    references.mkdir()
-    close = bytearray(single_side.read_bytes())
-    close[0x34] = 0x03
-    (references / "close.fds").write_bytes(bytes(close))
-
-    result = runner.invoke(
-        app,
-        ["identify", str(single_side), "--dat", str(dat), "--reference", str(references)],
-    )
-
-    assert result.exit_code == 1
-    assert "near match: close.fds" in result.stdout
-    assert "1 byte(s) differ" in result.stdout
-
-
-def test_identify_reports_a_far_candidate_as_the_nearest_one(
-    single_side: Path, image: Path, tmp_path: Path
-) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-    references = tmp_path / "known"
-    references.mkdir()
-    far = bytearray(single_side.read_bytes())
-    for offset in range(40000):
-        far[offset] ^= 0xFF
-    (references / "far.fds").write_bytes(bytes(far))
-
-    result = runner.invoke(
-        app,
-        [
-            "identify",
-            str(single_side),
-            "--dat",
-            str(dat),
-            "--reference",
-            str(references),
-            "--json",
-        ],
-    )
-
-    payload = json.loads(result.stdout)
-    assert not payload["nearest"]["near"]
-    assert payload["nearest"]["truncated_runs"] is False
-
-
-def test_identify_prints_every_differing_run(
-    single_side: Path, image: Path, tmp_path: Path
-) -> None:
-    dat = _dat_for(tmp_path / "test.dat", image)
-    references = tmp_path / "known"
-    references.mkdir()
-    close = bytearray(single_side.read_bytes())
-    for offset in range(0, 200, 2):
-        close[offset] ^= 0xFF
-    (references / "close.fds").write_bytes(bytes(close))
-
-    result = runner.invoke(
-        app,
-        ["identify", str(single_side), "--dat", str(dat), "--reference", str(references)],
-    )
-
-    assert "more runs not shown" in result.stdout
 
 
 def test_diff_explains_two_identical_images(image: Path) -> None:
@@ -1786,78 +1230,6 @@ def test_diff_explains_a_file_difference(single_side: Path, tmp_path: Path) -> N
     assert "file 0 MAIN: added, 8 bytes" in result.stdout
 
 
-def test_layout_reports_the_stream_and_the_files(tmp_path: Path) -> None:
-    payload = tmp_path / "main.prg"
-    payload.write_bytes(bytes([0xAA]) * 4096)
-    source = tmp_path / "one.fds"
-    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
-    built = tmp_path / "built.fds"
-    runner.invoke(
-        app,
-        ["insert", str(source), "-o", str(built), "--file", str(payload), "--name", "MAIN"],
-    )
-
-    result = runner.invoke(app, ["layout", str(built)])
-
-    assert result.exit_code == 0
-    assert "s to read end to end" in result.stdout
-    assert "MAIN" in result.stdout
-
-
-def test_layout_reports_dead_weight(tmp_path: Path) -> None:
-    raw = bytearray(blank_image(sides=1, headered=False, formatted=True))
-    raw[-4:] = b"junk"
-    source = tmp_path / "tail.fds"
-    source.write_bytes(bytes(raw))
-
-    result = runner.invoke(app, ["layout", str(source)])
-
-    assert "dead weight" in result.stdout
-
-
-def test_layout_can_emit_json(tmp_path: Path) -> None:
-    payload = tmp_path / "a.prg"
-    payload.write_bytes(bytes([0xAA]) * 8192)
-    small = tmp_path / "b.prg"
-    small.write_bytes(bytes([0xBB]) * 16)
-    source = tmp_path / "one.fds"
-    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
-    first = tmp_path / "first.fds"
-    second = tmp_path / "second.fds"
-    runner.invoke(
-        app, ["insert", str(source), "-o", str(first), "--file", str(payload), "--name", "BIG"]
-    )
-    runner.invoke(
-        app, ["insert", str(first), "-o", str(second), "--file", str(small), "--name", "SMALL"]
-    )
-
-    data = json.loads(runner.invoke(app, ["layout", str(second), "--json"]).stdout)
-
-    assert data["sides"][0]["reorder_saving_bytes"] > 0
-    assert [entry["name"] for entry in data["sides"][0]["files"]] == ["BIG", "SMALL"]
-
-
-def test_layout_prints_the_reorder_note(tmp_path: Path) -> None:
-    big = tmp_path / "a.prg"
-    big.write_bytes(bytes([0xAA]) * 8192)
-    small = tmp_path / "b.prg"
-    small.write_bytes(bytes([0xBB]) * 16)
-    source = tmp_path / "one.fds"
-    source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
-    first = tmp_path / "first.fds"
-    second = tmp_path / "second.fds"
-    runner.invoke(
-        app, ["insert", str(source), "-o", str(first), "--file", str(big), "--name", "BIG"]
-    )
-    runner.invoke(
-        app, ["insert", str(first), "-o", str(second), "--file", str(small), "--name", "SMALL"]
-    )
-
-    result = runner.invoke(app, ["layout", str(second)])
-
-    assert "measurement rather than a recommendation" in result.stdout
-
-
 def test_boot_reports_a_side_that_needs_a_bypass(single_side: Path) -> None:
     result = runner.invoke(app, ["boot", str(single_side)])
 
@@ -1938,7 +1310,7 @@ def test_insert_accepts_a_kind_by_name(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
-    assert "character" in runner.invoke(app, ["ls", str(built)]).stdout
+    assert "character" in runner.invoke(app, ["info", str(built), "--files"]).stdout
 
 
 def _game_with_a_file(tmp_path: Path, name: str = "Game") -> Path:
@@ -2059,14 +1431,14 @@ def test_doctor_reports_the_installation() -> None:
 
     assert result.exit_code == 0
     assert "fdstoolkit" in result.stdout
-    assert "dat cache" in result.stdout
+    assert "dat cache" not in result.stdout
 
 
 def test_doctor_can_emit_json() -> None:
     payload = json.loads(runner.invoke(app, ["doctor", "--json"]).stdout)
 
     assert payload["healthy"] is True
-    assert {check["name"] for check in payload["checks"]} >= {"fdstoolkit", "python", "dat cache"}
+    assert {check["name"] for check in payload["checks"]} >= {"fdstoolkit", "python", "codec"}
 
 
 def test_doctor_fails_on_an_unhealthy_installation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2303,16 +1675,6 @@ def test_a_published_bind_warns_instead_of_claiming_privacy(
 
     assert "nothing leaves this machine" not in result.stdout
     assert "there is no password" in result.stdout
-
-
-def test_doctor_can_clear_the_dat_cache_first(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-
-    result = runner.invoke(app, ["doctor", "--clear-cache"])
-
-    assert "removed 0 cached catalogue(s)" in result.stdout
 
 
 def ready_checks() -> tuple[Check, ...]:

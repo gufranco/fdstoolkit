@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any
+from typing import Final
 
 from fastapi import HTTPException
 
@@ -11,23 +12,18 @@ from fdstoolkit.build.targets import export_for
 from fdstoolkit.core.bios import predict_boot
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.edit.clean import clean_trailing_data
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
 from fdstoolkit.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstoolkit.edit.files import FileSpec, extract_files, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 from fdstoolkit.edit.recipes import load_recipes
-from fdstoolkit.edit.saves import find_save_candidates, normalise_saves
-from fdstoolkit.fdskey.card import FirmwareVariant, card_blank
-from fdstoolkit.fdskey.lint import lint_card_image
+from fdstoolkit.edit.saves import SaveRecipe, find_save_candidates, normalise_saves
 from fdstoolkit.identify.provenance import provenance_of
 from fdstoolkit.patch.apply import apply_patch
 from fdstoolkit.quality.consensus import compare_images
 from fdstoolkit.quality.explain import explain
-from fdstoolkit.quality.layout import layout_of
 from fdstoolkit.ui.schemas import (
     BuildSpec,
-    CardSpec,
     DiffResult,
     DiffSpec,
     EditSpec,
@@ -35,13 +31,10 @@ from fdstoolkit.ui.schemas import (
     FileResult,
     FilesResult,
     ImageSpec,
-    ImagesSpec,
     InsertSpec,
     PatchSpec,
     RebuildSpec,
-    RecipeSpec,
     RowsResult,
-    SaveExtractSpec,
     SaveSpec,
 )
 from fdstoolkit.ui.shared import (
@@ -62,6 +55,9 @@ KIND_BY_NAME = {
 }
 
 
+MIN_DUMPS: Final = 2
+
+
 def _disk(spec: ImageSpec) -> Disk:
     disk, _, _ = decode_payload(spec.data)
     return disk
@@ -69,30 +65,6 @@ def _disk(spec: ImageSpec) -> Disk:
 
 def _emit(disk: Disk, name: str, *, headered: bool = False) -> FileResult:
     return named_file(name, encoded(disk, headered=headered))
-
-
-def ls(spec: ImageSpec) -> RowsResult:
-    rows: list[dict[str, Any]] = []
-    sides = _disk(spec).sides
-    for index, side in enumerate(sides):
-        declared = side.declared_file_count
-        rows.extend(
-            {
-                "side": index,
-                "number": header.number,
-                "id": header.file_id,
-                "name": header.name,
-                "address": header.address,
-                "kind": str(header.kind),
-                "size": header.size,
-                "hidden": declared is not None and position >= declared,
-            }
-            for position, header in enumerate(side.file_headers)
-        )
-    return RowsResult(
-        headline=f"{len(rows)} file(s) across {len(sides)} side(s)",
-        rows=rows,
-    )
 
 
 def diff(spec: DiffSpec) -> DiffResult:
@@ -123,36 +95,8 @@ def boot(spec: ImageSpec) -> RowsResult:
     return RowsResult(rows=rows_of(predict_boot(_disk(spec)).sides))
 
 
-def layout(spec: ImageSpec) -> RowsResult:
-    return RowsResult(rows=rows_of(layout_of(_disk(spec)).sides))
-
-
 def provenance(spec: ImageSpec) -> RowsResult:
     return RowsResult(rows=rows_of(provenance_of(_disk(spec)).sides))
-
-
-def lint(spec: ImageSpec) -> RowsResult:
-    _, data, _ = decode_payload(spec.data)
-    findings = lint_card_image(data, name=Path(spec.name))
-    headline = (
-        "the card accepts this image as it stands"
-        if not findings
-        else f"{len(findings)} thing(s) would stop the card accepting this image"
-    )
-    return RowsResult(headline=headline, rows=rows_of(findings), ok=not findings)
-
-
-def saves(spec: ImagesSpec) -> RowsResult:
-    if not spec.images:
-        refuse("comparing saves needs at least one dump", status=UNPROCESSABLE)
-    disks = [decode_payload(entry)[0] for entry in spec.images]
-    candidates = find_save_candidates(disks)
-    headline = (
-        "no save candidate: every file agrees across the dumps"
-        if not candidates
-        else f"{len(candidates)} file(s) differ across the dumps and could hold the save"
-    )
-    return RowsResult(headline=headline, rows=rows_of(candidates))
 
 
 def extract(spec: ImageSpec) -> FilesResult:
@@ -187,11 +131,6 @@ def edit(spec: EditSpec) -> FileResult:
     return _emit(updated, spec.name)
 
 
-def clean(spec: ImageSpec) -> FileResult:
-    updated, _ = clean_trailing_data(_disk(spec))
-    return _emit(updated, spec.name)
-
-
 def rebuild_image(spec: RebuildSpec) -> FileResult:
     updated, _ = rebuild(
         _disk(spec),
@@ -212,39 +151,6 @@ def patch(spec: PatchSpec) -> FileResult:
     except (ValueError, IndexError, KeyError) as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
     return named_file(spec.name, outcome.data)
-
-
-def save_apply(spec: SaveSpec) -> FileResult:
-    _, data, _ = decode_payload(spec.data)
-    try:
-        merged = merge_save(data, bytes_of(spec.save))
-    except (ValueError, IndexError, KeyError) as error:
-        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    return named_file(spec.name, merged)
-
-
-def save_extract(spec: SaveExtractSpec) -> FileResult:
-    _, data, _ = decode_payload(spec.data)
-    try:
-        body = extract_save(data, bytes_of(spec.played), fmt=SaveFormat(spec.save_as))
-    except (ValueError, IndexError, KeyError) as error:
-        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    return named_file(f"{Path(spec.name).stem}.{spec.save_as}", body)
-
-
-def normalise(spec: RecipeSpec) -> FileResult:
-    with TemporaryDirectory(prefix="fdstoolkit-ui-") as directory:
-        path = Path(directory) / "recipes.json"
-        path.write_bytes(bytes_of(spec.recipes))
-        try:
-            recipes = load_recipes(path)
-        except (ValueError, OSError, KeyError, AttributeError, TypeError) as error:
-            raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    try:
-        updated, _ = normalise_saves(_disk(spec), recipes)
-    except (ValueError, IndexError, KeyError) as error:
-        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    return _emit(updated, spec.name)
 
 
 def export(spec: ExportSpec) -> FilesResult:
@@ -275,9 +181,80 @@ def build(spec: BuildSpec) -> FileResult:
     return named_file("built.fds", data)
 
 
-def card(spec: CardSpec) -> FileResult:
+def _recipes(data: str) -> tuple[SaveRecipe, ...]:
+    with TemporaryDirectory(prefix="fdstoolkit-ui-") as directory:
+        path = Path(directory) / "recipes.json"
+        path.write_bytes(bytes_of(data))
+        try:
+            return load_recipes(path)
+        except (ValueError, OSError, KeyError, AttributeError, TypeError) as error:
+            raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
+
+
+def _needed(value: str | None, what: str, action: str) -> str:
+    if value is None:
+        refuse(f"save {action} needs {what}", status=UNPROCESSABLE)
+    return value
+
+
+def _only_image(spec: SaveSpec) -> str:
+    if len(spec.images) != 1:
+        refuse(f"save {spec.action} works on one image", status=UNPROCESSABLE)
+    return spec.images[0]
+
+
+def _save_find(spec: SaveSpec) -> RowsResult:
+    if len(spec.images) < MIN_DUMPS:
+        refuse("save find compares two or more dumps of one release", status=UNPROCESSABLE)
+    candidates = find_save_candidates([decode_payload(entry)[0] for entry in spec.images])
+    headline = (
+        "no save candidate: every file agrees across the dumps"
+        if not candidates
+        else f"{len(candidates)} file(s) differ across the dumps and could hold the save"
+    )
+    return RowsResult(headline=headline, rows=rows_of(candidates))
+
+
+def _save_apply(spec: SaveSpec) -> FileResult:
+    _, data, _ = decode_payload(_only_image(spec))
+    save = _needed(spec.save, "a save", "apply")
     try:
-        data = card_blank(sides=spec.sides, variant=FirmwareVariant(spec.firmware))
-    except ValueError as error:
+        merged = merge_save(data, bytes_of(save))
+    except (ValueError, IndexError, KeyError) as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    return named_file("card.fds", data)
+    return named_file(spec.name, merged)
+
+
+def _save_extract(spec: SaveSpec) -> FileResult:
+    _, data, _ = decode_payload(_only_image(spec))
+    played = _needed(spec.played, "the played image", "extract")
+    try:
+        body = extract_save(data, bytes_of(played), fmt=SaveFormat(spec.save_as))
+    except (ValueError, IndexError, KeyError) as error:
+        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
+    return named_file(f"{Path(spec.name).stem}.{spec.save_as}", body)
+
+
+def _save_blank(spec: SaveSpec) -> FileResult:
+    disk, _, _ = decode_payload(_only_image(spec))
+    recipes = _recipes(_needed(spec.recipes, "a recipe file", "blank"))
+    try:
+        updated, _ = normalise_saves(disk, recipes)
+    except (ValueError, IndexError, KeyError) as error:
+        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
+    return _emit(updated, spec.name)
+
+
+SAVE_ACTIONS: Final[dict[str, Callable[[SaveSpec], RowsResult | FileResult]]] = {
+    "find": _save_find,
+    "apply": _save_apply,
+    "extract": _save_extract,
+    "blank": _save_blank,
+}
+
+
+def save(spec: SaveSpec) -> RowsResult | FileResult:
+    action = SAVE_ACTIONS.get(spec.action)
+    if action is None:
+        refuse(f"save takes {', '.join(SAVE_ACTIONS)}, not {spec.action}")
+    return action(spec)

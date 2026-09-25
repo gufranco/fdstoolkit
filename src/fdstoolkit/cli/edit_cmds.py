@@ -18,15 +18,9 @@ from fdstoolkit.cli.common import (
     read_image,
 )
 from fdstoolkit.codecs import fds, qd
-from fdstoolkit.core.disk import SIDES_PER_DISK
-from fdstoolkit.edit.clean import clean_trailing_data
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
-from fdstoolkit.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstoolkit.edit.files import FileSpec, extract_files, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
-from fdstoolkit.edit.recipes import load_recipes
-from fdstoolkit.edit.saves import normalise_saves
-from fdstoolkit.fdskey.card import FirmwareVariant, card_blank
 from fdstoolkit.patch.apply import apply_patch
 from fdstoolkit.patch.formats import PatchError
 
@@ -121,29 +115,6 @@ def patch_command(
     )
 
 
-def clean(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
-    *,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Remove leftover bytes after the last block of every side."""
-    disk, _, _, _ = decode_image(image)
-    guard_output(output, force=force)
-
-    cleaned, removed = clean_trailing_data(disk)
-    target = container_of(output)
-    if target is Container.FDS:
-        data, _ = fds.encode(cleaned, headered=False)
-    else:
-        data, _ = qd.encode(cleaned)
-    output.write_bytes(data)
-
-    for entry in removed:
-        typer.echo(f"side {entry.side}: removed {entry.bytes_removed} trailing byte(s)")
-    typer.echo(f"wrote {output} ({len(data)} bytes)")
-
-
 def rebuild_command(
     image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
@@ -222,89 +193,6 @@ def set_command(
     typer.echo(f"wrote {output} ({len(data)} bytes)")
 
 
-def save_apply(
-    image: Annotated[Path, typer.Argument(help="the original image")],
-    save: Annotated[Path, typer.Option("--save", help="an emulator save, IPS or whole image")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
-    *,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Merge an emulator save back into a disk image."""
-    data, _ = read_image(image)
-    if not save.is_file():
-        message = f"file not found: {save}"
-        raise fail(message)
-    guard_output(output, force=force)
-
-    try:
-        merged = merge_save(data, save.read_bytes())
-    except PatchError as error:
-        raise fail(str(error)) from error
-
-    output.write_bytes(merged)
-    typer.echo(f"wrote {output} ({len(merged)} bytes)")
-
-
-def save_extract(
-    original_image: Annotated[Path, typer.Argument(help="the pristine image")],
-    played: Annotated[Path, typer.Option("--played", help="the image a game wrote to")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the save")],
-    *,
-    fmt: Annotated[SaveFormat, typer.Option("--format", help="ips, ups or image")] = SaveFormat.IPS,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Write the difference between a pristine disk and a played one as a save."""
-    pristine, _ = read_image(original_image)
-    if not played.is_file():
-        message = f"file not found: {played}"
-        raise fail(message)
-    guard_output(output, force=force)
-
-    try:
-        save = extract_save(pristine, played.read_bytes(), fmt=fmt)
-    except PatchError as error:
-        raise fail(str(error)) from error
-
-    output.write_bytes(save)
-    typer.echo(f"wrote {output} ({len(save)} bytes, {fmt})")
-
-
-def normalise_saves_command(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
-    *,
-    recipes: Annotated[Path, typer.Option("--recipes", help="a recipe file")],
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Fill a declared save region so two played copies compare equal."""
-    disk, _, _, _ = decode_image(image)
-    if not recipes.is_file():
-        message = f"file not found: {recipes}"
-        raise fail(message)
-    guard_output(output, force=force)
-
-    try:
-        updated, applied = normalise_saves(disk, load_recipes(recipes))
-    except ValueError as error:
-        raise fail(str(error)) from error
-
-    target = container_of(output)
-    if target is Container.FDS:
-        data, _ = fds.encode(updated, headered=False)
-    else:
-        data, _ = qd.encode(updated)
-    output.write_bytes(data)
-
-    for entry in applied:
-        typer.echo(
-            f"side {entry.side} file {entry.position} {entry.name}: "
-            f"{entry.size} bytes filled with {entry.fill:#04x}"
-        )
-    if not applied:
-        typer.echo("no recipe matched this disk, so nothing changed")
-    typer.echo(f"wrote {output} ({len(data)} bytes)")
-
-
 def build(
     manifest: Annotated[Path, typer.Argument(help="a JSON manifest describing the disk")],
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the image")],
@@ -326,34 +214,10 @@ def build(
     typer.echo(f"wrote {output} ({len(data)} bytes)")
 
 
-def card(
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the blank")],
-    *,
-    sides: Annotated[
-        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="1 or 2 sides")
-    ] = 1,
-    variant: Annotated[
-        FirmwareVariant,
-        typer.Option("--firmware", help="released accepts an all-zero blank, master does not"),
-    ] = FirmwareVariant.MASTER,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Write a blank image an FDSKey card will accept."""
-    guard_output(output, force=force)
-    data = card_blank(sides=sides, variant=variant)
-    output.write_bytes(data)
-    typer.echo(f"wrote {output} ({len(data)} bytes, for {variant} firmware)")
-
-
 def register(app: typer.Typer) -> None:
     app.command(rich_help_panel=Family.REPAIR)(extract)
     app.command(name="insert", rich_help_panel=Family.REPAIR)(insert_command)
     app.command(name="patch", rich_help_panel=Family.REPAIR)(patch_command)
-    app.command(rich_help_panel=Family.REPAIR)(clean)
     app.command(name="rebuild", rich_help_panel=Family.REPAIR)(rebuild_command)
     app.command(name="set", rich_help_panel=Family.REPAIR)(set_command)
-    app.command(name="save-apply", rich_help_panel=Family.REPAIR)(save_apply)
-    app.command(name="save-extract", rich_help_panel=Family.REPAIR)(save_extract)
-    app.command(name="normalise-saves", rich_help_panel=Family.REPAIR)(normalise_saves_command)
     app.command(rich_help_panel=Family.CONTAINER)(build)
-    app.command(rich_help_panel=Family.CONTAINER)(card)

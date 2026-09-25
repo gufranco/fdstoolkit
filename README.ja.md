@@ -22,7 +22,7 @@
 
 </div>
 
-コマンドは **56** 個、そのすべてがローカルの Web ページからも使えます。テストは **1,754** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、パルスクラスは実機の **120** 面、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
+コマンドは **27** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,190** 件、ページが **130** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
 
 ---
 
@@ -39,7 +39,6 @@
   - [確認](#確認)
   - [修復](#修復)
   - [コンテナ](#コンテナ)
-  - [識別](#識別)
   - [ハードウェア](#ハードウェア)
 - [ウェブインターフェース](#ウェブインターフェース)
 - [手順](#手順)
@@ -104,40 +103,14 @@ dat cache         ~/.cache/fdstoolkit/dat, 0 catalogue(s)
 #### `info`
 
 ```bash
-fdstoolkit info <image> [--json]
+fdstoolkit info <image> [--files] [--json]
 ```
 
-面数、ゲームコード、製造日と書き換え日、ディスクライターのシリアル、宣言されたファイル数と実際のファイル数、隠しファイル、末尾の余剰データ。
+面数、ゲームコード、製造日と書き換え日、ディスクライターのシリアル、宣言されたファイル数と実際のファイル数、隠しファイル、末尾の余剰データ。`--files` を付けると、全面のすべてのファイルも一覧にします。番号、ID、名前、ロードアドレス、種類、サイズ、そして宣言数を超えた位置にあるかどうかです。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/info-dark.png">
 <img alt="ローカル Web ページの info コマンド" src="assets/screenshots/info-light.png">
-</picture>
-
-#### `ls`
-
-```bash
-fdstoolkit ls <image> [--json]
-```
-
-全面のすべてのファイル。番号、ID、名前、ロードアドレス、種別、サイズ、宣言数を超えた位置にあるかどうか。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/ls-dark.png">
-<img alt="ローカル Web ページの ls コマンド" src="assets/screenshots/ls-light.png">
-</picture>
-
-#### `layout`
-
-```bash
-fdstoolkit layout <image> [--json]
-```
-
-渦巻き上での各ファイルのバイトオフセットと、公称ビットレートでドライブがそこへ到達するまでの時間。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/layout-dark.png">
-<img alt="ローカル Web ページの layout コマンド" src="assets/screenshots/layout-light.png">
 </picture>
 
 #### `boot`
@@ -156,10 +129,10 @@ fdstoolkit boot <image> [--json]
 #### `hash`
 
 ```bash
-fdstoolkit hash <image> [--profile <name>] [--json]
+fdstoolkit hash <image> [--profile <name>] [-o <out>] [--force] [--json]
 ```
 
-イメージ全体と各面の CRC32、MD5、SHA-1、SHA-256、加えて正規化ダイジェストと RetroAchievements の MD5。
+イメージ全体と各面の CRC32、MD5、SHA-1、SHA-256、加えて正規化ダイジェストと RetroAchievements の MD5。正規化ダイジェストは、書き換え日や書き換え回数のように自然に変わる部分を無視するので、同じゲームの 2 本は、どちらかが店頭で書き換えられていても一致します。`--profile` はどこまで無視するかを選びます。`-o` を付けると、それらのフィールドを固定値にしたディスク、つまり正規化したイメージも書き出します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/hash-dark.png">
@@ -247,21 +220,6 @@ bits gained   0
 <img alt="ローカル Web ページの reads コマンド" src="assets/screenshots/reads-light.png">
 </picture>
 
-#### `integrity`
-
-```bash
-fdstoolkit integrity <image> [--original-crcs] [--json]
-```
-
-すべてのチェックサムを通過しながら内容が誤っているイメージを見つけます。ほぼ全体が未定義オペコードのファイル本体、ヘッダと長さが食い違う本体、そして `--original-crcs` を付けた場合は、本来そうならないはずなのに保存済みチェックサムがすべて正確に再計算できてしまう吸い出し。
-
-オペコードの閾値は実在する 10,105 本のプログラムファイルを基準に較正してあります。これらの中央値は未定義オペコード 36% です。グラフィックやテーブルを日常的に含むためです。したがって、ほぼコードでないファイルだけが報告されます。`SAVEDATA` や `JMP-TBL.` のような名前がここに現れるのは正しい動作です。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/integrity-dark.png">
-<img alt="ローカル Web ページの integrity コマンド" src="assets/screenshots/integrity-light.png">
-</picture>
-
 #### `diff`
 
 ```bash
@@ -273,19 +231,6 @@ fdstoolkit diff <a> <b> [--explain] [--json]
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/diff-dark.png">
 <img alt="ローカル Web ページの diff コマンド" src="assets/screenshots/diff-light.png">
-</picture>
-
-#### `lint`
-
-```bash
-fdstoolkit lint <image> [--json]
-```
-
-そのイメージを FDSKey が読み込めるかどうかを、カードに書き込む前に判定します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/lint-dark.png">
-<img alt="ローカル Web ページの lint コマンド" src="assets/screenshots/lint-light.png">
 </picture>
 
 ### 修復
@@ -301,19 +246,6 @@ fdstoolkit rebuild <image> -o <out> [--keep-tail] [--reveal-hidden] [--drop-hidd
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/rebuild-dark.png">
 <img alt="ローカル Web ページの rebuild コマンド" src="assets/screenshots/rebuild-light.png">
-</picture>
-
-#### `clean`
-
-```bash
-fdstoolkit clean <image> -o <out> [--force]
-```
-
-最終ブロック以降に残った非ゼロバイトを除去します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/clean-dark.png">
-<img alt="ローカル Web ページの clean コマンド" src="assets/screenshots/clean-light.png">
 </picture>
 
 #### `set`
@@ -385,79 +317,38 @@ CRC に失敗したブロックを、同じブロックが正常な別の吸い�
 
 ```bash
 fdstoolkit consensus <dumps>... -o <out> [--map] [--json] [--force]
-fdstoolkit consensus <directory> [--profile <name>] [--json]
 ```
 
-吸い出しどうしの合議です。何を渡すかで動作が決まります。1 枚のディスクの吸い出しを複数渡すと、ブロックごとの多数決で 1 つのイメージに統合し、一致しなかった箇所をすべて報告します。`--map` はブロックごとの一致度を表示します。ディレクトリを 1 つ渡すと、多数のゲームのコーパスとして読み、ゲームごとにそのすべての吸い出しの合議で 1 つのマスターを選び、少数意見は隠さず報告します。`--profile` はゲームをまとめる同一性プロファイルを選びます。
-
-Web ページにはディレクトリを渡せないため、同じ選択は `across` 欄で行います。
-
-```bash
-fdstoolkit consensus ~/dumps
-```
-
-```
-profile       release
-dumps         595
-games         242
-unanimous     210 of 242
-```
+1 枚のディスクの吸い出しを複数受け取り、ブロックごとの多数決で 1 つのイメージに統合し、吸い出しどうしが一致しなかったブロックをすべて報告します。`--map` はブロックごとの一致度を表示します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/consensus-dark.png">
 <img alt="ローカル Web ページの consensus コマンド" src="assets/screenshots/consensus-light.png">
 </picture>
 
-#### `saves`
+#### `save`
 
 ```bash
-fdstoolkit saves <images>... [--json]
+fdstoolkit save find <dumps>... [--json]
+fdstoolkit save apply <image> --save <s> -o <out> [--force]
+fdstoolkit save extract <image> --played <p> -o <out> [--format ips|ups|image] [--force]
+fdstoolkit save blank <image> --recipes <r> -o <out> [--force]
 ```
 
-同一タイトルの複数の吸い出しを比較し、どのファイルがセーブデータかを報告します。
+ゲームが進行状況を書き込むファイルに関することを、4 つの操作で扱います。
+
+| 操作 | 内容 |
+|---|---|
+| `find` | 同じリリースの吸い出しを比べ、違いのあるファイル、つまりセーブを示します |
+| `apply` | IPS、UPS、BPS、またはイメージ全体のセーブをイメージに書き戻します |
+| `extract` | 未使用のディスクとプレイ済みのディスクの差分をセーブとして書き出します |
+| `blank` | 宣言されたセーブ領域を埋め、プレイ済みの 2 本が一致して比較できるようにします。`--recipes` はどの領域がセーブかを宣言するファイルで、必須です。どのバイトをゲームが書き換えるかを本ツールが推測することはありません |
+
+各操作は必要なものを確かめ、足りないものを伝えます。`apply` には `--save`、`extract` には `--played`、`blank` には `--recipes` が必要で、`find` 以外の 3 つはファイルを書き出すので `-o` も必要です。
 
 <picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/saves-dark.png">
-<img alt="ローカル Web ページの saves コマンド" src="assets/screenshots/saves-light.png">
-</picture>
-
-#### `save-apply`
-
-```bash
-fdstoolkit save-apply <image> --save <s> -o <out> [--force]
-```
-
-IPS、UPS、BPS、またはイメージ全体のセーブを書き戻します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-apply-dark.png">
-<img alt="ローカル Web ページの save-apply コマンド" src="assets/screenshots/save-apply-light.png">
-</picture>
-
-#### `save-extract`
-
-```bash
-fdstoolkit save-extract <image> --played <p> -o <out> [--format ips|ups|image] [--force]
-```
-
-未プレイのディスクとプレイ済みのディスクの差分を書き出します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-extract-dark.png">
-<img alt="ローカル Web ページの save-extract コマンド" src="assets/screenshots/save-extract-light.png">
-</picture>
-
-#### `normalise-saves`
-
-```bash
-fdstoolkit normalise-saves <image> --recipes <r> -o <out> [--force]
-```
-
-宣言されたセーブ領域を消去し、プレイ済みの 2 本が一致して比較できるようにします。`--recipes` はどの領域がセーブかを宣言するファイルで、必須です。どのバイトをゲームが書き換えるかを本ツールが推測することはありません。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/normalise-saves-dark.png">
-<img alt="ローカル Web ページの normalise-saves コマンド" src="assets/screenshots/normalise-saves-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-dark.png">
+<img alt="ローカル Web ページの save コマンド" src="assets/screenshots/save-light.png">
 </picture>
 
 ### コンテナ
@@ -514,88 +405,6 @@ fdstoolkit build <manifest> -o <out> [--force]
 <img alt="ローカル Web ページの build コマンド" src="assets/screenshots/build-light.png">
 </picture>
 
-#### `card`
-
-```bash
-fdstoolkit card -o <out> [--sides 1|2] [--firmware <variant>] [--force]
-```
-
-FDSKey が受け付ける空のイメージ。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/card-dark.png">
-<img alt="ローカル Web ページの card コマンド" src="assets/screenshots/card-light.png">
-</picture>
-
-### 識別
-
-任天堂のマスターイメージは存在しません。ディスクは空の状態で販売され、店頭のディスクライターで書き込まれ、その際に 1 枚ずつ刻印されたからです。したがって同じゲームの 2 本はバイト列が一致しません。マスターに最も近いものは、その刻印を除いたうえで現存するすべての吸い出しが一致する内容です。
-
-#### `identify`
-
-```bash
-fdstoolkit identify <image> --dat <file> [--reference <dir>] [--no-cache] [--json]
-```
-
-一致した DAT のエントリと、どのダイジェストで一致したか。`--reference` を付けると、一致しなかった場合にそのディレクトリ内で最も近いイメージと、異なるバイト範囲を報告します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/identify-dark.png">
-<img alt="ローカル Web ページの identify コマンド" src="assets/screenshots/identify-light.png">
-</picture>
-
-#### `canon`
-
-```bash
-fdstoolkit canon <image> --profile <name> [-o <out>] [--force]
-```
-
-正規化ダイジェストを表示し、`-o` を付けると正規化イメージを書き出します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/canon-dark.png">
-<img alt="ローカル Web ページの canon コマンド" src="assets/screenshots/canon-light.png">
-</picture>
-
-#### `reference-build`
-
-```bash
-fdstoolkit reference-build <corpus> -o <set> --set-version <v> [--profile <name>] [--force]
-```
-
-その結果を、何もインストールせずに照合できるダイジェストの集合として公開します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reference-build-dark.png">
-<img alt="ローカル Web ページの reference-build コマンド" src="assets/screenshots/reference-build-light.png">
-</picture>
-
-#### `reference-verify`
-
-```bash
-fdstoolkit reference-verify <image> --set <set> [--json]
-```
-
-`match`、期待されるダイジェストを添えた `mismatch`、または `unknown`。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/reference-verify-dark.png">
-<img alt="ローカル Web ページの reference-verify コマンド" src="assets/screenshots/reference-verify-light.png">
-</picture>
-
-#### `dat-build`
-
-```bash
-fdstoolkit dat-build <corpus> -o <out> --name <n> --set-version <v> [--author <a>] [--force]
-```
-
-Logiqx 形式の DAT を出力し、コミュニティが既に使っているツールへ結果を届けます。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dat-build-dark.png">
-<img alt="ローカル Web ページの dat-build コマンド" src="assets/screenshots/dat-build-light.png">
-</picture>
-
 ### ハードウェア
 
 #### `status`
@@ -622,10 +431,10 @@ the stick reports nothing about the disk itself: not whether one is inserted, wh
 #### `doctor`
 
 ```bash
-fdstoolkit doctor [--clear-cache] [--json]
+fdstoolkit doctor [--json]
 ```
 
-バージョン、Python、プラットフォーム、ハードウェア対応の導入状況、接続されているデバイスとそれを開けるか、DAT キャッシュの状態。挙動がおかしいときは最初にこれを実行してください。`--clear-cache` は確認の前に、キャッシュ済みの DAT カタログをすべて削除します。
+バージョン、Python、プラットフォーム、ハードウェア対応の導入状況、接続されているデバイスとそれを開けるか、そしてコーデックと同一性プロファイルが自己テストに通るか。挙動がおかしいときは最初にこれを実行してください。
 
 
 #### `dump`
@@ -852,19 +661,6 @@ reads clean: the whole side reads. Repeat with two more factory disks, since a h
 <img alt="ローカル Web ページの calibrate コマンド" src="assets/screenshots/calibrate-light.png">
 </picture>
 
-#### `health`
-
-```bash
-fdstoolkit health <reference> --read <r>... [--json]
-```
-
-信頼できるディスクを基準としてドライブ自身のエラー率を測ります。ディスクのせいをドライブに、あるいはその逆に押し付けないためです。判定は `good`、`marginal`、`faulty` のいずれかです。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/health-dark.png">
-<img alt="ローカル Web ページの health コマンド" src="assets/screenshots/health-light.png">
-</picture>
-
 #### `web`
 
 ```bash
@@ -888,14 +684,13 @@ fdstoolkit web
 | ルート | 対応するコマンド |
 |---|---|
 | `GET /api/catalogue` | プロファイル、形式、出力先の一覧 |
-| `POST /api/info` | `info` と `ls` |
+| `POST /api/info` | `info` |
 | `POST /api/verify` | `verify` |
 | `POST /api/hash` | `hash` |
 | `POST /api/grade` | `grade` |
 | `POST /api/reads` | `reads` |
 | `GET /api/status` | `status` |
 | `POST /api/blank` | `blank` |
-| `POST /api/canon` | `canon` |
 | `POST /api/convert` | `convert` |
 | `POST /api/jobs/dump` | `dump` |
 | `POST /api/jobs/write` | `write` |
@@ -950,14 +745,6 @@ fdstoolkit grade pass1.fds --read pass2.fds
 
 1 枚のディスクではこの問いに答えられません。複数枚を読んで、どこで失敗したかを比べてください。どのディスクでも同じ場所で失敗するならドライブ、1 枚だけで起きるならそのディスク、ドライブが応答しなくなるならそのどちらでもありません。最後の場合の正しい対応は、別のディスクを入れて試すことではなく、中止することです。
 
-### 参照セットを作る
-
-```bash
-fdstoolkit consensus ~/dumps
-fdstoolkit reference-build ~/dumps -o fds-reference.json --set-version 2026-09-22
-fdstoolkit reference-verify mine.fds --set fds-reference.json
-```
-
 ## フォーマット
 
 1 面はブロックの並びです。
@@ -974,7 +761,6 @@ fdstoolkit reference-verify mine.fds --set fds-reference.json
 | `.fds` ヘッダなし | 65500 | なし | No-Intro がハッシュを取る対象 |
 | `.fds` fwNES ヘッダ付き | 16 + 面ごとに 65500 | なし | ヘッダが面数を保持します |
 | `.qd` | 65536 | あり | バーチャルコンソールの吸い出しと Quick Disk のダンプ |
-| FDSKey カードファイル | 65500 | なし | ファームウェアの制約内でヘッダなし |
 | パック済みパルスクラス、`raw03` | 可変 | あり | 1 パルスにつき 2 ビット、FDSStick が量子化済み |
 
 各変換で失われるもの。
@@ -988,13 +774,13 @@ fdstoolkit reference-verify mine.fds --set fds-reference.json
 
 ## 終了コードとスクリプト化
 
-`0` は異常なし、`1` は異常ありを意味します。何を異常とみなすかはコマンドごとに異なり、上に記載してあります。`splice` なら修復できなかったブロック、コーパスに対する `consensus` なら合議が割れたゲーム、`calibrate` なら正しく読めなかった最後の読み取り、`reference-verify` なら不一致です。
+`0` は異常なし、`1` は異常ありを意味します。何を異常とみなすかはコマンドごとに異なり、上に記載してあります。`splice` なら修復できなかったブロック、`consensus` なら吸い出しどうしが一致しなかったブロック、`calibrate` なら正しく読めなかった最後の読み取りです。
 
 報告を行うコマンドはすべて `--json` を受け付け、その JSON は人間向け出力と同じデータです。ファイルを書き出すコマンドは `--force` なしに上書きしません。
 
 ```bash
 fdstoolkit verify disk.fds --json | jq -r '.findings[] | "\(.code) \(.message)"'
-fdstoolkit consensus ~/dumps --json | jq '.contested[].game'
+fdstoolkit consensus a.fds b.fds c.fds -o merged.fds --json | jq '.disagreements'
 fdstoolkit calibrate speed --reference smb.fds --passes 5 --json | jq -r '.headline'
 ```
 
@@ -1021,7 +807,7 @@ MIT です。[LICENSE](LICENSE) を参照してください。
 <div align="center">
 
 ファミコン ディスクシステム / ディスクカード の保存、吸い出し、ディスク品質の測定、
-ドライブの調整、ベルト交換、モーター回転数の調整、FDSStick、FDSKey。
+ドライブの調整、ベルト交換、モーター回転数の調整、FDSStick。
 
 English documentation: <a href="README.md">README.md</a>
 

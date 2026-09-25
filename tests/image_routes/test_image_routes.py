@@ -25,13 +25,6 @@ def client_fixture() -> TestClient:
     return TestClient(create_app())
 
 
-def test_ls_lists_every_file(client: TestClient) -> None:
-    body = client.post("/api/ls", json={"data": ENCODED}).json()
-
-    assert isinstance(body["rows"], list)
-    assert body["headline"] == f"{len(body['rows'])} file(s) across 2 side(s)"
-
-
 def test_diff_reports_no_difference_between_one_image_and_itself(
     client: TestClient,
 ) -> None:
@@ -97,45 +90,26 @@ def test_boot_predicts_what_the_console_does(client: TestClient) -> None:
     assert len(body["rows"]) == 2
 
 
-def test_layout_places_every_file_on_the_spiral(client: TestClient) -> None:
-    body = client.post("/api/layout", json={"data": ENCODED}).json()
-
-    assert isinstance(body["rows"], list)
-
-
 def test_provenance_reports_a_verdict_per_side(client: TestClient) -> None:
     body = client.post("/api/provenance", json={"data": ENCODED}).json()
 
     assert len(body["rows"]) == 2
 
 
-def test_lint_checks_an_image_against_the_card(client: TestClient) -> None:
-    body = client.post("/api/lint", json={"data": ONE, "name": "disk.fds"}).json()
+def test_save_find_compares_dumps_of_one_release(client: TestClient) -> None:
+    body = client.post("/api/save", json={"action": "find", "images": [ENCODED, ENCODED]}).json()
 
     assert isinstance(body["rows"], list)
 
 
-def test_lint_says_the_card_accepts_a_clean_image(client: TestClient) -> None:
-    body = client.post("/api/lint", json={"data": ONE, "name": "disk.fds"}).json()
-
-    assert body["headline"] == "the card accepts this image as it stands"
-    assert body["ok"]
-
-
-def test_saves_compares_dumps_of_one_release(client: TestClient) -> None:
-    body = client.post("/api/saves", json={"images": [ENCODED, ENCODED]}).json()
-
-    assert isinstance(body["rows"], list)
-
-
-def test_saves_says_so_when_every_dump_agrees(client: TestClient) -> None:
-    body = client.post("/api/saves", json={"images": [ENCODED, ENCODED]}).json()
+def test_save_find_says_so_when_every_dump_agrees(client: TestClient) -> None:
+    body = client.post("/api/save", json={"action": "find", "images": [ENCODED, ENCODED]}).json()
 
     assert body["headline"] == "no save candidate: every file agrees across the dumps"
 
 
-def test_saves_needs_at_least_one_dump(client: TestClient) -> None:
-    answer = client.post("/api/saves", json={"images": []})
+def test_save_find_needs_two_dumps(client: TestClient) -> None:
+    answer = client.post("/api/save", json={"action": "find", "images": [ENCODED]})
 
     assert answer.status_code == UNPROCESSABLE
 
@@ -183,12 +157,6 @@ def test_an_edit_that_names_no_field_is_refused(client: TestClient) -> None:
     assert answer.status_code == BAD_REQUEST
 
 
-def test_clean_removes_trailing_bytes(client: TestClient) -> None:
-    body = client.post("/api/clean", json={"data": ONE}).json()
-
-    assert body["size"] == len(ONE_SIDE)
-
-
 def test_rebuild_reemits_the_image(client: TestClient) -> None:
     body = client.post("/api/rebuild", json={"data": ONE}).json()
 
@@ -206,15 +174,15 @@ def test_a_patch_that_is_not_a_patch_is_refused(client: TestClient) -> None:
 def test_a_save_that_does_not_apply_is_refused(client: TestClient) -> None:
     rubbish = base64.b64encode(b"nonsense").decode("ascii")
 
-    answer = client.post("/api/save-apply", json={"data": ONE, "save": rubbish})
+    answer = client.post("/api/save", json={"action": "apply", "images": [ONE], "save": rubbish})
 
     assert answer.status_code == BAD_REQUEST
 
 
 def test_save_extract_reports_the_difference(client: TestClient) -> None:
     body = client.post(
-        "/api/save-extract",
-        json={"data": ONE, "played": ONE, "save_as": "ips"},
+        "/api/save",
+        json={"action": "extract", "images": [ONE], "played": ONE, "save_as": "ips"},
     ).json()
 
     assert body["name"].endswith(".ips")
@@ -222,8 +190,8 @@ def test_save_extract_reports_the_difference(client: TestClient) -> None:
 
 def test_an_unknown_save_format_is_refused(client: TestClient) -> None:
     answer = client.post(
-        "/api/save-extract",
-        json={"data": ONE, "played": ONE, "save_as": "nonsense"},
+        "/api/save",
+        json={"action": "extract", "images": [ONE], "played": ONE, "save_as": "nonsense"},
     )
 
     assert answer.status_code == BAD_REQUEST
@@ -232,7 +200,7 @@ def test_an_unknown_save_format_is_refused(client: TestClient) -> None:
 def test_a_recipe_file_that_does_not_parse_is_refused(client: TestClient) -> None:
     rubbish = base64.b64encode(b"[]").decode("ascii")
 
-    answer = client.post("/api/normalise-saves", json={"data": ONE, "recipes": rubbish})
+    answer = client.post("/api/save", json={"action": "blank", "images": [ONE], "recipes": rubbish})
 
     assert answer.status_code == BAD_REQUEST
 
@@ -253,18 +221,6 @@ def test_a_manifest_that_does_not_parse_is_refused(client: TestClient) -> None:
     rubbish = base64.b64encode(b"{").decode("ascii")
 
     answer = client.post("/api/build", json={"manifest": rubbish})
-
-    assert answer.status_code == BAD_REQUEST
-
-
-def test_card_builds_a_blank_the_firmware_accepts(client: TestClient) -> None:
-    body = client.post("/api/card", json={"sides": 1}).json()
-
-    assert body["size"] > 0
-
-
-def test_an_unknown_firmware_variant_is_refused(client: TestClient) -> None:
-    answer = client.post("/api/card", json={"sides": 1, "firmware": "nonsense"})
 
     assert answer.status_code == BAD_REQUEST
 
@@ -293,7 +249,9 @@ def test_a_save_that_applies_produces_a_file(client: TestClient) -> None:
     changed[70] ^= 0xFF
     payload = base64.b64encode(_ips(ONE_SIDE, bytes(changed))).decode("ascii")
 
-    body = client.post("/api/save-apply", json={"data": ONE, "save": payload}).json()
+    body = client.post(
+        "/api/save", json={"action": "apply", "images": [ONE], "save": payload}
+    ).json()
 
     assert body["size"] == len(ONE_SIDE)
 
@@ -324,8 +282,8 @@ def test_a_recipe_file_that_parses_normalises_the_save(client: TestClient) -> No
     ).json()
 
     body = client.post(
-        "/api/normalise-saves",
-        json={"data": with_file["data"], "recipes": recipes},
+        "/api/save",
+        json={"action": "blank", "images": [with_file["data"]], "recipes": recipes},
     ).json()
 
     assert body["size"] == len(ONE_SIDE)
@@ -352,7 +310,7 @@ def test_a_recipe_that_names_a_file_that_is_not_there_is_refused(
         ).encode()
     ).decode("ascii")
 
-    answer = client.post("/api/normalise-saves", json={"data": ONE, "recipes": recipes})
+    answer = client.post("/api/save", json={"action": "blank", "images": [ONE], "recipes": recipes})
 
     assert answer.status_code == BAD_REQUEST
 
@@ -363,3 +321,27 @@ def test_a_manifest_that_parses_builds_an_image(client: TestClient) -> None:
     answer = client.post("/api/build", json={"manifest": manifest})
 
     assert answer.status_code in {OK, BAD_REQUEST}
+
+
+@pytest.mark.parametrize(
+    ("payload", "detail"),
+    [
+        ({"action": "apply", "images": [ONE]}, "save apply needs a save"),
+        ({"action": "extract", "images": [ONE]}, "save extract needs the played image"),
+        ({"action": "blank", "images": [ONE]}, "save blank needs a recipe file"),
+        ({"action": "apply", "images": [ONE, ONE], "save": ONE}, "save apply works on one image"),
+    ],
+)
+def test_a_save_action_missing_what_it_needs_is_refused(
+    client: TestClient, payload: dict[str, object], detail: str
+) -> None:
+    answer = client.post("/api/save", json=payload)
+
+    assert answer.status_code == UNPROCESSABLE
+    assert answer.json()["detail"] == detail
+
+
+def test_a_save_action_it_does_not_know_is_refused(client: TestClient) -> None:
+    answer = client.post("/api/save", json={"action": "erase", "images": [ONE]})
+
+    assert answer.status_code == BAD_REQUEST

@@ -156,11 +156,19 @@ def test_a_two_side_blank_is_built(client: TestClient) -> None:
     assert body["size"] == len(blank_image(sides=2, headered=False, formatted=True))
 
 
-def test_canon_writes_the_canonical_image(client: TestClient) -> None:
-    body = client.post("/api/canon", json={"data": ENCODED, "profile": "release"}).json()
+def test_hash_offers_the_canonical_image_when_asked(client: TestClient) -> None:
+    body = client.post(
+        "/api/hash", json={"data": ENCODED, "profile": "release", "canonical_image": True}
+    ).json()
 
-    assert body["name"]
-    assert base64.b64decode(body["data"])
+    assert body["file"]["name"]
+    assert base64.b64decode(body["file"]["data"])
+
+
+def test_hash_offers_no_image_unless_asked(client: TestClient) -> None:
+    body = client.post("/api/hash", json={"data": ENCODED}).json()
+
+    assert body["file"] is None
 
 
 def test_convert_produces_a_qd(client: TestClient) -> None:
@@ -221,13 +229,13 @@ def test_grade_folds_in_a_second_read(client: TestClient) -> None:
     assert body["reasons"]
 
 
-def test_a_canon_image_carries_a_profile_in_its_name(client: TestClient) -> None:
+def test_a_canonical_image_carries_a_profile_in_its_name(client: TestClient) -> None:
     body = client.post(
-        "/api/canon",
-        json={"data": ENCODED, "name": "smb.fds", "profile": "data"},
+        "/api/hash",
+        json={"data": ENCODED, "name": "smb.fds", "profile": "data", "canonical_image": True},
     ).json()
 
-    assert body["name"] == "smb.data.fds"
+    assert body["file"]["name"] == "smb.data.fds"
 
 
 def test_a_body_larger_than_the_ceiling_is_refused(client: TestClient) -> None:

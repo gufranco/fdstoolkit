@@ -6,10 +6,8 @@ from typing import Annotated
 import typer
 
 from fdstoolkit.cli.common import Family, decode_image, fail
-from fdstoolkit.identify.integrity import inspect_disk
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
-from fdstoolkit.quality.health import DriveVerdict, measure_health
 from fdstoolkit.quality.reads import compare_reads
 from fdstoolkit.report import as_json
 
@@ -118,83 +116,6 @@ def grade(
     raise typer.Exit(code=0 if report.grade.value == "clean" else 1)
 
 
-def health(
-    reference: Annotated[Path, typer.Argument(help="an image of a known-good disk")],
-    read: Annotated[
-        list[Path] | None,
-        typer.Option("--read", help="a dump of that same disk, repeatable"),
-    ] = None,
-    *,
-    json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
-) -> None:
-    """Measure the drive's own error rate before blaming a disk for it."""
-    expected, _, _, _ = decode_image(reference)
-    dumps = [decode_image(path)[0] for path in read or []]
-
-    try:
-        profile = measure_health(expected, dumps)
-    except ValueError as error:
-        raise fail(str(error)) from error
-
-    if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "passes": profile.passes,
-                    "blocks_compared": profile.blocks_compared,
-                    "blocks_wrong": profile.blocks_wrong,
-                    "error_rate": round(profile.error_rate, 6),
-                    "verdict": profile.verdict.value,
-                }
-            )
-        )
-        raise typer.Exit(code=0 if profile.verdict is DriveVerdict.GOOD else 1)
-
-    typer.echo(f"passes        {profile.passes}")
-    typer.echo(f"blocks        {profile.blocks_compared}")
-    typer.echo(f"misread       {profile.blocks_wrong}")
-    typer.echo(f"error rate    {profile.error_rate:.4%}")
-    typer.echo(f"verdict       {profile.verdict.value}")
-    raise typer.Exit(code=0 if profile.verdict is DriveVerdict.GOOD else 1)
-
-
-def integrity(
-    image: Annotated[Path, typer.Argument(help="the image to inspect")],
-    *,
-    original_crcs: Annotated[
-        bool,
-        typer.Option("--original-crcs", help="expect the dump to carry the disk's own CRCs"),
-    ] = False,
-    json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
-) -> None:
-    """Look for an image that passes its CRCs and is still wrong."""
-    disk, _, _, _ = decode_image(image)
-    report = inspect_disk(disk, expect_original_crcs=original_crcs)
-
-    if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "sound": report.sound,
-                    "suspicions": [
-                        {"kind": item.kind.value, "side": item.side, "detail": item.detail}
-                        for item in report.suspicions
-                    ],
-                }
-            )
-        )
-        raise typer.Exit(code=0 if report.sound else 1)
-
-    if report.sound:
-        typer.echo("sound, nothing suspicious")
-        raise typer.Exit(code=0)
-    for item in report.suspicions:
-        typer.echo(f"side {item.side}: {item.kind.value}, {item.detail}")
-    raise typer.Exit(code=1)
-
-
 def register(app: typer.Typer) -> None:
     app.command(rich_help_panel=Family.CHECK)(reads)
     app.command(rich_help_panel=Family.CHECK)(grade)
-    app.command(rich_help_panel=Family.HARDWARE)(health)
-    app.command(rich_help_panel=Family.CHECK)(integrity)

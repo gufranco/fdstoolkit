@@ -64,7 +64,7 @@ def test_a_number_is_offered_as_a_number() -> None:
     assert kinds["retries"] == "number"
 
 
-@pytest.mark.parametrize("command", ["blank", "card", "dump", "surface"])
+@pytest.mark.parametrize("command", ["blank", "dump", "surface"])
 def test_a_side_count_is_offered_as_one_or_two(command: str) -> None:
     field = next(entry for entry in form_for(command).fields if entry.name == "sides")
 

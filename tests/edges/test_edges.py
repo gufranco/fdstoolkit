@@ -11,12 +11,7 @@ from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.identify.datfile import build_dat
-from fdstoolkit.identify.integrity import CodeReport
-from fdstoolkit.master.corpus import GameKey, GroupMaster, build_masters
-from fdstoolkit.master.reference import ReferenceSet, reference_from
 from fdstoolkit.quality.confidence import ConfidenceReport
-from fdstoolkit.quality.health import DriveProfile
 from fdstoolkit.quality.reads import ReadStatistics
 
 runner = CliRunner()
@@ -65,32 +60,6 @@ def test_a_statistics_report_with_no_block_is_stable() -> None:
     assert ReadStatistics(passes=2, blocks=()).stability == 1.0
 
 
-def test_a_group_with_no_member_has_no_agreement() -> None:
-    group = GroupMaster(
-        key=GameKey(game_code="ABC", version=0, disk_number=0, sides=1),
-        members=(),
-        digest="d",
-        variants=0,
-        consensus=None,
-    )
-
-    assert group.agreement == 0.0
-
-
-def test_a_drive_that_compared_nothing_has_no_error_rate() -> None:
-    assert DriveProfile(passes=0, blocks_compared=0, blocks_wrong=0).error_rate == 0.0
-
-
-def test_an_empty_code_report_has_no_share() -> None:
-    assert CodeReport(examined=0, illegal=0).share == 0.0
-
-
-def test_a_homepage_is_written_into_the_dat() -> None:
-    text = build_dat([("A.fds", b"x")], name="F", version="1", homepage="https://example.test")
-
-    assert "https://example.test" in text
-
-
 def test_splicing_a_donor_of_another_shape_is_refused(tmp_path: Path) -> None:
     image = _write(tmp_path / "a.fds")
     other = Disk(
@@ -115,73 +84,6 @@ def test_splicing_a_donor_of_another_shape_is_refused(tmp_path: Path) -> None:
     assert "different shape" in result.stdout
 
 
-def test_a_contested_corpus_prints_the_dissenters(tmp_path: Path) -> None:
-    root = tmp_path / "corpus"
-    root.mkdir()
-    _write(root / "a.fds")
-    _write(root / "b.fds", _disk(licensee=0x99))
-
-    result = runner.invoke(app, ["consensus", str(root)])
-
-    assert "dissenting" in result.stdout
-
-
-def test_building_a_reference_with_an_unknown_profile_is_refused(tmp_path: Path) -> None:
-    root = tmp_path / "corpus"
-    root.mkdir()
-    _write(root / "a.fds")
-
-    result = runner.invoke(
-        app,
-        [
-            "reference-build",
-            str(root),
-            "-o",
-            str(tmp_path / "set.json"),
-            "--set-version",
-            "1",
-            "--profile",
-            "nope",
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "unknown profile" in result.stdout
-
-
-def test_a_mismatching_image_prints_the_expected_digest(tmp_path: Path) -> None:
-    root = tmp_path / "corpus"
-    root.mkdir()
-    _write(root / "a.fds")
-    reference = tmp_path / "set.json"
-    runner.invoke(app, ["reference-build", str(root), "-o", str(reference), "--set-version", "1"])
-    other = _write(tmp_path / "other.fds", _disk(licensee=0x77))
-
-    result = runner.invoke(app, ["reference-verify", str(other), "--set", str(reference)])
-
-    assert result.exit_code == 1
-    assert "expected" in result.stdout
-
-
-def test_a_dat_from_a_missing_directory_is_refused(tmp_path: Path) -> None:
-    result = runner.invoke(
-        app,
-        [
-            "dat-build",
-            str(tmp_path / "nowhere"),
-            "-o",
-            str(tmp_path / "o.dat"),
-            "--name",
-            "F",
-            "--set-version",
-            "1",
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "directory not found" in result.stdout
-
-
 def test_grading_against_a_dump_of_another_shape_is_refused(tmp_path: Path) -> None:
     image = _write(tmp_path / "a.fds")
     other = Disk(
@@ -202,75 +104,3 @@ def test_grading_against_a_dump_of_another_shape_is_refused(tmp_path: Path) -> N
 
     assert result.exit_code == 1
     assert "different shapes" in result.stdout
-
-
-def test_health_can_print_json(tmp_path: Path) -> None:
-    reference = _write(tmp_path / "ref.fds")
-    read = _write(tmp_path / "r.fds")
-
-    result = runner.invoke(app, ["health", str(reference), "--read", str(read), "--json"])
-
-    assert result.exit_code == 0
-    assert '"verdict": "good"' in result.stdout
-
-
-def test_an_unsound_image_lists_its_suspicions(tmp_path: Path) -> None:
-    header = bytearray(16)
-    header[0x00] = BlockKind.FILE_HEADER
-    header[0x03:0x0B] = b"PRG     "
-    header[0x0D:0x0F] = (200).to_bytes(2, "little")
-    disk = Disk(
-        sides=(
-            Side(
-                blocks=(
-                    Block(kind=BlockKind.DISK_INFO, payload=_payload()),
-                    Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([2, 1])),
-                    Block(kind=BlockKind.FILE_HEADER, payload=bytes(header)),
-                    Block(kind=BlockKind.FILE_DATA, payload=bytes([4]) + bytes((0x02,)) * 200),
-                ),
-                tail=b"",
-                capacity=65500,
-            ),
-        )
-    )
-    image = _write(tmp_path / "a.fds", disk)
-
-    result = runner.invoke(app, ["integrity", str(image)])
-
-    assert result.exit_code == 1
-    assert "implausible code" in result.stdout
-
-
-def test_a_reference_set_from_an_empty_corpus_holds_nothing() -> None:
-    reference = reference_from(build_masters([]), version="1")
-
-    assert ReferenceSet.from_json(reference.to_json()).entries == ()
-
-
-def test_an_unknown_image_prints_no_game(tmp_path: Path) -> None:
-    root = tmp_path / "corpus"
-    root.mkdir()
-    _write(root / "a.fds")
-    reference = tmp_path / "set.json"
-    runner.invoke(app, ["reference-build", str(root), "-o", str(reference), "--set-version", "1"])
-
-    payload = bytearray(_payload())
-    payload[0x10:0x13] = b"ZZZ"
-    other = _write(
-        tmp_path / "z.fds",
-        Disk(
-            sides=(
-                Side(
-                    blocks=(Block(kind=BlockKind.DISK_INFO, payload=bytes(payload)),),
-                    tail=b"",
-                    capacity=65500,
-                ),
-            )
-        ),
-    )
-
-    result = runner.invoke(app, ["reference-verify", str(other), "--set", str(reference)])
-
-    assert result.exit_code == 1
-    assert "unknown" in result.stdout
-    assert "game " not in result.stdout

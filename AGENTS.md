@@ -60,8 +60,6 @@ a factor of two and carry no tolerance.
 - A drive that reaches one face at a time cannot select a side. Reading more
   than one side asks the operator to turn the disk over, and refuses rather
   than reading the same face twice.
-- `SAVEDATA` and `JMP-TBL.` are reported by the opcode check and are working as
-  intended. They are almost entirely non-code.
 - An FDSStick does two jobs. It is an interface between a real Disk System drive
   and this machine, and it is a drive emulator that plays images off its own
   flash. Only the first is in scope, so the driver speaks three reports and no
@@ -123,9 +121,10 @@ behaviour.
 |---|---|
 | `core/` | The disk model, blocks, diagnostics, canonical identity |
 | `codecs/` | fds, qd, the raw03 pulse classes, foreign-image rejection |
-| `drive/` | The pulse-class reading and the console speed reading |
-| `quality/` | Reads, confidence, grading, calibration, the surface test |
-| `master/` | Corpus consensus, splicing, reference sets |
+| `drive/` | Live calibration of the drive against a reference disk |
+| `quality/` | Reads, confidence, grading, the surface test |
+| `identify/` | Digests and provenance |
+| `master/` | Splicing a good block in from another dump |
 | `ui/` | The web surface: routes, schemas, derived forms, static page |
 | `cli/` | One module per command family, each with a `register(app)` |
 

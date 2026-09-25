@@ -11,10 +11,10 @@ from fdstoolkit.cli import (
     drive_cli,
     edit_cmds,
     hardware_cmds,
-    identify_cmds,
     inspect_cmds,
     master_cli,
     quality_cli,
+    save_cmds,
 )
 
 app = typer.Typer(
@@ -27,11 +27,11 @@ compare_cmds.register(app)
 convert_cmds.register(app)
 edit_cmds.register(app)
 inspect_cmds.register(app)
-identify_cmds.register(app)
 hardware_cmds.register(app)
 quality_cli.register(app)
 master_cli.register(app)
 drive_cli.register(app)
+save_cmds.register(app)
 
 
 def _version_callback(value: bool) -> None:

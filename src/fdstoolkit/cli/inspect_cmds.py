@@ -11,28 +11,49 @@ from fdstoolkit.cli.common import (
     decode_image,
     exit_code,
     fail,
-    read_image,
+    guard_output,
     side_summary,
 )
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.core.bios import BootVerdict, predict_boot
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import worst_severity
+from fdstoolkit.core.disk import Disk
 from fdstoolkit.doctor import CheckStatus, diagnose
-from fdstoolkit.fdskey.lint import lint_card_image
-from fdstoolkit.identify.cache import DatCache
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.identify.provenance import provenance_of
-from fdstoolkit.quality.layout import layout_of
 from fdstoolkit.report import as_json, diagnostics_as_data
+
+
+def file_rows(disk: Disk) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for index, side in enumerate(disk.sides):
+        declared = side.declared_file_count or 0
+        rows.extend(
+            {
+                "side": index,
+                "number": header.number,
+                "id": header.file_id,
+                "name": header.name,
+                "address": header.address,
+                "size": header.size,
+                "kind": header.kind.name.lower(),
+                "hidden": position >= declared,
+            }
+            for position, header in enumerate(side.file_headers)
+        )
+    return rows
 
 
 def info(
     image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
     *,
+    files: Annotated[
+        bool, typer.Option("--files", help="also list every file on every side")
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Describe an image, side by side."""
+    """Describe an image, side by side, and with --files every file on it."""
     disk, findings, data, container = decode_image(image)
     payload: dict[str, object] = {
         "path": str(image),
@@ -43,6 +64,8 @@ def info(
         "sides": [side_summary(index, side) for index, side in enumerate(disk.sides)],
         "diagnostics": diagnostics_as_data(findings),
     }
+    if files:
+        payload["files"] = file_rows(disk)
     if json_output:
         typer.echo(as_json(payload))
         return
@@ -58,37 +81,9 @@ def info(
         )
     for finding in findings:
         typer.echo(f"  {finding.render()}")
-
-
-def ls(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    *,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
-) -> None:
-    """List the files on every side."""
-    disk, _, _, _ = decode_image(image)
-    rows: list[dict[str, object]] = []
-    for index, side in enumerate(disk.sides):
-        declared = side.declared_file_count or 0
-        for position, header in enumerate(side.file_headers):
-            rows.append(
-                {
-                    "side": index,
-                    "number": header.number,
-                    "id": header.file_id,
-                    "name": header.name,
-                    "address": header.address,
-                    "size": header.size,
-                    "kind": header.kind.name.lower(),
-                    "hidden": position >= declared,
-                }
-            )
-
-    if json_output:
-        typer.echo(as_json({"path": str(image), "files": rows}))
+    if not files:
         return
-
-    for row in rows:
+    for row in file_rows(disk):
         marker = " (hidden)" if row["hidden"] else ""
         typer.echo(
             f"side {row['side']} #{row['number']:3} {row['name']!s:<8} "
@@ -128,16 +123,24 @@ def verify(
 def hash_command(
     image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
     *,
-    profile: Annotated[str, typer.Option("--profile", help="canonical profile")] = "content",
+    profile: Annotated[str, typer.Option("--profile", help="raw, content or data")] = "content",
+    output: Annotated[
+        Path | None,
+        typer.Option("-o", "--output", help="also write the canonical image"),
+    ] = None,
+    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Hash an image, every side, and its canonical form."""
+    """Hash an image, every side, and its canonical form, which -o also writes out."""
     disk, _, data, container = decode_image(image)
     side_size = fds.SIDE_SIZE if container is Container.FDS else qd.SIDE_SIZE
     try:
         canonical = canonicalise(disk, profile_by_name(profile))
     except ValueError as error:
         raise fail(str(error)) from error
+    if output is not None:
+        guard_output(output, force=force)
+        output.write_bytes(canonical.data)
 
     whole = digests_of(data)
     payload: dict[str, object] = {
@@ -160,6 +163,8 @@ def hash_command(
     typer.echo(f"sha256    {whole.sha256}")
     typer.echo(f"canonical {digest_string(canonical)}")
     typer.echo(f"ra md5    {retroachievements_hash(data)}")
+    if output is not None:
+        typer.echo(f"wrote {output} ({len(canonical.data)} bytes)")
 
 
 def provenance(
@@ -185,66 +190,6 @@ def provenance(
         )
         for note in side.notes:
             typer.echo(f"  {note}")
-
-
-def layout(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    *,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
-) -> None:
-    """Show where each file sits on the side, and what it costs to reach it."""
-    disk, _, _, _ = decode_image(image)
-    report = layout_of(disk)
-
-    if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "path": str(image),
-                    "dead_bytes": report.dead_bytes,
-                    "sides": [
-                        {
-                            "side": side.side,
-                            "stream_bytes": side.stream_bytes,
-                            "seconds_to_read": round(side.seconds_to_read, 4),
-                            "dead_bytes": side.dead_bytes,
-                            "reorder_saving_bytes": side.reorder_saving_bytes,
-                            "note": side.note,
-                            "files": [
-                                {
-                                    "position": entry.position,
-                                    "file_id": entry.file_id,
-                                    "name": entry.name,
-                                    "size": entry.size,
-                                    "offset": entry.offset,
-                                    "seconds_to_reach": round(entry.seconds_to_reach, 4),
-                                    "hidden": entry.hidden,
-                                }
-                                for entry in side.placements
-                            ],
-                        }
-                        for side in report.sides
-                    ],
-                }
-            )
-        )
-        raise typer.Exit(code=0)
-
-    for side in report.sides:
-        typer.echo(
-            f"side {side.side}: {side.stream_bytes} bytes of stream, "
-            f"{side.seconds_to_read:.2f}s to read end to end"
-        )
-        for entry in side.placements:
-            marker = " (hidden)" if entry.hidden else ""
-            typer.echo(
-                f"  {entry.position:2d} {entry.name:<8} id {entry.file_id:3d}  "
-                f"{entry.size:6d} bytes  reached at {entry.seconds_to_reach:5.2f}s{marker}"
-            )
-        if side.dead_bytes:
-            typer.echo(f"  {side.dead_bytes} byte(s) of dead weight after the last block")
-        if side.note:
-            typer.echo(f"  {side.note}")
 
 
 def boot(
@@ -296,53 +241,11 @@ def boot(
     raise typer.Exit(code=1 if failed else 0)
 
 
-def lint(
-    image: Annotated[Path, typer.Argument(help="a .fds image destined for an FDSKey card")],
-    *,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
-) -> None:
-    """Predict whether FDSKey will load an image, before it reaches the card."""
-    data, _ = read_image(image)
-    findings = lint_card_image(data, name=image)
-
-    if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "path": str(image),
-                    "ok": not findings,
-                    "findings": [
-                        {
-                            "code": finding.code,
-                            "message": finding.message,
-                            "side": finding.side,
-                            "detail": dict(sorted(finding.detail.items())),
-                        }
-                        for finding in findings
-                    ],
-                }
-            )
-        )
-    else:
-        for finding in findings:
-            where = "" if finding.side is None else f"side {finding.side}: "
-            typer.echo(f"{where}[{finding.code}] {finding.message}")
-        typer.echo("ok" if not findings else "would not load")
-
-    raise typer.Exit(code=0 if not findings else 1)
-
-
 def doctor(
     *,
-    clear_cache: Annotated[
-        bool, typer.Option("--clear-cache", help="remove every cached DAT catalogue first")
-    ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Check the installation: version, Python, hardware support and caches."""
-    if clear_cache:
-        cache = DatCache()
-        typer.echo(f"removed {cache.clear()} cached catalogue(s) from {cache.root}")
+    """Check the installation: version, Python and hardware support."""
     report = diagnose()
     if json_output:
         typer.echo(
@@ -365,11 +268,8 @@ def doctor(
 
 def register(app: typer.Typer) -> None:
     app.command(rich_help_panel=Family.INSPECT)(info)
-    app.command(rich_help_panel=Family.INSPECT)(ls)
     app.command(rich_help_panel=Family.CHECK)(verify)
     app.command(name="hash", rich_help_panel=Family.INSPECT)(hash_command)
     app.command(rich_help_panel=Family.INSPECT)(provenance)
-    app.command(rich_help_panel=Family.INSPECT)(layout)
     app.command(rich_help_panel=Family.INSPECT)(boot)
-    app.command(rich_help_panel=Family.CHECK)(lint)
     app.command(rich_help_panel=Family.HARDWARE)(doctor)

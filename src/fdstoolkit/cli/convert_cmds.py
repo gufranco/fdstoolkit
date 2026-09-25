@@ -6,16 +6,17 @@ from typing import Annotated
 import typer
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
 from fdstoolkit.cli.common import (
     Container,
     Family,
+    TargetChoice,
     container_of,
     decode_image,
     fail,
     guard_output,
 )
 from fdstoolkit.codecs import fds, qd
-from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import Severity, worst_severity
 from fdstoolkit.core.disk import SIDES_PER_DISK
 
@@ -52,31 +53,6 @@ def convert(
         raise typer.Exit(code=1)
 
 
-def canon(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    *,
-    profile: Annotated[str, typer.Option("--profile", help="raw, content or data")] = "content",
-    output: Annotated[
-        Path | None,
-        typer.Option("-o", "--output", help="write the canonical image"),
-    ] = None,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    """Print the canonical digest, and optionally write the canonical image."""
-    disk, _, _, _ = decode_image(image)
-    try:
-        result = canonicalise(disk, profile_by_name(profile))
-    except ValueError as error:
-        raise fail(str(error)) from error
-
-    typer.echo(digest_string(result))
-    if output is None:
-        return
-    guard_output(output, force=force)
-    output.write_bytes(result.data)
-    typer.echo(f"wrote {output} ({len(result.data)} bytes)")
-
-
 def blank(
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write")],
     *,
@@ -103,7 +79,36 @@ def blank(
     typer.echo(f"wrote {output} ({len(data)} bytes)")
 
 
+def export(
+    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    target: Annotated[TargetChoice, typer.Option("--target", help="the device or emulator")],
+    directory: Annotated[Path, typer.Option("-d", "--directory", help="the card or folder root")],
+    *,
+    force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
+) -> None:
+    """Write an image in the layout a device or emulator expects."""
+    disk, _, _, _ = decode_image(image)
+
+    try:
+        written = export_for(
+            disk,
+            target=target.value,
+            directory=directory,
+            stem=image.stem,
+            force=force,
+        )
+    except FileExistsError as error:
+        message = f"{error}, pass --force to overwrite"
+        raise fail(message) from error
+
+    typer.echo(TARGETS[target.value].description)
+    for path in written:
+        typer.echo(f"wrote {path}")
+    for warning in swap_warnings(image.stem, target=target.value):
+        typer.echo(f"  {warning}")
+
+
 def register(app: typer.Typer) -> None:
     app.command(rich_help_panel=Family.CONTAINER)(convert)
-    app.command(rich_help_panel=Family.IDENTIFY)(canon)
     app.command(rich_help_panel=Family.CONTAINER)(blank)
+    app.command(rich_help_panel=Family.CONTAINER)(export)

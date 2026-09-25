@@ -8,9 +8,7 @@ import typer
 from fdstoolkit.cli.common import (
     Family,
     decode_image,
-    fail,
 )
-from fdstoolkit.edit.saves import find_save_candidates
 from fdstoolkit.quality.consensus import compare_images
 from fdstoolkit.quality.explain import Explanation, explain
 from fdstoolkit.report import as_json
@@ -105,50 +103,5 @@ def _print_explanation(
         )
 
 
-def saves(
-    images: Annotated[list[Path], typer.Argument(help="two or more dumps of the same release")],
-    *,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
-) -> None:
-    """Compare dumps of one release and report which file looks like the save."""
-    disks = [decode_image(path)[0] for path in images]
-    try:
-        candidates = find_save_candidates(disks)
-    except ValueError as error:
-        raise fail(str(error)) from error
-
-    if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "images": [str(path) for path in images],
-                    "candidates": [
-                        {
-                            "side": candidate.side,
-                            "position": candidate.position,
-                            "name": candidate.name,
-                            "size": candidate.size,
-                            "differing_bytes": candidate.differing_bytes,
-                            "name_matches_pattern": candidate.name_matches_pattern,
-                        }
-                        for candidate in candidates
-                    ],
-                }
-            )
-        )
-        return
-
-    if not candidates:
-        typer.echo("no save candidate: every file agrees across the dumps")
-        return
-    for candidate in candidates:
-        marker = ", name reads like a save" if candidate.name_matches_pattern else ""
-        typer.echo(
-            f"side {candidate.side} file {candidate.position} {candidate.name}: "
-            f"{candidate.differing_bytes} of {candidate.size} bytes differ{marker}"
-        )
-
-
 def register(app: typer.Typer) -> None:
     app.command(name="diff", rich_help_panel=Family.CHECK)(diff_command)
-    app.command(rich_help_panel=Family.REPAIR)(saves)

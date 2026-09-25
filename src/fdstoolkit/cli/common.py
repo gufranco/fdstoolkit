@@ -22,7 +22,6 @@ class Family(StrEnum):
     CHECK = "Check"
     REPAIR = "Repair"
     CONTAINER = "Container"
-    IDENTIFY = "Identify"
     HARDWARE = "Hardware"
 
 

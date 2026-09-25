@@ -77,56 +77,14 @@ def _corpus(tmp_path: Path) -> Path:
     return root
 
 
-def test_a_corpus_of_agreeing_dumps_is_unanimous(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["consensus", str(_corpus(tmp_path))])
-
-    assert result.exit_code == 0
-    assert "unanimous     1 of 1" in result.stdout
-
-
-def test_a_contested_game_is_named(tmp_path: Path) -> None:
-    root = _corpus(tmp_path)
-    _write_fds(root / "c.fds", _disk(licensee=0x99))
-
-    result = runner.invoke(app, ["consensus", str(root), "--json"])
-
-    payload = json.loads(result.stdout)
-    assert result.exit_code == 1
-    assert payload["dumps"] == 3
-
-
-def test_an_empty_directory_is_refused(tmp_path: Path) -> None:
-    empty = tmp_path / "empty"
-    empty.mkdir()
-
-    result = runner.invoke(app, ["consensus", str(empty)])
-
-    assert result.exit_code == 1
-    assert "no image found" in result.stdout
-
-
 def test_a_missing_path_is_refused_by_name(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["consensus", str(tmp_path / "nowhere")])
+    result = runner.invoke(
+        app, ["consensus", str(tmp_path / "nowhere"), "-o", str(tmp_path / "out.fds")]
+    )
 
     assert result.exit_code == 1
     assert "not found:" in result.stdout
     assert "nowhere" in result.stdout
-
-
-def test_a_corpus_refuses_an_output_file(tmp_path: Path) -> None:
-    result = runner.invoke(
-        app, ["consensus", str(_corpus(tmp_path)), "-o", str(tmp_path / "x.fds")]
-    )
-
-    assert result.exit_code == 1
-    assert "-o and --map do not apply" in result.stdout
-
-
-def test_a_corpus_refuses_a_block_map(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["consensus", str(_corpus(tmp_path)), "--map"])
-
-    assert result.exit_code == 1
-    assert "-o and --map do not apply" in result.stdout
 
 
 def test_dumps_of_one_disk_need_an_output(tmp_path: Path) -> None:
@@ -134,8 +92,7 @@ def test_dumps_of_one_disk_need_an_output(tmp_path: Path) -> None:
 
     result = runner.invoke(app, ["consensus", str(root / "a.fds"), str(root / "b.fds")])
 
-    assert result.exit_code == 1
-    assert "pass -o" in result.stdout
+    assert result.exit_code == 2
 
 
 def test_dumps_of_one_disk_can_report_json(tmp_path: Path) -> None:
@@ -150,97 +107,6 @@ def test_dumps_of_one_disk_can_report_json(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert payload["disagreements"] == []
     assert output.is_file()
-
-
-def test_an_unknown_profile_is_refused(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["consensus", str(_corpus(tmp_path)), "--profile", "nope"])
-
-    assert result.exit_code == 1
-    assert "unknown profile" in result.stdout
-
-
-def test_a_reference_set_is_built_and_verified(tmp_path: Path) -> None:
-    root = _corpus(tmp_path)
-    reference = tmp_path / "set.json"
-
-    built = runner.invoke(
-        app,
-        ["reference-build", str(root), "-o", str(reference), "--set-version", "1"],
-    )
-    assert built.exit_code == 0
-    assert reference.is_file()
-
-    checked = runner.invoke(app, ["reference-verify", str(root / "a.fds"), "--set", str(reference)])
-    assert checked.exit_code == 0
-    assert "match" in checked.stdout
-
-
-def test_an_image_outside_the_set_is_unknown(tmp_path: Path) -> None:
-    root = _corpus(tmp_path)
-    reference = tmp_path / "set.json"
-    runner.invoke(app, ["reference-build", str(root), "-o", str(reference), "--set-version", "1"])
-    other = _write_fds(tmp_path / "z.fds", _disk(code=b"ZZZ"))
-
-    result = runner.invoke(app, ["reference-verify", str(other), "--set", str(reference), "--json"])
-
-    assert result.exit_code == 1
-    assert json.loads(result.stdout)["verdict"] == "unknown"
-
-
-def test_verifying_against_a_missing_set_is_refused(tmp_path: Path) -> None:
-    root = _corpus(tmp_path)
-
-    result = runner.invoke(
-        app, ["reference-verify", str(root / "a.fds"), "--set", str(tmp_path / "no.json")]
-    )
-
-    assert result.exit_code == 1
-    assert "file not found" in result.stdout
-
-
-def test_verifying_against_a_bad_set_is_refused(tmp_path: Path) -> None:
-    root = _corpus(tmp_path)
-    bad = tmp_path / "bad.json"
-    bad.write_text('{"schema": "other"}', encoding="utf-8")
-
-    result = runner.invoke(app, ["reference-verify", str(root / "a.fds"), "--set", str(bad)])
-
-    assert result.exit_code == 1
-
-
-def test_a_dat_is_emitted_from_a_corpus(tmp_path: Path) -> None:
-    root = _corpus(tmp_path)
-    output = tmp_path / "set.dat"
-
-    result = runner.invoke(
-        app,
-        ["dat-build", str(root), "-o", str(output), "--name", "FDS", "--set-version", "1"],
-    )
-
-    assert result.exit_code == 0
-    assert "<datafile>" in output.read_text(encoding="utf-8")
-
-
-def test_a_dat_from_an_empty_directory_is_refused(tmp_path: Path) -> None:
-    empty = tmp_path / "empty"
-    empty.mkdir()
-
-    result = runner.invoke(
-        app,
-        [
-            "dat-build",
-            str(empty),
-            "-o",
-            str(tmp_path / "out.dat"),
-            "--name",
-            "FDS",
-            "--set-version",
-            "1",
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "at least one entry" in result.stdout
 
 
 def test_a_bad_block_is_spliced_from_a_donor(tmp_path: Path) -> None:
@@ -264,20 +130,3 @@ def test_a_block_with_no_good_donor_is_reported(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "no donor carries a good copy" in result.stdout
-
-
-def test_a_reference_from_a_missing_directory_is_refused(tmp_path: Path) -> None:
-    result = runner.invoke(
-        app,
-        [
-            "reference-build",
-            str(tmp_path / "nowhere"),
-            "-o",
-            str(tmp_path / "set.json"),
-            "--set-version",
-            "1",
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "directory not found" in result.stdout

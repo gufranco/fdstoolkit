@@ -29,7 +29,6 @@ from fdstoolkit.ui.forms import FAMILY_ORDER, forms
 from fdstoolkit.ui.jobs import JobBoard
 from fdstoolkit.ui.schemas import (
     BlankSpec,
-    CanonSpec,
     Catalogue,
     ConvertSpec,
     DiagnosticView,
@@ -50,7 +49,7 @@ from fdstoolkit.ui.schemas import (
     VerifyResult,
     VerifySpec,
 )
-from fdstoolkit.ui.shared import BAD_REQUEST, UNPROCESSABLE, decode_payload
+from fdstoolkit.ui.shared import BAD_REQUEST, UNPROCESSABLE, decode_payload, named_file
 from fdstoolkit.version import VERSION
 
 STATIC_DIR: Final = Path(str(resources.files("fdstoolkit.ui") / "static"))
@@ -76,38 +75,23 @@ EXPORT_TARGETS: Final = tuple(TARGETS)
 ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "status": "/api/status",
     "info": "/api/info",
-    "ls": "/api/ls",
     "verify": "/api/verify",
     "hash": "/api/hash",
     "diff": "/api/diff",
     "boot": "/api/boot",
-    "layout": "/api/layout",
     "provenance": "/api/provenance",
-    "lint": "/api/lint",
-    "saves": "/api/saves",
-    "canon": "/api/canon",
     "convert": "/api/convert",
     "blank": "/api/blank",
     "build": "/api/build",
-    "card": "/api/card",
     "export": "/api/export",
     "extract": "/api/extract",
     "insert": "/api/insert",
     "set": "/api/set",
-    "clean": "/api/clean",
     "rebuild": "/api/rebuild",
     "patch": "/api/patch",
-    "save-apply": "/api/save-apply",
-    "save-extract": "/api/save-extract",
-    "normalise-saves": "/api/normalise-saves",
+    "save": "/api/save",
     "splice": "/api/splice",
     "consensus": "/api/consensus",
-    "reference-build": "/api/reference-build",
-    "reference-verify": "/api/reference-verify",
-    "dat-build": "/api/dat-build",
-    "identify": "/api/identify",
-    "integrity": "/api/integrity",
-    "health": "/api/health",
     "grade": "/api/grade",
     "reads": "/api/reads",
     "calibrate": "/api/jobs/calibrate",
@@ -177,11 +161,17 @@ def verify(spec: VerifySpec) -> VerifyResult:
 def hashes(spec: HashSpec) -> HashResult:
     disk, data, _ = decode_payload(spec.data)
     canonical = canonicalise(disk, _profile(spec.profile))
+    image = (
+        named_file(f"{Path(spec.name).stem}.{spec.profile}.fds", restore(canonical))
+        if spec.canonical_image
+        else None
+    )
     return HashResult(
         whole=DigestView.of(digests_of(data)),
         sides=[DigestView.of(entry) for entry in side_digests(data, SIDE_SIZE)],
         canonical=digest_string(canonical),
         retroachievements=retroachievements_hash(data),
+        file=image,
     )
 
 
@@ -210,17 +200,6 @@ def blank(spec: BlankSpec) -> FileResult:
     )
     return FileResult(
         name="blank.fds",
-        data=base64.b64encode(data).decode("ascii"),
-        size=len(data),
-    )
-
-
-def canon(spec: CanonSpec) -> FileResult:
-    disk, _, _ = decode_payload(spec.data)
-    canonical = canonicalise(disk, _profile(spec.profile))
-    data = restore(canonical)
-    return FileResult(
-        name=f"{Path(spec.name).stem}.{spec.profile}.fds",
         data=base64.b64encode(data).decode("ascii"),
         size=len(data),
     )
@@ -255,41 +234,26 @@ def _register_core(app: FastAPI) -> None:
     app.add_api_route("/api/grade", grade, methods=["POST"])
     app.add_api_route("/api/reads", reads, methods=["POST"])
     app.add_api_route("/api/blank", blank, methods=["POST"])
-    app.add_api_route("/api/canon", canon, methods=["POST"])
     app.add_api_route("/api/convert", convert, methods=["POST"])
 
 
 def _register_image(app: FastAPI) -> None:
-    app.add_api_route("/api/ls", image_routes.ls, methods=["POST"])
     app.add_api_route("/api/diff", image_routes.diff, methods=["POST"])
     app.add_api_route("/api/boot", image_routes.boot, methods=["POST"])
-    app.add_api_route("/api/layout", image_routes.layout, methods=["POST"])
     app.add_api_route("/api/provenance", image_routes.provenance, methods=["POST"])
-    app.add_api_route("/api/lint", image_routes.lint, methods=["POST"])
-    app.add_api_route("/api/saves", image_routes.saves, methods=["POST"])
     app.add_api_route("/api/extract", image_routes.extract, methods=["POST"])
     app.add_api_route("/api/insert", image_routes.insert, methods=["POST"])
     app.add_api_route("/api/set", image_routes.edit, methods=["POST"])
-    app.add_api_route("/api/clean", image_routes.clean, methods=["POST"])
     app.add_api_route("/api/rebuild", image_routes.rebuild_image, methods=["POST"])
     app.add_api_route("/api/patch", image_routes.patch, methods=["POST"])
-    app.add_api_route("/api/save-apply", image_routes.save_apply, methods=["POST"])
-    app.add_api_route("/api/save-extract", image_routes.save_extract, methods=["POST"])
-    app.add_api_route("/api/normalise-saves", image_routes.normalise, methods=["POST"])
+    app.add_api_route("/api/save", image_routes.save, methods=["POST"])
     app.add_api_route("/api/export", image_routes.export, methods=["POST"])
     app.add_api_route("/api/build", image_routes.build, methods=["POST"])
-    app.add_api_route("/api/card", image_routes.card, methods=["POST"])
 
 
 def _register_analysis(app: FastAPI) -> None:
-    app.add_api_route("/api/health", analysis_routes.health, methods=["POST"])
-    app.add_api_route("/api/integrity", analysis_routes.integrity, methods=["POST"])
     app.add_api_route("/api/splice", analysis_routes.splice_blocks, methods=["POST"])
     app.add_api_route("/api/consensus", analysis_routes.consensus, methods=["POST"])
-    app.add_api_route("/api/reference-build", analysis_routes.reference_build, methods=["POST"])
-    app.add_api_route("/api/reference-verify", analysis_routes.reference_verify, methods=["POST"])
-    app.add_api_route("/api/dat-build", analysis_routes.dat_build, methods=["POST"])
-    app.add_api_route("/api/identify", analysis_routes.identify, methods=["POST"])
 
 
 def _register_hardware(app: FastAPI) -> None:

@@ -121,11 +121,18 @@ class DigestView(BaseModel):
         )
 
 
+class FileResult(BaseModel):
+    name: str
+    data: str
+    size: int
+
+
 class HashResult(BaseModel):
     whole: DigestView
     sides: list[DigestView]
     canonical: str
     retroachievements: str
+    file: FileResult | None = None
 
 
 class VerifyResult(BaseModel):
@@ -206,6 +213,7 @@ class ImageSpec(BaseModel):
 
 class HashSpec(ImageSpec):
     profile: str = "content"
+    canonical_image: bool = False
 
 
 class VerifySpec(ImageSpec):
@@ -241,10 +249,6 @@ class ConvertSpec(ImageSpec):
     headered: bool = False
 
 
-class CanonSpec(ImageSpec):
-    profile: str = "content"
-
-
 class DoctorCheck(BaseModel):
     name: str
     status: str
@@ -259,12 +263,6 @@ class DoctorResult(BaseModel):
 class HardwareResult(BaseModel):
     connected: bool
     detail: str
-
-
-class FileResult(BaseModel):
-    name: str
-    data: str
-    size: int
 
 
 def _no_rows() -> list[dict[str, Any]]:
@@ -327,66 +325,30 @@ class PatchSpec(ImageSpec):
     patch: str
 
 
-class SaveSpec(ImageSpec):
-    save: str
-
-
-class SaveExtractSpec(ImageSpec):
-    played: str
+class SaveSpec(BaseModel):
+    action: str = "find"
+    images: list[str] = Field(default_factory=list)
+    save: str | None = None
+    played: str | None = None
+    recipes: str | None = None
     save_as: str = "ips"
-
-
-class RecipeSpec(ImageSpec):
-    recipes: str
+    name: str = "disk.fds"
 
 
 class SpliceSpec(ImageSpec):
     donors: list[str] = Field(default_factory=list)
 
 
-class HealthSpec(ImageSpec):
-    reads: list[str] = Field(default_factory=list)
-
-
-class IdentifySpec(ImageSpec):
-    dat: str
-
-
 class ExportSpec(ImageSpec):
     target: str
-
-
-class CardSpec(BaseModel):
-    sides: SideCount = 1
-    firmware: str = "released"
 
 
 class BuildSpec(BaseModel):
     manifest: str
 
 
-class CorpusSpec(BaseModel):
+class ConsensusSpec(BaseModel):
     images: list[str] = Field(default_factory=list)
-    names: list[str] = Field(default_factory=list)
-    profile: str = "release"
-
-
-class ConsensusSpec(CorpusSpec):
-    across: str = "disk"
-
-
-class ReferenceBuildSpec(CorpusSpec):
-    set_version: str = Field(..., min_length=1)
-
-
-class ReferenceVerifySpec(ImageSpec):
-    reference: str
-
-
-class DatBuildSpec(CorpusSpec):
-    name: str = "Famicom Disk System"
-    set_version: str = Field("", min_length=1)
-    author: str = Field("", max_length=MAX_NAME)
 
 
 class DumpSpec(BaseModel):

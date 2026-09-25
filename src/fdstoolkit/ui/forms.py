@@ -28,7 +28,6 @@ FILE_FIELDS: Final = frozenset(
         "save",
         "played",
         "patch",
-        "dat",
         "recipes",
         "manifest",
         "reference",
@@ -43,12 +42,11 @@ FILE_LIST_FIELDS: Final = frozenset({"images", "reads", "donors"})
 CHOICES: Final[dict[str, tuple[str, ...]]] = {
     "profile": tuple(sorted(PROFILES)),
     "save_as": ("ips", "ups", "image"),
-    "across": ("disk", "corpus"),
     "finish": tuple(str(item) for item in Finish),
     "kind": ("program", "character", "nametable"),
     "target": tuple(TARGETS),
-    "firmware": ("released", "master"),
     "sides": tuple(str(count) for count in range(1, SIDES_PER_DISK + 1)),
+    "action": ("find", "apply", "extract", "blank"),
     "mode": tuple(str(item) for item in Mode),
 }
 
@@ -64,7 +62,6 @@ ACCEPTS: Final[dict[str, str]] = {
     "images": IMAGE_SUFFIXES,
     "reads": IMAGE_SUFFIXES,
     "donors": IMAGE_SUFFIXES,
-    "dat": ".dat,.xml",
     "save": ".ips,.ups,.fds",
     "patch": ".ips,.bps,.xdelta",
     "recipes": ".json",

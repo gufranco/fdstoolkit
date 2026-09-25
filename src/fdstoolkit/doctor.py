@@ -16,7 +16,6 @@ from fdstoolkit.build.blank import (
 )
 from fdstoolkit.codecs import fds
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
-from fdstoolkit.identify.cache import DatCache
 from fdstoolkit.version import VERSION
 
 MIN_PYTHON: Final = (3, 12)
@@ -192,15 +191,9 @@ def _identity_check() -> Check:
     )
 
 
-def _cache_check(cache: DatCache) -> Check:
-    count = len(list(cache.entries()))
-    return Check("dat cache", CheckStatus.OK, f"{cache.root}, {count} catalogue(s)")
-
-
 def diagnose(
     *,
     load_hid: Callable[[], Enumerator] = load_hid,
-    cache: DatCache | None = None,
     python: tuple[int, int, int] | None = None,
 ) -> DoctorReport:
     interpreter = python if python is not None else sys.version_info[:3]
@@ -212,6 +205,5 @@ def diagnose(
             *hardware_checks(load_hid),
             _codec_check(),
             _identity_check(),
-            _cache_check(cache if cache is not None else DatCache()),
         )
     )
