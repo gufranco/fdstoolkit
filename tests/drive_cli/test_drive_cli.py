@@ -140,3 +140,20 @@ def test_a_mode_it_does_not_know_is_refused() -> None:
     result = runner.invoke(app, ["calibrate", "belt"])
 
     assert result.exit_code == 2
+
+
+def test_a_bracketed_calibration_asks_before_every_read_after_the_first(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    disk = disk_with(FILES)
+    attach(monkeypatch, disk)
+    reference = saved(disk, tmp_path / "reference.fds")
+
+    result = runner.invoke(
+        app,
+        ["calibrate", "head", "--reference", str(reference), "--passes", "3", "--bracket"],
+        input="y\ny\n",
+    )
+
+    assert result.output.count("turn the adjustment one small step") == 2
+    assert "it still reads: keep turning the same way until it stops" in result.output

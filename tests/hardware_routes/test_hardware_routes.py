@@ -424,3 +424,18 @@ def test_a_job_that_cannot_stop_refuses_the_stop(
     answer = client.post(f"/api/jobs/{job['id']}/stop")
 
     assert answer.status_code == CONFLICT
+
+
+@pytest.mark.usefixtures("attached")
+def test_a_bracketed_calibration_waits_for_each_step(app: FastAPI, client: TestClient) -> None:
+    job_id = client.post(
+        "/api/jobs/calibrate", json={"reference": ONE, "passes": 2, "bracket": True}
+    ).json()["id"]
+
+    assert app.state.jobs.wait_for_state(job_id, JobState.WAITING, SETTLE)
+    waiting = client.get(f"/api/jobs/{job_id}").json()
+    client.post(f"/api/jobs/{job_id}/answer", json={"yes": True})
+
+    assert "one small step" in waiting["prompt"]
+    assert app.state.jobs.wait(job_id, SETTLE)
+    assert len(client.get(f"/api/jobs/{job_id}").json()["result"]["rows"]) == 2

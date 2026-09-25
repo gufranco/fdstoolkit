@@ -247,6 +247,7 @@ def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
             reference=wanted,
             progress=controls.step,
             stopped=controls.stopped,
+            bracket=controls.ask if spec.bracket else None,
         )
         return CalibrationResult.of(result)
 

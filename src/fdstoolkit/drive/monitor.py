@@ -15,14 +15,18 @@ from fdstoolkit.codecs.raw import (
     encode_era_b,
     unpack_raw03,
 )
-from fdstoolkit.core.blocks import Block
+from fdstoolkit.core.bios import BIOS_ERRORS
+from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Side
+from fdstoolkit.drive.bracket import Bracket
 
 MAX_READS: Final = 200
 DEFAULT_READS: Final = 20
 BIAS_PULSES: Final = 16
 BIAS_SHARE: Final = 0.75
+BLOCK_EXPECTED: Final = 0x21
+CRC_FAILED: Final = 0x27
 
 NOT_THIS_DRIVE: Final = (
     "judge the drive only with a disk it did not write: a factory disk, or one written "
@@ -112,6 +116,20 @@ class SideSample:
     invalid: int
     compared: int
     referenced: bool
+    found: tuple[bool, ...] = ()
+    kinds: tuple[BlockKind, ...] = ()
+
+    @property
+    def console_error(self) -> int | None:
+        if not self.blocks:
+            return BLOCK_EXPECTED + BlockKind.DISK_INFO
+        missing = self.missing
+        if not missing:
+            return None
+        first = missing[0]
+        if not self.found or self.found[first]:
+            return CRC_FAILED
+        return BLOCK_EXPECTED + self.kinds[first]
 
     @property
     def read(self) -> int:
@@ -221,15 +239,14 @@ def sample(packed: bytes, reference: Side | None = None) -> SideSample:
             invalid=invalid,
             compared=0,
             referenced=False,
+            kinds=tuple(block.kind for block in decoded.blocks),
         )
 
     starts = block_starts(values)
     short = long = compared = 0
-    blocks: list[bool] = []
-    for wanted, (good, region) in zip(
-        reference.blocks, _align(reference.blocks, decoded.blocks), strict=True
-    ):
-        blocks.append(good)
+    placed = _align(reference.blocks, decoded.blocks)
+    blocks = [good for good, _ in placed]
+    for wanted, (_, region) in zip(reference.blocks, placed, strict=True):
         if region is None:
             continue
         expected = encode_era_b(_framed(wanted.payload))
@@ -245,6 +262,8 @@ def sample(packed: bytes, reference: Side | None = None) -> SideSample:
         invalid=invalid,
         compared=compared,
         referenced=True,
+        found=tuple(region is not None for _, region in placed),
+        kinds=tuple(block.kind for block in reference.blocks),
     )
 
 
@@ -283,6 +302,9 @@ def describe(mode: Mode, number: int, current: SideSample, change: Trend) -> str
     if current.referenced:
         parts.append(f"{current.short} pulses short, {current.long} long")
     parts.append(f"{current.invalid} invalid")
+    error = current.console_error
+    if error is not None:
+        parts.append(f"console error {error:02X}, {BIOS_ERRORS[error]}")
     return f"{', '.join(parts)}: {verdict(mode, current)}, {change.value}"
 
 
@@ -290,6 +312,7 @@ def describe(mode: Mode, number: int, current: SideSample, change: Trend) -> str
 class Calibration:
     mode: Mode
     samples: tuple[SideSample, ...]
+    bracket: Bracket | None = None
 
     @property
     def last(self) -> SideSample | None:
@@ -300,9 +323,7 @@ class Calibration:
         last = self.last
         if last is None:
             return False
-        if self.mode is Mode.SPEED:
-            return last.speed is SpeedReading.CLEAN
-        return last.head is HeadReading.CLEAN
+        return _clean(self.mode, last)
 
     def rows(self) -> list[dict[str, object]]:
         return [
@@ -323,7 +344,15 @@ class Calibration:
         last = self.last
         if last is None:
             return "stopped before the first read"
+        if self.bracket is not None:
+            return self.bracket.verdict
         return f"{verdict(self.mode, last)}: {advice(self.mode, last)}"
+
+
+def _clean(mode: Mode, current: SideSample) -> bool:
+    if mode is Mode.SPEED:
+        return current.speed is SpeedReading.CLEAN
+    return current.head is HeadReading.CLEAN
 
 
 def _quiet(message: str) -> None:
@@ -334,6 +363,12 @@ def _never() -> bool:
     return False
 
 
+def _declined(ask: Callable[[str], bool] | None, state: Bracket | None, *, started: bool) -> bool:
+    if ask is None or state is None or not started:
+        return False
+    return not ask(state.instruction)
+
+
 def calibrate(
     reader: RawReader,
     *,
@@ -342,13 +377,15 @@ def calibrate(
     reference: Side | None = None,
     progress: Callable[[str], None] = _quiet,
     stopped: Callable[[], bool] = _never,
+    bracket: Callable[[str], bool] | None = None,
 ) -> Calibration:
     if not 1 <= reads <= MAX_READS:
         message = f"a calibration reads the side between 1 and {MAX_READS} times"
         raise ValueError(message)
     samples: list[SideSample] = []
+    state = None if bracket is None else Bracket()
     for number in range(1, reads + 1):
-        if stopped():
+        if stopped() or _declined(bracket, state, started=bool(samples)):
             break
         try:
             packed = reader.read_raw_side(what=f"calibration read {number}")
@@ -358,4 +395,8 @@ def calibrate(
         change = trend(samples[-1] if samples else None, current)
         samples.append(current)
         progress(describe(mode, number, current, change))
-    return Calibration(mode=mode, samples=tuple(samples))
+        if state is not None:
+            state = state.after(clean=_clean(mode, current))
+            if state.done:
+                break
+    return Calibration(mode=mode, samples=tuple(samples), bracket=state)

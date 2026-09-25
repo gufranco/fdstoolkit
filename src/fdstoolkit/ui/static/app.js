@@ -680,7 +680,8 @@ export function confirmErase(command) {
 function turnPrompt(job, answer) {
   const box = element('div', { className: 'turn' });
   box.setAttribute('role', 'alert');
-  const yes = element('button', { type: 'button', className: 'run', textContent: t('job.turned') });
+  const done = job.command === 'calibrate' ? 'job.stepped' : 'job.turned';
+  const yes = element('button', { type: 'button', className: 'run', textContent: t(done) });
   const no = element('button', { type: 'button', className: 'plain', textContent: t('job.stop') });
   const reply = (given) => {
     yes.disabled = true;

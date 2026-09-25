@@ -290,3 +290,91 @@ def test_a_line_names_a_single_missed_block() -> None:
     )
 
     assert "block 1 not read" in describe(Mode.HEAD, 1, found, Trend.FIRST)
+
+
+def test_a_read_with_nothing_in_it_is_console_error_22() -> None:
+    side = reference_side()
+
+    assert sample(pack_raw03(bytes(4000)), side).console_error == 0x22
+    assert sample(pack_raw03(bytes(4000))).console_error == 0x22
+
+
+def test_a_missing_first_block_is_console_error_22() -> None:
+    side = reference_side()
+
+    found = sample(stream(side, keep=slice(2, None)), side)
+
+    assert found.console_error == 0x22
+    assert "console error 22, block 1 expected" in describe(Mode.HEAD, 1, found, Trend.FIRST)
+
+
+def test_a_missing_file_header_is_console_error_24() -> None:
+    side = reference_side()
+    payloads = [block.payload for block in side.blocks]
+
+    found = sample(encode_block_stream(payloads[:2] + payloads[4:]), side)
+
+    assert found.missing[0] == 2
+    assert found.console_error == 0x24
+
+
+def test_a_block_that_is_found_but_wrong_is_console_error_27() -> None:
+    side = reference_side()
+
+    found = sample(nudged(stream(side), shorter=True), side)
+
+    assert found.console_error == 0x27
+
+
+def test_a_clean_read_has_no_console_error() -> None:
+    side = reference_side()
+
+    found = sample(stream(side), side)
+
+    assert found.console_error is None
+    assert "console error" not in describe(Mode.SPEED, 1, found, Trend.FIRST)
+
+
+def test_without_a_reference_a_failed_checksum_is_console_error_27() -> None:
+    found = SideSample(
+        blocks=(True, False), short=0, long=0, invalid=0, compared=0, referenced=False
+    )
+
+    assert found.console_error == 0x27
+
+
+def test_a_bracketed_calibration_asks_for_a_step_between_reads_and_finds_the_middle() -> None:
+    side = reference_side()
+    clean = stream(side)
+    lost = stream(side, keep=slice(2, None))
+    reader = Reader([clean, clean, lost, clean, clean, lost])
+    asked: list[str] = []
+
+    def ask(prompt: str) -> bool:
+        asked.append(prompt)
+        return True
+
+    result = calibrate(reader, mode=Mode.HEAD, reads=20, reference=side, bracket=ask)
+
+    assert reader.reads == 6
+    assert len(asked) == 5
+    assert "the other way" in asked[-1]
+    assert result.bracket is not None
+    assert result.bracket.done
+    assert result.headline.startswith("it reads across")
+
+
+def decline(prompt: str) -> bool:
+    del prompt
+    return False
+
+
+def test_declining_a_step_ends_a_bracketed_calibration() -> None:
+    side = reference_side()
+    reader = Reader([stream(side)])
+
+    result = calibrate(reader, mode=Mode.SPEED, reads=5, reference=side, bracket=decline)
+
+    assert reader.reads == 1
+    assert result.bracket is not None
+    assert "keep turning" in result.headline

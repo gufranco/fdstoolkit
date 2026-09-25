@@ -235,6 +235,7 @@ class CalibrateSpec(BaseModel):
     )
     side: int = Field(0, ge=0, le=SIDES_PER_DISK - 1)
     passes: int = Field(DEFAULT_READS, ge=1, le=MAX_READS)
+    bracket: bool = False
 
 
 class BlankSpec(BaseModel):

@@ -22,7 +22,7 @@
 
 </div>
 
-**27** commands, every one but `doctor` also on the local web page. **1,190** Python tests and **130** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**27** commands, every one but `doctor` also on the local web page. **1,210** Python tests and **131** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -606,7 +606,7 @@ Exit status is 0 only when every pattern held and the finish verified.
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--json]
+fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--json]
 ```
 
 Reads the same side over and over while you adjust the drive, and says after every read what changed. It is meant to run while a screwdriver is in the drive: turn a little, watch the next line, turn again. `--passes` sets how many reads, 20 by default and 200 at most. Ctrl-C, or Stop on the page, ends it after the read in progress and reports what it saw.
@@ -641,8 +641,8 @@ fdstoolkit calibrate speed --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid: reads fast, first read
-  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid: reads fast, the same as the last read
+  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, first read
+  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, the same as the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
 reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table
 ```
@@ -667,13 +667,33 @@ fdstoolkit calibrate head --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid: the start of the side is not read, first read
-  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid: the start of the side is not read, better than the last read
+  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, first read
+  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, better than the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
 reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another
 ```
 
 The head tolerance is about 0.05 mm, so adjust a quarter turn at a time and read again. Once it reads clean, repeat with two more factory disks: a head can be set to suit one disk and miss another. Neither mode can say which way to turn, only whether the last turn helped.
+
+Each failing read also names the error a console would stop on for it, from the console's own table: `22` to `25` when block 1 to 4 is not found, `27` when a block is found and fails its checksum. These are the numbers the repair guides talk about, so a line reads the same way the television would. It is the stick's read translated, not a console's: a console reads with its own drive electronics, and could stop one block earlier or later.
+
+`--bracket` runs the method the repair guides use to set the head: move it until the disk stops reading, move it back until it stops reading on the other side, then settle in the middle. Before every read after the first, the command asks for one small step, the same size each time, an eighth of a turn for the head screw. It turns you round when the disk stops reading, and when it stops on the other side too it says how wide the range that read was and how many steps back to its middle. That works only if every step is the same size, so count them.
+
+```bash
+fdstoolkit calibrate head --reference smb.fds --bracket --passes 60
+```
+
+The guides also publish the positions the parts should end up in. They come from people measuring their own drives, not from Nintendo, and the toolkit cannot check any of them:
+
+| Part | Published value | Source |
+|---|---|---|
+| Read head | Its far edge 35.5 mm from the spindle centre, tolerance 0.05 mm | [TinkerDifferent, drive calibration](https://tinkerdifferent.com/resources/famicom-fds-drive-calibration-wip.52/updates) |
+| Read head | 10.72 mm spacing, about 0.05 mm either way | [TinkerDifferent, calibration technique](https://tinkerdifferent.com/resources/famicom-disk-system-calibration-technique.39/) |
+| Gear | The flange hole at the 8/9 or 9/10 tooth position | [TinkerDifferent, calibration technique](https://tinkerdifferent.com/resources/famicom-disk-system-calibration-technique.39/) |
+| Spindle hub | Its factory position, set with a 1.5 mm hex screw; misplaced it gives errors 22 and 27 | [famicomdisksystem.com](https://www.famicomdisksystem.com/tutorials/fds-repair-mod/belt-replacement-adjustment/) |
+| Speed | 400 RPM at the disk table shaft in one guide; 820 at the spindle and 1170 at the motor in another | Both TinkerDifferent guides above |
+
+The two speed figures differ by about a factor of two, and neither guide says why or ties its figure to the bit rate the RAM adapter checks. Treat them as a starting point for a strobe, not a target this command can confirm.
 
 Exit status is 0 when the last read was clean.
 

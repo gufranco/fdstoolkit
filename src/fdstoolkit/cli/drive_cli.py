@@ -6,7 +6,7 @@ from typing import Annotated
 import typer
 
 from fdstoolkit.cli.common import Family, decode_image, fail
-from fdstoolkit.cli.hardware_cmds import open_drive, step
+from fdstoolkit.cli.hardware_cmds import open_drive, prompter, step
 from fdstoolkit.core.disk import SIDES_PER_DISK, Side
 from fdstoolkit.drive.monitor import (
     DEFAULT_READS,
@@ -57,6 +57,13 @@ def calibrate_command(
         int,
         typer.Option("--passes", min=1, max=MAX_READS, help="read the side this many times"),
     ] = DEFAULT_READS,
+    bracket: Annotated[
+        bool,
+        typer.Option(
+            "--bracket",
+            help="ask for one small step between reads and find the middle of the range that reads",
+        ),
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
     """Read a side over and over while you adjust the drive, and say what each read shows."""
@@ -64,7 +71,14 @@ def calibrate_command(
     typer.echo(NOT_THIS_DRIVE)
     drive = open_drive()
     try:
-        result = calibrate(drive, mode=mode, reads=passes, reference=wanted, progress=step)
+        result = calibrate(
+            drive,
+            mode=mode,
+            reads=passes,
+            reference=wanted,
+            progress=step,
+            bracket=prompter(yes=False) if bracket else None,
+        )
     except HardwareFaultError as error:
         raise fail(str(error)) from error
     finally:

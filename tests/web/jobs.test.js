@@ -182,3 +182,14 @@ describe("stopping a job", () => {
     expect(view.querySelector(".dialog-actions")).toBeNull();
   });
 });
+
+describe("the calibration prompt", () => {
+  it("names the step rather than the disk", () => {
+    const view = jobView(
+      { ...running, command: "calibrate", state: "waiting", prompt: "turn one step" },
+      () => {}
+    );
+
+    expect(view.querySelector(".turn .run").textContent).toBe("Turned it, read again");
+  });
+});

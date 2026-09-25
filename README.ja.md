@@ -22,7 +22,7 @@
 
 </div>
 
-コマンドは **27** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,190** 件、ページが **130** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
+コマンドは **27** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,210** 件、ページが **131** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
 
 ---
 
@@ -585,7 +585,7 @@ grade failed
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--json]
+fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--json]
 ```
 
 ドライブを調整している間、同じ面を繰り返し読み、読むたびに何が変わったかを示します。ドライバーをドライブに差したまま使うためのコマンドです。少し回し、次の行を見て、また回します。`--passes` は読む回数で、既定は 20、最大は 200 です。Ctrl-C、またはページの「中止」で、読み取り中の 1 回が終わったところで止まり、それまでの結果を報告します。
@@ -620,8 +620,8 @@ fdstoolkit calibrate speed --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid: reads fast, first read
-  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid: reads fast, the same as the last read
+  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, first read
+  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, the same as the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
 reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table
 ```
@@ -646,13 +646,33 @@ fdstoolkit calibrate head --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid: the start of the side is not read, first read
-  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid: the start of the side is not read, better than the last read
+  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, first read
+  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, better than the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
 reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another
 ```
 
 ヘッドの許容誤差はおよそ 0.05 mm なので、4 分の 1 回転ずつ調整して読み直します。正しく読めたら、さらに 2 枚の工場出荷のディスクで繰り返します。ヘッドは 1 枚のディスクに合っても別のディスクには合わないことがあるからです。どちらのモードも、どちらへ回すべきかは示せず、直前の調整がよくなったかどうかだけを示します。
+
+失敗した読み取りには、本体ならどのエラーで止まるかも、本体自身のエラー表から示します。ブロック 1 から 4 が見つからなければ `22` から `25`、ブロックが見つかってもチェックサムが合わなければ `27` です。修理ガイドが話題にするのはこの番号なので、1 行がテレビに表示されるのと同じ形で読めます。これはスティックの読み取りを置き換えたもので、本体の読み取りそのものではありません。本体は自分のドライブ回路で読むので、1 ブロック早く、あるいは遅く止まることがあります。
+
+`--bracket` は、修理ガイドがヘッドを合わせるのに使う方法を実行します。ディスクが読めなくなるまで動かし、反対側でも読めなくなるまで戻し、その中央に落ち着かせます。最初の読み取り以降、読み取りのたびに小さく 1 段、毎回同じ大きさだけ回すよう求めます。ヘッドのねじなら 8 分の 1 回転です。ディスクが読めなくなったところで向きを変えるよう伝え、反対側でも読めなくなったら、読めた範囲の幅と、その中央まで何段戻すかを示します。これは毎回同じ大きさで回した場合にだけ成り立つので、回した回数を数えてください。
+
+```bash
+fdstoolkit calibrate head --reference smb.fds --bracket --passes 60
+```
+
+ガイドは部品が収まるべき位置も公開しています。これは各自が自分のドライブを測った値で、任天堂の値ではなく、本ツールはどれも確かめられません。
+
+| 部品 | 公開されている値 | 出典 |
+|---|---|---|
+| 読み取りヘッド | 遠い側の端がスピンドル中心から 35.5 mm、許容誤差 0.05 mm | [TinkerDifferent, drive calibration](https://tinkerdifferent.com/resources/famicom-fds-drive-calibration-wip.52/updates) |
+| 読み取りヘッド | 間隔 10.72 mm、前後およそ 0.05 mm | [TinkerDifferent, calibration technique](https://tinkerdifferent.com/resources/famicom-disk-system-calibration-technique.39/) |
+| ギア | フランジの穴が 8/9 または 9/10 番目の歯の位置 | [TinkerDifferent, calibration technique](https://tinkerdifferent.com/resources/famicom-disk-system-calibration-technique.39/) |
+| スピンドルハブ | 工場出荷時の位置。1.5 mm の六角ねじで固定。ずれるとエラー 22 と 27 | [famicomdisksystem.com](https://www.famicomdisksystem.com/tutorials/fds-repair-mod/belt-replacement-adjustment/) |
+| 速度 | あるガイドではディスクテーブル軸で 400 RPM、別のガイドではスピンドルで 820、モーターで 1170 | 上記の TinkerDifferent の 2 つのガイド |
+
+2 つの速度の値はおよそ 2 倍異なり、どちらのガイドもその理由を示さず、値を RAM アダプタが確かめるビットレートにも結び付けていません。ストロボで合わせる際の出発点として扱い、このコマンドで確かめられる目標値とはみなさないでください。
 
 最後の読み取りが正しく読めた場合に終了コード 0 を返します。
 
