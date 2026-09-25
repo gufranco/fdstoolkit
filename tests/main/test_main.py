@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
-import zlib
 from collections.abc import Callable
 from pathlib import Path
 
@@ -25,7 +24,6 @@ from fdstoolkit.hardware import session
 from fdstoolkit.hardware.fdsstick import FdsStick, HidApiTransport
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import Grade
-from fdstoolkit.identify import firmware
 from fdstoolkit.quality.surface import Finish, PatternPass, StopReason, SurfaceReport
 
 runner = CliRunner()
@@ -1943,87 +1941,6 @@ def test_insert_accepts_a_kind_by_name(tmp_path: Path) -> None:
     assert "character" in runner.invoke(app, ["ls", str(built)]).stdout
 
 
-def _known_bios(monkeypatch: pytest.MonkeyPatch) -> bytes:
-    data = bytes([0x5A]) * firmware.BIOS_SIZE
-    crc = f"{zlib.crc32(data):08x}"
-    monkeypatch.setattr(
-        firmware,
-        "KNOWN_REVISIONS",
-        {crc: firmware.Revision(name="Rev 01A", crc32=crc, sha1="0" * 40, mame_name="x.bin")},
-    )
-    return data
-
-
-def test_bios_identifies_a_known_revision(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    source = tmp_path / "disksys.rom"
-    source.write_bytes(_known_bios(monkeypatch))
-
-    result = runner.invoke(app, ["bios", str(source)])
-
-    assert result.exit_code == 0
-    assert "Rev 01A" in result.stdout
-    assert "fceux    accepts it" in result.stdout
-
-
-def test_bios_extracts_from_a_wrapped_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    known = _known_bios(monkeypatch)
-    source = tmp_path / "bios.nes"
-    source.write_bytes(bytes(0x6000) + known + bytes(0x2000))
-    output = tmp_path / "disksys.rom"
-
-    result = runner.invoke(app, ["bios", str(source), "--extract", str(output)])
-
-    assert result.exit_code == 0
-    assert "offset 0x6000" in result.stdout
-    assert output.read_bytes() == known
-
-
-def test_bios_reports_an_unknown_file(tmp_path: Path) -> None:
-    source = tmp_path / "odd.rom"
-    source.write_bytes(bytes(0x2000))
-
-    result = runner.invoke(app, ["bios", str(source)])
-
-    assert result.exit_code == 1
-    assert "unknown" in result.stdout
-
-
-def test_bios_refuses_to_extract_nothing(tmp_path: Path) -> None:
-    source = tmp_path / "odd.rom"
-    source.write_bytes(bytes(0xA000))
-
-    result = runner.invoke(app, ["bios", str(source), "--extract", str(tmp_path / "out.rom")])
-
-    assert result.exit_code == 1
-    assert "no known BIOS" in result.stdout
-
-
-def test_bios_reports_a_missing_file(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["bios", str(tmp_path / "nope.rom")])
-
-    assert result.exit_code == 1
-
-
-def test_bios_can_emit_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    source = tmp_path / "disksys.rom"
-    source.write_bytes(_known_bios(monkeypatch))
-
-    payload = json.loads(runner.invoke(app, ["bios", str(source), "--json"]).stdout)
-
-    assert payload["revision"] == "Rev 01A"
-    assert payload["emulators"]["mesen2"] == "accepts it"
-
-
-def test_bios_reports_a_file_too_small_to_be_one(tmp_path: Path) -> None:
-    source = tmp_path / "tiny.rom"
-    source.write_bytes(bytes(100))
-
-    result = runner.invoke(app, ["bios", str(source)])
-
-    assert "crc32" not in result.stdout
-    assert "rejects it" in result.stdout
-
-
 def _game_with_a_file(tmp_path: Path, name: str = "Game") -> Path:
     payload = tmp_path / "main.prg"
     payload.write_bytes(bytes([0xAA]) * 8)
@@ -2052,29 +1969,6 @@ def _game_with_a_file(tmp_path: Path, name: str = "Game") -> Path:
     return built
 
 
-def test_export_refuses_a_bios_it_does_not_recognise(tmp_path: Path) -> None:
-    source = _game_with_a_file(tmp_path)
-    bios_file = tmp_path / "bios.bin"
-    bios_file.write_bytes(bytes(0x2000))
-
-    result = runner.invoke(
-        app,
-        [
-            "export",
-            str(source),
-            "--target",
-            "mister",
-            "-d",
-            str(tmp_path / "out"),
-            "--bios",
-            str(bios_file),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "no known BIOS" in result.stdout
-
-
 def test_export_writes_a_headerless_image_for_the_nt_mini(tmp_path: Path) -> None:
     source = _game_with_a_file(tmp_path)
     card = tmp_path / "card"
@@ -2083,20 +1977,6 @@ def test_export_writes_a_headerless_image_for_the_nt_mini(tmp_path: Path) -> Non
 
     assert result.exit_code == 0
     assert len((card / "Game.fds").read_bytes()) == 2 * SIDE_SIZE
-
-
-def test_export_places_the_bios(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    source = _game_with_a_file(tmp_path)
-    bios_file = tmp_path / "bios.bin"
-    bios_file.write_bytes(_known_bios(monkeypatch))
-    card = tmp_path / "card"
-
-    runner.invoke(
-        app,
-        ["export", str(source), "--target", "mister", "-d", str(card), "--bios", str(bios_file)],
-    )
-
-    assert (card / "boot0.rom").exists()
 
 
 def test_export_warns_about_a_known_swap_exception(tmp_path: Path) -> None:
@@ -2118,27 +1998,6 @@ def test_export_refuses_to_overwrite(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "pass --force" in result.stdout
-
-
-def test_export_reports_a_missing_bios(tmp_path: Path) -> None:
-    source = _game_with_a_file(tmp_path)
-
-    result = runner.invoke(
-        app,
-        [
-            "export",
-            str(source),
-            "--target",
-            "mister",
-            "-d",
-            str(tmp_path / "card"),
-            "--bios",
-            str(tmp_path / "nope.rom"),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "not found" in result.stdout
 
 
 def test_a_sharp_mz_disk_is_refused_by_name(tmp_path: Path) -> None:

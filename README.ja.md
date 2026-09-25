@@ -91,7 +91,7 @@ dat cache         ~/.cache/fdstoolkit/dat, 0 catalogue(s)
 
 ダイジェストは `fdstoolkit:v1:<プロファイル>/v1:<sha256>` の形式で出力されます。595 イメージのコーパスでは、`release` で 144 グループ中 142 が、`content` で 125 が一致します。
 
-**FDSStick のキャプチャが持つのは時間情報ではなくパルスクラスです。** この機器はハードウェアの側で各パルスを 3 種類の公称長のいずれかへ丸め、`dump --raw` はそのクラスを `raw03` ファイルとして保存します。これはドライブが 3 種類の長さをどれだけ均等に分けて読めているかを示し、`calibrate --capture` がそれを測定します。速度は示せないため、速度は実機側から `calibrate --cycles` で得ます。
+**FDSStick のキャプチャが持つのは時間情報ではなくパルスクラスです。** この機器はハードウェアの側で各パルスを 3 種類の公称長のいずれかへ丸め、`dump --raw` はそのクラスを `raw03` ファイルとして保存します。パルスは時間の長さを持ちませんが、長さのクラスは持ちます。そしてディスク上のバイトが、各パルスがどのクラスになるべきかを正確に決めます。そのため同じディスクのイメージと比べると、内容が求めるより 1 クラス短く読まれたパルスはドライブが速すぎること、1 クラス長く読まれたパルスは遅すぎることを意味します。これを数えるのが `calibrate speed` です。1、2 パーセントずれたドライブでもすべてのパルスは正しく分類されるので、調整の最後の詰めには実機側の速度テストかストロボが必要です。
 
 **1 本のゲームは 1 枚のディスクです。** どのゲームも片面または両面の 1 枚のディスクを使い、2 枚目にまたがるゲームはありません。3 面以上を持つイメージは複数のディスクを 1 つにまとめたものであり、すべてのコマンドがこれを拒否します。
 
@@ -478,10 +478,10 @@ fdstoolkit convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|
 #### `export`
 
 ```bash
-fdstoolkit export <image> --target <t> -d <dir> [--bios <file>] [--force]
+fdstoolkit export <image> --target <t> -d <dir> [--force]
 ```
 
-機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`。いずれもヘッダなしの `.fds` を書き出します。`--bios` を付けると BIOS もその対象が探す場所へ配置します。
+機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`。いずれもヘッダなしの `.fds` を書き出します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
@@ -542,19 +542,6 @@ fdstoolkit identify <image> --dat <file> [--reference <dir>] [--no-cache] [--jso
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/identify-dark.png">
 <img alt="ローカル Web ページの identify コマンド" src="assets/screenshots/identify-light.png">
-</picture>
-
-#### `bios`
-
-```bash
-fdstoolkit bios <file> [--extract <out>] [--force]
-```
-
-BIOS のリビジョンと、そのファイルを受け付けるエミュレータ。`--extract` はより大きなダンプから 8 KB のイメージを取り出します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/bios-dark.png">
-<img alt="ローカル Web ページの bios コマンド" src="assets/screenshots/bios-light.png">
 </picture>
 
 #### `canon`
@@ -640,10 +627,6 @@ fdstoolkit doctor [--clear-cache] [--json]
 
 バージョン、Python、プラットフォーム、ハードウェア対応の導入状況、接続されているデバイスとそれを開けるか、DAT キャッシュの状態。挙動がおかしいときは最初にこれを実行してください。`--clear-cache` は確認の前に、キャッシュ済みの DAT カタログをすべて削除します。
 
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/doctor-dark.png">
-<img alt="ローカル Web ページの doctor コマンド" src="assets/screenshots/doctor-light.png">
-</picture>
 
 #### `dump`
 
@@ -793,42 +776,76 @@ grade failed
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate [--cycles <n>] [--capture <file>] [--json]
+fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--json]
 ```
 
-本ツールが測定できる 2 つの方法で、ドライブを片方ずつ、または両方同時に確認します。与えた測定がすべて通った場合、つまり速度が微調整の範囲内にあり、パルス分類が健全な場合にのみ合格とします。
+ドライブを調整している間、同じ面を繰り返し読み、読むたびに何が変わったかを示します。ドライバーをドライブに差したまま使うためのコマンドです。少し回し、次の行を見て、また回します。`--passes` は読む回数で、既定は 20、最大は 200 です。Ctrl-C、またはページの「中止」で、読み取り中の 1 回が終わったところで止まり、それまでの結果を報告します。
 
-ここでのすべての測定はビットレートを基準としており、回転数は使いません。RAM アダプタは 96.4 kbit/s を期待し、許容範囲は 10 パーセントです。ハードウェアが実際に要求しているのはこの数値だけです。この機構の回転数として公表されている値は 2 倍の開きがあり、許容範囲も示されていません。
+ドライブに入れるディスクは、このドライブが書き込んだものであってはなりません。工場出荷のディスクか、信頼できるドライブで書き込んだディスクを使います。調整のずれたドライブは、自分では読めて他のドライブでは読めないディスクを書くため、自分の書いたディスクを読めても何の証明にもなりません。コマンドは最初の読み取りの前にそう表示します。
 
-`--cycles` は、ディスク一覧表示ツールが実機の画面に表示するバイト間の平均 CPU サイクル数を受け取ります。FDSStick は時間情報ではなくパルスクラスを送るため、本ツールが行える速度測定はこれだけです。
+`--reference` はその同じディスクのイメージで、信頼できるドライブで吸い出したもの、または既知の吸い出しと一致したものです。これがあると、読み取りのたびに、ディスクの内容が求めるものとパルスごとに比べます。ない場合はチェックサムだけで判定するので、ブロックが読めたかどうかは分かっても、読めなかった理由は分かりません。`--side` はリファレンスのどの面がヘッドに向いているかを示します。
+
+ドライブには 3 つの調整箇所があり、このコマンドは FDSStick から見える範囲でそれぞれを扱います。
+
+| 調整 | 場所 | `calibrate` が見るもの |
+|---|---|---|
+| モーターの速度 | モーター上の可変抵抗 | `speed`: リファレンスに対して短く、または長く読まれたパルス |
+| スピンドルハブの位置。ベルト交換で失われる | 機構の上部にあるハブ。止めねじで固定 | `head`: 面のどのブロックが読めたか、失敗がどこにあるか |
+| 読み取りヘッドの位置合わせ | ヘッドの調整ねじ | `head`: 同上 |
+
+`speed` は読み取りごとに次の 5 つのいずれかを報告します。
+
+| 判定 | 意味 |
+|---|---|
+| reads fast | 読み違えたパルスの大半が 1 クラス短い。モーターの速度を少し下げる |
+| reads slow | 大半が 1 クラス長い。モーターの速度を少し上げる |
+| errors with no speed bias | ブロックは失敗するが、どちらにも偏らない。速度の問題には見えない |
+| nothing read | ブロックが 1 つも見つからない。速度が大きくずれているか、ヘッドかハブの位置がずれている |
+| reads clean | すべてのブロックが読め、すべてのパルスが一致した |
+
+読み違えたパルスが 16 個以上あり、その 4 分の 3 以上が同じ向きなら、その向きに偏っているとみなします。どちらの数値も、速度のずれと雑音を分けるものについての推論で決めたもので、実機で測ったものではありません。実機で最初に見直すべき値です。
 
 ```bash
-fdstoolkit calibrate --cycles 152
+fdstoolkit calibrate speed --reference smb.fds --passes 3
 ```
 
 ```
-speed    94.20 kbit/s, -2.28% of nominal, in spec
-         the drive reads slow: raise the motor speed a little, then measure again
+judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
+  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid: reads fast, first read
+  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid: reads fast, the same as the last read
+  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
+reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table
 ```
 
-換算は厳密です。2A03 は 1.7897725 MHz で動作し 1 バイトは 8 ビットなので、サイクル数はそのままレートへ写像されます。バイト間のサイクル数が多いほどディスクは遅く回っています。
+助言は速度を上げるか下げるかだけを示し、ねじをどちらへ回すかは示しません。反時計回りで速度が上がると書いた修理ガイドがありますが、頼る前に、小さく回して自分のドライブで確かめてください。
 
-助言はモーターの速度を上げるか下げるかだけを示し、半固定抵抗をどちらへ回すかは示しません。本ツールが信頼できる出典に、その向きを示すものがないからです。少しだけ回して測り直し、数値が逆へ動いたら反対に回してください。
+`speed` の reads clean は、RAM アダプタが受け付ける許容範囲に入っていることを意味し、正確な速度であることは意味しません。最後の詰めには実機側のテストを使います。Copy Master の速度テストは 1 から 9 を表示し、「too slow」「too fast」も示します。ToToTEK と Bung は、ディスクを入れた状態で 5 に合わせること、そして最初の 1 回はヘッドの位置が不定のまま始まるのでテストを 2 回続けて行うことを勧めています。ストロボのアプリも使えます。ディスクテーブルの軸は 400 RPM で回ります。
 
-| 表示値 | レート | 誤差 |
-|---|---|---|
-| 146 | 98.07 kbit/s | +1.73% |
-| 148 | 96.74 kbit/s | +0.36% |
-| 149 | 96.10 kbit/s | -0.32% |
-| 152 | 94.20 kbit/s | -2.28% |
+`head` は面のどのブロックが読めたかを報告します。
 
-厳密な公称値は 148.53 サイクルなので、整数表示は 1 カウントあたり約 0.68% の刻みになります。
+| 判定 | 意味 |
+|---|---|
+| the start of the side is not read | 最初のブロックが欠け、残りは読める。ヘッドの開始位置がずれている |
+| the end of the side is not read | 面の終わり近くまで読める。ヘッドの移動範囲が足りない |
+| errors across the side | 失敗が面全体に散らばる。位置ではなく、速度かディスクを疑う |
+| nothing read | ブロックが見つからない。ヘッドかハブの位置が大きくずれているか、速度がずれている |
+| reads clean | 面全体が読めた |
 
-`--capture` は `dump --raw` が保存した `raw03` キャプチャを受け取り、3 種類のパルス長への分布と、そのいずれにも入らなかったパルスの数を報告します。
+```bash
+fdstoolkit calibrate head --reference smb.fds --passes 3
+```
 
-測定の前にギャップの連続を除外します。ギャップとは短いパルスの長い連続であり、含めたままでは分布が「ドライブがどう読んでいるか」ではなく「ディスクがどれだけ埋まっているか」の指標になってしまうためです。残りの部分について、実在する 120 面の中央値は 63.1、27.9、9.0 パーセントで、これを基準値としています。正常なドライブではこの 120 面が -5.4 から +3.0 パーセントに分布するため、閾値は 6 パーセントに置いてあり、どの面もこれに触れません。
+```
+judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
+  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid: the start of the side is not read, first read
+  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid: the start of the side is not read, better than the last read
+  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
+reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another
+```
 
-知っておくべき制限が 2 つあります。ギャップを除いたパルスが 512 個未満のキャプチャは、判定せず「サンプル不足」として報告します。また、ここで唯一ディスクの内容に依存しない数値は無効パルス数なので、数値どうしが食い違う場合はそちらを信頼してください。
+ヘッドの許容誤差はおよそ 0.05 mm なので、4 分の 1 回転ずつ調整して読み直します。正しく読めたら、さらに 2 枚の工場出荷のディスクで繰り返します。ヘッドは 1 枚のディスクに合っても別のディスクには合わないことがあるからです。どちらのモードも、どちらへ回すべきかは示せず、直前の調整がよくなったかどうかだけを示します。
+
+最後の読み取りが正しく読めた場合に終了コード 0 を返します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
@@ -854,7 +871,7 @@ fdstoolkit health <reference> --read <r>... [--json]
 fdstoolkit web [--host <h>] [--port N] [--no-open]
 ```
 
-ローカルのウェブインターフェースを開きます。上記のすべてのコマンドがそこから利用でき、各ルートはコマンドが呼ぶものとまったく同じ処理を呼び出します。`--no-open` はブラウザを開かずにサーバーだけを起動します。SSH 越しに使う場合はこちらです。既定では `127.0.0.1:8000` を待ち受けます。
+ローカルのウェブインターフェースを開きます。`doctor` を除く上記のすべてのコマンドがそこから利用でき、各ルートはコマンドが呼ぶものとまったく同じ処理を呼び出します。`--no-open` はブラウザを開かずにサーバーだけを起動します。SSH 越しに使う場合はこちらです。既定では `127.0.0.1:8000` を待ち受けます。`doctor` はインストールを確認するコマンドなので、インストールを行った端末で使います。
 
 ## ウェブインターフェース
 
@@ -871,13 +888,11 @@ fdstoolkit web
 | ルート | 対応するコマンド |
 |---|---|
 | `GET /api/catalogue` | プロファイル、形式、出力先の一覧 |
-| `GET /api/doctor` | `doctor` |
 | `POST /api/info` | `info` と `ls` |
 | `POST /api/verify` | `verify` |
 | `POST /api/hash` | `hash` |
 | `POST /api/grade` | `grade` |
 | `POST /api/reads` | `reads` |
-| `POST /api/calibrate` | `calibrate` |
 | `GET /api/status` | `status` |
 | `POST /api/blank` | `blank` |
 | `POST /api/canon` | `canon` |
@@ -885,9 +900,11 @@ fdstoolkit web
 | `POST /api/jobs/dump` | `dump` |
 | `POST /api/jobs/write` | `write` |
 | `POST /api/jobs/surface` | `surface` |
+| `POST /api/jobs/calibrate` | `calibrate` |
 | `GET /api/jobs/current` | 実行中のディスク操作があれば、その操作 |
 | `GET /api/jobs/{id}` | 1 つの操作の状態、進行状況の行、問いかけ、結果 |
 | `POST /api/jobs/{id}/answer` | 操作の問いかけへの回答 |
+| `POST /api/jobs/{id}/stop` | 読み取り中の 1 回が終わったところで調整を止める |
 
 イメージとキャプチャは base64 で符号化してリクエストボディに載せます。`GET /docs` は生成された API リファレンスを提供するため、このページはエンドポイントの唯一の利用者ではなく、その 1 つにすぎません。
 
@@ -923,9 +940,11 @@ fdstoolkit grade pass1.fds --read pass2.fds
 ### ドライブを調整する。粗調整から微調整へ
 
 1. 何よりも先にヘッドを清掃してください。汚れは媒体の不良として現れます。
-2. 実機でディスク一覧表示ツールを動かし、サイクル数を読み取って `calibrate --cycles` に渡します。指示どおりにモーターの速度を少しずつ上げ下げし、そのままでよいと言われるまで繰り返します。
-3. 正常と分かっているディスクを `--raw` 付きで吸い出し、保存したキャプチャに `calibrate --capture` をかけます。分布が glitching や shifted なら、ドライブはまだ 3 種類のパルス長をうまく分けて読めていません。
-4. 読み取りが難しいと分かっているディスクで確認します。コミュニティでは 39 ファイルを含む特定の面が使われており、チェックサムエラーなしに 39 個すべて読めれば合格です。
+2. 工場出荷のディスクと、信頼できるドライブで吸い出したそのイメージを用意します。このドライブが書き込んだディスクは決して使いません。
+3. ベルトを交換した後は `calibrate head --reference <image>` を実行し、スピンドルハブ、次にヘッドを 4 分の 1 回転ずつ調整して、すべての読み取りが正しくなるまで続けます。
+4. `calibrate speed --reference <image>` を実行し、指示どおりにモーターの速度を上げ下げして、正しく読めるまで続けます。
+5. スティックは最後の 1 パーセントを見られないので、速度の仕上げは実機側のテストかストロボで行います。
+6. さらに 2 枚の工場出荷のディスクで `calibrate head` を繰り返します。そのうえで、読み取りが難しいと分かっているディスクで確認します。コミュニティでは 39 ファイルを含む特定の面が使われており、チェックサムエラーなしに 39 個すべて読めれば合格です。
 
 ### ドライブとディスクのどちらが原因かを判断する
 
@@ -969,23 +988,23 @@ fdstoolkit reference-verify mine.fds --set fds-reference.json
 
 ## 終了コードとスクリプト化
 
-`0` は異常なし、`1` は異常ありを意味します。何を異常とみなすかはコマンドごとに異なり、上に記載してあります。`splice` なら修復できなかったブロック、コーパスに対する `consensus` なら合議が割れたゲーム、`calibrate` なら微調整の範囲外にあるドライブ、`reference-verify` なら不一致です。
+`0` は異常なし、`1` は異常ありを意味します。何を異常とみなすかはコマンドごとに異なり、上に記載してあります。`splice` なら修復できなかったブロック、コーパスに対する `consensus` なら合議が割れたゲーム、`calibrate` なら正しく読めなかった最後の読み取り、`reference-verify` なら不一致です。
 
 報告を行うコマンドはすべて `--json` を受け付け、その JSON は人間向け出力と同じデータです。ファイルを書き出すコマンドは `--force` なしに上書きしません。
 
 ```bash
 fdstoolkit verify disk.fds --json | jq -r '.findings[] | "\(.code) \(.message)"'
 fdstoolkit consensus ~/dumps --json | jq '.contested[].game'
-fdstoolkit calibrate --cycles 152 --json | jq -r '.speed.advice'
+fdstoolkit calibrate speed --reference smb.fds --passes 5 --json | jq -r '.headline'
 ```
 
 ## このツールにできないこと
 
 **ディスクシステムのフラックスキャプチャは存在しません。** Quick Disk はインデックス穴も標準的なステッピングも持たない 1 本の連続した渦巻きであり、KryoFlux や Greaseweazle はこの媒体を読むことができません。本ツールが読み込むのは FDSStick が生成するものだけです。
 
-**FDSStick ではドライブの速度を測定できません。** この機器はハードウェアの側で各パルスを 3 種類の長さのいずれかへ丸め、時間情報ではなくクラスを送ってきます。速度は `calibrate --cycles` による実機側の読み取りから得る必要があります。
+**FDSStick ではドライブ速度の最後の 1 パーセントを測定できません。** この機器はハードウェアの側で各パルスを 3 種類の長さのいずれかへ丸め、時間情報ではなくクラスを送ってくるので、小さな速度のずれではクラスが変わりません。`calibrate speed` は許容範囲の外にあるドライブを見つけ、仕上げは実機側のテストかストロボで行います。
 
-**ヘッドの位置合わせはパルスクラスからは測定できません。** 信号振幅か、複数のディスクにまたがるエラー密度の比較が必要です。
+**ヘッドの精密な位置合わせはパルスクラスからは測定できません。** 信号振幅が必要です。`calibrate head` はブロックが読めたかどうかしか見ないので、位置が大きくずれたヘッドやハブは見つけられても、わずかに中心を外れただけのものは見つけられません。
 
 **ベルトの不良とモーターの不良は切り分けられません。** プーリー比が必要ですが、信頼できる出典がその値を示していません。
 

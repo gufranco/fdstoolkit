@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import zlib
 from pathlib import Path
 
 import pytest
@@ -12,7 +11,6 @@ from fdstoolkit.codecs.fds import SIDE_SIZE, decode
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.files import FileSpec, insert_file
-from fdstoolkit.identify import firmware
 
 
 def game(*, sides: int = 2) -> Disk:
@@ -26,18 +24,6 @@ def game(*, sides: int = 2) -> Disk:
     return disk
 
 
-@pytest.fixture
-def bios(monkeypatch: pytest.MonkeyPatch) -> bytes:
-    data = bytes([0x5A]) * firmware.BIOS_SIZE
-    crc = f"{zlib.crc32(data):08x}"
-    monkeypatch.setattr(
-        firmware,
-        "KNOWN_REVISIONS",
-        {crc: firmware.Revision(name="Rev 01A", crc32=crc, sha1="0" * 40, mame_name="x")},
-    )
-    return data
-
-
 def test_every_target_names_its_source() -> None:
     assert all(target.source.startswith("https://") for target in TARGETS.values())
 
@@ -48,38 +34,6 @@ def test_the_nt_mini_gets_a_headerless_image(tmp_path: Path) -> None:
     image = tmp_path / "Game.fds"
     assert image in written
     assert len(image.read_bytes()) == 2 * SIDE_SIZE
-
-
-def test_the_bios_goes_where_the_nt_mini_looks(tmp_path: Path, bios: bytes) -> None:
-    export_for(game(), target="nt-mini", directory=tmp_path, stem="Game", bios=bios)
-
-    assert (tmp_path / "BIOS" / "fds.bin").read_bytes() == bios
-
-
-def test_the_bios_goes_where_mister_looks(tmp_path: Path, bios: bytes) -> None:
-    export_for(game(), target="mister", directory=tmp_path, stem="Game", bios=bios)
-
-    assert (tmp_path / "boot0.rom").read_bytes() == bios
-
-
-def test_the_bios_goes_where_the_everdrive_looks(tmp_path: Path, bios: bytes) -> None:
-    export_for(game(), target="everdrive-n8-pro", directory=tmp_path, stem="Game", bios=bios)
-
-    assert (tmp_path / "EDN8" / "syscore" / "disksys.rom").read_bytes() == bios
-
-
-def test_a_bios_inside_a_larger_dump_is_extracted_first(tmp_path: Path, bios: bytes) -> None:
-    wrapped = bytes(0x6000) + bios + bytes(0x2000)
-
-    export_for(game(), target="mister", directory=tmp_path, stem="Game", bios=wrapped)
-
-    assert (tmp_path / "boot0.rom").read_bytes() == bios
-
-
-@pytest.mark.usefixtures("bios")
-def test_an_unknown_bios_is_refused(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="no known BIOS"):
-        export_for(game(), target="mister", directory=tmp_path, stem="Game", bios=bytes(0x2000))
 
 
 def test_an_unknown_target_is_refused(tmp_path: Path) -> None:

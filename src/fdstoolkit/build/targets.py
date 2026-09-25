@@ -9,7 +9,6 @@ from typing import Any, Final
 
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.identify.firmware import extract_bios
 
 SWAP_EXCEPTIONS: Final = "swap_exceptions.json"
 
@@ -18,7 +17,6 @@ SWAP_EXCEPTIONS: Final = "swap_exceptions.json"
 class Target:
     name: str
     description: str
-    bios_path: str
     source: str
 
 
@@ -28,31 +26,26 @@ TARGETS: Final[Mapping[str, Target]] = {
         description=(
             "Analogue Nt Mini Noir jailbreak: headerless, a whole number of 65500-byte sides"
         ),
-        bios_path="BIOS/fds.bin",
         source="https://github.com/SmokeMonsterPacks/Nt-Mini-Noir-Jailbreak",
     ),
     "mister": Target(
         name="mister",
-        description="MiSTer NES core: a .fds file, the BIOS beside the games as boot0.rom",
-        bios_path="boot0.rom",
+        description="MiSTer NES core: a headerless .fds file",
         source="https://github.com/MiSTer-devel/NES_MiSTer/blob/master/README.md",
     ),
     "everdrive-n8-pro": Target(
         name="everdrive-n8-pro",
-        description="EverDrive N8 Pro: a .fds file, the BIOS in /EDN8/syscore",
-        bios_path="EDN8/syscore/disksys.rom",
+        description="EverDrive N8 Pro: a headerless .fds file",
         source="https://krikzz.com/pub/support/everdrive-n8/pro-series/n8-pro-manual.pdf",
     ),
     "mesen2": Target(
         name="mesen2",
-        description="Mesen2: a .fds file, the BIOS as disksys.rom in its firmware folder",
-        bios_path="disksys.rom",
+        description="Mesen2: a headerless .fds file",
         source="https://github.com/SourMesen/Mesen2/blob/master/Core/Shared/FirmwareHelper.h",
     ),
     "fceux": Target(
         name="fceux",
-        description="FCEUX: a .fds file, the BIOS as an exactly 8192-byte disksys.rom",
-        bios_path="disksys.rom",
+        description="FCEUX: a headerless .fds file",
         source="https://github.com/TASEmulators/fceux/blob/master/src/fds.cpp",
     ),
 }
@@ -82,20 +75,11 @@ def export_for(
     target: str,
     directory: Path,
     stem: str,
-    bios: bytes | None = None,
     force: bool = False,
 ) -> tuple[Path, ...]:
-    chosen = _target(target)
-    clean_bios = extract_bios(bios) if bios is not None else None
-
-    written: list[Path] = []
+    _target(target)
     data, _ = encode(disk, headered=False)
-    written.append(_write(directory / f"{stem}.fds", data, force=force))
-
-    if clean_bios is not None:
-        written.append(_write(directory / chosen.bios_path, clean_bios, force=force))
-
-    return tuple(written)
+    return (_write(directory / f"{stem}.fds", data, force=force),)
 
 
 def _exceptions() -> dict[str, Any]:

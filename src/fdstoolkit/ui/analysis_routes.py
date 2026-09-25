@@ -13,7 +13,6 @@ from fdstoolkit.core.disk import Disk
 from fdstoolkit.identify.dat import identify as identify_image
 from fdstoolkit.identify.dat import load_dat
 from fdstoolkit.identify.datfile import build_dat
-from fdstoolkit.identify.firmware import emulator_notes, identify_bios
 from fdstoolkit.identify.integrity import inspect_disk
 from fdstoolkit.master.corpus import build_masters
 from fdstoolkit.master.reference import ReferenceSet, reference_from
@@ -21,7 +20,6 @@ from fdstoolkit.master.splice import splice
 from fdstoolkit.quality.consensus import build_consensus
 from fdstoolkit.quality.health import measure_health
 from fdstoolkit.ui.schemas import (
-    BiosSpec,
     ConsensusSpec,
     CorpusSpec,
     DatBuildSpec,
@@ -175,12 +173,3 @@ def identify(spec: IdentifySpec) -> RowsResult:
         ],
         ok=found.entry is not None,
     )
-
-
-def bios(spec: BiosSpec) -> RowsResult:
-    data = bytes_of(spec.data)
-    report = identify_bios(data)
-    notes = emulator_notes(report.revision, exact_size=report.exact_size)
-    rows = [{"revision": str(report.revision), "exact_size": report.exact_size}]
-    rows.extend({"emulator": name, "note": note} for name, note in sorted(notes.items()))
-    return RowsResult(rows=rows)

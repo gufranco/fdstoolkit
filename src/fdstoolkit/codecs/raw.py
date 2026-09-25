@@ -272,8 +272,19 @@ def _expected_length(kind: int, pending: int) -> int | None:
 
 
 def decode_raw03(values: bytes) -> tuple[Side, tuple[Diagnostic, ...]]:
+    side, findings, _ = _walk(values)
+    return side, findings
+
+
+def block_starts(values: bytes) -> tuple[int, ...]:
+    _, _, starts = _walk(values)
+    return starts
+
+
+def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[int, ...]]:
     findings: list[Diagnostic] = []
     blocks: list[Block] = []
+    starts: list[int] = []
     cursor = 0
     pending = 0
 
@@ -310,8 +321,9 @@ def decode_raw03(values: bytes) -> tuple[Side, tuple[Diagnostic, ...]]:
         if block.kind is BlockKind.FILE_HEADER:
             pending = FileHeader.parse(payload).size
         blocks.append(block)
+        starts.append(gap)
 
     if not blocks:
         findings.append(_diagnostic("FDS014", Severity.ERROR, {"values": len(values)}))
 
-    return Side(blocks=tuple(blocks), tail=b"", capacity=0), tuple(findings)
+    return Side(blocks=tuple(blocks), tail=b"", capacity=0), tuple(findings), tuple(starts)

@@ -7,8 +7,7 @@ from pydantic import BaseModel, Field, Strict
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.core.diskinfo import PROFILES
-from fdstoolkit.drive.classes import ClassReport
-from fdstoolkit.drive.speed import SpeedReport
+from fdstoolkit.drive.monitor import DEFAULT_READS, MAX_READS, Calibration
 from fdstoolkit.hardware.session import MAX_PASSES, MAX_RETRIES
 from fdstoolkit.identify.hashes import Digests
 from fdstoolkit.quality.grade import GradedReport
@@ -184,53 +183,20 @@ class ReadsResult(BaseModel):
         )
 
 
-class SpeedView(BaseModel):
-    bit_rate_hz: float
-    cell_ns: float
-    error: float
-    verdict: str
-    direction: str
-    advice: str
-
-    @classmethod
-    def of(cls, report: SpeedReport) -> Self:
-        return cls(
-            bit_rate_hz=report.bit_rate_hz,
-            cell_ns=report.cell_ns,
-            error=report.error,
-            verdict=str(report.verdict),
-            direction=str(report.direction),
-            advice=report.advice,
-        )
-
-
-class ClassesResult(BaseModel):
-    counts: list[int]
-    shares: list[float]
-    glitches: int
-    glitch_rate: float
-    drift: float
-    reading: str
-    judgeable: bool
-
-    @classmethod
-    def of(cls, report: ClassReport) -> Self:
-        return cls(
-            counts=list(report.counts),
-            shares=list(report.shares),
-            glitches=report.glitches,
-            glitch_rate=report.glitch_rate,
-            drift=report.drift,
-            reading=str(report.reading),
-            judgeable=report.judgeable,
-        )
-
-
 class CalibrationResult(BaseModel):
     headline: str
-    speed: SpeedView | None = None
-    classes: ClassesResult | None = None
-    ok: bool = True
+    mode: str
+    rows: list[dict[str, Any]]
+    ok: bool
+
+    @classmethod
+    def of(cls, result: Calibration) -> Self:
+        return cls(
+            headline=result.headline,
+            mode=str(result.mode),
+            rows=result.rows(),
+            ok=result.clean,
+        )
 
 
 class ImageSpec(BaseModel):
@@ -255,10 +221,12 @@ class ReadsSpec(BaseModel):
 
 
 class CalibrateSpec(BaseModel):
-    cycles: float | None = Field(None, gt=0)
-    capture: str | None = Field(
-        None, description="a raw03 capture kept by dump --raw, base64 encoded"
+    mode: str = "speed"
+    reference: str | None = Field(
+        None, description="an image of the disk in the drive, dumped by a drive you trust"
     )
+    side: int = Field(0, ge=0, le=SIDES_PER_DISK - 1)
+    passes: int = Field(DEFAULT_READS, ge=1, le=MAX_READS)
 
 
 class BlankSpec(BaseModel):
@@ -384,14 +352,8 @@ class IdentifySpec(ImageSpec):
     dat: str
 
 
-class BiosSpec(BaseModel):
-    data: str
-    extract: bool = False
-
-
 class ExportSpec(ImageSpec):
     target: str
-    bios: str | None = None
 
 
 class CardSpec(BaseModel):
@@ -479,6 +441,8 @@ class JobView(BaseModel):
     id: str
     command: str
     writes: bool
+    stoppable: bool = False
+    stopping: bool = False
     state: str
     steps: list[str] = Field(default_factory=list)
     prompt: str = ""

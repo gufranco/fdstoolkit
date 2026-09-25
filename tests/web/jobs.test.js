@@ -151,3 +151,34 @@ describe("confirmErase", () => {
     expect(document.getElementById(dialog.getAttribute("aria-describedby"))).not.toBeNull();
   });
 });
+
+describe("stopping a job", () => {
+  const measuring = { ...running, command: "calibrate", writes: false, stoppable: true };
+
+  it("offers a stop while a stoppable job runs and passes it on", () => {
+    let stopped = [];
+    const view = jobView(measuring, () => {}, (id) => {
+      stopped = [...stopped, id];
+    });
+
+    const button = view.querySelector(".dialog-actions .plain");
+    button.click();
+
+    expect(button.textContent).toBe("Stop");
+    expect(button.disabled).toBe(true);
+    expect(stopped).toEqual(["j1"]);
+  });
+
+  it("says the stop is coming once it was asked for", () => {
+    const view = jobView({ ...measuring, stopping: true }, () => {});
+
+    expect(view.querySelector(".dialog-actions")).toBeNull();
+    expect(view.textContent).toContain("Stopping after the read in progress.");
+  });
+
+  it("offers no stop for a job that cannot stop", () => {
+    const view = jobView(running, () => {});
+
+    expect(view.querySelector(".dialog-actions")).toBeNull();
+  });
+});

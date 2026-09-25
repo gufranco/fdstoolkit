@@ -41,10 +41,14 @@ a factor of two and carry no tolerance.
 
 ## Things that look like bugs and are not
 
-- An FDSStick capture carries pulse classes, never timing, so no command
-  measures speed from one. Speed comes only from the console through
-  `calibrate --cycles`, and the timing commands that once read other capture tools'
-  output are gone.
+- An FDSStick capture carries pulse classes, never timing. `calibrate speed`
+  still finds a drive outside the tolerance, by comparing each class against
+  what an image of the same disk requires: a class read short means fast, long
+  means slow. A drive a percent off misreads no class, so the fine band is left
+  to a console speed test or a strobe, and the README says so.
+- A drive that reads back its own writes proves nothing about the drive, since a
+  drive out of adjustment writes disks only it can read. Calibration is judged
+  against a disk this drive did not write, and the command prints that first.
 - An FDSStick reports no drive state at all, so `DriveStatus` answers unknown.
   Unknown does not block a write; a state the drive reports as bad does. The
   safety of a write comes from the backup, the confirmation and the readback
@@ -137,6 +141,7 @@ to validate the measurement layer against bytes the toolkit did not generate,
 and found four real defects before they were removed with every other path
 that needs hardware other than the FDSStick.
 
-Head alignment is not measurable from pulse classes. Belt and motor faults are not
-separable without the pulley ratio, which no trustworthy source states. Both
-are named in the README rather than guessed at.
+Fine head alignment is not measurable from pulse classes; `calibrate head` sees
+only which blocks read. Belt and motor faults are not separable without the
+pulley ratio, which no trustworthy source states. Both are named in the README
+rather than guessed at.

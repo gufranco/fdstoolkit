@@ -40,11 +40,17 @@ class NotWaitingError(Exception):
     pass
 
 
+class NotStoppableError(Exception):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class Job:
     id: str
     command: str
     writes: bool
+    stoppable: bool = False
+    stopping: bool = False
     state: JobState = JobState.RUNNING
     steps: tuple[str, ...] = ()
     prompt: str = ""
@@ -63,6 +69,9 @@ class Controls:
     def ask(self, prompt: str) -> bool:
         return self._board.ask(self._job_id, prompt)
 
+    def stopped(self) -> bool:
+        return self._board.stopping(self._job_id)
+
 
 class JobBoard:
     def __init__(self, *, answer_limit: float = ANSWER_LIMIT_S) -> None:
@@ -71,13 +80,20 @@ class JobBoard:
         self._replies: dict[str, bool] = {}
         self._answer_limit = answer_limit
 
-    def start(self, command: str, *, writes: bool, work: Callable[[Controls], BaseModel]) -> Job:
+    def start(
+        self,
+        command: str,
+        *,
+        writes: bool,
+        work: Callable[[Controls], BaseModel],
+        stoppable: bool = False,
+    ) -> Job:
         with self._changed:
             running = self._active()
             if running is not None:
                 message = f"{running.command} is already running, so the drive is busy"
                 raise JobBusyError(message)
-            job = Job(id=uuid.uuid4().hex, command=command, writes=writes)
+            job = Job(id=uuid.uuid4().hex, command=command, writes=writes, stoppable=stoppable)
             self._jobs = self._trimmed() | {job.id: job}
         threading.Thread(
             target=self._run, args=(job.id, work), name=f"fdstoolkit-{command}", daemon=True
@@ -128,6 +144,18 @@ class JobBoard:
                 raise NotWaitingError(message)
             self._replies = self._replies | {job_id: yes}
             self._changed.notify_all()
+
+    def stop(self, job_id: str) -> None:
+        with self._changed:
+            job = self._jobs.get(job_id)
+            if job is None or not job.stoppable or job.state not in ACTIVE:
+                message = "that job cannot be stopped"
+                raise NotStoppableError(message)
+            self._put(replace(job, stopping=True))
+
+    def stopping(self, job_id: str) -> bool:
+        with self._changed:
+            return self._jobs[job_id].stopping
 
     def _run(self, job_id: str, work: Callable[[Controls], BaseModel]) -> None:
         try:

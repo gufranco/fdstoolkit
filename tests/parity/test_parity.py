@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from fdstoolkit.cli.main import app as cli_app
 from fdstoolkit.ui.app import ROUTE_FOR_COMMAND, create_app
 
-SERVER_ONLY = {"web"}
+CLI_ONLY = {"web", "doctor"}
 
 
 @pytest.fixture(name="client")
@@ -32,7 +32,7 @@ def web_routes() -> set[str]:
 
 
 def test_every_command_has_a_route() -> None:
-    missing = cli_commands() - SERVER_ONLY - set(ROUTE_FOR_COMMAND)
+    missing = cli_commands() - CLI_ONLY - set(ROUTE_FOR_COMMAND)
 
     assert missing == set()
 
@@ -55,8 +55,8 @@ def test_every_mapped_route_is_registered() -> None:
 def test_the_catalogue_lists_every_command(client: TestClient) -> None:
     listed = set(client.get("/api/catalogue").json()["commands"])
 
-    assert listed == cli_commands() - SERVER_ONLY
+    assert listed == cli_commands() - CLI_ONLY
 
 
-def test_only_the_command_that_starts_the_server_is_left_out() -> None:
-    assert "web" not in ROUTE_FOR_COMMAND
+def test_only_the_server_and_the_install_check_are_left_out() -> None:
+    assert CLI_ONLY.isdisjoint(ROUTE_FOR_COMMAND)

@@ -92,7 +92,10 @@ async function call(path, method, body) {
     headers: method === 'GET' ? {} : { 'content-type': 'application/json' },
     body: method === 'GET' ? undefined : JSON.stringify(body),
   });
-  const payload = await answer.json();
+  const payload = await answer.json().catch(() => null);
+  if (payload === null) {
+    throw new Error(t('state.unreadable').replace('{status}', String(answer.status)));
+  }
   if (!answer.ok) {
     throw new Error(explain(payload.detail));
   }
@@ -440,9 +443,7 @@ export function describeLimits(field) {
   }
   const parts = [
     present(field.minimum) ? t('limit.min').replace('{min}', field.minimum) : '',
-    present(field.above) ? t('limit.above').replace('{min}', field.above) : '',
     present(field.maximum) ? t('limit.max').replace('{max}', field.maximum) : '',
-    present(field.below) ? t('limit.below').replace('{max}', field.below) : '',
   ].filter(Boolean);
   if (parts.length) {
     return parts.join(' ');
@@ -696,7 +697,21 @@ function turnPrompt(job, answer) {
 
 const JOB_BANNER = { running: 'busy', waiting: 'warn', failed: 'bad', done: 'good' };
 
-export function jobView(job, answer) {
+function stopControl(job, stop) {
+  if (job.stopping) {
+    return element('p', { className: 'quiet', textContent: t('job.stopping') });
+  }
+  const button = element('button', { type: 'button', className: 'plain', textContent: t('job.stop') });
+  button.addEventListener('click', () => {
+    button.disabled = true;
+    stop(job.id);
+  });
+  const actions = element('div', { className: 'dialog-actions' });
+  actions.append(button);
+  return actions;
+}
+
+export function jobView(job, answer, stop) {
   const box = element('div', { className: 'job' });
   box.append(banner(JOB_BANNER[job.state], t(`job.${job.state}`)));
   if (job.writes && job.state !== 'failed') {
@@ -708,6 +723,9 @@ export function jobView(job, answer) {
   box.append(steps);
   if (job.state === 'waiting') {
     box.append(turnPrompt(job, answer));
+  }
+  if (job.stoppable && job.state === 'running') {
+    box.append(stopControl(job, stop));
   }
   if (job.state === 'failed') {
     box.append(element('p', { className: 'reason', textContent: job.error }));
@@ -728,6 +746,10 @@ export async function follow(
     call(`/api/jobs/${id}/answer`, 'POST', { yes }).catch((error) => {
       out.append(banner('bad', error.message));
     });
+  const stop = (id) =>
+    call(`/api/jobs/${id}/stop`, 'POST', {}).catch((error) => {
+      out.append(banner('bad', error.message));
+    });
   if (first.writes) {
     window.addEventListener('beforeunload', keepPageOpen);
   }
@@ -741,7 +763,7 @@ export async function follow(
       }
       const seen = JSON.stringify(job);
       if (seen !== shown) {
-        out.replaceChildren(jobView(job, answer));
+        out.replaceChildren(jobView(job, answer, stop));
         shown = seen;
       }
       if (job.state === 'failed') {

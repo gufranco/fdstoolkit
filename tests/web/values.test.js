@@ -124,18 +124,6 @@ describe("describeLimits", () => {
     expect(describeLimits({ minimum: null, maximum: 65535 })).toBe("65535 or less.");
   });
 
-  it("states an exclusive lower bound as more than", () => {
-    expect(describeLimits({ above: 0 })).toBe("More than 0.");
-  });
-
-  it("states an exclusive upper bound as less than", () => {
-    expect(describeLimits({ below: 10 })).toBe("Less than 10.");
-  });
-
-  it("joins an exclusive bound with an inclusive one", () => {
-    expect(describeLimits({ above: 0, maximum: 20 })).toBe("More than 0. 20 or less.");
-  });
-
   it("states an exact length when both lengths agree", () => {
     expect(describeLimits({ min_length: 3, max_length: 3 })).toBe("Exactly 3 characters.");
   });

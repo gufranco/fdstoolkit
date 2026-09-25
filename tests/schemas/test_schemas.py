@@ -4,24 +4,19 @@ import pytest
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
-from fdstoolkit.codecs.raw import pack_raw03
 from fdstoolkit.core.diagnostics import Diagnostic, Severity
 from fdstoolkit.core.diskinfo import PROFILES
-from fdstoolkit.drive.classes import measure_classes
-from fdstoolkit.drive.speed import from_cycles
 from fdstoolkit.identify.hashes import digests_of
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.quality.reads import compare_reads
 from fdstoolkit.ui.schemas import (
-    ClassesResult,
     DiagnosticView,
     DigestView,
     DiskView,
     GradeResult,
     ProfileView,
     ReadsResult,
-    SpeedView,
 )
 
 IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
@@ -96,21 +91,3 @@ def test_a_reads_view_carries_the_decay_direction() -> None:
     assert view.passes == 2
     assert view.stability == pytest.approx(1.0)
     assert view.decay
-
-
-def test_a_speed_view_carries_the_verdict_the_direction_and_the_advice() -> None:
-    view = SpeedView.of(from_cycles(152))
-
-    assert view.verdict == "in spec"
-    assert view.direction == "faster"
-    assert "raise the motor speed" in view.advice
-
-
-def test_a_classes_view_carries_the_distribution() -> None:
-    values = pack_raw03(bytes([0] * 700 + [1] * 200 + [2] * 100))
-
-    view = ClassesResult.of(measure_classes(values))
-
-    assert len(view.counts) == 4
-    assert sum(view.shares) == pytest.approx(1.0)
-    assert view.reading

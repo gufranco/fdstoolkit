@@ -14,8 +14,8 @@ MEASUREMENT_NAMES = (
     "canonical_digest",
     "grade_disk",
     "compare_reads",
-    "from_cycles",
-    "measure_classes",
+    "calibrate",
+    "sample_side",
     "score_disk",
 )
 

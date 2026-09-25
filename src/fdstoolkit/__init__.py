@@ -6,8 +6,9 @@ from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import Diagnostic, Severity
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.drive.classes import ClassReport, measure_classes
-from fdstoolkit.drive.speed import SpeedReport, Verdict, from_cycles
+from fdstoolkit.drive.monitor import Calibration, SideSample, calibrate
+from fdstoolkit.drive.monitor import Mode as CalibrationMode
+from fdstoolkit.drive.monitor import sample as sample_side
 from fdstoolkit.identify.hashes import Digests, digests_of, side_digests
 from fdstoolkit.quality.confidence import ConfidenceReport, score_disk
 from fdstoolkit.quality.grade import GradedReport, grade_disk
@@ -33,7 +34,8 @@ def canonical_digest(disk: Disk, profile: str) -> str:
 __all__ = [
     "Block",
     "BlockKind",
-    "ClassReport",
+    "Calibration",
+    "CalibrationMode",
     "ConfidenceReport",
     "Diagnostic",
     "Digests",
@@ -43,17 +45,16 @@ __all__ = [
     "ReadStatistics",
     "Severity",
     "Side",
-    "SpeedReport",
-    "Verdict",
+    "SideSample",
     "__version__",
+    "calibrate",
     "canonical_digest",
     "compare_reads",
     "decode_image",
     "digests_of",
     "encode_disk",
-    "from_cycles",
     "grade_disk",
-    "measure_classes",
+    "sample_side",
     "score_disk",
     "side_digests",
 ]

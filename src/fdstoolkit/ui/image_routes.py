@@ -248,7 +248,6 @@ def normalise(spec: RecipeSpec) -> FileResult:
 
 
 def export(spec: ExportSpec) -> FilesResult:
-    bios = bytes_of(spec.bios) if spec.bios else None
     with TemporaryDirectory(prefix="fdstoolkit-ui-") as directory:
         root = Path(directory)
         try:
@@ -257,7 +256,6 @@ def export(spec: ExportSpec) -> FilesResult:
                 target=spec.target,
                 directory=root,
                 stem=Path(spec.name).stem,
-                bios=bios,
             )
         except (ValueError, KeyError, OSError) as error:
             raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error

@@ -348,3 +348,79 @@ def test_an_unknown_job_is_not_found(client: TestClient) -> None:
     answer = client.get("/api/jobs/nothing")
 
     assert answer.status_code == NOT_FOUND
+
+
+@pytest.mark.usefixtures("attached")
+def test_a_calibration_against_its_reference_reads_clean(app: FastAPI, client: TestClient) -> None:
+    job = run(app, client, "/api/jobs/calibrate", {"mode": "speed", "reference": ONE, "passes": 2})
+
+    assert job["state"] == "done"
+    assert job["stoppable"]
+    assert job["steps"][0].startswith("judge the drive only with a disk it did not write")
+    assert job["steps"][1].startswith("read 1: 2 of 2 blocks")
+    assert job["result"]["ok"] is True
+    assert job["result"]["mode"] == "speed"
+    assert len(job["result"]["rows"]) == 2
+
+
+@pytest.mark.usefixtures("attached")
+def test_a_calibration_without_a_reference_reads_by_checksum(
+    app: FastAPI, client: TestClient
+) -> None:
+    job = run(app, client, "/api/jobs/calibrate", {"mode": "head", "passes": 1})
+
+    assert job["result"]["ok"] is True
+    assert "pulses short" not in job["steps"][1]
+
+
+@pytest.mark.usefixtures("attached")
+def test_a_calibration_mode_it_does_not_know_is_refused(client: TestClient) -> None:
+    answer = client.post("/api/jobs/calibrate", json={"mode": "belt"})
+
+    assert answer.status_code == BAD_REQUEST
+
+
+@pytest.mark.usefixtures("attached")
+def test_a_reference_side_it_lacks_is_refused(client: TestClient) -> None:
+    answer = client.post("/api/jobs/calibrate", json={"reference": ONE, "side": 1})
+
+    assert answer.status_code == UNPROCESSABLE
+    assert "has 1 side(s), so it has no side 1" in answer.json()["detail"]
+
+
+class SlowReads(SimulatedDrive):
+    def __init__(self, disk: Disk, gate: threading.Event) -> None:
+        super().__init__(disk)
+        self.gate = gate
+
+    def read_raw_side(self, *, what: str) -> bytes:
+        self.gate.wait(SETTLE)
+        return super().read_raw_side(what=what)
+
+
+def test_a_calibration_stops_between_reads_when_asked(
+    monkeypatch: pytest.MonkeyPatch, app: FastAPI, client: TestClient
+) -> None:
+    gate = threading.Event()
+    serve(monkeypatch, SlowReads(disk_of(ONE_SIDE), gate))
+    job_id = client.post("/api/jobs/calibrate", json={"passes": 50}).json()["id"]
+
+    stopping = client.post(f"/api/jobs/{job_id}/stop")
+    gate.set()
+
+    assert stopping.status_code == OK
+    assert stopping.json()["stopping"] is True
+    assert app.state.jobs.wait(job_id, SETTLE)
+    done = client.get(f"/api/jobs/{job_id}").json()
+    assert len(done["result"]["rows"]) == 1
+
+
+def test_a_job_that_cannot_stop_refuses_the_stop(
+    monkeypatch: pytest.MonkeyPatch, app: FastAPI, client: TestClient
+) -> None:
+    serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE)))
+    job = run(app, client, "/api/jobs/dump", {"sides": 1})
+
+    answer = client.post(f"/api/jobs/{job['id']}/stop")
+
+    assert answer.status_code == CONFLICT

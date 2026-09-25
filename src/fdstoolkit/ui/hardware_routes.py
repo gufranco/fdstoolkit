@@ -6,13 +6,23 @@ from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, Request
 
+from fdstoolkit.drive.monitor import NOT_THIS_DRIVE, Mode, calibrate
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import DumpResult, dump, dump_repeated, write_verified
 from fdstoolkit.quality.surface import Finish, SurfacePlan, surface_test
-from fdstoolkit.ui.jobs import Controls, Job, JobBoard, JobBusyError, NotWaitingError
+from fdstoolkit.ui.jobs import (
+    Controls,
+    Job,
+    JobBoard,
+    JobBusyError,
+    NotStoppableError,
+    NotWaitingError,
+)
 from fdstoolkit.ui.schemas import (
     AnswerSpec,
+    CalibrateSpec,
+    CalibrationResult,
     CurrentJob,
     DumpedResult,
     DumpSpec,
@@ -61,6 +71,8 @@ def _view(job: Job) -> JobView:
         id=job.id,
         command=job.command,
         writes=job.writes,
+        stoppable=job.stoppable,
+        stopping=job.stopping,
         state=str(job.state),
         steps=list(job.steps),
         prompt=job.prompt,
@@ -75,6 +87,7 @@ def _start(
     *,
     writes: bool,
     work: Callable[[FdsStick, Controls], BaseModel],
+    stoppable: bool = False,
 ) -> JobView:
     board = _board(request)
     running = board.current()
@@ -90,7 +103,7 @@ def _start(
             drive.close()
 
     try:
-        return _view(board.start(command, writes=writes, work=run))
+        return _view(board.start(command, writes=writes, work=run, stoppable=stoppable))
     except JobBusyError as error:
         drive.close()
         raise HTTPException(status_code=CONFLICT, detail=str(error)) from error
@@ -212,6 +225,34 @@ def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
     return _start(request, "surface", writes=True, work=work)
 
 
+def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
+    try:
+        mode = Mode(spec.mode)
+    except ValueError as error:
+        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
+    wanted = None
+    if spec.reference is not None:
+        disk, _, _ = decode_payload(spec.reference)
+        if spec.side >= disk.side_count:
+            message = f"the reference has {disk.side_count} side(s), so it has no side {spec.side}"
+            raise HTTPException(status_code=UNPROCESSABLE, detail=message)
+        wanted = disk.sides[spec.side]
+
+    def work(drive: FdsStick, controls: Controls) -> CalibrationResult:
+        controls.step(NOT_THIS_DRIVE)
+        result = calibrate(
+            drive,
+            mode=mode,
+            reads=spec.passes,
+            reference=wanted,
+            progress=controls.step,
+            stopped=controls.stopped,
+        )
+        return CalibrationResult.of(result)
+
+    return _start(request, "calibrate", writes=False, work=work, stoppable=True)
+
+
 def current_job(request: Request) -> CurrentJob:
     job = _board(request).current()
     return CurrentJob(job=None if job is None else _view(job))
@@ -222,6 +263,14 @@ def job_status(job_id: str, request: Request) -> JobView:
     if job is None:
         raise HTTPException(status_code=NOT_FOUND, detail=f"there is no job {job_id}")
     return _view(job)
+
+
+def job_stop(job_id: str, request: Request) -> JobView:
+    try:
+        _board(request).stop(job_id)
+    except NotStoppableError as error:
+        raise HTTPException(status_code=CONFLICT, detail=str(error)) from error
+    return job_status(job_id, request)
 
 
 def job_answer(job_id: str, spec: AnswerSpec, request: Request) -> JobView:

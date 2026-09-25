@@ -109,6 +109,14 @@ class SimulatedDrive:
                 attempts=1,
             )
 
+    def read_raw_side(self, *, what: str) -> bytes:
+        del what
+        self.read_count += 1
+        return self._capture(self._side(self._raw_side()))
+
+    def _raw_side(self) -> int:
+        return 0
+
     def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
         target = self._side(side)
         if self._write_protected:
@@ -150,6 +158,9 @@ class FacingDrive(SimulatedDrive):
     def read_side(self, side: int) -> Iterator[BlockRead]:
         del side
         return super().read_side(self.facing)
+
+    def _raw_side(self) -> int:
+        return self.facing
 
     def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
         del side

@@ -11,6 +11,7 @@ from fdstoolkit.build.targets import TARGETS
 from fdstoolkit.cli.common import Family
 from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.core.diskinfo import PROFILES
+from fdstoolkit.drive.monitor import Mode
 from fdstoolkit.quality.surface import Finish
 
 FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice", "auto")
@@ -21,7 +22,6 @@ DERIVED_FROM_FILE: Final = "name"
 FILE_FIELDS: Final = frozenset(
     {
         "data",
-        "capture",
         "left",
         "right",
         "file",
@@ -32,7 +32,6 @@ FILE_FIELDS: Final = frozenset(
         "recipes",
         "manifest",
         "reference",
-        "bios",
     }
 )
 
@@ -50,6 +49,7 @@ CHOICES: Final[dict[str, tuple[str, ...]]] = {
     "target": tuple(TARGETS),
     "firmware": ("released", "master"),
     "sides": tuple(str(count) for count in range(1, SIDES_PER_DISK + 1)),
+    "mode": tuple(str(item) for item in Mode),
 }
 
 
@@ -64,13 +64,11 @@ ACCEPTS: Final[dict[str, str]] = {
     "images": IMAGE_SUFFIXES,
     "reads": IMAGE_SUFFIXES,
     "donors": IMAGE_SUFFIXES,
-    "capture": ".raw03",
     "dat": ".dat,.xml",
     "save": ".ips,.ups,.fds",
     "patch": ".ips,.bps,.xdelta",
     "recipes": ".json",
     "manifest": ".json",
-    "bios": ".bin,.rom",
 }
 
 
@@ -83,8 +81,6 @@ class FormField(BaseModel):
     options: list[str] = []
     minimum: float | None = None
     maximum: float | None = None
-    above: float | None = None
-    below: float | None = None
     step: float | None = None
     min_length: int | None = None
     max_length: int | None = None
@@ -111,13 +107,11 @@ def opens_a_drive(callback: Callable[..., object]) -> bool:
 class Bounds(BaseModel):
     minimum: float | None = None
     maximum: float | None = None
-    above: float | None = None
-    below: float | None = None
     min_length: int | None = None
     max_length: int | None = None
 
 
-NUMERIC_RULES: Final = (("ge", "minimum"), ("gt", "above"), ("le", "maximum"), ("lt", "below"))
+NUMERIC_RULES: Final = (("ge", "minimum"), ("le", "maximum"))
 
 LENGTH_RULES: Final = (("min_length", "min_length"), ("max_length", "max_length"))
 

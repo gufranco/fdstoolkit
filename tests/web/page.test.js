@@ -43,7 +43,7 @@ const FORMS = [
       { name: 'game_name', kind: 'text', required: true, min_length: 3, max_length: 3, default: null },
     ],
   },
-  { command: 'doctor', family: 'hardware', summary: '', route: '/api/doctor', method: 'GET', fields: [] },
+  { command: 'status', family: 'hardware', summary: '', route: '/api/status', method: 'GET', fields: [] },
   {
     command: 'dump',
     family: 'hardware',
@@ -270,7 +270,7 @@ describe('languages', () => {
 
     unknown.click();
 
-    expect(document.querySelector('[data-i18n=title]').textContent).toBe('fdstoolkit');
+    expect(document.querySelector('[data-i18n=title]').textContent).toBe('Famicom Disk System Toolkit');
     document.querySelector('[data-language=en]').click();
   });
 });
@@ -292,7 +292,7 @@ describe('the form', () => {
   });
 
   it('says a command needs nothing when it has no fields', async () => {
-    await open('doctor');
+    await open('status');
 
     expect(panel().textContent).toContain('This command needs nothing from you. Press the button.');
   });
@@ -388,11 +388,21 @@ describe('running a command', () => {
   });
 
   it('uses GET for a command that reads only', async () => {
-    await open('doctor', { 'GET /api/doctor': () => reply(200, { headline: 'healthy', ok: true }) });
+    await open('status', { 'GET /api/status': () => reply(200, { headline: 'healthy', ok: true }) });
 
     await run();
 
     expect(panel().querySelector('.output .banner').textContent).toBe('healthy');
+  });
+
+  it('says the server failed when its answer is not a result', async () => {
+    await open('status', { 'GET /api/status': () => ({ ok: false, status: 500, json: async () => JSON.parse('Internal Server Error') }) });
+
+    await run();
+
+    expect(panel().querySelector('.output .reason').textContent).toBe(
+      'The server answered 500 with something that is not a result. Its terminal shows what went wrong.',
+    );
   });
 
   it('reports a refusal with the reason and a hint', async () => {
@@ -493,6 +503,29 @@ describe('the drive commands', () => {
 
     expect(panel().querySelector('.output').textContent).toContain('that job is not waiting for an answer');
     await vi.waitFor(() => expect(panel().querySelector('.output .reason').textContent).toBe('declined'), {
+      timeout: 3000,
+    });
+  });
+
+  it('stops a job that can stop and reports a stop the server refused', async () => {
+    const measuring = { ...done, state: 'running', stoppable: true, result: null };
+    let polls = 0;
+    await open('dump', {
+      'POST /api/jobs/dump': () => reply(200, measuring),
+      'GET /api/jobs/j1': () => {
+        polls += 1;
+        return reply(200, polls > 1 ? { ...measuring, state: 'failed', error: 'stopped' } : measuring);
+      },
+      'POST /api/jobs/j1/stop': () => reply(409, { detail: 'that job cannot be stopped' }),
+    });
+
+    await run();
+    panel().querySelector('.job .dialog-actions .plain').click();
+    await settle();
+
+    expect(sent.some((entry) => entry.key === 'POST /api/jobs/j1/stop')).toBe(true);
+    expect(panel().querySelector('.output').textContent).toContain('that job cannot be stopped');
+    await vi.waitFor(() => expect(panel().querySelector('.output .reason').textContent).toBe('stopped'), {
       timeout: 3000,
     });
   });

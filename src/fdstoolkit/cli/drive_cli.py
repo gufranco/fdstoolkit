@@ -5,101 +5,77 @@ from typing import Annotated
 
 import typer
 
-from fdstoolkit.cli.common import Family, fail
-from fdstoolkit.drive.classes import ClassReport, Reading, measure_classes
-from fdstoolkit.drive.speed import SpeedReport, Verdict, from_cycles
+from fdstoolkit.cli.common import Family, decode_image, fail
+from fdstoolkit.cli.hardware_cmds import open_drive, step
+from fdstoolkit.core.disk import SIDES_PER_DISK, Side
+from fdstoolkit.drive.monitor import (
+    DEFAULT_READS,
+    MAX_READS,
+    NOT_THIS_DRIVE,
+    Calibration,
+    Mode,
+    calibrate,
+)
+from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.report import as_json
 
 
-def _speed(cycles: float) -> SpeedReport:
-    try:
-        return from_cycles(cycles)
-    except ValueError as error:
-        raise fail(str(error)) from error
-
-
-def _classes(capture: Path) -> ClassReport:
-    if not capture.is_file():
-        message = f"file not found: {capture}"
+def reference_side(path: Path | None, side: int) -> Side | None:
+    if path is None:
+        return None
+    disk, _, _, _ = decode_image(path)
+    if side >= disk.side_count:
+        message = f"{path.name} has {disk.side_count} side(s), so it has no side {side}"
         raise fail(message)
-    try:
-        return measure_classes(capture.read_bytes())
-    except ValueError as error:
-        raise fail(str(error)) from error
+    return disk.sides[side]
 
 
-def _speed_json(cycles: float) -> dict[str, object]:
-    report = _speed(cycles)
+def calibration_json(result: Calibration) -> dict[str, object]:
     return {
-        "cycles_per_byte": cycles,
-        "bit_rate_hz": round(report.bit_rate_hz, 1),
-        "error": round(report.error, 5),
-        "verdict": report.verdict.value,
-        "direction": report.direction.value,
-        "advice": report.advice,
+        "mode": result.mode.value,
+        "clean": result.clean,
+        "headline": result.headline,
+        "reads": result.rows(),
     }
 
 
-def _classes_json(report: ClassReport) -> dict[str, object]:
-    return {
-        "reading": report.reading.value,
-        "pulses": report.total,
-        "shares": [round(share, 5) for share in report.shares],
-        "glitches": report.glitches,
-        "glitch_rate": round(report.glitch_rate, 6),
-        "drift": round(report.drift, 5),
-    }
-
-
-LABEL_WIDTH = 9
-
-
-def _labelled(label: str, text: str) -> str:
-    return f"{label:<{LABEL_WIDTH}}" + text.replace("\n", "\n" + " " * LABEL_WIDTH)
-
-
-def calibrate(
-    cycles: Annotated[
-        float | None,
+def calibrate_command(
+    mode: Annotated[Mode, typer.Argument(help="speed for the motor, head for the head and hub")],
+    *,
+    reference: Annotated[
+        Path | None,
         typer.Option(
-            "--cycles", help="average CPU cycles between bytes, as a console disk-lister shows it"
+            "--reference",
+            help="an image of the disk in the drive, dumped by a drive you trust",
         ),
     ] = None,
-    capture: Annotated[
-        Path | None,
-        typer.Option("--capture", help="a raw03 capture kept by dump --raw"),
-    ] = None,
-    *,
+    side: Annotated[
+        int,
+        typer.Option("--side", min=0, max=SIDES_PER_DISK - 1, help="which side of the reference"),
+    ] = 0,
+    passes: Annotated[
+        int,
+        typer.Option("--passes", min=1, max=MAX_READS, help="read the side this many times"),
+    ] = DEFAULT_READS,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
-    """Check the drive: its speed from a console reading, its pulse separation from a capture."""
-    if cycles is None and capture is None:
-        message = "calibrating needs --cycles, --capture, or both"
-        raise fail(message)
-
-    speed = None if cycles is None else _speed(cycles)
-    classes = None if capture is None else _classes(capture)
-    ok = (speed is None or speed.verdict is Verdict.FINE) and (
-        classes is None or classes.reading is Reading.HEALTHY
-    )
+    """Read a side over and over while you adjust the drive, and say what each read shows."""
+    wanted = reference_side(reference, side)
+    typer.echo(NOT_THIS_DRIVE)
+    drive = open_drive()
+    try:
+        result = calibrate(drive, mode=mode, reads=passes, reference=wanted, progress=step)
+    except HardwareFaultError as error:
+        raise fail(str(error)) from error
+    finally:
+        drive.close()
 
     if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "speed": None if cycles is None else _speed_json(cycles),
-                    "classes": None if classes is None else _classes_json(classes),
-                }
-            )
-        )
-        raise typer.Exit(code=0 if ok else 1)
-
-    if speed is not None:
-        typer.echo(_labelled("speed", speed.render()))
-    if classes is not None:
-        typer.echo(_labelled("classes", classes.render()))
-    raise typer.Exit(code=0 if ok else 1)
+        typer.echo(as_json(calibration_json(result)))
+    else:
+        typer.echo(result.headline)
+    raise typer.Exit(code=0 if result.clean else 1)
 
 
 def register(app: typer.Typer) -> None:
-    app.command(rich_help_panel=Family.HARDWARE)(calibrate)
+    app.command(name="calibrate", rich_help_panel=Family.HARDWARE)(calibrate_command)

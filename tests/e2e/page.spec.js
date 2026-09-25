@@ -158,3 +158,14 @@ test('a two-sided surface test turns the disk twice and grades clean', async ({ 
   await expect(page.locator('#panel .output .banner')).toHaveText('grade clean');
   await expect(page.getByRole('link', { name: 'Download before.fds' })).toBeVisible();
 });
+
+test('a calibration reports every read and a verdict', async ({ page }) => {
+  await openCommand(page, 'calibrate');
+  await page.locator('select[data-field=mode]').selectOption('head');
+  await page.locator('input[data-field=passes]').fill('3');
+
+  await page.locator('#panel button.run').click();
+
+  await expect(page.locator('#panel .output .banner')).toHaveText(/^reads clean: the whole side reads/);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});

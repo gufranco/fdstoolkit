@@ -7,7 +7,14 @@ import pytest
 from pydantic import BaseModel
 
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
-from fdstoolkit.ui.jobs import Controls, JobBoard, JobBusyError, JobState, NotWaitingError
+from fdstoolkit.ui.jobs import (
+    Controls,
+    JobBoard,
+    JobBusyError,
+    JobState,
+    NotStoppableError,
+    NotWaitingError,
+)
 
 SETTLE = 2.0
 BRIEF = 0.05
@@ -209,3 +216,45 @@ def test_an_unknown_job_is_not_found() -> None:
     assert not board.wait_for_state("nothing", JobState.DONE, BRIEF)
     with pytest.raises(NotWaitingError):
         board.answer("nothing", yes=True)
+
+
+def test_a_stoppable_job_sees_the_stop_between_steps() -> None:
+    board = JobBoard()
+    gate = threading.Event()
+    seen: list[bool] = []
+
+    def work(controls: Controls) -> Answer:
+        seen.append(controls.stopped())
+        gate.wait(SETTLE)
+        seen.append(controls.stopped())
+        return Answer(value=10)
+
+    job = board.start("calibrate", writes=False, work=work, stoppable=True)
+    board.stop(job.id)
+    gate.set()
+
+    assert finished(board, job.id) is JobState.DONE
+    assert seen[-1] is True
+    stopped = board.get(job.id)
+    assert stopped is not None
+    assert stopped.stoppable
+    assert stopped.stopping
+
+
+def test_a_job_that_is_not_stoppable_refuses_a_stop() -> None:
+    board = JobBoard()
+    gate = threading.Event()
+
+    def work(controls: Controls) -> Answer:
+        del controls
+        gate.wait(SETTLE)
+        return Answer(value=11)
+
+    job = board.start("write", writes=True, work=work)
+
+    with pytest.raises(NotStoppableError):
+        board.stop(job.id)
+    gate.set()
+    finished(board, job.id)
+    with pytest.raises(NotStoppableError):
+        board.stop("nothing")

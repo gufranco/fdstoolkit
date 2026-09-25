@@ -11,13 +11,11 @@ from fdstoolkit.cli.common import (
     TargetChoice,
     decode_image,
     fail,
-    guard_output,
     read_image,
 )
 from fdstoolkit.identify.cache import DatCache
 from fdstoolkit.identify.dat import Catalogue, Identification, MatchKind, load_dat
 from fdstoolkit.identify.dat import identify as identify_image
-from fdstoolkit.identify.firmware import emulator_notes, extract_bios, identify_bios
 from fdstoolkit.identify.near import NearMatch, nearest_match, reference_images
 from fdstoolkit.report import as_json
 
@@ -110,80 +108,15 @@ def _print_identification(result: Identification, near: NearMatch | None) -> Non
         typer.echo("    more runs not shown")
 
 
-def bios(
-    file: Annotated[Path, typer.Argument(help="a BIOS file, 8 KB or wrapped in a larger dump")],
-    *,
-    extract: Annotated[
-        Path | None, typer.Option("--extract", help="write the 8 KB BIOS found inside")
-    ] = None,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
-) -> None:
-    """Identify a Famicom Disk System BIOS, and say which emulators accept it."""
-    if not file.is_file():
-        message = f"file not found: {file}"
-        raise fail(message)
-    data = file.read_bytes()
-    report = identify_bios(data)
-    notes = emulator_notes(report.revision, exact_size=report.exact_size)
-
-    if extract is not None:
-        guard_output(extract, force=force)
-        try:
-            extract.write_bytes(extract_bios(data))
-        except ValueError as error:
-            raise fail(str(error)) from error
-
-    revision = report.revision
-    if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "path": str(file),
-                    "size": report.size,
-                    "offset": report.offset,
-                    "crc32": report.crc32,
-                    "sha1": report.sha1,
-                    "revision": revision.name if revision else None,
-                    "mame_name": revision.mame_name if revision else None,
-                    "source": revision.source if revision else None,
-                    "emulators": notes,
-                }
-            )
-        )
-    else:
-        name = revision.name if revision else "unknown"
-        typer.echo(f"{file.name}: {name}, {report.size} bytes")
-        if report.offset:
-            typer.echo(f"  the BIOS sits at offset {report.offset:#x} inside a larger dump")
-        if report.crc32:
-            typer.echo(f"  crc32 {report.crc32}  sha1 {report.sha1}")
-        for emulator, verdict in notes.items():
-            typer.echo(f"  {emulator:<8} {verdict}")
-        if extract is not None:
-            typer.echo(f"wrote {extract}")
-
-    raise typer.Exit(code=0 if revision is not None else 1)
-
-
 def export(
     image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
     target: Annotated[TargetChoice, typer.Option("--target", help="the device or emulator")],
     directory: Annotated[Path, typer.Option("-d", "--directory", help="the card or folder root")],
     *,
-    bios: Annotated[
-        Path | None, typer.Option("--bios", help="a BIOS to place where the target looks")
-    ] = None,
     force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
 ) -> None:
     """Write an image in the layout a device or emulator expects."""
     disk, _, _, _ = decode_image(image)
-    bios_data = None
-    if bios is not None:
-        if not bios.is_file():
-            message = f"file not found: {bios}"
-            raise fail(message)
-        bios_data = bios.read_bytes()
 
     try:
         written = export_for(
@@ -191,14 +124,11 @@ def export(
             target=target.value,
             directory=directory,
             stem=image.stem,
-            bios=bios_data,
             force=force,
         )
     except FileExistsError as error:
         message = f"{error}, pass --force to overwrite"
         raise fail(message) from error
-    except ValueError as error:
-        raise fail(str(error)) from error
 
     typer.echo(TARGETS[target.value].description)
     for path in written:
@@ -209,5 +139,4 @@ def export(
 
 def register(app: typer.Typer) -> None:
     app.command(rich_help_panel=Family.IDENTIFY)(identify)
-    app.command(rich_help_panel=Family.IDENTIFY)(bios)
     app.command(rich_help_panel=Family.CONTAINER)(export)

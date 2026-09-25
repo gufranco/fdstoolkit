@@ -7,7 +7,7 @@ from fdstoolkit.ui.app import ROUTE_FOR_COMMAND, create_app
 from fdstoolkit.ui.forms import FIELD_KINDS, form_for, forms, model_for
 from fdstoolkit.ui.schemas import ImageSpec
 
-GET_ONLY = {"doctor", "status"}
+GET_ONLY = {"status"}
 
 
 @pytest.fixture(name="client")
@@ -36,8 +36,8 @@ def test_a_form_names_its_route_and_method() -> None:
 
 
 def test_a_command_with_no_body_is_a_get() -> None:
-    assert form_for("doctor").method == "GET"
-    assert form_for("doctor").fields == []
+    assert form_for("status").method == "GET"
+    assert form_for("status").fields == []
 
 
 def test_an_image_field_is_offered_as_a_file() -> None:
@@ -123,13 +123,6 @@ def test_a_handler_with_a_plain_parameter_skips_it_and_finds_the_model() -> None
         return ""
 
     assert model_for(handler) is ImageSpec
-
-
-def test_an_exclusive_lower_bound_is_not_offered_as_an_inclusive_one() -> None:
-    cycles = next(field for field in form_for("calibrate").fields if field.name == "cycles")
-
-    assert cycles.above == 0
-    assert cycles.minimum is None
 
 
 @pytest.mark.parametrize("command", ["write", "surface"])

@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app as cli_app
 from fdstoolkit.codecs.fds import decode
-from fdstoolkit.codecs.raw import pack_raw03
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.doctor import CheckStatus, diagnose
 from fdstoolkit.identify.hashes import digests_of
@@ -55,13 +54,10 @@ def test_the_catalogue_lists_every_command_the_page_covers(client: TestClient) -
     assert "grade" in body["commands"]
 
 
-def test_doctor_is_reachable(client: TestClient) -> None:
-    body = client.get("/api/doctor").json()
+def test_the_install_check_is_not_on_the_page(client: TestClient) -> None:
+    answer = client.get("/api/doctor")
 
-    names = {check["name"] for check in body["checks"]}
-    assert "codec" in names
-    assert "identity" in names
-    assert isinstance(body["healthy"], bool)
+    assert answer.status_code == 404
 
 
 def test_info_describes_every_side(client: TestClient) -> None:
@@ -261,7 +257,7 @@ def test_the_device_route_reports_what_the_check_found(client: TestClient) -> No
 def test_only_the_commands_that_open_a_drive_are_marked() -> None:
     marked = {form.command for form in forms() if form.needs_hardware}
 
-    assert marked == {"dump", "write", "surface"}
+    assert marked == {"calibrate", "dump", "write", "surface"}
 
 
 def test_a_command_whose_source_is_unreadable_is_marked_rather_than_cleared() -> None:
@@ -283,55 +279,6 @@ def test_every_marked_commandopens_a_drive_in_the_cli() -> None:
     assert {form.command for form in forms() if form.needs_hardware} == opens
 
 
-def packed_capture() -> str:
-    return base64.b64encode(pack_raw03(bytes([0] * 700 + [1] * 200 + [2] * 100))).decode("ascii")
-
-
-def test_calibrate_converts_a_console_cycle_count(client: TestClient) -> None:
-    body = client.post("/api/calibrate", json={"cycles": 152}).json()
-
-    assert body["speed"]["bit_rate_hz"] == pytest.approx(94_200, rel=0.01)
-    assert "raise the motor speed" in body["speed"]["advice"]
-    assert "clockwise" not in body["speed"]["advice"]
-    assert body["classes"] is None
-    assert body["headline"] == "speed in spec"
-    assert not body["ok"]
-
-
-def test_calibrate_judges_a_capture(client: TestClient) -> None:
-    body = client.post("/api/calibrate", json={"capture": packed_capture()}).json()
-
-    assert len(body["classes"]["counts"]) == 4
-    assert body["speed"] is None
-    assert body["headline"].startswith("pulse classes ")
-
-
-def test_calibrate_reports_both_measurements_together(client: TestClient) -> None:
-    body = client.post("/api/calibrate", json={"cycles": 148, "capture": packed_capture()}).json()
-
-    assert body["headline"].startswith("speed fine, pulse classes ")
-
-
-def test_calibrate_needs_something_to_measure(client: TestClient) -> None:
-    answer = client.post("/api/calibrate", json={})
-
-    assert answer.status_code == UNPROCESSABLE
-    assert "a cycle count, a capture, or both" in answer.json()["detail"]
-
-
-def test_calibrate_refuses_a_cycle_count_of_nothing(client: TestClient) -> None:
-    answer = client.post("/api/calibrate", json={"cycles": 0})
-
-    assert answer.status_code == UNPROCESSABLE
-
-
-def test_calibrate_refuses_a_capture_that_carries_nothing(client: TestClient) -> None:
-    answer = client.post("/api/calibrate", json={"capture": ""})
-
-    assert answer.status_code == BAD_REQUEST
-    assert "carries no bytes" in answer.json()["detail"]
-
-
 def test_status_reports_only_the_device_checks(client: TestClient) -> None:
     body = client.get("/api/status").json()
 
@@ -339,3 +286,17 @@ def test_status_reports_only_the_device_checks(client: TestClient) -> None:
     assert "fdsstick" in names
     assert "python" not in names
     assert isinstance(body["healthy"], bool)
+
+
+def test_an_unexpected_failure_answers_json_that_names_it() -> None:
+    app = create_app()
+
+    def broken() -> None:
+        message = "the parser met a byte it did not expect"
+        raise RuntimeError(message)
+
+    app.add_api_route("/api/broken", broken, methods=["GET"])
+    answer = TestClient(app, raise_server_exceptions=False).get("/api/broken")
+
+    assert answer.status_code == 500
+    assert "RuntimeError: the parser met a byte it did not expect" in answer.json()["detail"]

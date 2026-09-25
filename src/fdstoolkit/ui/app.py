@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from collections.abc import Awaitable, Callable
 from hashlib import sha256
 from importlib import resources
@@ -18,9 +19,7 @@ from fdstoolkit.codecs.qd import CrcMode
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, restore
 from fdstoolkit.core.diagnostics import worst_severity
 from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
-from fdstoolkit.doctor import CheckStatus, diagnose, hardware_checks
-from fdstoolkit.drive.classes import Reading, measure_classes
-from fdstoolkit.drive.speed import Verdict, from_cycles
+from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
@@ -30,11 +29,8 @@ from fdstoolkit.ui.forms import FAMILY_ORDER, forms
 from fdstoolkit.ui.jobs import JobBoard
 from fdstoolkit.ui.schemas import (
     BlankSpec,
-    CalibrateSpec,
-    CalibrationResult,
     CanonSpec,
     Catalogue,
-    ClassesResult,
     ConvertSpec,
     DiagnosticView,
     DigestView,
@@ -51,11 +47,10 @@ from fdstoolkit.ui.schemas import (
     ProfileView,
     ReadsResult,
     ReadsSpec,
-    SpeedView,
     VerifyResult,
     VerifySpec,
 )
-from fdstoolkit.ui.shared import BAD_REQUEST, UNPROCESSABLE, bytes_of, decode_payload
+from fdstoolkit.ui.shared import BAD_REQUEST, UNPROCESSABLE, decode_payload
 from fdstoolkit.version import VERSION
 
 STATIC_DIR: Final = Path(str(resources.files("fdstoolkit.ui") / "static"))
@@ -79,7 +74,6 @@ MIN_READS: Final = 2
 EXPORT_TARGETS: Final = tuple(TARGETS)
 
 ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
-    "doctor": "/api/doctor",
     "status": "/api/status",
     "info": "/api/info",
     "ls": "/api/ls",
@@ -112,12 +106,11 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "reference-verify": "/api/reference-verify",
     "dat-build": "/api/dat-build",
     "identify": "/api/identify",
-    "bios": "/api/bios",
     "integrity": "/api/integrity",
     "health": "/api/health",
     "grade": "/api/grade",
     "reads": "/api/reads",
-    "calibrate": "/api/calibrate",
+    "calibrate": "/api/jobs/calibrate",
     "dump": "/api/jobs/dump",
     "write": "/api/jobs/write",
     "surface": "/api/jobs/surface",
@@ -146,17 +139,6 @@ def catalogue() -> Catalogue:
         commands=sorted(ROUTE_FOR_COMMAND),
         forms=[entry.model_dump() for entry in forms()],
         families=list(FAMILY_ORDER),
-    )
-
-
-def doctor() -> DoctorResult:
-    report = diagnose()
-    return DoctorResult(
-        checks=[
-            DoctorCheck(name=check.name, status=str(check.status), detail=check.detail)
-            for check in report.checks
-        ],
-        healthy=report.healthy,
     )
 
 
@@ -219,25 +201,6 @@ def reads(spec: ReadsSpec) -> ReadsResult:
     return ReadsResult.of(compare_reads(disks))
 
 
-def calibrate(spec: CalibrateSpec) -> CalibrationResult:
-    if spec.cycles is None and spec.capture is None:
-        message = "calibrating needs a cycle count, a capture, or both"
-        raise HTTPException(status_code=UNPROCESSABLE, detail=message)
-    speed = None if spec.cycles is None else from_cycles(spec.cycles)
-    classes = None if spec.capture is None else measure_classes(bytes_of(spec.capture))
-    parts = (
-        None if speed is None else f"speed {speed.verdict.value}",
-        None if classes is None else f"pulse classes {classes.reading.value}",
-    )
-    return CalibrationResult(
-        headline=", ".join(part for part in parts if part is not None),
-        speed=None if speed is None else SpeedView.of(speed),
-        classes=None if classes is None else ClassesResult.of(classes),
-        ok=(speed is None or speed.verdict is Verdict.FINE)
-        and (classes is None or classes.reading is Reading.HEALTHY),
-    )
-
-
 def blank(spec: BlankSpec) -> FileResult:
     data = blank_image(
         sides=spec.sides,
@@ -284,7 +247,6 @@ def convert(spec: ConvertSpec) -> FileResult:
 def _register_core(app: FastAPI) -> None:
     app.add_api_route("/", index, methods=["GET"], response_class=HTMLResponse)
     app.add_api_route("/api/catalogue", catalogue, methods=["GET"])
-    app.add_api_route("/api/doctor", doctor, methods=["GET"])
     app.add_api_route("/api/hardware", hardware, methods=["GET"])
     app.add_api_route("/api/status", status, methods=["GET"])
     app.add_api_route("/api/info", info, methods=["POST"])
@@ -292,7 +254,6 @@ def _register_core(app: FastAPI) -> None:
     app.add_api_route("/api/hash", hashes, methods=["POST"])
     app.add_api_route("/api/grade", grade, methods=["POST"])
     app.add_api_route("/api/reads", reads, methods=["POST"])
-    app.add_api_route("/api/calibrate", calibrate, methods=["POST"])
     app.add_api_route("/api/blank", blank, methods=["POST"])
     app.add_api_route("/api/canon", canon, methods=["POST"])
     app.add_api_route("/api/convert", convert, methods=["POST"])
@@ -329,19 +290,23 @@ def _register_analysis(app: FastAPI) -> None:
     app.add_api_route("/api/reference-verify", analysis_routes.reference_verify, methods=["POST"])
     app.add_api_route("/api/dat-build", analysis_routes.dat_build, methods=["POST"])
     app.add_api_route("/api/identify", analysis_routes.identify, methods=["POST"])
-    app.add_api_route("/api/bios", analysis_routes.bios, methods=["POST"])
 
 
 def _register_hardware(app: FastAPI) -> None:
     app.add_api_route("/api/jobs/dump", hardware_routes.dump_job, methods=["POST"])
     app.add_api_route("/api/jobs/write", hardware_routes.write_job, methods=["POST"])
     app.add_api_route("/api/jobs/surface", hardware_routes.surface_job, methods=["POST"])
+    app.add_api_route("/api/jobs/calibrate", hardware_routes.calibrate_job, methods=["POST"])
     app.add_api_route("/api/jobs/current", hardware_routes.current_job, methods=["GET"])
     app.add_api_route("/api/jobs/{job_id}", hardware_routes.job_status, methods=["GET"])
     app.add_api_route("/api/jobs/{job_id}/answer", hardware_routes.job_answer, methods=["POST"])
+    app.add_api_route("/api/jobs/{job_id}/stop", hardware_routes.job_stop, methods=["POST"])
 
 
 DEVICE_CHECK: Final = "fdsstick"
+SERVER_FAULT: Final = 500
+
+logger = logging.getLogger("uvicorn.error")
 
 MAX_BODY_BYTES: Final = 64 * 1024 * 1024
 TOO_LARGE: Final = 413
@@ -378,8 +343,22 @@ async def _label_asset_lifetime(
     return answer
 
 
+async def _report_fault(request: Request, error: Exception) -> JSONResponse:
+    logger.error("%s %s failed", request.method, request.url.path, exc_info=error)
+    return JSONResponse(
+        status_code=SERVER_FAULT,
+        content={
+            "detail": (
+                f"the server failed on this request: {type(error).__name__}: {error}. "
+                "The full traceback is in the terminal that started fdstoolkit web"
+            )
+        },
+    )
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="fdstoolkit", version=VERSION, docs_url="/docs")
+    app = FastAPI(title="Famicom Disk System Toolkit", version=VERSION, docs_url="/docs")
+    app.add_exception_handler(Exception, _report_fault)
     app.state.jobs = JobBoard()
     app.middleware("http")(_label_asset_lifetime)
     app.middleware("http")(_reject_oversized)

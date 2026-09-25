@@ -106,14 +106,6 @@ def test_a_catalogue_that_does_not_parse_is_refused(client: TestClient) -> None:
     assert answer.status_code == BAD_REQUEST
 
 
-def test_bios_identifies_a_firmware_image(client: TestClient) -> None:
-    payload = base64.b64encode(bytes(8192)).decode("ascii")
-
-    body = client.post("/api/bios", json={"data": payload}).json()
-
-    assert body["rows"]
-
-
 def test_consensus_of_one_disk_returns_the_merge_and_its_verdict(client: TestClient) -> None:
     body = client.post("/api/consensus", json={"images": [ONE, ONE]}).json()
 

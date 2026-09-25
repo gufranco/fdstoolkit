@@ -97,7 +97,7 @@ open without a udev rule; `doctor` fails that check and prints the rule to insta
 
 Digests print as `fdstoolkit:v1:<profile>/v1:<sha256>`. Under `release`, 142 of 144 groups in a 595-image corpus agree; under `content`, 125.
 
-**An FDSStick capture carries classes, not timing.** The device rounds every pulse to one of three nominal lengths in hardware, and `dump --raw` keeps those classes as `raw03` files. They show how evenly the drive separates the three lengths, which `calibrate --capture` measures. They cannot show speed, so speed comes from the console instead, through `calibrate --cycles`.
+**An FDSStick capture carries classes, not timing.** The device rounds every pulse to one of three nominal lengths in hardware, and `dump --raw` keeps those classes as `raw03` files. A pulse carries no duration, but it does carry a length class, and the bytes on a disk decide exactly which class each pulse should have. So against an image of the same disk, a pulse read one class shorter than its content requires means the drive runs fast, and one class longer means it runs slow. That is what `calibrate speed` counts. A drive a percent or two off still classifies every pulse correctly, so the last stretch of adjustment needs a console speed test or a strobe.
 
 **A game is one disk.** Every game uses a single disk, with one or two sides, and no game spans a second disk. An image holding more than two sides bundles several disks together, and every command refuses it.
 
@@ -484,10 +484,10 @@ Between `.fds` and `.qd`. `--crc-mode` decides what goes in the CRC fields when 
 #### `export`
 
 ```bash
-fdstoolkit export <image> --target <t> -d <dir> [--bios <file>] [--force]
+fdstoolkit export <image> --target <t> -d <dir> [--force]
 ```
 
-The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`. Each writes a headerless `.fds`. `--bios` also places the BIOS where that target looks for it.
+The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`. Each writes a headerless `.fds`.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
@@ -548,19 +548,6 @@ The matching DAT entry and which digest matched. With `--reference`, a miss repo
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/identify-dark.png">
 <img alt="The identify command on the local web page" src="assets/screenshots/identify-light.png">
-</picture>
-
-#### `bios`
-
-```bash
-fdstoolkit bios <file> [--extract <out>] [--force]
-```
-
-BIOS revision and which emulators accept the file. `--extract` pulls the 8 KB image out of a larger dump.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/bios-dark.png">
-<img alt="The bios command on the local web page" src="assets/screenshots/bios-light.png">
 </picture>
 
 #### `canon`
@@ -646,10 +633,6 @@ fdstoolkit doctor [--clear-cache] [--json]
 
 Version, Python, platform, whether hardware support is installed, which devices are attached and whether they open, and the state of the DAT cache. Run this first when something behaves unexpectedly. `--clear-cache` removes every cached DAT catalogue before the checks run.
 
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/doctor-dark.png">
-<img alt="The doctor command on the local web page" src="assets/screenshots/doctor-light.png">
-</picture>
 
 #### `dump`
 
@@ -814,42 +797,76 @@ Exit status is 0 only when every pattern held and the finish verified.
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate [--cycles <n>] [--capture <file>] [--json]
+fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--json]
 ```
 
-Checks the drive in the two ways this toolkit can measure it, either or both at once. It passes only when every measurement given passes: the speed inside the fine band, and the pulse classes healthy.
+Reads the same side over and over while you adjust the drive, and says after every read what changed. It is meant to run while a screwdriver is in the drive: turn a little, watch the next line, turn again. `--passes` sets how many reads, 20 by default and 200 at most. Ctrl-C, or Stop on the page, ends it after the read in progress and reports what it saw.
 
-Everything here is measured against the bit rate, never a rotation speed. The RAM adapter expects 96.4 kbit/s and tolerates ten percent, and that is the only figure the hardware enforces. Published rotation speeds for this mechanism disagree by a factor of two and carry no tolerance.
+The disk in the drive must be one this drive did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment writes disks that it reads back and no other drive does, so reading its own writes proves nothing. The command says so before the first read.
 
-`--cycles` takes the average CPU cycles between bytes that a disk-lister tool displays on the console. An FDSStick sends pulse classes rather than timing, so this is the one speed measurement the toolkit can make.
+`--reference` is an image of that same disk, dumped by a drive you trust or matched to a known dump. With it, every read is compared pulse by pulse against what the disk's content requires. Without it, only the checksums judge, which says whether a block read and nothing about why not. `--side` names which side of the reference faces the head.
+
+There are three adjustments in the drive, and this command covers what an FDSStick can see of each:
+
+| Adjustment | Where | What `calibrate` watches |
+|---|---|---|
+| Motor speed | The potentiometer on the motor | `speed`: pulses read short or long against the reference |
+| Spindle hub position, lost when the belt is replaced | The hub on top of the mechanism, fixed by a set screw | `head`: which blocks of the side read, and where the failures are |
+| Read head alignment | The head adjustment screw | `head`: the same |
+
+`speed` reports one of five readings for each read:
+
+| Reading | Means |
+|---|---|
+| reads fast | Most misread pulses came back a class short. Lower the motor speed a little |
+| reads slow | Most came back a class long. Raise the motor speed a little |
+| errors with no speed bias | Blocks fail without leaning either way, which does not look like speed |
+| nothing read | No block was found at all: far off speed, or the head or hub is out of position |
+| reads clean | Every block read and every pulse matched |
+
+A reading leans one way when at least 16 pulses were misread and at least three quarters of them went that way. Both figures were chosen by reasoning about what separates a speed error from noise, not measured on a drive, and they are the first to revisit with real hardware.
 
 ```bash
-fdstoolkit calibrate --cycles 152
+fdstoolkit calibrate speed --reference smb.fds --passes 3
 ```
 
 ```
-speed    94.20 kbit/s, -2.28% of nominal, in spec
-         the drive reads slow: raise the motor speed a little, then measure again
+judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
+  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid: reads fast, first read
+  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid: reads fast, the same as the last read
+  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
+reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table
 ```
 
-The conversion is exact: the 2A03 runs at 1.7897725 MHz over eight bits, so cycles map to a rate directly. More cycles between bytes means a slower disk.
+The advice says whether to raise or lower the speed, never which way to turn the screw. One repair guide reports that turning counter-clockwise raises the speed; check it on your drive with a small turn before relying on it.
 
-The advice says whether to raise or lower the motor speed, never which way to turn the trimmer, because no source this toolkit trusts states the direction. Turn a small amount, measure again, and reverse if the figure moved the wrong way.
+A clean `speed` reading means the drive sits inside the tolerance the RAM adapter accepts, not at the exact rate. For the last stretch, use a console-side test. Copy Master's speed test shows 1 to 9 and says "too slow" or "too fast"; ToToTEK and Bung recommend 5 with a disk in the drive, and running the test twice, because the first run starts with the head in an unknown position. A strobe app works too: the disk table shaft turns at 400 RPM.
 
-| Reading | Rate | Error |
-|---|---|---|
-| 146 | 98.07 kbit/s | +1.73% |
-| 148 | 96.74 kbit/s | +0.36% |
-| 149 | 96.10 kbit/s | -0.32% |
-| 152 | 94.20 kbit/s | -2.28% |
+`head` reports which blocks of the side read:
 
-Exact nominal is 148.53 cycles, so the integer display quantises at about 0.68% per count.
+| Reading | Means |
+|---|---|
+| the start of the side is not read | The first blocks are missing and the rest read: the head starts in the wrong place |
+| the end of the side is not read | The side reads until near its end: the head runs out of travel |
+| errors across the side | Failures are spread out, which points at speed or at the disk rather than at position |
+| nothing read | No block was found: the head or hub is far out of position, or the speed is |
+| reads clean | The whole side read |
 
-`--capture` takes a `raw03` capture kept by `dump --raw`, and reports the distribution across the three pulse lengths and the count of pulses that fell outside all of them.
+```bash
+fdstoolkit calibrate head --reference smb.fds --passes 3
+```
 
-Gap runs are excluded before measuring, because a gap is a long run of short pulses and leaving it in makes the distribution a measure of how full the disk is rather than of how the drive reads. Over the remainder, 120 real sides give a median of 63.1, 27.9 and 9.0 percent, which is the reference used here. On a perfect drive those 120 sides spread from -5.4 to +3.0 percent, so the threshold sits at 6 percent and none of them trip it.
+```
+judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
+  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid: the start of the side is not read, first read
+  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid: the start of the side is not read, better than the last read
+  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
+reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another
+```
 
-Two limits worth knowing. A capture with fewer than 512 pulses outside the gaps is reported as sparse rather than judged. And the invalid-pulse count is the only figure here that is independent of what is on the disk, so it is the one to trust when the two disagree.
+The head tolerance is about 0.05 mm, so adjust a quarter turn at a time and read again. Once it reads clean, repeat with two more factory disks: a head can be set to suit one disk and miss another. Neither mode can say which way to turn, only whether the last turn helped.
+
+Exit status is 0 when the last read was clean.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
@@ -875,7 +892,7 @@ The drive's own error rate, measured against a disk you trust, so the drive is n
 fdstoolkit web [--host <h>] [--port N] [--no-open]
 ```
 
-Open the local web interface. Every command above is reachable from it, and each route calls exactly what the command calls. `--no-open` starts the server without opening a browser, which is what you want over SSH. Binds `127.0.0.1:8000` by default.
+Open the local web interface. Every command above except `doctor` is reachable from it, and each route calls exactly what the command calls. `doctor` checks the installation, so it belongs in the terminal where the install happened. `--no-open` starts the server without opening a browser, which is what you want over SSH. Binds `127.0.0.1:8000` by default.
 
 ## Web interface
 
@@ -892,13 +909,11 @@ The rule the design turns on is that the web layer decides nothing. Every route 
 | Route | Command it mirrors |
 |---|---|
 | `GET /api/catalogue` | the profile, format and target tables |
-| `GET /api/doctor` | `doctor` |
 | `POST /api/info` | `info` and `ls` |
 | `POST /api/verify` | `verify` |
 | `POST /api/hash` | `hash` |
 | `POST /api/grade` | `grade` |
 | `POST /api/reads` | `reads` |
-| `POST /api/calibrate` | `calibrate` |
 | `GET /api/status` | `status` |
 | `POST /api/blank` | `blank` |
 | `POST /api/canon` | `canon` |
@@ -906,9 +921,11 @@ The rule the design turns on is that the web layer decides nothing. Every route 
 | `POST /api/jobs/dump` | `dump` |
 | `POST /api/jobs/write` | `write` |
 | `POST /api/jobs/surface` | `surface` |
+| `POST /api/jobs/calibrate` | `calibrate` |
 | `GET /api/jobs/current` | the disk job still running, if any |
 | `GET /api/jobs/{id}` | one job's state, progress lines, prompt and result |
 | `POST /api/jobs/{id}/answer` | the answer to a job's prompt |
+| `POST /api/jobs/{id}/stop` | stop a calibration after the read in progress |
 
 Images and captures travel base64 encoded in the request body. `GET /docs` serves the generated API reference, so the page is one client of the endpoints rather than the only one.
 
@@ -944,9 +961,11 @@ If the two disagree, `consensus` merges them by majority and names every block t
 ### Calibrating a drive, coarse then fine
 
 1. Clean the head before anything else. Contamination reads as a media fault.
-2. Run a disk-lister tool on the console, read the cycles figure, and pass it to `calibrate --cycles`. Raise or lower the motor speed as it says, a little at a time, and repeat until it says to leave it alone.
-3. Dump a known-good disk with `--raw` and run `calibrate --capture` on the kept captures. A glitching or shifted spread means the drive still separates the three pulse lengths badly.
-4. Confirm with a disk known to be hard to read. Community practice uses a specific side with 39 files; pass means all 39 with no checksum error.
+2. Take a factory disk and an image of it from a drive you trust. Never use a disk this drive wrote.
+3. After a belt replacement, run `calibrate head --reference <image>` and adjust the spindle hub, then the head, a quarter turn at a time, until every read is clean.
+4. Run `calibrate speed --reference <image>` and raise or lower the motor speed as it says until it reads clean.
+5. Finish the speed with a console test or a strobe, since the stick cannot see the last percent.
+6. Repeat `calibrate head` with two more factory disks. Then confirm with a disk known to be hard to read: community practice uses a specific side with 39 files, and a pass means all 39 with no checksum error.
 
 ### Deciding whether it is the drive or the disk
 
@@ -990,23 +1009,23 @@ What each conversion costs:
 
 ## Exit codes and scripting
 
-`0` means nothing failed, `1` means something did. What counts as failure is command-specific and documented above: an unrepaired block for `splice`, a contested game for `consensus` across a corpus, a drive outside the fine band for `calibrate`, a mismatch for `reference-verify`.
+`0` means nothing failed, `1` means something did. What counts as failure is command-specific and documented above: an unrepaired block for `splice`, a contested game for `consensus` across a corpus, a last read that was not clean for `calibrate`, a mismatch for `reference-verify`.
 
 Every reporting command takes `--json`, and the JSON is the same data the human output renders. Commands that write files refuse to overwrite without `--force`.
 
 ```bash
 fdstoolkit verify disk.fds --json | jq -r '.findings[] | "\(.code) \(.message)"'
 fdstoolkit consensus ~/dumps --json | jq '.contested[].game'
-fdstoolkit calibrate --cycles 152 --json | jq -r '.speed.advice'
+fdstoolkit calibrate speed --reference smb.fds --passes 5 --json | jq -r '.headline'
 ```
 
 ## What this cannot do
 
 **No FDS flux capture exists.** Quick Disk is one continuous spiral with no index hole and no standard stepping, so KryoFlux and Greaseweazle cannot read this medium at all. This toolkit reads only what an FDSStick produces.
 
-**An FDSStick cannot measure drive speed.** The device rounds every pulse to one of three lengths in hardware and sends classes, not timing. Speed must come from a console-side reading via `calibrate --cycles`.
+**An FDSStick cannot measure the last percent of drive speed.** The device rounds every pulse to one of three lengths in hardware and sends classes, not timing, so a small speed error changes no class. `calibrate speed` finds a drive outside the tolerance; a console test or a strobe finishes the job.
 
-**Head alignment is not measurable from pulse classes.** It needs signal amplitude, or error density compared across several disks.
+**Fine head alignment is not measurable from pulse classes.** It needs signal amplitude. `calibrate head` sees only whether blocks read, so it finds a head or hub that is out of position, not one that is merely off-centre.
 
 **Belt and motor faults are not separable** without the pulley ratio, which no trustworthy source states.
 

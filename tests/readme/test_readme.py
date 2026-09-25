@@ -77,7 +77,7 @@ def test_every_screenshot_it_shows_exists(name: str) -> None:
 def test_every_command_carries_a_screenshot(name: str) -> None:
     shown = {Path(path).stem.rsplit("-", maxsplit=1)[0] for path in referenced(name)}
 
-    assert commands() - shown - {"web"} == set()
+    assert commands() - shown - {"web", "doctor"} == set()
 
 
 @pytest.mark.parametrize("name", READMES)
