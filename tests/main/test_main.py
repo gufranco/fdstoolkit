@@ -5,6 +5,7 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
+import click
 import pytest
 from device import FakeFdsStick
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
@@ -233,7 +234,7 @@ def test_a_side_count_other_than_one_or_two_is_refused(
     result = runner.invoke(app, [command, *output, "--sides", sides])
 
     assert result.exit_code == 2
-    assert "--sides" in result.output
+    assert "--sides" in click.unstyle(result.output)
 
 
 def test_blank_can_write_a_formatted_disk(tmp_path: Path) -> None:
