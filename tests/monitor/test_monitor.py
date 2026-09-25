@@ -5,8 +5,15 @@ import hashlib
 import pytest
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs.fds import decode
-from fdstoolkit.codecs.raw import block_starts, encode_block_stream, pack_raw03, unpack_raw03
+from fdstoolkit.codecs.raw import (
+    block_starts,
+    decode_raw03,
+    encode_block_stream,
+    pack_raw03,
+    unpack_raw03,
+)
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.monitor import (
@@ -20,6 +27,7 @@ from fdstoolkit.drive.monitor import (
     advice,
     calibrate,
     describe,
+    learn,
     sample,
     trend,
 )
@@ -28,6 +36,7 @@ from fdstoolkit.edit.files import FileSpec, insert_file
 FILES = 4
 SKIP_SYNC = 40
 NUDGED = 60
+TRAILING_GAP = 4000
 
 DIGESTS_PER_FILE = 8
 
@@ -59,9 +68,9 @@ def stream(side: Side, *, keep: slice = slice(None)) -> bytes:
     return encode_block_stream([block.payload for block in side.blocks[keep]])
 
 
-def nudged(packed: bytes, *, shorter: bool) -> bytes:
+def nudged(packed: bytes, *, shorter: bool, first: int = 0) -> bytes:
     values = bytearray(unpack_raw03(packed))
-    for start in block_starts(bytes(values)):
+    for start in block_starts(bytes(values))[first:]:
         changed = 0
         for index in range(start + SKIP_SYNC, len(values)):
             if changed == NUDGED:
@@ -391,3 +400,50 @@ def test_a_replay_hands_back_saved_reads_in_order_and_then_stops() -> None:
     assert replay.reads == 2
     with pytest.raises(ValueError, match="calibration read 3: the captures hold 2 reads"):
         replay.read_raw_side(what="calibration read 3")
+
+
+def test_without_a_reference_a_block_read_clean_earlier_becomes_the_reference() -> None:
+    side = reference_side()
+    reader = Reader([stream(side), nudged(stream(side), shorter=True)])
+
+    result = calibrate(reader, mode=Mode.SPEED, reads=2)
+
+    first, second = result.samples
+    assert not first.referenced
+    assert second.referenced
+    assert second.short > second.long
+    assert second.speed is SpeedReading.FAST
+
+
+def test_without_a_reference_nothing_is_compared_before_any_block_reads_clean() -> None:
+    side = reference_side()
+    reader = Reader([nudged(stream(side), shorter=True)])
+
+    result = calibrate(reader, mode=Mode.SPEED, reads=1)
+
+    assert not result.samples[0].referenced
+    assert result.samples[0].compared == 0
+
+
+def test_the_calibration_disk_is_its_own_reference_from_the_first_read() -> None:
+    side = calibration_disk().sides[0]
+    heard: list[str] = []
+    damaged = nudged(stream(side, keep=slice(0, 4)), shorter=True, first=3)
+    reader = Reader([pack_raw03(unpack_raw03(damaged) + bytes(TRAILING_GAP))])
+
+    result = calibrate(reader, mode=Mode.SPEED, reads=1, progress=heard.append)
+
+    assert result.samples[0].referenced
+    assert result.samples[0].speed is SpeedReading.FAST
+    assert any("calibration disk" in line for line in heard)
+
+
+def test_learning_keeps_the_first_clean_copy_and_ignores_failed_blocks() -> None:
+    side = reference_side()
+    clean, _ = decode_raw03(unpack_raw03(stream(side)) + bytes(TRAILING_GAP))
+    broken, _ = decode_raw03(unpack_raw03(nudged(stream(side), shorter=True)) + bytes(TRAILING_GAP))
+
+    learned = learn(learn({}, broken.blocks), clean.blocks)
+
+    assert len(learned) == len(side.blocks)
+    assert learn(learned, clean.blocks) == learned

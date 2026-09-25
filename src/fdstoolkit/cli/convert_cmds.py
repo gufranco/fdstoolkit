@@ -5,7 +5,8 @@ from typing import Annotated
 
 import typer
 
-from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.blank import DEFAULT_GAME_NAME, blank_image
+from fdstoolkit.build.calibration import DECIDES_ITSELF, calibration_image
 from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
 from fdstoolkit.cli.common import (
     Container,
@@ -63,9 +64,16 @@ def blank(
     header: Annotated[bool, typer.Option("--header", help="write an fwNES header")] = False,
     game_name: Annotated[str, typer.Option("--game-name", help="three-character code")] = "   ",
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    calibration: Annotated[
+        bool,
+        typer.Option("--calibration", help="the calibration disk: two sides of known pulses"),
+    ] = False,
 ) -> None:
-    """Create a blank image."""
+    """Create a blank image, or the calibration disk."""
     guard_output(output, force=force)
+    if calibration:
+        _calibration_image(output, header=header, plain=(sides, formatted, game_name))
+        return
     try:
         data = blank_image(
             sides=sides,
@@ -77,6 +85,18 @@ def blank(
         raise fail(str(error)) from error
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes)")
+
+
+def _calibration_image(output: Path, *, header: bool, plain: tuple[int, bool, str]) -> None:
+    if plain != (1, False, DEFAULT_GAME_NAME):
+        raise fail(DECIDES_ITSELF)
+    data = calibration_image(headered=header)
+    output.write_bytes(data)
+    typer.echo(f"wrote {output} ({len(data)} bytes)")
+    typer.echo(
+        "write it only on a drive you trust, with write --calibration --trusted-drive, "
+        "which lists every adjustment that drive needs first"
+    )
 
 
 def export(

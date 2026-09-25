@@ -261,6 +261,7 @@ class BlankSpec(BaseModel):
     formatted: bool = False
     headered: bool = False
     game_name: str = Field("   ", min_length=GAME_NAME_LENGTH, max_length=GAME_NAME_LENGTH)
+    calibration: bool = False
 
 
 class ConvertSpec(ImageSpec):
@@ -379,7 +380,9 @@ class DumpSpec(BaseModel):
 
 
 class WriteSpec(BaseModel):
-    data: str
+    data: str | None = None
+    calibration: bool = False
+    trusted_drive: bool = False
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
     confirm: bool = False
 

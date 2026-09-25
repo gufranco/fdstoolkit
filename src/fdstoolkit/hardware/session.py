@@ -46,13 +46,14 @@ class SideFlipError(Exception):
 def _flip_message(side: int) -> str:
     face = "B" if side % 2 else "A"
     return (
-        f"turn the disk over so side {face} faces the head, then confirm. "
-        "This drive reads one face at a time and cannot select a side on its own"
+        f"turn the disk over so side {face} faces down, then confirm. "
+        "The head sits under the disk and reads only the face turned toward it, "
+        "so this drive cannot select a side on its own"
     )
 
 
 def _rewind_message() -> str:
-    return "turn the disk back over so side A faces the head for the next pass, then confirm"
+    return "turn the disk back over so side A faces down again for the next pass, then confirm"
 
 
 def _ask_for_flip(reader: DiskReader, side: int, flip: Callable[[str], bool] | None) -> None:

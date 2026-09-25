@@ -12,7 +12,8 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.blank import DEFAULT_GAME_NAME, blank_image
+from fdstoolkit.build.calibration import DECIDES_ITSELF, calibration_image
 from fdstoolkit.build.targets import TARGETS
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.qd import CrcMode
@@ -73,6 +74,7 @@ ASSET_ROOT: Final = f"/assets/{ASSET_STAMP}"
 A_YEAR: Final = 31536000
 SIDE_SIZE: Final = fds.SIDE_SIZE
 MIN_READS: Final = 2
+CALIBRATION_NAME: Final = "calibration.fds"
 EXPORT_TARGETS: Final = tuple(TARGETS)
 
 ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
@@ -219,6 +221,10 @@ def reads(spec: ReadsSpec) -> ReadsResult | WeakResult:
 
 
 def blank(spec: BlankSpec) -> FileResult:
+    if spec.calibration:
+        if (spec.sides, spec.formatted, spec.game_name) != (1, False, DEFAULT_GAME_NAME):
+            raise HTTPException(status_code=UNPROCESSABLE, detail=DECIDES_ITSELF)
+        return named_file(CALIBRATION_NAME, calibration_image(headered=spec.headered))
     data = blank_image(
         sides=spec.sides,
         headered=spec.headered,

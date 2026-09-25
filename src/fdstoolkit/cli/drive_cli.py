@@ -77,7 +77,12 @@ def calibrate_command(
     ] = None,
     side: Annotated[
         int,
-        typer.Option("--side", min=0, max=SIDES_PER_DISK - 1, help="which side of the reference"),
+        typer.Option(
+            "--side",
+            min=0,
+            max=SIDES_PER_DISK - 1,
+            help="which side of the reference is turned down, toward the head",
+        ),
     ] = 0,
     passes: Annotated[
         int,

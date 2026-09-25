@@ -6,6 +6,12 @@ from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, Request
 
+from fdstoolkit.build.calibration import (
+    TRUSTED_DRIVE,
+    CalibrationChoiceError,
+    calibration_disk,
+    check_write_choice,
+)
 from fdstoolkit.drive.captures import bundle_zip, created_now
 from fdstoolkit.drive.monitor import MAX_READS, NOT_THIS_DRIVE, Mode, RawReader, Replay, calibrate
 from fdstoolkit.drive.recovery import recover
@@ -48,7 +54,7 @@ from fdstoolkit.ui.shared import (
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
-    from fdstoolkit.core.disk import Side
+    from fdstoolkit.core.disk import Disk, Side
 
 BACKUP_NAME = "before.fds"
 DUMP_NAME = "dump.fds"
@@ -183,11 +189,32 @@ def dump_job(spec: DumpSpec, request: Request) -> JobView:
     return _start(request, "dump", writes=False, work=work)
 
 
+def _write_target(spec: WriteSpec) -> Disk:
+    try:
+        check_write_choice(
+            has_image=spec.data is not None,
+            calibration=spec.calibration,
+            trusted_drive=spec.trusted_drive,
+        )
+    except CalibrationChoiceError as error:
+        detail = str(error)
+        if spec.calibration:
+            detail = "\n".join([detail, *TRUSTED_DRIVE])
+        raise HTTPException(status_code=UNPROCESSABLE, detail=detail) from error
+    if spec.data is None:
+        return calibration_disk()
+    disk, _, _ = decode_payload(spec.data)
+    return disk
+
+
 def write_job(spec: WriteSpec, request: Request) -> JobView:
     _confirmed("writing a disk", confirm=spec.confirm)
-    disk, _, _ = decode_payload(spec.data)
+    disk = _write_target(spec)
 
     def work(drive: FdsStick, controls: Controls) -> ReportedFile:
+        if spec.calibration:
+            for line in TRUSTED_DRIVE:
+                controls.step(line)
         backup = Backup()
         report = write_verified(
             drive,

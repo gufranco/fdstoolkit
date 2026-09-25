@@ -22,7 +22,7 @@
 
 </div>
 
-**27** commands, every one but `doctor` also on the local web page. **1,282** Python tests and **132** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**27** commands, every one but `doctor` also on the local web page. **1,311** Python tests and **132** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -407,9 +407,27 @@ The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`,
 
 ```bash
 fdstoolkit blank -o <out> [--sides 1|2] [--formatted] [--header] [--game-name ABC] [--force]
+fdstoolkit blank --calibration -o <out> [--header] [--force]
 ```
 
 A blank image. `--formatted` writes a disk information block using values measured from 1,729 never-rewritten sides: country `49`, serial `ffff`, rewrite count `00`, filler `ff`.
+
+`--calibration` makes the calibration disk instead: two sides built so that every pulse on them is known in advance, which `calibrate` recognises by itself. Each side carries six files in the order long, medium, mixed, long, medium, mixed, so every pattern sits both near the start of the side and near its end.
+
+| File | Bytes | What it puts on the disk |
+|---|---|---|
+| `CAL-LNG` | `aa` repeated | 99.8 percent long pulses |
+| `CAL-MED` | `24 49 92` repeated | 99.9 percent medium pulses |
+| `CAL-MIX` | runs of 48 long bytes, 48 medium bytes and 16 `00` bytes | all three classes and the transitions between them |
+
+The patterns follow from the toolkit's classification boundaries. A long pulse sits closer to the boundary below it than any other class sits to a neighbour, so a drive running fast shows first as long pulses read as medium. A medium pulse sits closest to the boundary above it, so a drive running slow shows first as medium pulses read as long. The stick's own hardware boundaries are not published, so this ordering is a property of the toolkit's decoder rather than a measurement of the stick.
+
+Each side holds 53,854 bytes of blocks. That size is measured rather than taken from the format: the `.fds` file reserves 65,500 bytes a side, but among 345 factory-written sides the median carries 50,350 and the largest 54,958, with 95 percent at or under 53,910. Staying inside that keeps the last file on the physical side instead of past the end of the track.
+
+```
+wrote calibration.fds (131000 bytes)
+write it only on a drive you trust, with write --calibration --trusted-drive, which lists every adjustment that drive needs first
+```
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/blank-dark.png">
@@ -473,7 +491,7 @@ A block that failed on every read is not given up on. The captures of those read
 
 The drive cannot read one block on its own, so every retry is a full read of the side. That is why the budget is per side rather than per block: each re-read resolves every block still failing, and a side with ten bad blocks costs at most `--retries` more reads, not ten times that. A re-read block is matched by its type and file number, never by position, so a damaged block that vanishes on the re-read cannot shift the ones after it. Blocks that only read clean on a re-read are counted as a sign the disk is wearing.
 
-The drive reaches one face at a time and cannot select a side, so reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
+The head sits under the disk and reads only the face turned down, toward it, so the drive cannot select a side. Reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
 
 Every read and write runs against a deadline. Before anything has been measured a side gets 20 seconds; after the first side, the limit is three times as long as that side took, and never under 2 seconds. A side that overruns stops the command and closes the device, and is never retried, because a drive that has stalled once only wears the disk further. A dump that stalls writes no file. A write that stalls says the side may be half written, since only a fresh dump can show what landed. A side at the rate the adapter expects takes about 5.5 seconds. These limits come from that figure rather than from a measured drive, and are the first thing to revisit on real hardware.
 
@@ -486,9 +504,22 @@ Every read and write runs against a deadline. Before anything has been measured 
 
 ```bash
 fdstoolkit write <image> [--backup <p>] [--retries N] [--yes]
+fdstoolkit write --calibration --trusted-drive [--backup <p>] [--retries N] [--yes]
 ```
 
 Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`.
+
+`--calibration` writes the calibration disk described under `blank`, both sides, turning the disk once. It is the one write that can do lasting harm with a disk that verifies perfectly: a drive out of adjustment writes a disk that reads back on it and on nothing else, and that disk would then teach every drive it calibrates the same error. So the command first prints what the drive must already have been through, and refuses unless `--trusted-drive` confirms it:
+
+1. Clean the read head. Contamination reads as a media fault.
+2. Put the spindle hub back at its factory position, set with a 1.5 mm hex screw. Misplaced, it gives errors 22 and 27.
+3. Set the read head, published as its far edge 35.5 mm from the spindle centre with a tolerance of about 0.05 mm. Use `calibrate head --bracket` on a factory disk and settle in the middle of the range that reads.
+4. Set the motor speed with `calibrate speed` on a factory disk until it reads clean.
+5. Finish the speed on a console: Copy Master's speed test should show 5 with a disk in the drive, run twice. A strobe at the disk table shaft is the alternative.
+6. Confirm on three factory disks, every side, several passes.
+7. After writing, read the new disk on a second drive before trusting it.
+
+Every step is one the `calibrate` section sources. None of them can be checked by the toolkit, which is why the confirmation is yours and not the command's.
 
 An FDSStick does not report whether a disk is write protected, whether the battery holds, or whether a disk is even present, so the toolkit cannot check any of them before writing. What protects the disk instead is the sequence around the write. The side is read once before anything is written, and that one read is both the backup `--backup` saves and the baseline for the check afterwards. The command asks before it starts unless you pass `--yes`, and reads everything back afterwards to compare it with what was meant to be written. If the readback is identical to the read taken before, the disk did not take the write at all, and the command stops and says so rather than listing mismatched blocks.
 
@@ -503,7 +534,7 @@ overwrite the disk in the drive with 2 side(s) of new data, destroying whatever 
   reading side 0 before writing it
   writing side 0
   reading side 0 back
-turn the disk over so side B faces the head, then confirm. This drive reads one face at a time and cannot select a side on its own [y/N]: y
+turn the disk over so side B faces down, then confirm. The head sits under the disk and reads only the face turned toward it, so this drive cannot select a side on its own [y/N]: y
   reading side 1 before writing it
   writing side 1
   reading side 1 back
@@ -575,7 +606,7 @@ The test stops as soon as its verdict is decided, because every further pass onl
 
 A stopped test skips its `--finish`. A block that fails once does not stop anything, since one failure is the marginal case more passes are meant to separate.
 
-With `--sides 2` every pass runs on side A, then the command asks you to turn the disk over once and runs every pass on side B. The finish then works backwards, side B first while it still faces the head, then one more turn for side A, so the whole test costs two turns. The check that the disk was really turned is the same one `write` makes.
+With `--sides 2` every pass runs on side A, then the command asks you to turn the disk over once and runs every pass on side B. The finish then works backwards, side B first while it is still turned down toward the head, then one more turn for side A, so the whole test costs two turns. The check that the disk was really turned is the same one `write` makes.
 
 ```bash
 fdstoolkit surface --sides 2 --passes 3 --backup before.fds --finish blank
@@ -587,12 +618,12 @@ a surface test destroys every byte on 2 side(s) of the disk in the drive. Use a 
   side 0 pass 1 pattern 0xff
   ...
   side 0 pass 3 pattern 0x55
-turn the disk over so side B faces the head, then confirm. This drive reads one face at a time and cannot select a side on its own [y/N]: y
+turn the disk over so side B faces down, then confirm. The head sits under the disk and reads only the face turned toward it, so this drive cannot select a side on its own [y/N]: y
   side 1 pass 1 pattern 0x00
   ...
   side 1 pass 3 pattern 0x55
   finishing side 1
-turn the disk over so side A faces the head, then confirm. This drive reads one face at a time and cannot select a side on its own [y/N]: y
+turn the disk over so side A faces down, then confirm. The head sits under the disk and reads only the face turned toward it, so this drive cannot select a side on its own [y/N]: y
   finishing side 0
 59145 data bytes per side, 100.0% of the physical track, 24 pattern pass(es) run
 side 0 pass 1 pattern 0x00: held
@@ -636,7 +667,19 @@ Reads the same side over and over while you adjust the drive, and says after eve
 
 The disk in the drive must be one this drive did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment writes disks that it reads back and no other drive does, so reading its own writes proves nothing. The command says so before the first read.
 
-`--reference` is an image of that same disk, dumped by a drive you trust or matched to a known dump. With it, every read is compared pulse by pulse against what the disk's content requires. Without it, only the checksums judge, which says whether a block read and nothing about why not. `--side` names which side of the reference faces the head.
+Every read is compared pulse by pulse against what the disk's content requires, and the command takes that content from the best source it has, in this order:
+
+| Source | Where it comes from | What it can compare |
+|---|---|---|
+| `--reference` | An image of the same disk, dumped by a drive you trust or matched to a known dump | Every block, from the first read |
+| The calibration disk | Recognised from its disk information and file headers, with no file needed | Every block, from the first read, including blocks that never read clean |
+| Blocks read clean | Learned during the run: once a block passes its checksum, its bytes are known | That block, in every later read |
+
+With none of them, only the checksums judge the first read, which says whether a block read and nothing about why not. Learning closes that gap quickly on a drive that is only slightly off, since most blocks read clean at least once, and not at all on a drive so far off that a block never reads clean, which is where the reference or the calibration disk earns its place. `--side` names which side of the reference is turned down, toward the head under the disk.
+
+```
+this is the fdstoolkit calibration disk, side 0: every pulse is compared with what the disk holds, including blocks that never read clean
+```
 
 There are three adjustments in the drive, and this command covers what an FDSStick can see of each:
 
@@ -802,9 +845,9 @@ Three passes give the bundle three reads of every side, which is what the weak-b
 ### Calibrating a drive, coarse then fine
 
 1. Clean the head before anything else. Contamination reads as a media fault.
-2. Take a factory disk and an image of it from a drive you trust. Never use a disk this drive wrote.
-3. After a belt replacement, run `calibrate head --reference <image>` and adjust the spindle hub, then the head, a quarter turn at a time, until every read is clean.
-4. Run `calibrate speed --reference <image>` and raise or lower the motor speed as it says until it reads clean.
+2. Take a factory disk, or a calibration disk written on a drive you trust. Never use a disk this drive wrote. An image of the factory disk sharpens the count, and without one `calibrate` learns each block from the reads that come back clean.
+3. After a belt replacement, run `calibrate head` and adjust the spindle hub, then the head, a quarter turn at a time, until every read is clean.
+4. Run `calibrate speed` and raise or lower the motor speed as it says until it reads clean.
 5. Finish the speed with a console test or a strobe, since the stick cannot see the last percent.
 6. Repeat `calibrate head` with two more factory disks. Then confirm with a disk known to be hard to read: community practice uses a specific side with 39 files, and a pass means all 39 with no checksum error.
 

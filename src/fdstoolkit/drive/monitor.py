@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final, Protocol
 
+from fdstoolkit.build.calibration import matching_side
 from fdstoolkit.codecs.raw import (
     GAP_VALUE,
     MAX_CLASS,
@@ -16,11 +18,13 @@ from fdstoolkit.codecs.raw import (
     unpack_raw03,
 )
 from fdstoolkit.core.bios import BIOS_ERRORS
-from fdstoolkit.core.blocks import BlockKind
+from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Side
+from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
 from fdstoolkit.drive.align import align_blocks, good_block
 from fdstoolkit.drive.bracket import Bracket
+from fdstoolkit.drive.vote import Identity, identities
 
 MAX_READS: Final = 200
 DEFAULT_READS: Final = 20
@@ -28,6 +32,14 @@ BIAS_PULSES: Final = 16
 BIAS_SHARE: Final = 0.75
 BLOCK_EXPECTED: Final = 0x21
 CRC_FAILED: Final = 0x27
+
+RECOGNISED: Final = (
+    "this is the fdstoolkit calibration disk, side {side}: every pulse is compared with "
+    "what the disk holds, including blocks that never read clean"
+)
+
+Key = tuple[Identity, int]
+SIDE_OFFSET: Final = FIELDS_BY_NAME["side"].offset
 
 NOT_THIS_DRIVE: Final = (
     "judge the drive only with a disk it did not write: a factory disk, or one written "
@@ -214,24 +226,73 @@ def _leaning(actual: bytes, expected: bytes) -> tuple[int, int, int]:
     return short, long, len(pairs)
 
 
-def sample(packed: bytes, reference: Side | None = None) -> SideSample:
+def _keys(blocks: Sequence[Block]) -> list[Key]:
+    seen: Counter[Identity] = Counter()
+    keys: list[Key] = []
+    for identity in identities(blocks):
+        keys.append((identity, seen[identity]))
+        seen[identity] += 1
+    return keys
+
+
+def learn(learned: Mapping[Key, bytes], blocks: Sequence[Block]) -> dict[Key, bytes]:
+    fresh = {
+        key: block.payload
+        for key, block in zip(_keys(blocks), blocks, strict=True)
+        if good_block(block) and key not in learned
+    }
+    return {**learned, **fresh}
+
+
+def _against_learned(
+    values: bytes, blocks: Sequence[Block], learned: Mapping[Key, bytes]
+) -> tuple[int, int, int]:
+    starts = block_starts(values)
+    short = long = compared = 0
+    for key, start in zip(_keys(blocks), starts, strict=False):
+        payload = learned.get(key)
+        if payload is None:
+            continue
+        expected = encode_era_b(_framed(payload))
+        more_short, more_long, more = _leaning(values[start : start + len(expected)], expected)
+        short += more_short
+        long += more_long
+        compared += more
+    return short, long, compared
+
+
+def sample(
+    packed: bytes,
+    reference: Side | None = None,
+    learned: Mapping[Key, bytes] | None = None,
+) -> SideSample:
     values = unpack_raw03(packed)
     decoded, _ = decode_raw03(values)
+    return measure(values, decoded.blocks, reference, learned or {})
+
+
+def measure(
+    values: bytes,
+    decoded: Sequence[Block],
+    reference: Side | None,
+    learned: Mapping[Key, bytes],
+) -> SideSample:
     invalid = _invalid(values)
     if reference is None:
+        short, long, compared = _against_learned(values, decoded, learned)
         return SideSample(
-            blocks=tuple(good_block(block) for block in decoded.blocks),
-            short=0,
-            long=0,
+            blocks=tuple(good_block(block) for block in decoded),
+            short=short,
+            long=long,
             invalid=invalid,
-            compared=0,
-            referenced=False,
-            kinds=tuple(block.kind for block in decoded.blocks),
+            compared=compared,
+            referenced=compared > 0,
+            kinds=tuple(block.kind for block in decoded),
         )
 
     starts = block_starts(values)
     short = long = compared = 0
-    placed = align_blocks(reference.blocks, decoded.blocks)
+    placed = align_blocks(reference.blocks, decoded)
     blocks = [good for good, _ in placed]
     for wanted, (_, region) in zip(reference.blocks, placed, strict=True):
         if region is None:
@@ -370,6 +431,8 @@ def calibrate(
         message = f"a calibration reads the side between 1 and {MAX_READS} times"
         raise ValueError(message)
     samples: list[SideSample] = []
+    known = reference
+    learned: dict[Key, bytes] = {}
     state = None if bracket is None else Bracket()
     for number in range(1, reads + 1):
         if stopped() or _declined(bracket, state, started=bool(samples)):
@@ -378,7 +441,14 @@ def calibrate(
             packed = reader.read_raw_side(what=f"calibration read {number}")
         except KeyboardInterrupt:
             break
-        current = sample(packed, reference)
+        values = unpack_raw03(packed)
+        decoded, _ = decode_raw03(values)
+        if known is None:
+            known = matching_side(decoded.blocks)
+            if known is not None:
+                progress(RECOGNISED.format(side=known.blocks[0].payload[SIDE_OFFSET]))
+        current = measure(values, decoded.blocks, known, learned)
+        learned = learn(learned, decoded.blocks)
         change = trend(samples[-1] if samples else None, current)
         samples.append(current)
         progress(describe(mode, number, current, change))

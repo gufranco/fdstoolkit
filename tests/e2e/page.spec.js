@@ -150,7 +150,7 @@ test('a two-sided surface test turns the disk twice and grades clean', async ({ 
   await page.getByRole('button', { name: 'Erase and continue' }).click();
 
   for (const side of ['B', 'A']) {
-    const prompt = page.getByRole('alert').filter({ hasText: `side ${side} faces the head` });
+    const prompt = page.getByRole('alert').filter({ hasText: `side ${side} faces down` });
     await expect(prompt).toBeVisible();
     await prompt.getByRole('button', { name: TURNED }).click();
   }
@@ -190,6 +190,30 @@ test('a dump offers its captures, and reads maps them back at phone width', asyn
   await page.locator('#panel button.run').click();
 
   await expect(page.locator('#panel .output')).toContainText('weak');
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
+test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'write');
+  await page.locator('input[data-field=calibration]').check();
+  await page.locator('#panel button.run').click();
+  await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
+
+  await expect(page.locator('#panel .output')).toContainText('trusted drive confirmation');
+  await expect(page.locator('#panel .output')).toContainText('Clean the read head first');
+
+  await page.locator('input[data-field=trusted_drive]').check();
+  await page.locator('#panel button.run').click();
+  await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
+
+  const prompt = page.getByRole('alert').filter({ hasText: 'side B faces down' });
+  await expect(prompt).toBeVisible();
+  await expect(page.locator('#panel .steps li').first()).toContainText('Write this disk only on a drive you already trust');
+  await prompt.getByRole('button', { name: TURNED }).click();
+
+  await expect(page.locator('#panel .output .banner')).toHaveText('the disk reads back as written, on this drive');
   expect(await shortControls(page, '#panel')).toEqual([]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });

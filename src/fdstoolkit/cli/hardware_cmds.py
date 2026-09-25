@@ -7,6 +7,12 @@ from typing import Annotated, Final
 
 import typer
 
+from fdstoolkit.build.calibration import (
+    TRUSTED_DRIVE,
+    CalibrationChoiceError,
+    calibration_disk,
+    check_write_choice,
+)
 from fdstoolkit.cli.common import (
     Family,
     decode_image,
@@ -15,7 +21,7 @@ from fdstoolkit.cli.common import (
     writer_for,
 )
 from fdstoolkit.codecs import fds
-from fdstoolkit.core.disk import SIDES_PER_DISK
+from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import created_now, write_bundle
 from fdstoolkit.drive.recovery import recover
@@ -209,9 +215,38 @@ def keep_captures(drive: FdsStick, directory: Path, *, image: str) -> None:
     )
 
 
+def calibration_target(image: Path | None, *, calibration: bool, trusted_drive: bool) -> Disk:
+    if calibration:
+        for line in TRUSTED_DRIVE:
+            typer.echo(line)
+    try:
+        check_write_choice(
+            has_image=image is not None, calibration=calibration, trusted_drive=trusted_drive
+        )
+    except CalibrationChoiceError as error:
+        hint = ". Pass --trusted-drive to give it" if calibration and not trusted_drive else ""
+        message = f"{error}{hint}"
+        raise fail(message) from error
+    if image is None:
+        return calibration_disk()
+    disk, _, _, _ = decode_image(image)
+    return disk
+
+
 def write(
-    image: Annotated[Path, typer.Argument(help="the image to write to a disk")],
+    image: Annotated[Path | None, typer.Argument(help="the image to write to a disk")] = None,
     *,
+    calibration: Annotated[
+        bool,
+        typer.Option("--calibration", help="write the calibration disk instead of an image"),
+    ] = False,
+    trusted_drive: Annotated[
+        bool,
+        typer.Option(
+            "--trusted-drive",
+            help="confirm the drive in use is cleaned, aligned and at speed, as listed",
+        ),
+    ] = False,
     backup: Annotated[
         Path | None,
         typer.Option("--backup", help="where to save the disk's current contents"),
@@ -227,8 +262,8 @@ def write(
         ),
     ] = 3,
 ) -> None:
-    """Write an image to a disk, then read it back and compare."""
-    disk, _, _, _ = decode_image(image)
+    """Write an image, or the calibration disk, then read it back and compare."""
+    disk = calibration_target(image, calibration=calibration, trusted_drive=trusted_drive)
     drive = open_drive()
 
     ask = prompter(yes=yes)
