@@ -6,21 +6,32 @@ import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image, formatted_side
+from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE, SIDE_PAYLOAD
 from fdstoolkit.codecs.fds import decode, encode
+from fdstoolkit.codecs.raw import class_histogram, encode_era_b
+from fdstoolkit.core.blocks import BlockKind
+from fdstoolkit.core.crc import block_crc, encode_crc
+from fdstoolkit.drive.monitor import SpeedReading
 from fdstoolkit.hardware.session import Grade, SideFlipError
 from fdstoolkit.quality.surface import (
     PATTERNS,
     Finish,
     PatternPass,
     StopReason,
+    SurfacePattern,
     SurfacePlan,
     SurfaceReport,
     SurfaceTestRefusedError,
     blank_disk,
+    pattern_disk,
     surface_test,
 )
 
 BLANK_BLOCKS = 2
+KEY = bytes(range(16))
+OTHER_KEY = bytes(range(1, 17))
+DOMINANT = 0.99
+MIXED_SHARE = 0.1
 
 
 class FinishNoisyDrive(SimulatedDrive):
@@ -43,11 +54,40 @@ def scratch_disk():  # noqa: ANN201
     return disk
 
 
-def test_the_patterns_are_complementary_so_a_stuck_bit_shows() -> None:
-    assert 0x00 in PATTERNS
-    assert 0xFF in PATTERNS
-    assert 0xAA in PATTERNS
-    assert 0x55 in PATTERNS
+def shares(payload: bytes) -> tuple[float, float, float]:
+    framed = bytes([0x80]) + payload + encode_crc(block_crc(payload))
+    counts = class_histogram(encode_era_b(framed))
+    total = counts[0] + counts[1] + counts[2]
+    return counts[0] / total, counts[1] / total, counts[2] / total
+
+
+def data_of(pattern: SurfacePattern, key: bytes = KEY) -> bytes:
+    side = pattern_disk(pattern, sides=1, key=key).sides[0]
+    return b"".join(b.payload for b in side.blocks if b.kind is BlockKind.FILE_DATA)
+
+
+@pytest.mark.parametrize(
+    ("pattern", "position"),
+    [(SurfacePattern.SHORT, 0), (SurfacePattern.MEDIUM, 1), (SurfacePattern.LONG, 2)],
+)
+def test_each_fixed_pattern_writes_one_pulse_class(pattern: SurfacePattern, position: int) -> None:
+    assert shares(data_of(pattern))[position] >= DOMINANT
+
+
+def test_the_unique_pattern_writes_every_pulse_class() -> None:
+    assert all(share > MIXED_SHARE for share in shares(data_of(SurfacePattern.UNIQUE)))
+
+
+def test_the_unique_pattern_changes_with_its_key_and_differs_between_files() -> None:
+    side = pattern_disk(SurfacePattern.UNIQUE, sides=1, key=KEY).sides[0]
+    files = [b.payload for b in side.blocks if b.kind is BlockKind.FILE_DATA]
+
+    assert len(set(files)) == len(files)
+    assert data_of(SurfacePattern.UNIQUE, KEY) != data_of(SurfacePattern.UNIQUE, OTHER_KEY)
+
+
+def test_every_pulse_class_is_written_in_one_pass() -> None:
+    assert set(PATTERNS) == set(SurfacePattern)
 
 
 def test_a_healthy_disk_passes_every_pattern() -> None:
@@ -178,8 +218,10 @@ def test_the_report_names_the_pattern_that_failed() -> None:
 
 
 def test_a_run_passes_only_when_every_pattern_held_and_the_finish_verified() -> None:
-    held = PatternPass(0x00, verified=True, mismatched_blocks=(), grade=Grade.CLEAN)
-    failed = PatternPass(0xFF, verified=False, mismatched_blocks=((0, 3),), grade=Grade.FAILED)
+    held = PatternPass(SurfacePattern.SHORT, verified=True, mismatched_blocks=(), grade=Grade.CLEAN)
+    failed = PatternPass(
+        SurfacePattern.LONG, verified=False, mismatched_blocks=((0, 3),), grade=Grade.FAILED
+    )
 
     clean = SurfaceReport(passes=(held,))
     broken = SurfaceReport(passes=(held, failed))
@@ -193,7 +235,12 @@ def test_a_run_passes_only_when_every_pattern_held_and_the_finish_verified() -> 
 def test_a_report_of_marginal_passes_is_not_clean() -> None:
     report = SurfaceReport(
         passes=(
-            PatternPass(pattern=0x00, verified=True, mismatched_blocks=(), grade=Grade.MARGINAL),
+            PatternPass(
+                pattern=SurfacePattern.SHORT,
+                verified=True,
+                mismatched_blocks=(),
+                grade=Grade.MARGINAL,
+            ),
         )
     )
 
@@ -203,20 +250,25 @@ def test_a_report_of_marginal_passes_is_not_clean() -> None:
 def test_a_report_with_an_unstable_pass_is_unstable() -> None:
     report = SurfaceReport(
         passes=(
-            PatternPass(pattern=0x00, verified=True, mismatched_blocks=(), grade=Grade.UNSTABLE),
+            PatternPass(
+                pattern=SurfacePattern.SHORT,
+                verified=True,
+                mismatched_blocks=(),
+                grade=Grade.UNSTABLE,
+            ),
         )
     )
 
     assert report.grade is Grade.UNSTABLE
 
 
-def test_a_filled_side_sweeps_the_whole_physical_track() -> None:
+def test_a_filled_side_carries_what_factory_disks_carry_and_no_more() -> None:
     drive = SimulatedDrive(scratch_disk())
 
     report = surface_test(drive, drive, sides=1, confirm=lambda _: True)
 
-    assert report.coverage == pytest.approx(1.0, abs=0.01)
-    assert report.data_bytes > 50_000
+    assert report.data_bytes == SIDE_PAYLOAD
+    assert report.coverage == pytest.approx(SIDE_PAYLOAD / LARGEST_FACTORY_SIDE)
 
 
 def test_a_quick_run_sweeps_only_a_corner_of_the_track() -> None:
@@ -249,8 +301,15 @@ def test_a_run_of_no_passes_is_refused() -> None:
 def test_a_block_that_fails_twice_is_the_surface_itself() -> None:
     report = SurfaceReport(
         passes=(
-            PatternPass(0x00, verified=False, mismatched_blocks=((0, 4),), grade=Grade.FAILED),
-            PatternPass(0xFF, verified=False, mismatched_blocks=((0, 4),), grade=Grade.FAILED),
+            PatternPass(
+                SurfacePattern.SHORT,
+                verified=False,
+                mismatched_blocks=((0, 4),),
+                grade=Grade.FAILED,
+            ),
+            PatternPass(
+                SurfacePattern.LONG, verified=False, mismatched_blocks=((0, 4),), grade=Grade.FAILED
+            ),
         )
     )
 
@@ -261,8 +320,15 @@ def test_a_block_that_fails_twice_is_the_surface_itself() -> None:
 def test_a_block_that_fails_once_is_only_marginal() -> None:
     report = SurfaceReport(
         passes=(
-            PatternPass(0x00, verified=False, mismatched_blocks=((0, 4),), grade=Grade.FAILED),
-            PatternPass(0xFF, verified=True, mismatched_blocks=(), grade=Grade.CLEAN),
+            PatternPass(
+                SurfacePattern.SHORT,
+                verified=False,
+                mismatched_blocks=((0, 4),),
+                grade=Grade.FAILED,
+            ),
+            PatternPass(
+                SurfacePattern.LONG, verified=True, mismatched_blocks=(), grade=Grade.CLEAN
+            ),
         )
     )
 
@@ -273,8 +339,15 @@ def test_a_block_that_fails_once_is_only_marginal() -> None:
 def test_a_block_clean_after_an_early_failure_was_refreshed_by_the_rewrite() -> None:
     report = SurfaceReport(
         passes=(
-            PatternPass(0x00, verified=False, mismatched_blocks=((0, 9),), grade=Grade.FAILED),
-            PatternPass(0xFF, verified=True, mismatched_blocks=(), grade=Grade.CLEAN),
+            PatternPass(
+                SurfacePattern.SHORT,
+                verified=False,
+                mismatched_blocks=((0, 9),),
+                grade=Grade.FAILED,
+            ),
+            PatternPass(
+                SurfacePattern.LONG, verified=True, mismatched_blocks=(), grade=Grade.CLEAN
+            ),
         )
     )
 
@@ -284,8 +357,15 @@ def test_a_block_clean_after_an_early_failure_was_refreshed_by_the_rewrite() -> 
 def test_a_block_still_failing_on_the_last_pass_did_not_recover() -> None:
     report = SurfaceReport(
         passes=(
-            PatternPass(0x00, verified=False, mismatched_blocks=((0, 9),), grade=Grade.FAILED),
-            PatternPass(0xFF, verified=False, mismatched_blocks=((0, 9),), grade=Grade.FAILED),
+            PatternPass(
+                SurfacePattern.SHORT,
+                verified=False,
+                mismatched_blocks=((0, 9),),
+                grade=Grade.FAILED,
+            ),
+            PatternPass(
+                SurfacePattern.LONG, verified=False, mismatched_blocks=((0, 9),), grade=Grade.FAILED
+            ),
         )
     )
 
@@ -418,7 +498,7 @@ def test_a_surface_test_reports_each_pattern_as_it_starts() -> None:
     )
 
     assert steps == [
-        f"side {side} pass 1 pattern {pattern:#04x}" for side in (0, 1) for pattern in PATTERNS
+        f"side {side} pass 1 pattern {pattern}" for side in (0, 1) for pattern in PATTERNS
     ]
 
 
@@ -449,3 +529,41 @@ def test_a_finish_that_reads_back_wrong_is_reported() -> None:
     assert report.stopped is None
     assert report.finish_ran
     assert not report.finish_verified
+
+
+@pytest.mark.parametrize(
+    ("short", "long", "reading"),
+    [(40, 2, SpeedReading.FAST), (1, 40, SpeedReading.SLOW), (20, 20, SpeedReading.ERRORS)],
+)
+def test_the_misreads_of_failed_blocks_say_whether_the_drive_or_the_surface_is_at_fault(
+    short: int, long: int, reading: SpeedReading
+) -> None:
+    failed = PatternPass(
+        SurfacePattern.LONG,
+        verified=False,
+        mismatched_blocks=((0, 3),),
+        grade=Grade.FAILED,
+        short=short,
+        long=long,
+        compared=500,
+    )
+
+    assert SurfaceReport(passes=(failed,)).pulse_reading is reading
+
+
+def test_a_report_with_nothing_compared_has_no_pulse_reading() -> None:
+    held = PatternPass(SurfacePattern.SHORT, verified=True, mismatched_blocks=(), grade=Grade.CLEAN)
+
+    assert SurfaceReport(passes=(held,)).pulse_reading is None
+
+
+def test_a_failed_pass_counts_the_misread_pulses_from_the_capture() -> None:
+    fault = FaultPlan(bad_crc_blocks=frozenset({3}), unstable_blocks=frozenset({3}))
+    drive = SimulatedDrive(scratch_disk(), plan=fault)
+
+    report = surface_test(drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(key=KEY))
+
+    failed = [entry for entry in report.passes if not entry.verified]
+    assert failed
+    assert all(entry.compared > 0 for entry in failed)
+    assert report.pulse_reading is not None

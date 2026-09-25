@@ -134,6 +134,16 @@ class Replay:
         return self.captures[self.reads - 1]
 
 
+def lean(short: int, long: int) -> SpeedReading:
+    leaning = short + long
+    if leaning >= BIAS_PULSES:
+        if short >= leaning * BIAS_SHARE:
+            return SpeedReading.FAST
+        if long >= leaning * BIAS_SHARE:
+            return SpeedReading.SLOW
+    return SpeedReading.ERRORS
+
+
 @dataclass(frozen=True, slots=True)
 class SideSample:
     blocks: tuple[bool, ...]
@@ -175,13 +185,7 @@ class SideSample:
             return SpeedReading.NOTHING
         if not self.missing and not (self.short or self.long or self.invalid):
             return SpeedReading.CLEAN
-        leaning = self.short + self.long
-        if leaning >= BIAS_PULSES:
-            if self.short >= leaning * BIAS_SHARE:
-                return SpeedReading.FAST
-            if self.long >= leaning * BIAS_SHARE:
-                return SpeedReading.SLOW
-        return SpeedReading.ERRORS
+        return lean(self.short, self.long)
 
     @property
     def head(self) -> HeadReading:

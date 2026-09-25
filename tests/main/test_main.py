@@ -25,7 +25,13 @@ from fdstoolkit.hardware import session
 from fdstoolkit.hardware.fdsstick import FdsStick, HidApiTransport
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import Grade
-from fdstoolkit.quality.surface import Finish, PatternPass, StopReason, SurfaceReport
+from fdstoolkit.quality.surface import (
+    Finish,
+    PatternPass,
+    StopReason,
+    SurfacePattern,
+    SurfaceReport,
+)
 
 runner = CliRunner()
 STALL_CEILING = 0.05
@@ -1567,13 +1573,29 @@ def test_surface_names_every_class_of_failing_block(
     report = SurfaceReport(
         passes=(
             PatternPass(
-                0x00, verified=False, mismatched_blocks=((0, 4), (0, 9)), grade=Grade.FAILED
+                SurfacePattern.SHORT,
+                verified=False,
+                mismatched_blocks=((0, 4), (0, 9)),
+                grade=Grade.FAILED,
+                short=30,
+                long=1,
+                compared=900,
             ),
-            PatternPass(0xFF, verified=False, mismatched_blocks=((0, 4),), grade=Grade.FAILED),
-            PatternPass(0xAA, verified=True, mismatched_blocks=(), grade=Grade.CLEAN),
+            PatternPass(
+                SurfacePattern.MEDIUM,
+                verified=False,
+                mismatched_blocks=((0, 4),),
+                grade=Grade.FAILED,
+                short=12,
+                long=0,
+                compared=400,
+            ),
+            PatternPass(
+                SurfacePattern.LONG, verified=True, mismatched_blocks=(), grade=Grade.CLEAN
+            ),
         ),
-        coverage=1.0,
-        data_bytes=59145,
+        coverage=0.98,
+        data_bytes=53854,
         finish=Finish.ERASE,
         finish_verified=False,
         finish_ran=True,
@@ -1594,6 +1616,10 @@ def test_surface_names_every_class_of_failing_block(
     assert "rewriting refreshed them" in result.stdout
     assert "erased, with nothing the adapter can read" in result.stdout
     assert "which did not verify" in result.stdout
+    assert "side 0 pass 1 pattern short pulses: did not hold" in result.stdout
+    assert "98.0% of the most any measured factory side carries" in result.stdout
+    assert "42 read short and 1 read long" in result.stdout
+    assert "the drive running fast" in result.stdout
     assert result.exit_code == 1
 
 

@@ -318,7 +318,7 @@ def surface(
     ] = Finish.LEAVE,
     yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
 ) -> None:
-    """Write and read back complementary patterns to grade a scratch disk."""
+    """Write and read back every pulse length to grade a scratch disk."""
     drive = open_drive()
 
     ask = prompter(yes=yes)
@@ -346,12 +346,14 @@ def surface(
 
 def report_surface(report: SurfaceReport) -> None:
     typer.echo(
-        f"{report.data_bytes} data bytes per side, {report.coverage:.1%} of the physical track, "
-        f"{len(report.passes)} pattern pass(es) run",
+        f"{report.data_bytes} data bytes per side, {report.coverage:.1%} of the most any "
+        f"measured factory side carries, {len(report.passes)} pattern pass(es) run",
     )
     for entry in report.passes:
         state = "held" if entry.verified else "did not hold"
-        typer.echo(f"side {entry.side} pass {entry.round} pattern {entry.pattern:#04x}: {state}")
+        typer.echo(f"side {entry.side} pass {entry.round} pattern {entry.pattern}: {state}")
+    if report.pulse_summary:
+        typer.echo(report.pulse_summary)
 
     if report.hard_blocks:
         typer.echo(

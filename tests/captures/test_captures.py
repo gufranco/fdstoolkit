@@ -15,6 +15,7 @@ from fdstoolkit.drive.captures import (
     Capture,
     bundle_zip,
     created_now,
+    latest_capture,
     load_bundle,
     read_zip,
     write_bundle,
@@ -193,3 +194,24 @@ def test_a_zip_missing_a_listed_capture_is_refused() -> None:
 
 def test_a_bundle_is_stamped_in_utc_to_the_second() -> None:
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", created_now())
+
+
+class Recorder:
+    def __init__(self, captures: tuple[Capture, ...]) -> None:
+        self._captures = captures
+
+    @property
+    def captures(self) -> tuple[Capture, ...]:
+        return self._captures
+
+
+def test_the_latest_capture_of_a_side_is_its_last_read() -> None:
+    source = Recorder(CAPTURES)
+
+    assert latest_capture(source, 0) == b"\x01\x02\x04"
+    assert latest_capture(source, 1) == b"\x05"
+
+
+def test_a_source_without_captures_or_without_that_side_gives_none() -> None:
+    assert latest_capture(object(), 0) is None
+    assert latest_capture(Recorder(CAPTURES[:2]), 1) is None

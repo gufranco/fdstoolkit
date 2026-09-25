@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final, cast
+from typing import Final, Protocol, cast, runtime_checkable
 
 from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.version import VERSION
@@ -34,6 +34,18 @@ class Capture:
     @property
     def name(self) -> str:
         return f"side{self.side}.read{self.read:02d}.raw03"
+
+
+@runtime_checkable
+class CaptureSource(Protocol):
+    @property
+    def captures(self) -> tuple[Capture, ...]: ...
+
+
+def latest_capture(source: object, side: int) -> bytes | None:
+    if not isinstance(source, CaptureSource):
+        return None
+    return next((c.data for c in reversed(source.captures) if c.side == side), None)
 
 
 @dataclass(frozen=True, slots=True)

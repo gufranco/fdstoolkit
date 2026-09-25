@@ -22,7 +22,7 @@
 
 </div>
 
-コマンドは **27** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,311** 件、ページが **132** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
+コマンドは **27** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,323** 件、ページが **132** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
 
 ---
 
@@ -549,13 +549,24 @@ verified True, grade clean
 fdstoolkit surface [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
 ```
 
-互いに補完的なパターンを書いては読み戻し、不要ディスクの状態を評価します。多重書き込みによるディスク消去の磁気版にあたり、すべてのビットセルを両方向へ強制的に反転させたうえで、戻ってきた内容を検証します。
+ドライブが記録できるすべての長さのパルスを書いては読み戻し、不要ディスクの状態を評価します。あわせて、磁性面の劣化とドライブの調整ずれを見分けます。
 
-1 巡で `0x00`、`0xFF`、`0xAA`、`0x55` の 4 パターンを順に書きます。前の 2 つはすべてのセルをそれぞれの飽和状態へ追い込み、片方の極性しか保持できない弱ったセルを露出させます。後の 2 つはビット単位で交互に切り替わるため、一様なパターンでは到達できない隣接セル間の干渉を露出させます。各パターンは次を書く前に読み戻して比較されます。
+ディスクが記録するのは磁束反転であり、データは反転の間隔に宿ります。アダプタはすべての間隔を 3 種類の長さに分類するため、バイトパターンが意味を持つのは、それが生む間隔を通してだけです。ドライブ自身のエンコーダで測ると、`0x00` と `0xFF` はどちらも短い間隔だけを書き、`0xAA` と `0x55` はどちらもほぼ長い間隔だけを書きます。この 4 バイトで組んだ巡回は 2 種類を 2 回ずつ書き、中間の間隔を一度も書きません。
 
-既定では面をトラックの物理的な限界まで埋めます。66,560 バイトのギャップ込みバッファに対して 32 ブロック、データ 59,145 バイトです。残りはブロック間ギャップであり、いずれにせよ各パスでドライブが書き直すため、表面全体が走査されます。`--quick` は代わりに 4 KiB のファイルを 1 つだけ書き、トラックの 12% を対象とします。判定のためではなく、手早い確認のための指定です。
+1 巡で次の 4 パターンを順に書き、各パターンは次を書く前に読み戻して比較されます。
 
-`--passes N` は 4 パターンの巡回全体を繰り返します。死んだセルは毎回失敗し、境界にあるセルはそうならないため、両者を切り分ける手段がこの繰り返しです。
+| パターン | 書くもの | 露出させるもの |
+|---|---|---|
+| unique data | 巡ごとに新しく生成する 16 バイトの鍵から SHAKE-256 で得たバイト列。ファイルごと、面ごとに異なります | 現実的な混合比での 3 種類すべての間隔と、古いブロックや位置のずれたブロック。この巡の前には存在しなかったデータとは一致しえません |
+| short pulses | `00` の繰り返し。間隔の 100% が短い | 最も密な磁束。弱ったヘッドや摩耗した面が最初に分解できなくなる領域です |
+| medium pulses | `24 49 92` の繰り返し。間隔の 99.9% 超が中間 | 上側の境界に最も近い種類。回転の遅いドライブで最初に失敗します |
+| long pulses | `aa` の繰り返し。間隔の 99.9% 超が長い | 下側の境界に最も近い種類。回転の速いドライブで最初に失敗します |
+
+面を満たすときは 8,949 バイトのファイルを 6 つ、ブロック合計 53,854 バイトを書きます。キャリブレーションディスクと同じ量で、理由も同じです。工場で書かれた 345 面のうち最大のものが 54,958 バイトであり、それを超えて書くと最後のファイルがトラックの終端からはみ出して、正常なディスクを損傷と判定しかねません。報告では、この最大の工場製の面に対する割合で充填量を示します。`--quick` は代わりに 4 KiB のファイルを 1 つだけ書きます。判定のためではなく、手早い確認のための指定です。
+
+`--passes N` は 4 パターンの巡回全体を、毎回新しい鍵で繰り返します。死んだ箇所は毎回失敗し、境界にある箇所はそうならないため、両者を切り分ける手段がこの繰り返しです。
+
+ある巡が失敗すると、コマンドはその面でドライブが実際に返したパルスを書いた間隔と比べ、読み違いがどちらへ偏っているかを示します。失敗したブロック全体で読み違いが一方へ偏っていれば、原因はドライブの回転速度です。回転の速いドライブは長い間隔を中間と読み、遅いドライブは中間を長いと読むからです。読み違いが両方向へ出ていれば、原因は磁性面です。閾値は `calibrate speed` と同じで、読み違いが 16 パルス以上あり、その 4 分の 3 が同じ方向へ偏っていることです。
 
 失敗したブロックは、失敗した回数によって分類されます。
 
@@ -571,7 +582,7 @@ recovered の数が、修復にあたる部分です。閾値へ近づいてい�
 
 | 値 | 残すもの |
 |---|---|
-| `leave` | 最後に書いたパターン `0x55`。既定値です |
+| `leave` | 最後に書いたパターン、長いパルス。既定値です |
 | `blank` | 工場出荷状態の面。ディスク情報ブロックとファイル数 0 のみで、店頭で購入した未書き込みディスクとバイト単位で同一です |
 | `erase` | ブロックを一切残さないため、アダプタは何も読み取れません |
 
@@ -593,22 +604,22 @@ fdstoolkit surface --sides 2 --passes 3 --backup before.fds --finish blank
 
 ```
 a surface test destroys every byte on 2 side(s) of the disk in the drive. Use a scratch disk, never an original [y/N]: y
-  side 0 pass 1 pattern 0x00
-  side 0 pass 1 pattern 0xff
+  side 0 pass 1 pattern unique data
+  side 0 pass 1 pattern short pulses
   ...
-  side 0 pass 3 pattern 0x55
+  side 0 pass 3 pattern long pulses
 turn the disk over so the side B label faces up, then confirm. The head sits under the disk and reads side B from the face turned down, so this drive cannot select a side on its own [y/N]: y
-  side 1 pass 1 pattern 0x00
+  side 1 pass 1 pattern unique data
   ...
-  side 1 pass 3 pattern 0x55
+  side 1 pass 3 pattern long pulses
   finishing side 1
 turn the disk over so the side A label faces up, then confirm. The head sits under the disk and reads side A from the face turned down, so this drive cannot select a side on its own [y/N]: y
   finishing side 0
-59145 data bytes per side, 100.0% of the physical track, 24 pattern pass(es) run
-side 0 pass 1 pattern 0x00: held
-side 0 pass 1 pattern 0xff: held
+53854 data bytes per side, 98.0% of the most any measured factory side carries, 24 pattern pass(es) run
+side 0 pass 1 pattern unique data: held
+side 0 pass 1 pattern short pulses: held
 ...
-side 1 pass 3 pattern 0x55: held
+side 1 pass 3 pattern long pulses: held
 left the disk formatted as it leaves the kiosk, verified
 grade clean
 ```
@@ -616,11 +627,12 @@ grade clean
 同じコマンドを、A 面の 1 か所が壊れたディスクで実行した場合です。判定がすでに決まっているため、裏返しを求める前、2 つ目のパターンで止まります。
 
 ```
-  side 0 pass 1 pattern 0x00
-  side 0 pass 1 pattern 0xff
-59145 data bytes per side, 100.0% of the physical track, 2 pattern pass(es) run
-side 0 pass 1 pattern 0x00: did not hold
-side 0 pass 1 pattern 0xff: did not hold
+  side 0 pass 1 pattern unique data
+  side 0 pass 1 pattern short pulses
+53854 data bytes per side, 98.0% of the most any measured factory side carries, 2 pattern pass(es) run
+side 0 pass 1 pattern unique data: did not hold
+side 0 pass 1 pattern short pulses: did not hold
+in the blocks that failed, 23 read short and 19 read long: they go both ways, which is the surface rather than the drive's speed
 1 block(s) failed on more than one pattern, which is the surface itself
 stopped early: a block failed on two patterns, so the surface is damaged
 grade failed

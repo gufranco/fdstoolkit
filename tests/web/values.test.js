@@ -181,6 +181,6 @@ describe("helpFor", () => {
   });
 
   it("falls back to the help the field shares", () => {
-    expect(helpFor("surface", { name: "passes" })).toContain("write and read-back passes");
+    expect(helpFor("surface", { name: "passes" })).toContain("run all four patterns");
   });
 });

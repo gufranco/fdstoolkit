@@ -243,7 +243,8 @@ def test_a_confirmed_surface_job_reports_its_coverage(app: FastAPI, client: Test
     assert job["state"] == JobState.DONE
     assert job["result"]["rows"][0]["coverage"] > 0
     assert job["result"]["headline"] == "grade clean"
-    assert "side 0 pass 1 pattern 0x00" in job["steps"]
+    assert "side 0 pass 1 pattern unique data" in job["steps"]
+    assert job["result"]["rows"][0]["pulses"] is None
 
 
 @pytest.mark.usefixtures("attached")

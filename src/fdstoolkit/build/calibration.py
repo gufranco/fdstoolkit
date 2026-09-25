@@ -26,6 +26,7 @@ MIXED_SHORT_RUN: Final = 16
 
 
 class Pattern(StrEnum):
+    SHORT = "SHT"
     LONG = "LNG"
     MEDIUM = "MED"
     MIXED = "MIX"
@@ -71,26 +72,32 @@ TRUSTED_DRIVE: Final = (
 )
 
 
-def _pattern_bytes(pattern: Pattern) -> bytes:
+def _repeated(unit: bytes, size: int) -> bytes:
+    return (unit * (size // len(unit) + 1))[:size]
+
+
+def pattern_bytes(pattern: Pattern, size: int = FILE_SIZE) -> bytes:
+    if pattern is Pattern.SHORT:
+        return bytes([SHORT_BYTE]) * size
     if pattern is Pattern.LONG:
-        return bytes([LONG_BYTE]) * FILE_SIZE
+        return bytes([LONG_BYTE]) * size
     if pattern is Pattern.MEDIUM:
-        return (MEDIUM_BYTES * (FILE_SIZE // len(MEDIUM_BYTES) + 1))[:FILE_SIZE]
+        return _repeated(MEDIUM_BYTES, size)
     cycle = (
         bytes([LONG_BYTE]) * MIXED_RUN
         + MEDIUM_BYTES * (MIXED_RUN // len(MEDIUM_BYTES))
         + bytes([SHORT_BYTE]) * MIXED_SHORT_RUN
     )
-    return (cycle * (FILE_SIZE // len(cycle) + 1))[:FILE_SIZE]
+    return _repeated(cycle, size)
 
 
 def pattern_of(payload: bytes) -> Pattern | None:
     data = payload[1:]
-    return next((pattern for pattern in Pattern if _pattern_bytes(pattern) == data), None)
+    return next((pattern for pattern in Pattern if pattern_bytes(pattern) == data), None)
 
 
 def _file_name(pattern: Pattern, index: int) -> str:
-    return f"CAL-{pattern.value}{index // len(Pattern) + 1}"
+    return f"CAL-{pattern.value}{LAYOUT[:index].count(pattern) + 1}"
 
 
 @cache
@@ -107,7 +114,7 @@ def calibration_disk(sides: int = SIDES_PER_DISK) -> Disk:
                     name=_file_name(pattern, index),
                     address=LOAD_ADDRESS,
                     kind=FileKind.PROGRAM,
-                    data=_pattern_bytes(pattern),
+                    data=pattern_bytes(pattern),
                 ),
             )
     return disk

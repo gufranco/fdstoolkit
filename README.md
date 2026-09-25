@@ -22,7 +22,7 @@
 
 </div>
 
-**27** commands, every one but `doctor` also on the local web page. **1,311** Python tests and **132** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**27** commands, every one but `doctor` also on the local web page. **1,323** Python tests and **132** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -555,23 +555,24 @@ The lines indented by two spaces are progress, printed as each step starts, so a
 fdstoolkit surface [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
 ```
 
-Write and read back complementary patterns to grade a scratch disk. This is the magnetic
-equivalent of a multi-pass `dd` wipe: it forces every bit cell to flip in both directions and
-verifies what came back.
+Write and read back patterns that exercise every pulse the drive can record, to grade a scratch disk and tell a failing surface apart from a drive out of adjustment.
 
-One pass writes four patterns in sequence, `0x00`, `0xFF`, `0xAA`, `0x55`. The first two drive
-every cell to each saturation state, which is what exposes a weak cell that holds one polarity
-and not the other. The second two alternate at the bit level, which exposes adjacent-cell
-interference that a solid pattern cannot reach. Each pattern is read back and compared before the
-next is written.
+A disk stores flux transitions, and the data lives in the intervals between them. The adapter sorts every interval into one of three lengths, so a byte pattern only matters for the intervals it produces. Measured through the drive's own encoder, `0x00` and `0xFF` both write nothing but short intervals, and `0xAA` and `0x55` both write almost nothing but long ones. A pass built from those four bytes would write two classes twice and never write a medium interval at all.
 
-By default the side is filled to the physical limit of the track, 32 blocks and 59,145 data bytes
-against the 66,560-byte gapped buffer. The remainder is inter-block gap, which the drive rewrites
-on every pass anyway, so the whole surface is swept. `--quick` writes a single 4 KiB file instead,
-covering 12% of the track, for a fast check rather than a verdict.
+One pass writes four patterns in sequence, each read back and compared before the next is written:
 
-`--passes N` repeats the whole four-pattern cycle. More passes is how a marginal cell is
-separated from a dead one, because a dead cell fails every time and a marginal one does not.
+| Pattern | What it writes | What it exposes |
+|---|---|---|
+| unique data | Bytes from SHAKE-256 over a fresh 16-byte key per pass, different in every file and on every side | All three classes in realistic mixture, and any stale or misplaced block, which cannot match data that did not exist before this pass |
+| short pulses | `00` repeated, 100 percent short intervals | The densest flux, the hardest for a weak head or a worn surface to resolve |
+| medium pulses | `24 49 92` repeated, over 99.9 percent medium intervals | The class nearest its upper boundary, the first to fail on a slow drive |
+| long pulses | `aa` repeated, over 99.9 percent long intervals | The class nearest its lower boundary, the first to fail on a fast drive |
+
+A full side carries six files of 8,949 bytes, 53,854 bytes of blocks, the same as the calibration disk and for the same reason: among 345 factory-written sides the largest carries 54,958 bytes, and writing past that risks the last files falling off the end of the track, which would grade a good disk as damaged. The report states the fill as a share of that largest factory side. `--quick` writes a single 4 KiB file instead, for a fast check rather than a verdict.
+
+`--passes N` repeats the whole four-pattern cycle with a new key each time. More passes is how a marginal spot is separated from a dead one, because a dead spot fails every time and a marginal one does not.
+
+When a pass fails, the command compares the pulses the drive actually returned for that side against the intervals it wrote, and says which way the misreads lean. Misreads leaning one way across the failed blocks point at the drive's speed, since a fast drive reads long intervals as medium and a slow one reads medium as long. Misreads going both ways point at the surface. The thresholds are the ones `calibrate speed` uses, at least 16 misread pulses with three quarters of them leaning the same way.
 
 The report classifies each failing block by how often it failed:
 
@@ -590,7 +591,7 @@ because every pass destroys what was there.
 
 | Value | Leaves |
 |---|---|
-| `leave` | The last pattern written, `0x55`. The default |
+| `leave` | The last pattern written, long pulses. The default |
 | `blank` | A factory-blank side: disk info block plus a file count of zero, byte-identical to what a kiosk-bought unwritten disk carries |
 | `erase` | No blocks at all, so the adapter finds nothing to read |
 
@@ -614,22 +615,22 @@ fdstoolkit surface --sides 2 --passes 3 --backup before.fds --finish blank
 
 ```
 a surface test destroys every byte on 2 side(s) of the disk in the drive. Use a scratch disk, never an original [y/N]: y
-  side 0 pass 1 pattern 0x00
-  side 0 pass 1 pattern 0xff
+  side 0 pass 1 pattern unique data
+  side 0 pass 1 pattern short pulses
   ...
-  side 0 pass 3 pattern 0x55
+  side 0 pass 3 pattern long pulses
 turn the disk over so the side B label faces up, then confirm. The head sits under the disk and reads side B from the face turned down, so this drive cannot select a side on its own [y/N]: y
-  side 1 pass 1 pattern 0x00
+  side 1 pass 1 pattern unique data
   ...
-  side 1 pass 3 pattern 0x55
+  side 1 pass 3 pattern long pulses
   finishing side 1
 turn the disk over so the side A label faces up, then confirm. The head sits under the disk and reads side A from the face turned down, so this drive cannot select a side on its own [y/N]: y
   finishing side 0
-59145 data bytes per side, 100.0% of the physical track, 24 pattern pass(es) run
-side 0 pass 1 pattern 0x00: held
-side 0 pass 1 pattern 0xff: held
+53854 data bytes per side, 98.0% of the most any measured factory side carries, 24 pattern pass(es) run
+side 0 pass 1 pattern unique data: held
+side 0 pass 1 pattern short pulses: held
 ...
-side 1 pass 3 pattern 0x55: held
+side 1 pass 3 pattern long pulses: held
 left the disk formatted as it leaves the kiosk, verified
 grade clean
 ```
@@ -637,11 +638,12 @@ grade clean
 The same command on a disk with one bad spot on side A. It stops on the second pattern, before asking for a turn, because the verdict is already known:
 
 ```
-  side 0 pass 1 pattern 0x00
-  side 0 pass 1 pattern 0xff
-59145 data bytes per side, 100.0% of the physical track, 2 pattern pass(es) run
-side 0 pass 1 pattern 0x00: did not hold
-side 0 pass 1 pattern 0xff: did not hold
+  side 0 pass 1 pattern unique data
+  side 0 pass 1 pattern short pulses
+53854 data bytes per side, 98.0% of the most any measured factory side carries, 2 pattern pass(es) run
+side 0 pass 1 pattern unique data: did not hold
+side 0 pass 1 pattern short pulses: did not hold
+in the blocks that failed, 23 read short and 19 read long: they go both ways, which is the surface rather than the drive's speed
 1 block(s) failed on more than one pattern, which is the surface itself
 stopped early: a block failed on two patterns, so the surface is damaged
 grade failed
