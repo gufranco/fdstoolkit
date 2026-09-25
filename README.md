@@ -491,7 +491,7 @@ A block that failed on every read is not given up on. The captures of those read
 
 The drive cannot read one block on its own, so every retry is a full read of the side. That is why the budget is per side rather than per block: each re-read resolves every block still failing, and a side with ten bad blocks costs at most `--retries` more reads, not ten times that. A re-read block is matched by its type and file number, never by position, so a damaged block that vanishes on the re-read cannot shift the ones after it. Blocks that only read clean on a re-read are counted as a sign the disk is wearing.
 
-The head sits under the disk and reads only the face turned down, toward it, so the drive cannot select a side. Reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
+The head sits under the disk and reads only the face turned down, toward it, so the drive cannot select a side. Every prompt names the side by its label, which faces up while the head reads that side from below. Reading more than one side asks you to turn the disk over between reads, and refuses rather than reading the same face twice. `--yes` answers that prompt. If the second read returns the same bytes as the first, the dump fails and writes nothing, because a disk that was not turned over produces a file that looks like a two-side dump and is not.
 
 Every read and write runs against a deadline. Before anything has been measured a side gets 20 seconds; after the first side, the limit is three times as long as that side took, and never under 2 seconds. A side that overruns stops the command and closes the device, and is never retried, because a drive that has stalled once only wears the disk further. A dump that stalls writes no file. A write that stalls says the side may be half written, since only a fresh dump can show what landed. A side at the rate the adapter expects takes about 5.5 seconds. These limits come from that figure rather than from a measured drive, and are the first thing to revisit on real hardware.
 
@@ -534,7 +534,7 @@ overwrite the disk in the drive with 2 side(s) of new data, destroying whatever 
   reading side 0 before writing it
   writing side 0
   reading side 0 back
-turn the disk over so side B faces down, then confirm. The head sits under the disk and reads only the face turned toward it, so this drive cannot select a side on its own [y/N]: y
+turn the disk over so the side B label faces up, then confirm. The head sits under the disk and reads side B from the face turned down, so this drive cannot select a side on its own [y/N]: y
   reading side 1 before writing it
   writing side 1
   reading side 1 back
@@ -606,7 +606,7 @@ The test stops as soon as its verdict is decided, because every further pass onl
 
 A stopped test skips its `--finish`. A block that fails once does not stop anything, since one failure is the marginal case more passes are meant to separate.
 
-With `--sides 2` every pass runs on side A, then the command asks you to turn the disk over once and runs every pass on side B. The finish then works backwards, side B first while it is still turned down toward the head, then one more turn for side A, so the whole test costs two turns. The check that the disk was really turned is the same one `write` makes.
+With `--sides 2` every pass runs on side A, then the command asks you to turn the disk over once and runs every pass on side B. The finish then works backwards, side B first while its label still faces up, then one more turn for side A, so the whole test costs two turns. The check that the disk was really turned is the same one `write` makes.
 
 ```bash
 fdstoolkit surface --sides 2 --passes 3 --backup before.fds --finish blank
@@ -618,12 +618,12 @@ a surface test destroys every byte on 2 side(s) of the disk in the drive. Use a 
   side 0 pass 1 pattern 0xff
   ...
   side 0 pass 3 pattern 0x55
-turn the disk over so side B faces down, then confirm. The head sits under the disk and reads only the face turned toward it, so this drive cannot select a side on its own [y/N]: y
+turn the disk over so the side B label faces up, then confirm. The head sits under the disk and reads side B from the face turned down, so this drive cannot select a side on its own [y/N]: y
   side 1 pass 1 pattern 0x00
   ...
   side 1 pass 3 pattern 0x55
   finishing side 1
-turn the disk over so side A faces down, then confirm. The head sits under the disk and reads only the face turned toward it, so this drive cannot select a side on its own [y/N]: y
+turn the disk over so the side A label faces up, then confirm. The head sits under the disk and reads side A from the face turned down, so this drive cannot select a side on its own [y/N]: y
   finishing side 0
 59145 data bytes per side, 100.0% of the physical track, 24 pattern pass(es) run
 side 0 pass 1 pattern 0x00: held
@@ -675,7 +675,7 @@ Every read is compared pulse by pulse against what the disk's content requires, 
 | The calibration disk | Recognised from its disk information and file headers, with no file needed | Every block, from the first read, including blocks that never read clean |
 | Blocks read clean | Learned during the run: once a block passes its checksum, its bytes are known | That block, in every later read |
 
-With none of them, only the checksums judge the first read, which says whether a block read and nothing about why not. Learning closes that gap quickly on a drive that is only slightly off, since most blocks read clean at least once, and not at all on a drive so far off that a block never reads clean, which is where the reference or the calibration disk earns its place. `--side` names which side of the reference is turned down, toward the head under the disk.
+With none of them, only the checksums judge the first read, which says whether a block read and nothing about why not. Learning closes that gap quickly on a drive that is only slightly off, since most blocks read clean at least once, and not at all on a drive so far off that a block never reads clean, which is where the reference or the calibration disk earns its place. `--side` names which side of the reference is in the drive: the side whose label faces up, read from the face turned down.
 
 ```
 this is the fdstoolkit calibration disk, side 0: every pulse is compared with what the disk holds, including blocks that never read clean

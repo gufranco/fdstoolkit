@@ -485,7 +485,7 @@ fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [-
 
 ドライブは 1 ブロックだけを読むことができないため、再試行は毎回その面全体の読み直しになります。予算がブロックごとではなく面ごとなのはそのためです。1 回の読み直しで、まだ失敗しているブロックすべてを解決します。不良ブロックが 10 個ある面でも、追加の読み取りは最大で `--retries` 回であり、その 10 倍にはなりません。読み直したブロックは位置ではなく種別とファイル番号で照合するため、損傷したブロックが読み直しで消えても、後続のブロックがずれることはありません。読み直しでようやく正しく読めたブロックは、ディスクが劣化している兆候として数えます。
 
-ヘッドはディスクの下にあり、下を向いた面だけを読むので、ドライブは面を選択できません。そのため複数面を読む場合、読み取りの合間にディスクを裏返すよう求め、同じ面を二度読むくらいなら処理を中止します。`--yes` はその確認に自動で答えます。2 回目の読み取りが 1 回目と同じバイト列を返した場合、吸い出しは失敗し、何も書き出しません。裏返されなかったディスクは、両面を吸い出したように見えて実際はそうでないファイルを生むからです。
+ヘッドはディスクの下にあり、下を向いた面だけを読むので、ドライブは面を選択できません。どの問いかけも面をラベルで示し、そのラベルは上を向き、ヘッドはその面を下から読みます。そのため複数面を読む場合、読み取りの合間にディスクを裏返すよう求め、同じ面を二度読むくらいなら処理を中止します。`--yes` はその確認に自動で答えます。2 回目の読み取りが 1 回目と同じバイト列を返した場合、吸い出しは失敗し、何も書き出しません。裏返されなかったディスクは、両面を吸い出したように見えて実際はそうでないファイルを生むからです。
 
 すべての読み取りと書き込みには期限があります。まだ何も測定していない段階では 1 面につき 20 秒、最初の面を読んだ後は、その面にかかった時間の 3 倍を上限とし、2 秒を下回ることはありません。期限を過ぎた面はコマンドを止め、デバイスを閉じ、再試行もしません。一度止まったドライブで続けても、ディスクを傷めるだけだからです。止まった吸い出しはファイルを書き出しません。止まった書き込みは、面が書きかけの可能性があると伝えます。何が書き込まれたかは、改めて吸い出さなければ分からないからです。アダプタが期待するレートなら 1 面は約 5.5 秒で読めます。これらの上限は実測したドライブではなくこの数値から決めたもので、実機で最初に見直すべき値です。
 
@@ -528,7 +528,7 @@ overwrite the disk in the drive with 2 side(s) of new data, destroying whatever 
   reading side 0 before writing it
   writing side 0
   reading side 0 back
-turn the disk over so side B faces down, then confirm. The head sits under the disk and reads only the face turned toward it, so this drive cannot select a side on its own [y/N]: y
+turn the disk over so the side B label faces up, then confirm. The head sits under the disk and reads side B from the face turned down, so this drive cannot select a side on its own [y/N]: y
   reading side 1 before writing it
   writing side 1
   reading side 1 back
@@ -585,7 +585,7 @@ recovered の数が、修復にあたる部分です。閾値へ近づいてい�
 
 止まったテストは `--finish` を行いません。1 回だけ失敗したブロックでは止まりません。1 回の失敗はパスを重ねて切り分けるべき境界的なケースだからです。
 
-`--sides 2` では、すべてのパスを A 面で行ったあと、ディスクを 1 回裏返すよう求め、すべてのパスを B 面で行います。終了処理は逆順に進みます。まだ下を向いてヘッドに面している B 面を先に処理し、もう 1 回裏返して A 面を処理するので、テスト全体で裏返すのは 2 回です。ディスクが本当に裏返されたかの確認は `write` と同じです。
+`--sides 2` では、すべてのパスを A 面で行ったあと、ディスクを 1 回裏返すよう求め、すべてのパスを B 面で行います。終了処理は逆順に進みます。まだラベルが上を向いている B 面を先に処理し、もう 1 回裏返して A 面を処理するので、テスト全体で裏返すのは 2 回です。ディスクが本当に裏返されたかの確認は `write` と同じです。
 
 ```bash
 fdstoolkit surface --sides 2 --passes 3 --backup before.fds --finish blank
@@ -597,12 +597,12 @@ a surface test destroys every byte on 2 side(s) of the disk in the drive. Use a 
   side 0 pass 1 pattern 0xff
   ...
   side 0 pass 3 pattern 0x55
-turn the disk over so side B faces down, then confirm. The head sits under the disk and reads only the face turned toward it, so this drive cannot select a side on its own [y/N]: y
+turn the disk over so the side B label faces up, then confirm. The head sits under the disk and reads side B from the face turned down, so this drive cannot select a side on its own [y/N]: y
   side 1 pass 1 pattern 0x00
   ...
   side 1 pass 3 pattern 0x55
   finishing side 1
-turn the disk over so side A faces down, then confirm. The head sits under the disk and reads only the face turned toward it, so this drive cannot select a side on its own [y/N]: y
+turn the disk over so the side A label faces up, then confirm. The head sits under the disk and reads side A from the face turned down, so this drive cannot select a side on its own [y/N]: y
   finishing side 0
 59145 data bytes per side, 100.0% of the physical track, 24 pattern pass(es) run
 side 0 pass 1 pattern 0x00: held
@@ -654,7 +654,7 @@ fdstoolkit calibrate speed|head --captures <bundle> [--reference <image>] [--sid
 | キャリブレーション用ディスク | ディスク情報とファイルヘッダから自動で認識し、ファイルは不要 | 最初の読み取りから、一度も正しく読めないブロックも含むすべてのブロック |
 | 正しく読めたブロック | 実行中に学習する。ブロックがチェックサムを通れば、その内容が確定する | そのブロックを、以降のすべての読み取りで |
 
-どれもない場合、最初の読み取りはチェックサムだけで判定するので、ブロックが読めたかどうかは分かっても、読めなかった理由は分かりません。わずかにずれているだけのドライブなら、ほとんどのブロックが一度は正しく読めるので学習がすぐにその穴を埋めます。一方、ブロックが一度も正しく読めないほどずれたドライブでは埋まらず、そこでリファレンスかキャリブレーション用ディスクが役に立ちます。`--side` はリファレンスのどの面を下に、ディスクの下にあるヘッドへ向けているかを示します。
+どれもない場合、最初の読み取りはチェックサムだけで判定するので、ブロックが読めたかどうかは分かっても、読めなかった理由は分かりません。わずかにずれているだけのドライブなら、ほとんどのブロックが一度は正しく読めるので学習がすぐにその穴を埋めます。一方、ブロックが一度も正しく読めないほどずれたドライブでは埋まらず、そこでリファレンスかキャリブレーション用ディスクが役に立ちます。`--side` はリファレンスのどの面がドライブに入っているかを示します。ラベルが上を向いている面で、下を向いた側から読まれます。
 
 ```
 this is the fdstoolkit calibration disk, side 0: every pulse is compared with what the disk holds, including blocks that never read clean

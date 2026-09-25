@@ -150,7 +150,7 @@ test('a two-sided surface test turns the disk twice and grades clean', async ({ 
   await page.getByRole('button', { name: 'Erase and continue' }).click();
 
   for (const side of ['B', 'A']) {
-    const prompt = page.getByRole('alert').filter({ hasText: `side ${side} faces down` });
+    const prompt = page.getByRole('alert').filter({ hasText: `side ${side} label faces up` });
     await expect(prompt).toBeVisible();
     await prompt.getByRole('button', { name: TURNED }).click();
   }
@@ -208,7 +208,7 @@ test('the calibration disk is written only after the trusted drive is confirmed'
   await page.locator('#panel button.run').click();
   await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
 
-  const prompt = page.getByRole('alert').filter({ hasText: 'side B faces down' });
+  const prompt = page.getByRole('alert').filter({ hasText: 'side B label faces up' });
   await expect(prompt).toBeVisible();
   await expect(page.locator('#panel .steps li').first()).toContainText('Write this disk only on a drive you already trust');
   await prompt.getByRole('button', { name: TURNED }).click();
