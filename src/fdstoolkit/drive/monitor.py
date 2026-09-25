@@ -16,9 +16,10 @@ from fdstoolkit.codecs.raw import (
     unpack_raw03,
 )
 from fdstoolkit.core.bios import BIOS_ERRORS
-from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.blocks import BlockKind
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Side
+from fdstoolkit.drive.align import align_blocks, good_block
 from fdstoolkit.drive.bracket import Bracket
 
 MAX_READS: Final = 200
@@ -108,6 +109,19 @@ class RawReader(Protocol):
     def read_raw_side(self, *, what: str) -> bytes: ...
 
 
+@dataclass(slots=True)
+class Replay:
+    captures: tuple[bytes, ...]
+    reads: int = 0
+
+    def read_raw_side(self, *, what: str) -> bytes:
+        if self.reads >= len(self.captures):
+            message = f"{what}: the captures hold {len(self.captures)} reads"
+            raise ValueError(message)
+        self.reads += 1
+        return self.captures[self.reads - 1]
+
+
 @dataclass(frozen=True, slots=True)
 class SideSample:
     blocks: tuple[bool, ...]
@@ -191,33 +205,6 @@ def _invalid(values: bytes) -> int:
     return count
 
 
-def _good(block: Block) -> bool:
-    return block.stored_crc == block.computed_crc
-
-
-def _align(wanted: Sequence[Block], found: Sequence[Block]) -> list[tuple[bool, int | None]]:
-    placed: list[tuple[bool, int | None]] = []
-    cursor = 0
-    for block in wanted:
-        match = next(
-            (
-                index
-                for index in range(cursor, len(found))
-                if _good(found[index]) and found[index].payload == block.payload
-            ),
-            None,
-        )
-        if match is not None:
-            placed.append((True, match))
-            cursor = match + 1
-        elif cursor < len(found) and not _good(found[cursor]) and found[cursor].kind is block.kind:
-            placed.append((False, cursor))
-            cursor += 1
-        else:
-            placed.append((False, None))
-    return placed
-
-
 def _leaning(actual: bytes, expected: bytes) -> tuple[int, int, int]:
     pairs = [
         (have, want) for have, want in zip(actual, expected, strict=False) if have != MAX_CLASS
@@ -233,7 +220,7 @@ def sample(packed: bytes, reference: Side | None = None) -> SideSample:
     invalid = _invalid(values)
     if reference is None:
         return SideSample(
-            blocks=tuple(_good(block) for block in decoded.blocks),
+            blocks=tuple(good_block(block) for block in decoded.blocks),
             short=0,
             long=0,
             invalid=invalid,
@@ -244,7 +231,7 @@ def sample(packed: bytes, reference: Side | None = None) -> SideSample:
 
     starts = block_starts(values)
     short = long = compared = 0
-    placed = _align(reference.blocks, decoded.blocks)
+    placed = align_blocks(reference.blocks, decoded.blocks)
     blocks = [good for good, _ in placed]
     for wanted, (_, region) in zip(reference.blocks, placed, strict=True):
         if region is None:

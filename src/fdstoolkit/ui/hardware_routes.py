@@ -6,7 +6,9 @@ from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, Request
 
-from fdstoolkit.drive.monitor import NOT_THIS_DRIVE, Mode, calibrate
+from fdstoolkit.drive.captures import bundle_zip, created_now
+from fdstoolkit.drive.monitor import MAX_READS, NOT_THIS_DRIVE, Mode, RawReader, Replay, calibrate
+from fdstoolkit.drive.recovery import recover
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import DumpResult, dump, dump_repeated, write_verified
@@ -36,6 +38,7 @@ from fdstoolkit.ui.shared import (
     CONFLICT,
     NOT_FOUND,
     UNPROCESSABLE,
+    bundle_of,
     decode_payload,
     encoded,
     named_file,
@@ -45,7 +48,11 @@ from fdstoolkit.ui.shared import (
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
+    from fdstoolkit.core.disk import Side
+
 BACKUP_NAME = "before.fds"
+DUMP_NAME = "dump.fds"
+CAPTURES_NAME = "dump.captures.zip"
 
 
 def _drive() -> FdsStick:
@@ -89,11 +96,7 @@ def _start(
     work: Callable[[FdsStick, Controls], BaseModel],
     stoppable: bool = False,
 ) -> JobView:
-    board = _board(request)
-    running = board.current()
-    if running is not None:
-        message = f"{running.command} is already running, so the drive is busy"
-        raise HTTPException(status_code=CONFLICT, detail=message)
+    _idle(request)
     drive = _drive()
 
     def run(controls: Controls) -> BaseModel:
@@ -103,9 +106,30 @@ def _start(
             drive.close()
 
     try:
-        return _view(board.start(command, writes=writes, work=run, stoppable=stoppable))
-    except JobBusyError as error:
+        return _launch(request, command, writes=writes, run=run, stoppable=stoppable)
+    except HTTPException:
         drive.close()
+        raise
+
+
+def _idle(request: Request) -> None:
+    running = _board(request).current()
+    if running is not None:
+        message = f"{running.command} is already running, so the drive is busy"
+        raise HTTPException(status_code=CONFLICT, detail=message)
+
+
+def _launch(
+    request: Request,
+    command: str,
+    *,
+    writes: bool,
+    run: Callable[[Controls], BaseModel],
+    stoppable: bool,
+) -> JobView:
+    try:
+        return _view(_board(request).start(command, writes=writes, work=run, stoppable=stoppable))
+    except JobBusyError as error:
         raise HTTPException(status_code=CONFLICT, detail=str(error)) from error
 
 
@@ -136,12 +160,24 @@ def dump_job(spec: DumpSpec, request: Request) -> JobView:
                 flip=controls.ask,
                 progress=controls.step,
             )
-        body = encoded(result.as_disk())
+        outcome = recover(result, drive.captures)
+        for line in outcome.lines:
+            controls.step(line.strip())
+        body = encoded(outcome.result.as_disk())
+        kept = (
+            named_file(
+                CAPTURES_NAME,
+                bundle_zip(drive.captures, image=DUMP_NAME, created=created_now()),
+            )
+            if spec.keep_captures and drive.captures
+            else None
+        )
         return DumpedResult(
-            name="dump.fds",
+            name=DUMP_NAME,
             data=base64.b64encode(body).decode("ascii"),
             size=len(body),
-            grade=str(result.grade),
+            grade=str(outcome.result.grade),
+            captures=kept,
         )
 
     return _start(request, "dump", writes=False, work=work)
@@ -238,20 +274,58 @@ def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
             raise HTTPException(status_code=UNPROCESSABLE, detail=message)
         wanted = disk.sides[spec.side]
 
+    if spec.captures is not None:
+        replay = _replay(spec.captures, spec.side)
+
+        def offline(controls: Controls) -> CalibrationResult:
+            return _calibrated(
+                replay, controls, mode=mode, reads=len(replay.captures), wanted=wanted
+            )
+
+        _idle(request)
+        return _launch(request, "calibrate", writes=False, run=offline, stoppable=True)
+
     def work(drive: FdsStick, controls: Controls) -> CalibrationResult:
         controls.step(NOT_THIS_DRIVE)
-        result = calibrate(
+        return _calibrated(
             drive,
+            controls,
             mode=mode,
             reads=spec.passes,
-            reference=wanted,
-            progress=controls.step,
-            stopped=controls.stopped,
-            bracket=controls.ask if spec.bracket else None,
+            wanted=wanted,
+            bracket=spec.bracket,
         )
-        return CalibrationResult.of(result)
 
     return _start(request, "calibrate", writes=False, work=work, stoppable=True)
+
+
+def _replay(payload: str, side: int) -> Replay:
+    saved = bundle_of(payload).of_side(side)[:MAX_READS]
+    if not saved:
+        message = f"the captures hold no read of side {side}"
+        raise HTTPException(status_code=UNPROCESSABLE, detail=message)
+    return Replay(saved)
+
+
+def _calibrated(
+    reader: RawReader,
+    controls: Controls,
+    *,
+    mode: Mode,
+    reads: int,
+    wanted: Side | None,
+    bracket: bool = False,
+) -> CalibrationResult:
+    result = calibrate(
+        reader,
+        mode=mode,
+        reads=reads,
+        reference=wanted,
+        progress=controls.step,
+        stopped=controls.stopped,
+        bracket=controls.ask if bracket else None,
+    )
+    return CalibrationResult.of(result)
 
 
 def current_job(request: Request) -> CurrentJob:

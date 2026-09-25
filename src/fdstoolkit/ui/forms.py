@@ -31,6 +31,7 @@ FILE_FIELDS: Final = frozenset(
         "recipes",
         "manifest",
         "reference",
+        "captures",
     }
 )
 
@@ -66,6 +67,7 @@ ACCEPTS: Final[dict[str, str]] = {
     "patch": ".ips,.bps,.xdelta",
     "recipes": ".json",
     "manifest": ".json",
+    "captures": ".zip",
 }
 
 

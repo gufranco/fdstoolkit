@@ -5,20 +5,60 @@ from typing import Annotated
 
 import typer
 
-from fdstoolkit.cli.common import Family, decode_image, fail
+from fdstoolkit.cli.common import Family, decode_image, fail, load_captures
+from fdstoolkit.drive.captures import Bundle
+from fdstoolkit.drive.weak import bundle_weak_blocks
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.quality.reads import compare_reads
 from fdstoolkit.report import as_json
 
 
+def _weak_report(bundle: Bundle, *, json_output: bool) -> None:
+    found = bundle_weak_blocks(bundle)
+    if json_output:
+        typer.echo(
+            as_json(
+                {
+                    "reads": len(bundle.captures),
+                    "weak": [
+                        {
+                            "side": side,
+                            "block": entry.block,
+                            "kind": entry.kind,
+                            "unstable": entry.unstable,
+                            "invalid": entry.invalid,
+                            "reads": entry.reads,
+                            "missing": entry.missing,
+                        }
+                        for side, entry in found
+                    ],
+                }
+            )
+        )
+        raise typer.Exit(code=0 if not found else 1)
+    typer.echo(f"saved reads   {len(bundle.captures)}")
+    typer.echo(f"weak blocks   {len(found)}")
+    for side, entry in found:
+        typer.echo(f"side {side} {entry.render()}")
+    raise typer.Exit(code=0 if not found else 1)
+
+
 def reads(
-    images: Annotated[list[Path], typer.Argument(help="two or more dumps of one disk")],
+    images: Annotated[
+        list[Path] | None, typer.Argument(help="two or more dumps of one disk")
+    ] = None,
     *,
+    captures: Annotated[
+        Path | None,
+        typer.Option("--captures", help="map the weak blocks in the captures a dump --raw kept"),
+    ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
     """Compare repeated dumps of one disk and report which blocks move."""
-    disks = [decode_image(path)[0] for path in images]
+    if captures is not None:
+        _weak_report(load_captures(captures), json_output=json_output)
+    disks = [decode_image(path)[0] for path in images or []]
 
     try:
         stats = compare_reads(disks)
@@ -63,6 +103,10 @@ def grade(
         typer.Option("--read", help="another dump of the same disk, repeatable"),
     ] = None,
     *,
+    captures: Annotated[
+        Path | None,
+        typer.Option("--captures", help="count the weak blocks in the captures a dump --raw kept"),
+    ] = None,
     block_map: Annotated[
         bool, typer.Option("--map", help="print the per-block confidence")
     ] = False,
@@ -81,7 +125,8 @@ def grade(
 
     confidence = score_disk(disk, reads=stats)
 
-    report = grade_disk(confidence=confidence, findings=findings, reads=stats)
+    weak = None if captures is None else len(bundle_weak_blocks(load_captures(captures)))
+    report = grade_disk(confidence=confidence, findings=findings, reads=stats, weak_blocks=weak)
 
     if json_output:
         typer.echo(

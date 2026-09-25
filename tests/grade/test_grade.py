@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fdstoolkit.build.blank import blank_image
+from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
 from fdstoolkit.core.disk import Disk, Side
@@ -95,3 +97,20 @@ def test_a_failed_report_names_what_failed() -> None:
 
     assert any(reason.metric == "errors" for reason in report.failures)
     assert "errors" in report.render()
+
+
+def test_weak_blocks_keep_a_clean_disk_from_grading_clean() -> None:
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True))
+
+    report = grade_disk(confidence=score_disk(disk), weak_blocks=2)
+
+    assert report.grade is Grade.MARGINAL
+    assert any(reason.metric == "weak blocks" and not reason.passed for reason in report.reasons)
+
+
+def test_no_weak_block_passes_that_check() -> None:
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True))
+
+    report = grade_disk(confidence=score_disk(disk), weak_blocks=0)
+
+    assert report.grade is Grade.CLEAN

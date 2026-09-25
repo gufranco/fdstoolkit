@@ -19,6 +19,7 @@ from fdstoolkit.codecs.qd import encode as encode_qd
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.doctor import Check, CheckStatus, DoctorReport
+from fdstoolkit.drive.captures import Capture, load_bundle
 from fdstoolkit.hardware import session
 from fdstoolkit.hardware.fdsstick import FdsStick, HidApiTransport
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
@@ -1402,7 +1403,7 @@ def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.Mo
     class CapturingStick(FdsStick):
         def __init__(self, disk: Disk) -> None:
             self._drive = SimulatedDrive(disk)
-            self._captures = [b"\\x55" * 8]
+            self._captures = [Capture(side=0, read=1, data=b"\\x55" * 8)]
 
         def status(self):  # noqa: ANN202
             return self._drive.status()
@@ -1422,7 +1423,8 @@ def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.Mo
         ["dump", "-o", str(tmp_path / "dump.fds"), "--raw", str(tmp_path / "raw")],
     )
 
-    assert (tmp_path / "raw" / "dump.read01.raw03").read_bytes() == b"\\x55" * 8
+    assert (tmp_path / "raw" / "side0.read01.raw03").read_bytes() == b"\\x55" * 8
+    assert load_bundle(tmp_path / "raw").image == "dump.fds"
     assert "packed pulse classes" in result.stdout
 
 
@@ -1494,7 +1496,7 @@ def test_the_web_server_loader_returns_a_runner_and_a_factory() -> None:
 def test_a_drive_that_returned_no_capture_says_so(tmp_path: Path) -> None:
     drive = FdsStick(HidApiTransport(FakeFdsStick()))
 
-    hardware_cmds.keep_captures(drive, tmp_path, stem="d")
+    hardware_cmds.keep_captures(drive, tmp_path, image="d.fds")
 
     assert not list(tmp_path.iterdir())
 
@@ -1516,6 +1518,10 @@ def test_dump_asks_the_operator_to_turn_the_disk_over(
 
         def read_side(self, side: int):  # noqa: ANN202, ARG002
             return self._inner.read_side(self.facing)
+
+        @property
+        def captures(self):  # noqa: ANN202
+            return self._inner.captures
 
     disk, _, _, _ = common.decode_image(image)
     drive = OneFace(disk)
@@ -1608,6 +1614,10 @@ def test_dump_can_be_told_the_disk_is_already_turned_over(
         def read_side(self, side: int):  # noqa: ANN202
             self.facing = side
             return self._inner.read_side(self.facing)
+
+        @property
+        def captures(self):  # noqa: ANN202
+            return self._inner.captures
 
     disk, _, _, _ = common.decode_image(image)
 
@@ -1721,3 +1731,14 @@ def test_status_can_print_json(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.exit_code == 1
     assert payload["ready"] is False
     assert [check["name"] for check in payload["checks"]] == ["hardware support", "fdsstick"]
+
+
+def test_dump_recovers_a_failed_block_from_the_reads_it_kept(
+    single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attach(monkeypatch, single_side, plan=FaultPlan(bad_crc_blocks=frozenset({1})))
+
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.fds"), "--retries", "2"])
+
+    assert "side 0 block 1: recovered by a pulse vote across 3 reads" in result.stdout
+    assert "grade marginal" in result.stdout

@@ -4,10 +4,15 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from fdstoolkit.codecs.raw import encode_block_stream
+from fdstoolkit.codecs.raw import block_regions, encode_block_stream, pack_raw03, unpack_raw03
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.drive.captures import Capture
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
+
+DAMAGE_OFFSET = 40
+DAMAGE_STRIDE = 7
+TRAILING_GAP = 4000
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,17 +46,28 @@ class SimulatedDrive:
         self.read_count = 0
         self.write_count = 0
         self.closed = False
-        self._captures: list[bytes] = []
+        self._captures: list[Capture] = []
 
     def close(self) -> None:
         self.closed = True
 
     @property
-    def captures(self) -> tuple[bytes, ...]:
+    def captures(self) -> tuple[Capture, ...]:
         return tuple(self._captures)
 
-    def _capture(self, side: Side) -> bytes:
-        return encode_block_stream([block.payload for block in side.blocks])
+    def _capture(self, side: Side, read: int = 1) -> bytes:
+        packed = encode_block_stream([block.payload for block in side.blocks])
+        if not self._plan.bad_crc_blocks:
+            return packed
+        values = bytearray(unpack_raw03(packed))
+        regions = block_regions(bytes(values))
+        for index in self._plan.bad_crc_blocks:
+            if index < len(regions):
+                start, end = regions[index]
+                span = max(end - start - 1, 1)
+                spot = start + 1 + (DAMAGE_OFFSET + DAMAGE_STRIDE * read) % span
+                values[spot] = 1 if values[spot] == 0 else 0
+        return pack_raw03(bytes(values) + bytes(TRAILING_GAP))
 
     def status(self) -> DriveStatus:
         return DriveStatus(
@@ -97,7 +113,8 @@ class SimulatedDrive:
     def read_side(self, side: int) -> Iterator[BlockRead]:
         target = self._side(side)
         self.read_count += 1
-        self._captures.append(self._capture(target))
+        read = sum(1 for capture in self._captures if capture.side == side) + 1
+        self._captures.append(Capture(side=side, read=read, data=self._capture(target, read)))
         for index, block in enumerate(target.blocks):
             if self._plan.link_lost_after is not None and index >= self._plan.link_lost_after:
                 message = "the device stopped answering"

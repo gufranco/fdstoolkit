@@ -170,6 +170,21 @@ class GradeResult(BaseModel):
         )
 
 
+class WeakView(BaseModel):
+    side: int
+    block: int
+    kind: str
+    unstable: int
+    invalid: int
+    reads: int
+    missing: int
+
+
+class WeakResult(BaseModel):
+    reads: int
+    weak: list[WeakView]
+
+
 class ReadsResult(BaseModel):
     passes: int
     stability: float
@@ -222,10 +237,12 @@ class VerifySpec(ImageSpec):
 
 class GradeSpec(ImageSpec):
     reads: list[str] = Field(default_factory=list)
+    captures: str | None = Field(None, description="the capture bundle a dump kept, as a zip")
 
 
 class ReadsSpec(BaseModel):
     images: list[str] = Field(default_factory=list)
+    captures: str | None = Field(None, description="the capture bundle a dump kept, as a zip")
 
 
 class CalibrateSpec(BaseModel):
@@ -236,6 +253,7 @@ class CalibrateSpec(BaseModel):
     side: int = Field(0, ge=0, le=SIDES_PER_DISK - 1)
     passes: int = Field(DEFAULT_READS, ge=1, le=MAX_READS)
     bracket: bool = False
+    captures: str | None = Field(None, description="the capture bundle a dump kept, as a zip")
 
 
 class BlankSpec(BaseModel):
@@ -350,12 +368,14 @@ class BuildSpec(BaseModel):
 
 class ConsensusSpec(BaseModel):
     images: list[str] = Field(default_factory=list)
+    captures: str | None = Field(None, description="the capture bundle a dump kept, as a zip")
 
 
 class DumpSpec(BaseModel):
     sides: SideCount = 1
     passes: int = Field(1, ge=1, le=MAX_PASSES)
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
+    keep_captures: bool = False
 
 
 class WriteSpec(BaseModel):
@@ -427,3 +447,4 @@ class FilesResult(BaseModel):
 
 class DumpedResult(FileResult):
     grade: str
+    captures: FileResult | None = None

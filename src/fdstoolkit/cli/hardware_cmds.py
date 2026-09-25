@@ -17,6 +17,8 @@ from fdstoolkit.cli.common import (
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.doctor import CheckStatus, hardware_checks
+from fdstoolkit.drive.captures import created_now, write_bundle
+from fdstoolkit.drive.recovery import recover
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
@@ -128,7 +130,9 @@ def dump(
     ] = 3,
     raw: Annotated[
         Path | None,
-        typer.Option("--raw", help="also keep every pulse capture the drive returned, here"),
+        typer.Option(
+            "--raw", help="also keep every pulse capture the drive returned, with a manifest, here"
+        ),
     ] = None,
     yes: Annotated[
         bool,
@@ -165,12 +169,17 @@ def dump(
     except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
         raise fail(str(error)) from error
 
+    outcome = recover(result, drive.captures)
+    result = outcome.result
+    grade = result.grade if outcome.recovered else grade
     data, _ = fds.encode(result.as_disk(), headered=False)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
+    for line in outcome.lines:
+        typer.echo(line)
     report_blocks(result)
     if raw is not None:
-        keep_captures(drive, raw, stem=output.stem)
+        keep_captures(drive, raw, image=output.name)
     raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
 
 
@@ -188,18 +197,16 @@ def report_blocks(result: DumpResult) -> None:
             )
 
 
-def keep_captures(drive: FdsStick, directory: Path, *, stem: str) -> None:
+def keep_captures(drive: FdsStick, directory: Path, *, image: str) -> None:
     captures = drive.captures
     if not captures:
         typer.echo("  the drive returned no pulse capture to keep")
         return
-    suffix = "raw03"
-    kind = "packed pulse classes"
-    directory.mkdir(parents=True, exist_ok=True)
-    for index, capture in enumerate(captures, start=1):
-        target = directory / f"{stem}.read{index:02d}.{suffix}"
-        target.write_bytes(capture)
-        typer.echo(f"  kept {target} ({len(capture)} bytes of {kind})")
+    written = write_bundle(directory, captures, image=image, created=created_now())
+    typer.echo(
+        f"  kept {len(captures)} capture(s) of packed pulse classes in {directory}, "
+        f"described by {written[0].name}"
+    )
 
 
 def write(

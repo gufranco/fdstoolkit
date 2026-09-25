@@ -277,14 +277,18 @@ def decode_raw03(values: bytes) -> tuple[Side, tuple[Diagnostic, ...]]:
 
 
 def block_starts(values: bytes) -> tuple[int, ...]:
-    _, _, starts = _walk(values)
-    return starts
+    return tuple(start for start, _ in block_regions(values))
 
 
-def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[int, ...]]:
+def block_regions(values: bytes) -> tuple[tuple[int, int], ...]:
+    _, _, regions = _walk(values)
+    return regions
+
+
+def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int, int], ...]]:
     findings: list[Diagnostic] = []
     blocks: list[Block] = []
-    starts: list[int] = []
+    regions: list[tuple[int, int]] = []
     cursor = 0
     pending = 0
 
@@ -321,9 +325,9 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[int, ...]]
         if block.kind is BlockKind.FILE_HEADER:
             pending = FileHeader.parse(payload).size
         blocks.append(block)
-        starts.append(gap)
+        regions.append((gap, cursor))
 
     if not blocks:
         findings.append(_diagnostic("FDS014", Severity.ERROR, {"values": len(values)}))
 
-    return Side(blocks=tuple(blocks), tail=b"", capacity=0), tuple(findings), tuple(starts)
+    return Side(blocks=tuple(blocks), tail=b"", capacity=0), tuple(findings), tuple(regions)

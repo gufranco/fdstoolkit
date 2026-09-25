@@ -169,3 +169,27 @@ test('a calibration reports every read and a verdict', async ({ page }) => {
   await expect(page.locator('#panel .output .banner')).toHaveText(/^reads clean: the whole side reads/);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
+
+test('a dump offers its captures, and reads maps them back at phone width', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'dump');
+  await page.locator('input[data-field=keep_captures]').check();
+  await page.locator('#panel button.run').click();
+
+  const bundle = page.getByRole('link', { name: 'Download dump.captures.zip' });
+  await expect(page.getByRole('link', { name: 'Download dump.fds' })).toBeVisible();
+  await expect(bundle).toBeVisible();
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+
+  const href = await bundle.getAttribute('href');
+  const zip = Buffer.from(href.slice(href.indexOf(',') + 1), 'base64');
+  await openCommand(page, 'reads');
+  await page.locator('input[data-field=captures]').setInputFiles({
+    name: 'dump.captures.zip', mimeType: 'application/zip', buffer: zip,
+  });
+  await page.locator('#panel button.run').click();
+
+  await expect(page.locator('#panel .output')).toContainText('weak');
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});

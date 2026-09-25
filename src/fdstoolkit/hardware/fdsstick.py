@@ -6,6 +6,7 @@ from enum import IntEnum
 from typing import Final, Protocol, cast, runtime_checkable
 
 from fdstoolkit.codecs.raw import decode_raw03, encode_block_stream, unpack_raw03
+from fdstoolkit.drive.captures import Capture
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, Watchdog
 
@@ -61,11 +62,11 @@ class FdsStick:
     def __init__(self, transport: HidTransport, *, ceiling: float = UNMEASURED_CEILING_S) -> None:
         self._transport = transport
         self._watchdog = Watchdog(on_stall=self.close, ceiling=ceiling)
-        self._captures: list[bytes] = []
+        self._captures: list[Capture] = []
         self._resyncs: list[tuple[int, int]] = []
 
     @property
-    def captures(self) -> tuple[bytes, ...]:
+    def captures(self) -> tuple[Capture, ...]:
         return tuple(self._captures)
 
     @property
@@ -154,7 +155,8 @@ class FdsStick:
 
     def read_side(self, side: int) -> Iterator[BlockRead]:
         packed = self.read_raw_side(what=f"reading side {side}")
-        self._captures.append(packed)
+        read = sum(1 for capture in self._captures if capture.side == side) + 1
+        self._captures.append(Capture(side=side, read=read, data=packed))
         values = unpack_raw03(packed)
         decoded, _ = decode_raw03(values)
         for index, block in enumerate(decoded.blocks):

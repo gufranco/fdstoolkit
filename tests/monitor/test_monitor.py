@@ -13,6 +13,7 @@ from fdstoolkit.drive.monitor import (
     MAX_READS,
     HeadReading,
     Mode,
+    Replay,
     SideSample,
     SpeedReading,
     Trend,
@@ -378,3 +379,15 @@ def test_declining_a_step_ends_a_bracketed_calibration() -> None:
     assert reader.reads == 1
     assert result.bracket is not None
     assert "keep turning" in result.headline
+
+
+def test_a_replay_hands_back_saved_reads_in_order_and_then_stops() -> None:
+    replay = Replay((b"\x01", b"\x02"))
+
+    first = replay.read_raw_side(what="calibration read 1")
+    second = replay.read_raw_side(what="calibration read 2")
+
+    assert (first, second) == (b"\x01", b"\x02")
+    assert replay.reads == 2
+    with pytest.raises(ValueError, match="calibration read 3: the captures hold 2 reads"):
+        replay.read_raw_side(what="calibration read 3")

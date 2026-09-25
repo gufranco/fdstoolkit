@@ -20,6 +20,7 @@ from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, 
 from fdstoolkit.core.diagnostics import worst_severity
 from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
 from fdstoolkit.doctor import CheckStatus, hardware_checks
+from fdstoolkit.drive.weak import bundle_weak_blocks
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
@@ -48,8 +49,10 @@ from fdstoolkit.ui.schemas import (
     ReadsSpec,
     VerifyResult,
     VerifySpec,
+    WeakResult,
+    WeakView,
 )
-from fdstoolkit.ui.shared import BAD_REQUEST, UNPROCESSABLE, decode_payload, named_file
+from fdstoolkit.ui.shared import BAD_REQUEST, UNPROCESSABLE, bundle_of, decode_payload, named_file
 from fdstoolkit.version import VERSION
 
 STATIC_DIR: Final = Path(str(resources.files("fdstoolkit.ui") / "static"))
@@ -180,10 +183,34 @@ def grade(spec: GradeSpec) -> GradeResult:
     others = [decode_payload(entry)[0] for entry in spec.reads]
     stats = compare_reads([disk, *others]) if others else None
     confidence = score_disk(disk, reads=stats)
-    return GradeResult.of(grade_disk(confidence=confidence, findings=findings, reads=stats))
+    weak = None if spec.captures is None else len(bundle_weak_blocks(bundle_of(spec.captures)))
+    return GradeResult.of(
+        grade_disk(confidence=confidence, findings=findings, reads=stats, weak_blocks=weak)
+    )
 
 
-def reads(spec: ReadsSpec) -> ReadsResult:
+def weak_result(payload: str) -> WeakResult:
+    bundle = bundle_of(payload)
+    return WeakResult(
+        reads=len(bundle.captures),
+        weak=[
+            WeakView(
+                side=side,
+                block=entry.block,
+                kind=entry.kind,
+                unstable=entry.unstable,
+                invalid=entry.invalid,
+                reads=entry.reads,
+                missing=entry.missing,
+            )
+            for side, entry in bundle_weak_blocks(bundle)
+        ],
+    )
+
+
+def reads(spec: ReadsSpec) -> ReadsResult | WeakResult:
+    if spec.captures is not None:
+        return weak_result(spec.captures)
     if len(spec.images) < MIN_READS:
         message = "comparing reads needs at least two dumps of the same disk"
         raise HTTPException(status_code=UNPROCESSABLE, detail=message)

@@ -13,6 +13,7 @@ from fdstoolkit.codecs import fds
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import Disk
+from fdstoolkit.drive.captures import Bundle, BundleError, read_zip
 from fdstoolkit.ui.schemas import FileResult
 
 BAD_REQUEST: Final = 400
@@ -47,6 +48,13 @@ def decode_payload(payload: str) -> tuple[Disk, bytes, tuple[Diagnostic, ...]]:
     except ValueError as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
     return disk, data, findings
+
+
+def bundle_of(payload: str) -> Bundle:
+    try:
+        return read_zip(bytes_of(payload))
+    except BundleError as error:
+        raise HTTPException(status_code=UNPROCESSABLE, detail=str(error)) from error
 
 
 def encoded(disk: Disk, *, headered: bool = False) -> bytes:

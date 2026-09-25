@@ -293,7 +293,8 @@ export function isDownload(entry) {
 
 export function renderResult(target, payload) {
   if (isDownload(payload)) {
-    target.replaceChildren(banner('good', t('state.file')), download(payload));
+    const extra = Object.values(payload).filter(isDownload);
+    target.replaceChildren(banner('good', t('state.file')), download(payload), ...extra.map(download));
     return;
   }
   if (payload && isDownload(payload.file)) {

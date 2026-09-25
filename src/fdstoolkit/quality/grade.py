@@ -47,6 +47,7 @@ def grade_disk(
     confidence: ConfidenceReport,
     findings: Sequence[Diagnostic] = (),
     reads: ReadStatistics | None = None,
+    weak_blocks: int | None = None,
 ) -> GradedReport:
     errors = sum(1 for finding in findings if finding.severity is Severity.ERROR)
     warnings = sum(1 for finding in findings if finding.severity is Severity.WARNING)
@@ -70,6 +71,16 @@ def grade_disk(
                 value=reads.stability,
                 threshold=STABLE_READS,
                 passed=reads.stability >= STABLE_READS,
+            )
+        )
+
+    if weak_blocks is not None:
+        reasons.append(
+            Reason(
+                metric="weak blocks",
+                value=weak_blocks,
+                threshold=NO_FINDINGS,
+                passed=not weak_blocks,
             )
         )
 

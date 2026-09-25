@@ -22,7 +22,7 @@
 
 </div>
 
-**27** commands, every one but `doctor` also on the local web page. **1,210** Python tests and **131** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**27** commands, every one but `doctor` also on the local web page. **1,282** Python tests and **132** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -97,6 +97,8 @@ open without a udev rule; `doctor` fails that check and prints the rule to insta
 Digests print as `fdstoolkit:v1:<profile>/v1:<sha256>`. Under `release`, 142 of 144 groups in a 595-image corpus agree; under `content`, 125.
 
 **An FDSStick capture carries classes, not timing.** The device rounds every pulse to one of three nominal lengths in hardware, and `dump --raw` keeps those classes as `raw03` files. A pulse carries no duration, but it does carry a length class, and the bytes on a disk decide exactly which class each pulse should have. So against an image of the same disk, a pulse read one class shorter than its content requires means the drive runs fast, and one class longer means it runs slow. That is what `calibrate speed` counts. A drive a percent or two off still classifies every pulse correctly, so the last stretch of adjustment needs a console speed test or a strobe.
+
+**A saved capture is the disk as the drive saw it.** `dump --raw <dir>` writes every read of every side as `side{S}.read{NN}.raw03`, plus a `manifest.json` naming each file with its side, read number, size and SHA-256, the image it belongs to, and when it was kept. The web page hands the same bundle back as one zip. Every command that takes `--captures` reads either form and refuses a file whose digest no longer matches, so a bundle can be kept for years and read again without the disk. Because a class sits on every pulse, an error in a read is one pulse in the wrong class, never an extra or a missing pulse, and three reads that each went wrong in a different place can be voted back into the pulses the disk holds.
 
 **A game is one disk.** Every game uses a single disk, with one or two sides, and no game spans a second disk. An image holding more than two sides bundles several disks together, and every command refuses it.
 
@@ -178,10 +180,10 @@ Structural and checksum findings, each with a code. `--strict` fails on warnings
 #### `grade`
 
 ```bash
-fdstoolkit grade <image> [--read <r>...] [--map] [--json]
+fdstoolkit grade <image> [--read <r>...] [--captures <bundle>] [--map] [--json]
 ```
 
-A grade with the measurement behind it. `--read` folds in repeated dumps, `--map` prints the per-block confidence and the basis for each.
+A grade with the measurement behind it. `--read` folds in repeated dumps, `--captures` counts the weak blocks a saved capture bundle shows, and `--map` prints the per-block confidence and the basis for each. A single weak block holds the grade at marginal, since a block whose pulses move between reads is the one that fails next.
 
 ```bash
 fdstoolkit grade disk.fds --read pass2.fds
@@ -205,9 +207,22 @@ Confidence starts from the checksum state and is adjusted by read agreement. A c
 
 ```bash
 fdstoolkit reads <images>... [--json]
+fdstoolkit reads --captures <bundle> [--json]
 ```
 
 Compares repeated dumps of one physical disk block by block. Reports stability, which blocks move, and the direction of the bit flips. Magnetic decay loses transitions, so ones fall to zeros; the report names that as `loss`, the opposite as `gain`, and both as `mixed`.
+
+With `--captures`, the same question is asked one layer down. Dumps can only disagree once a block has already failed its checksum; saved captures show the pulses that move between reads while every block still reads clean. Each weak block is listed with how many of its pulses differ, how many were invalid, and how many reads lost it altogether, the blocks some read never found first.
+
+```bash
+fdstoolkit reads --captures captures/
+```
+
+```
+saved reads   3
+weak blocks   1
+side 0 block 3 (file data): 1 pulse(s) differ across 3 read(s), 0 invalid
+```
 
 ```bash
 fdstoolkit reads pass1.fds pass2.fds pass3.fds
@@ -322,10 +337,13 @@ Replace blocks whose CRC fails with the same block from a donor dump that has it
 #### `consensus`
 
 ```bash
-fdstoolkit consensus <dumps>... -o <out> [--map] [--json] [--force]
+fdstoolkit consensus <dumps>... -o <out> [--captures <bundle>] [--map] [--json] [--force]
+fdstoolkit consensus --captures <bundle> -o <out> [--json] [--force]
 ```
 
 Merges several dumps of one disk block by block, by majority, into one image, and reports every block the dumps disagree on. `--map` prints the per-block agreement.
+
+`--captures` rebuilds a disk from a saved capture bundle by a pulse vote: for every block no read got right, the pulses of each read that reached it are compared one by one and the majority is kept. It needs three reads of the block, and a block every read got wrong in the same place stays wrong, because a vote cannot outvote a shared error. Alone, the rebuilt disk is the output and every block it could not fix is named. With dumps, the rebuilt disk joins them as one more voter.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/consensus-dark.png">
@@ -449,7 +467,9 @@ Version, Python, platform, whether hardware support is installed, which devices 
 fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [--yes] [--force]
 ```
 
-Read a disk. `--passes` reads each side more than once, `--retries` re-reads a side that has failed blocks up to that many more times, and `--raw` keeps every pulse capture the drive returned.
+Read a disk. `--passes` reads each side more than once, `--retries` re-reads a side that has failed blocks up to that many more times, and `--raw` keeps every pulse capture the drive returned as a bundle the other commands read back.
+
+A block that failed on every read is not given up on. The captures of those reads go to the same pulse vote `consensus --captures` runs, and a block the vote rebuilds is written into the image, named on its own line, and leaves the grade at marginal rather than clean. A disk read once has a single capture per side, so the vote only has material after `--retries` or `--passes`.
 
 The drive cannot read one block on its own, so every retry is a full read of the side. That is why the budget is per side rather than per block: each re-read resolves every block still failing, and a side with ten bad blocks costs at most `--retries` more reads, not ten times that. A re-read block is matched by its type and file number, never by position, so a damaged block that vanishes on the re-read cannot shift the ones after it. Blocks that only read clean on a re-read are counted as a sign the disk is wearing.
 
@@ -607,9 +627,12 @@ Exit status is 0 only when every pattern held and the finish verified.
 
 ```bash
 fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--json]
+fdstoolkit calibrate speed|head --captures <bundle> [--reference <image>] [--side N] [--json]
 ```
 
 Reads the same side over and over while you adjust the drive, and says after every read what changed. It is meant to run while a screwdriver is in the drive: turn a little, watch the next line, turn again. `--passes` sets how many reads, 20 by default and 200 at most. Ctrl-C, or Stop on the page, ends it after the read in progress and reports what it saw.
+
+`--captures` replays the reads a `dump --raw` kept instead of reading the drive, with no stick attached. Each saved read of `--side` becomes one line, so a dump that went badly can be read again later for what it says about the drive, and a bundle someone sends from another drive can be judged without that drive.
 
 The disk in the drive must be one this drive did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment writes disks that it reads back and no other drive does, so reading its own writes proves nothing. The command says so before the first read.
 
@@ -722,6 +745,8 @@ The page binds `127.0.0.1:8000` by default. It is not a service: nothing listens
 
 The rule the design turns on is that the web layer decides nothing. Every route parses its payload, calls the same function the command calls, and reports what came back. A grade requested through the page carries the same confidence and the same basis as `grade` prints, because it is the same call. That is checked rather than asserted: the tests compare a route's answer against the command's answer for the same input.
 
+Saved captures travel the same way. A dump with `keep captures` set offers the bundle as a second download beside the image, and `consensus`, `reads`, `grade` and `calibrate` each take that zip in a `captures` field. A calibration that replays captures never opens the drive, so it runs with no stick attached.
+
 | Route | Command it mirrors |
 |---|---|
 | `GET /api/catalogue` | the profile, format and target tables |
@@ -765,13 +790,14 @@ The interface is in English and Japanese. Both dictionaries carry the same keys,
 One dump says what the drive read once. Two say whether it read the same thing twice.
 
 ```bash
-fdstoolkit dump -o pass1.fds --raw captures/
+fdstoolkit dump -o pass1.fds --passes 3 --raw captures/
 fdstoolkit dump -o pass2.fds
 fdstoolkit reads pass1.fds pass2.fds
-fdstoolkit grade pass1.fds --read pass2.fds
+fdstoolkit reads --captures captures/
+fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 ```
 
-If the two disagree, `consensus` merges them by majority and names every block that did not settle. If one dump has a block another has good, `splice` takes it.
+Three passes give the bundle three reads of every side, which is what the weak-block map and the pulse vote need. If the two dumps disagree, `consensus` merges them by majority and names every block that did not settle, and `consensus pass1.fds pass2.fds --captures captures/` adds the pulse vote as one more voter. If one dump has a block another has good, `splice` takes it. Keep the bundle with the images: it is the only record of how the disk read, and it can be voted again later without the disk.
 
 ### Calibrating a drive, coarse then fine
 

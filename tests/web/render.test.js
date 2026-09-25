@@ -35,6 +35,20 @@ describe('renderResult', () => {
     expect(target.querySelector('.download-size').textContent).toBe('127.9 KiB');
   });
 
+  it('offers the capture bundle a dump kept beside the image', () => {
+    renderResult(target, {
+      name: 'dump.fds',
+      data: 'AA==',
+      size: 10,
+      grade: 'clean',
+      captures: { name: 'dump.captures.zip', data: 'AA==', size: 20 },
+    });
+
+    const links = [...target.querySelectorAll('a')].map((link) => link.download);
+
+    expect(links).toEqual(['dump.fds', 'dump.captures.zip']);
+  });
+
   it('offers every file when the payload carries several', () => {
     const files = [
       { name: 'a.fds', data: 'AA==', size: 10 },

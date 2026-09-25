@@ -17,8 +17,11 @@ from fdstoolkit.codecs.raw import (
     SHORT_LIMIT,
     VALUES_PER_BYTE,
     RawEncoding,
+    block_regions,
+    block_starts,
     class_histogram,
     decode_raw03,
+    encode_block_stream,
     encode_era_b,
     encode_raw03,
     pack_raw03,
@@ -226,3 +229,15 @@ def test_a_block_whose_crc_does_not_match_is_reported() -> None:
     _, findings = decode_raw03(stream)
 
     assert "FDS002" in [finding.code for finding in findings]
+
+
+def test_every_decoded_block_carries_where_it_starts_and_ends() -> None:
+    payloads = [bytes([0x01]) + bytes(55), bytes([0x02, 0x00])]
+    values = unpack_raw03(encode_block_stream(payloads))
+
+    regions = block_regions(values)
+
+    assert len(regions) == len(payloads)
+    assert all(start < end for start, end in regions)
+    assert regions[0][1] <= regions[1][0]
+    assert block_starts(values) == tuple(start for start, _ in regions)
