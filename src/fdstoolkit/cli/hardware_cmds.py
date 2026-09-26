@@ -198,16 +198,8 @@ def dump(
 
 def report_blocks(result: DumpResult) -> None:
     for side in result.sides:
-        if side.marginal_blocks:
-            typer.echo(
-                f"  side {side.index}: {len(side.marginal_blocks)} block(s) only read clean on "
-                "a re-read, so this disk is wearing"
-            )
-        if side.failed_blocks:
-            typer.echo(
-                f"  side {side.index}: {len(side.failed_blocks)} block(s) never read clean, "
-                f"blocks {', '.join(str(index) for index in side.failed_blocks)}"
-            )
+        for line in side.lines:
+            typer.echo(f"  {line}")
 
 
 def keep_captures(drive: FdsStick, directory: Path, *, image: str) -> None:

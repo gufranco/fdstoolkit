@@ -18,7 +18,7 @@ from fdstoolkit.codecs.raw import (
     unpack_raw03,
 )
 from fdstoolkit.core.bios import BIOS_ERRORS
-from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.blocks import BLOCKS_PER_FILE, Block, BlockKind, declared_blocks
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Side
 from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
@@ -32,8 +32,6 @@ BIAS_PULSES: Final = 16
 BIAS_SHARE: Final = 0.75
 BLOCK_EXPECTED: Final = 0x21
 CRC_FAILED: Final = 0x27
-HEAD_BLOCKS: Final = 2
-BLOCKS_PER_FILE: Final = 2
 
 RECOGNISED: Final = (
     "this is the fdstoolkit calibration disk, side {side}: every pulse is compared with "
@@ -270,7 +268,7 @@ def _against_learned(
 def _declared_blocks(decoded: Sequence[Block]) -> int:
     for block in decoded:
         if block.kind is BlockKind.FILE_AMOUNT and good_block(block):
-            return HEAD_BLOCKS + BLOCKS_PER_FILE * block.payload[1]
+            return declared_blocks(block.payload)
     return 0
 
 

@@ -8,7 +8,7 @@ from typing import Final
 from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.bitstream import emulated_side_size
-from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.blocks import Block, BlockKind, declared_blocks
 from fdstoolkit.core.disk import Disk, Side, require_readable_sides
 from fdstoolkit.hardware.ports import (
     BlockRead,
@@ -24,6 +24,7 @@ MAX_PASSES: Final = 20
 MIN_PASSES = 2
 EMULATED_CAPACITY = 66560
 DISK_INFO_KIND: Final = bytes([BlockKind.DISK_INFO])
+FILE_AMOUNT_KIND: Final = bytes([BlockKind.FILE_AMOUNT])
 
 
 class Grade(StrEnum):
@@ -116,8 +117,32 @@ class SideDump:
         return tuple(block.index for block in self.blocks if block.failed)
 
     @property
+    def missing_blocks(self) -> int:
+        return max(_declared(self.blocks) - len(self.blocks), 0)
+
+    @property
+    def lines(self) -> tuple[str, ...]:
+        found: list[str] = []
+        if self.marginal_blocks:
+            found.append(
+                f"side {self.index}: {len(self.marginal_blocks)} block(s) only read clean on "
+                "a re-read, so this disk is wearing"
+            )
+        if self.failed_blocks:
+            found.append(
+                f"side {self.index}: {len(self.failed_blocks)} block(s) never read clean, "
+                f"blocks {', '.join(str(index) for index in self.failed_blocks)}"
+            )
+        if self.missing_blocks:
+            found.append(
+                f"side {self.index}: {self.missing_blocks} block(s) the side declares were never "
+                f"found, after block {len(self.blocks) - 1}"
+            )
+        return tuple(found)
+
+    @property
     def grade(self) -> Grade:
-        if self.failed_blocks or not self.blocks:
+        if self.failed_blocks or self.missing_blocks or not self.blocks:
             return Grade.FAILED
         if self.marginal_blocks:
             return Grade.MARGINAL
@@ -245,13 +270,44 @@ def _identities(blocks: Sequence[BlockRead]) -> tuple[Identity | None, ...]:
     return tuple(found)
 
 
+def _declared(blocks: Sequence[BlockRead]) -> int:
+    for block in blocks:
+        if block.crc_ok and block.payload[:1] == FILE_AMOUNT_KIND:
+            return declared_blocks(block.payload)
+    return 0
+
+
+def _unfinished(blocks: Sequence[BlockRead]) -> bool:
+    return any(not block.crc_ok for block in blocks) or len(blocks) < _declared(blocks)
+
+
+def _missing_from(
+    resolved: Sequence[BlockRead], again: Sequence[BlockRead], reads: int
+) -> list[BlockRead]:
+    have = set(_identities(resolved))
+    return [
+        BlockRead(
+            index=len(resolved) + offset,
+            payload=block.payload,
+            crc_ok=block.crc_ok,
+            attempts=reads,
+            stored_crc=block.stored_crc,
+        )
+        for offset, block in enumerate(
+            block
+            for identity, block in zip(_identities(again), again, strict=True)
+            if identity is not None and identity not in have
+        )
+    ]
+
+
 def _read_side_with_retries(reader: DiskReader, side: int, retries: int) -> tuple[BlockRead, ...]:
     resolved = list(reader.read_side(side))
-    wanted = _identities(resolved)
     reads = 1
-    while reads <= retries and any(not block.crc_ok for block in resolved):
+    while reads <= retries and _unfinished(resolved):
         reads += 1
         again = list(reader.read_side(side))
+        wanted = _identities(resolved)
         clean = {
             identity: block
             for identity, block in zip(_identities(again), again, strict=True)
@@ -270,6 +326,7 @@ def _read_side_with_retries(reader: DiskReader, side: int, retries: int) -> tupl
                 attempts=reads,
                 stored_crc=found.stored_crc,
             )
+        resolved += _missing_from(resolved, again, reads)
     return tuple(resolved)
 
 

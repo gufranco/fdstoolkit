@@ -62,6 +62,44 @@ class DroppingDrive(SimulatedDrive):
         return iter(blocks[: self.dropped] + blocks[self.dropped + 1 :])
 
 
+class ShortFirstReadDrive(SimulatedDrive):
+    def __init__(self, disk: Disk, *, kept: int) -> None:
+        super().__init__(disk)
+        self.kept = kept
+
+    def read_side(self, side: int) -> Iterator[BlockRead]:
+        blocks = list(super().read_side(side))
+        if self.read_count == 1:
+            return iter(blocks[: self.kept])
+        return iter(blocks)
+
+
+def test_a_read_that_stopped_before_the_declared_files_is_read_again() -> None:
+    disk = disk_with_files()
+    drive = ShortFirstReadDrive(disk, kept=3)
+
+    result = dump(drive, sides=1, retries=2)
+
+    assert drive.read_count == 2
+    assert [block.payload for block in result.sides[0].blocks] == [
+        block.payload for block in disk.sides[0].blocks
+    ]
+    assert result.sides[0].marginal_blocks == tuple(range(3, len(disk.sides[0].blocks)))
+
+
+def test_a_side_that_never_reads_its_declared_files_fails() -> None:
+    drive = ShortFirstReadDrive(disk_with_files(), kept=3)
+
+    result = dump(drive, sides=1, retries=0)
+
+    missing = len(disk_with_files().sides[0].blocks) - 3
+    assert result.sides[0].grade is Grade.FAILED
+    assert result.sides[0].missing_blocks == missing
+    assert result.sides[0].lines == (
+        f"side 0: {missing} block(s) the side declares were never found, after block 2",
+    )
+
+
 def test_many_failed_blocks_share_one_retry_budget() -> None:
     disk = disk_with_files()
     flaky = dict.fromkeys(range(2, len(disk.sides[0].blocks)), 99)

@@ -16,6 +16,14 @@ FILE_SIZE_OFFSET: Final = 0x0D
 FILE_KIND_OFFSET: Final = 0x0F
 
 
+HEAD_BLOCKS: Final = 2
+BLOCKS_PER_FILE: Final = 2
+
+
+def declared_blocks(file_amount: bytes) -> int:
+    return HEAD_BLOCKS + BLOCKS_PER_FILE * file_amount[1]
+
+
 class BlockKind(IntEnum):
     DISK_INFO = 1
     FILE_AMOUNT = 2
