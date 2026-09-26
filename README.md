@@ -747,7 +747,7 @@ judge the drive only with a disk it did not write: a factory disk, or one writte
 reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another
 ```
 
-The head tolerance is about 0.05 mm, so adjust a quarter turn at a time and read again. Once it reads clean, repeat with two more factory disks: a head can be set to suit one disk and miss another. Neither mode can say which way to turn, only whether the last turn helped.
+The head tolerance is about 0.05 mm and a full turn of the head screw moves the head about one track, so adjust about 45 degrees at a time and read again, as the FDSStick's author advises. Once it reads clean, repeat with two more factory disks: a head can be set to suit one disk and miss another. Neither mode can say which way to turn, only whether the last turn helped.
 
 Each failing read also names the error a console would stop on for it, from the console's own table: `22` to `25` when block 1 to 4 is not found, `27` when a block is found and fails its checksum. These are the numbers the repair guides talk about, so a line reads the same way the television would. It is the stick's read translated, not a console's: a console reads with its own drive electronics, and could stop one block earlier or later.
 
@@ -854,7 +854,7 @@ Three passes give the bundle three reads of every side, which is what the weak-b
 
 1. Clean the head before anything else. Contamination reads as a media fault.
 2. Take a factory disk, or a calibration disk written on a drive you trust. Never use a disk this drive wrote. An image of the factory disk sharpens the count, and without one `calibrate` learns each block from the reads that come back clean.
-3. After a belt replacement, run `calibrate head` and adjust the spindle hub, then the head, a quarter turn at a time, until every read is clean.
+3. After a belt replacement, run `calibrate head` and adjust the spindle hub, then the head, about 45 degrees at a time, until every read is clean.
 4. Run `calibrate speed` and raise or lower the motor speed as it says until it reads clean.
 5. Finish the speed with a console test or a strobe, since the stick cannot see the last percent.
 6. Repeat `calibrate head` with two more factory disks. Then confirm with a disk known to be hard to read: community practice uses a specific side with 39 files, and a pass means all 39 with no checksum error.

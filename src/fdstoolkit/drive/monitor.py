@@ -89,6 +89,10 @@ SPEED_ADVICE: Final[dict[SpeedReading, str]] = {
     ),
 }
 
+FINE_TURN: Final = (
+    "Turn the head screw about 45 degrees, since a full turn moves the head about one track,"
+)
+
 HEAD_ADVICE: Final[dict[HeadReading, str]] = {
     HeadReading.NOTHING: (
         "no block was found: the head or the spindle hub is far out of position, or the "
@@ -96,11 +100,11 @@ HEAD_ADVICE: Final[dict[HeadReading, str]] = {
     ),
     HeadReading.START: (
         "the first blocks are missing and the rest read: the head starts in the wrong place. "
-        "Adjust a quarter turn and watch whether more of the start comes back"
+        f"{FINE_TURN} and watch whether more of the start comes back"
     ),
     HeadReading.END: (
-        "the side reads until near its end: the head runs out of travel. Adjust a quarter "
-        "turn and watch whether the end comes back"
+        "the side reads until near its end: the head runs out of travel. "
+        f"{FINE_TURN} and watch whether the end comes back"
     ),
     HeadReading.SCATTERED: (
         "failures are spread across the side, which points at speed or at the disk rather "

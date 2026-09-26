@@ -468,3 +468,12 @@ def test_learning_keeps_the_first_clean_copy_and_ignores_failed_blocks() -> None
 
     assert len(learned) == len(side.blocks)
     assert learn(learned, clean.blocks) == learned
+
+
+def test_head_advice_names_a_fine_turn_for_a_head_nearly_in_place() -> None:
+    side = reference_side()
+
+    found = sample(stream(side, keep=slice(2, None)), side)
+
+    assert "45 degrees" in advice(Mode.HEAD, found)
+    assert "one track" in advice(Mode.HEAD, found)
