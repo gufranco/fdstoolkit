@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from fdstoolkit.codecs.raw import block_regions, encode_block_stream, pack_raw03, unpack_raw03
+from fdstoolkit.codecs.raw import (
+    NOMINAL_LONG,
+    NOMINAL_MEDIUM,
+    NOMINAL_SHORT,
+    block_regions,
+    encode_block_stream,
+    pack_raw03,
+    unpack_raw03,
+)
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.drive.captures import Capture
@@ -13,6 +22,10 @@ from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, Hardwar
 DAMAGE_OFFSET = 40
 DAMAGE_STRIDE = 7
 TRAILING_GAP = 4000
+NOMINAL_COUNTS = (NOMINAL_SHORT, NOMINAL_MEDIUM, NOMINAL_LONG, NOMINAL_LONG * 2)
+COUNT_SCALE = 1.5
+COUNT_JITTER = 3
+BYTE_MAX = 255
 CRC_DAMAGE = 0xFFFF
 
 
@@ -27,6 +40,20 @@ class FaultPlan:
     writes_do_not_stick: bool = False
 
 
+def counts_of(packed: bytes) -> bytes:
+    classes = unpack_raw03(packed) + bytes(TRAILING_GAP)
+    offsets = hashlib.shake_256(b"counts").digest(len(classes))
+    return bytes(
+        min(
+            BYTE_MAX,
+            round(NOMINAL_COUNTS[value] * COUNT_SCALE)
+            + offset % (2 * COUNT_JITTER + 1)
+            - COUNT_JITTER,
+        )
+        for value, offset in zip(classes, offsets, strict=True)
+    )
+
+
 class SimulatedDrive:
     def __init__(
         self,
@@ -36,8 +63,10 @@ class SimulatedDrive:
         battery_ok: bool = True,
         ready: bool = True,
         plan: FaultPlan | None = None,
+        timing_mode: int | None = None,
     ) -> None:
         self._disk = disk
+        self._timing_mode = timing_mode
         self._write_protected = write_protected
         self._battery_ok = battery_ok
         self._ready = ready
@@ -133,10 +162,13 @@ class SimulatedDrive:
                 stored_crc=block.computed_crc if crc_ok else block.computed_crc ^ CRC_DAMAGE,
             )
 
-    def read_raw_side(self, *, what: str) -> bytes:
+    def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
         del what
         self.read_count += 1
-        return self._capture(self._side(self._raw_side()))
+        packed = self._capture(self._side(self._raw_side()))
+        if mode and mode == self._timing_mode:
+            return counts_of(packed)
+        return packed
 
     def _raw_side(self) -> int:
         return 0

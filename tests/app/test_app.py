@@ -265,7 +265,7 @@ def test_the_device_route_reports_what_the_check_found(client: TestClient) -> No
 def test_only_the_commands_that_open_a_drive_are_marked() -> None:
     marked = {form.command for form in forms() if form.needs_hardware}
 
-    assert marked == {"calibrate", "dump", "write", "surface"}
+    assert marked == {"calibrate", "dump", "write", "surface", "probe"}
 
 
 def test_a_command_whose_source_is_unreadable_is_marked_rather_than_cleared() -> None:

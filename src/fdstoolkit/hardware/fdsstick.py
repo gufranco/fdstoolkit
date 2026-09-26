@@ -97,12 +97,12 @@ class FdsStick:
             lambda: self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
         )
 
-    def read_raw_side(self, *, what: str = "reading a side") -> bytes:
+    def read_raw_side(self, *, what: str = "reading a side", mode: int = MODE_READ) -> bytes:
         with self._watchdog.side(what):
-            return self._read_raw()
+            return self._read_raw(mode)
 
-    def _read_raw(self) -> bytes:
-        self._start(MODE_READ)
+    def _read_raw(self, mode: int) -> bytes:
+        self._start(mode)
         out = bytearray()
         expected = FIRST_SEQUENCE
         opening = True

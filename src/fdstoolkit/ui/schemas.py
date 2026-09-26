@@ -256,6 +256,7 @@ class CalibrateSpec(BaseModel):
     passes: int = Field(DEFAULT_READS, ge=1, le=MAX_READS)
     bracket: bool = False
     captures: str | None = Field(None, description="the capture bundle a dump kept, as a zip")
+    timing_mode: int | None = Field(None, ge=0x02, le=0xFF)
 
 
 class BlankSpec(BaseModel):
@@ -395,6 +396,10 @@ class SurfaceSpec(BaseModel):
     passes: int = Field(1, ge=1, le=MAX_PASSES)
     quick: bool = False
     finish: str = "leave"
+    confirm: bool = False
+
+
+class ProbeSpec(BaseModel):
     confirm: bool = False
 
 

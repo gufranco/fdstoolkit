@@ -186,3 +186,19 @@ def test_calibration_refuses_captures_with_no_read_of_that_side(client: TestClie
 
     assert answer.status_code == UNPROCESSABLE
     assert "hold no read of side 1" in answer.json()["detail"]
+
+
+def test_replayed_captures_warn_that_a_timing_mode_shows_nothing(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    no_drive(monkeypatch)
+    disk = disk_with_a_file()
+
+    job = run(
+        app,
+        client,
+        "/api/jobs/calibrate",
+        {"mode": "speed", "captures": b64(zipped(disk, (None,))), "timing_mode": 3},
+    )
+
+    assert job["steps"][0].startswith("warning: saved captures hold pulse classes")

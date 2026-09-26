@@ -69,19 +69,20 @@ class RawEncoding(StrEnum):
     ERA_B = "era-b"
 
 
-def quantise(counts: bytes) -> bytes:
+def quantise(counts: bytes, scale: float = 1.0) -> bytes:
+    limits = (SHORT_LIMIT * scale, CLASS0_LIMIT * scale, CLASS1_LIMIT * scale, CLASS2_LIMIT * scale)
     out = bytearray()
     for count in counts:
-        if count < SHORT_LIMIT:
-            out.append(3)
-        elif count < CLASS0_LIMIT:
+        if count < limits[0]:
+            out.append(MAX_CLASS)
+        elif count < limits[1]:
             out.append(0)
-        elif count < CLASS1_LIMIT:
+        elif count < limits[2]:
             out.append(1)
-        elif count < CLASS2_LIMIT:
+        elif count < limits[3]:
             out.append(2)
         else:
-            out.append(3)
+            out.append(MAX_CLASS)
     return bytes(out)
 
 

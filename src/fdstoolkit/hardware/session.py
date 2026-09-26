@@ -245,9 +245,10 @@ STALE_BLOCK: Final = (
 )
 REFUSED_WRITE: Final = (
     "the disk reads back exactly as it was before the write, so it did not take the write. "
-    "Check the disk's write-protect tab first. After that, this is what a drive with an "
-    "FD3206 controller does when it silently refuses a full-surface write; check the chip "
-    "marking, FD3206P rather than FD7201P, before suspecting the image"
+    "That is what a drive with an FD3206 controller does when it silently refuses a "
+    "full-surface write; check the chip marking, FD3206P rather than FD7201P, before "
+    "suspecting the image. A side whose write-protect tab is broken off may be refused too, "
+    "though whether the drive enforces the tab for an FDSStick is not documented"
 )
 HALF_WRITE: Final = (
     "the disk took everything but its disk information block, which still reads as it was "

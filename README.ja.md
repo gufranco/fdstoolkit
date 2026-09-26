@@ -22,7 +22,7 @@
 
 </div>
 
-コマンドは **27** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,394** 件、ページが **134** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
+コマンドは **28** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,421** 件、ページが **134** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
 
 ---
 
@@ -505,7 +505,7 @@ fdstoolkit write --calibration --trusted-drive [--backup <p>] [--retries N] [--y
 
 測定した工場製 345 面のうち最長の 54,958 バイトを超えるブロックを持つ面は、最後のファイルがトラックの終端からはみ出す恐れがあるため、何も書かずに拒否します。`--long-side` を付けると書き込みます。読み戻しでは、イメージより後ろにディスク上の古いデータが残っていれば失敗とします。読み取り側はそこにある古いブロックを隠しファイルと受け取るからです。
 
-ドライブが書き込みを拒む 2 つの形は、読み戻しから名指しします。書き込む前とまったく同じに読める場合、ディスクは書き込みを一切受け付けていません。まず書き込み禁止タブを、次にコントローラが FD7201P ではなく FD3206P でないかを確認してください。ディスク情報ブロック以外のすべてを受け付けた場合は、電源基板が書き込み用に改造されていないドライブです。Nintendo のヘッダを書き換えられるのは FMD-POWER-01、またはそのために改造した後継の基板だけだからです。`surface` もどちらの場合も同じ理由を示して止まります。
+ドライブが書き込みを拒む 2 つの形は、読み戻しから名指しします。書き込む前とまったく同じに読める場合、ディスクは書き込みを一切受け付けていません。コントローラが FD7201P ではなく FD3206P でないかを確認してください。書き込み禁止タブが折られた面も拒否されるかもしれませんが、FDSStick から書き込むときにドライブがタブを守るかは文書化されていません。ディスク情報ブロック以外のすべてを受け付けた場合は、電源基板が書き込み用に改造されていないドライブです。Nintendo のヘッダを書き換えられるのは FMD-POWER-01、またはそのために改造した後継の基板だけだからです。`surface` もどちらの場合も同じ理由を示して止まります。
 
 `--calibration` は `blank` の項で説明したキャリブレーション用ディスクを両面に書き込み、ディスクを 1 回裏返します。完全に検証を通ったディスクで長く害を残しうる唯一の書き込みです。調整のずれたドライブは、自分では読めて他のドライブでは読めないディスクを書き、そのディスクは調整に使うすべてのドライブに同じずれを教えてしまいます。そのためコマンドは最初に、そのドライブが済ませているべきことを表示し、`--trusted-drive` で確認しない限り書き込みを拒否します。
 
@@ -654,7 +654,7 @@ grade failed
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--json]
+fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--timing-mode N] [--json]
 fdstoolkit calibrate speed|head --captures <bundle> [--reference <image>] [--side N] [--json]
 ```
 
@@ -760,9 +760,40 @@ fdstoolkit calibrate head --reference smb.fds --bracket --passes 60
 
 最後の読み取りが正しく読めた場合に終了コード 0 を返します。
 
+`--timing-mode` は `probe` が見つけたモードで読むため、各読み取りでパルスのクラスごとの長さとばらつきも `timing: short 93.1±1.8, medium 139.6±1.9, long 186.0±1.8 counts, spread 1.4%, smaller is better` のように表示します。ばらつきが小さいほどパルスがきれいで、ヘッド調整が目指すのはそこです。FDSStick の作者も同じ種類のばらつきでヘッドを合わせています。このオプションがなければ、調整の最初にタイミングが無効だという警告を表示します。あるモードがどこかの読み取りでパルスクラスを返した場合は、その読み取りでそう伝え、クラスから判定します。
+
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
 <img alt="ローカル Web ページの calibrate コマンド" src="assets/screenshots/calibrate-light.png">
+</picture>
+
+#### `probe`
+
+```bash
+fdstoolkit probe [--yes] [--json]
+```
+
+この FDSStick のファームウェアが、丸めたパルスクラスではなく、各パルスの長さそのものを送れるかを調べます。ハードウェアはすべてのパルスをタイマーで測っています。2015 年の公開ファームウェアはその値をコンピュータへ送り、後のファームウェアは送る前に機器の中で 3 つのクラスへ丸めます。お手持ちの機器のファームウェアに値を送るモードが残っているかは文書化されていないため、probe が機器に直接尋ねます。
+
+未使用のモードバイト 0x02 から 0x07 のそれぞれで読み取りを始め、返ってきたものを判定します。値はバイトの全範囲に散らばり、パックしたクラスは 0 のバイトだらけになります。値を丸めてチェックサムの一致するブロックが復号できたときだけ、そのモードをタイミングとみなします。タイミングを返す最初のモードで止まります。
+
+文書化されていないモードは、読み取りではなく書き込みを行うかもしれません。また、ディスクの書き込み禁止タブが FDSStick からの書き込みを止めると示すものはありません。そのため probe は作業用のディスク、たとえばキャリブレーション用ディスクを求め、始める前に面を通常どおり読み、モードごとにもう一度読みます。あるモードでディスクが変わった場合は、ただちに止まってそのモードを示します。
+
+```
+mode 0x02: pulse classes only
+mode 0x03: pulse timing
+mode 0x03 returns pulse timing: calibrate with timing mode 3, --timing-mode 3 on the command line
+```
+
+タイミングを返すモードがなかった場合、最後の行は警告となり、終了コードは 1 です。
+
+```
+warning: no mode tried returned pulse timing, so this firmware sends pulse classes only. calibrate keeps working from classes, but cannot show how long each pulse was or how widely the pulses spread
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/probe-dark.png">
+<img alt="ローカル Web ページの probe コマンド" src="assets/screenshots/probe-light.png">
 </picture>
 
 #### `web`
@@ -816,6 +847,7 @@ fdstoolkit web
 | `POST /api/jobs/write` | `write` |
 | `POST /api/jobs/surface` | `surface` |
 | `POST /api/jobs/calibrate` | `calibrate` |
+| `POST /api/jobs/probe` | `probe` |
 | `GET /api/jobs/current` | 実行中のディスク操作があれば、その操作 |
 | `GET /api/jobs/{id}` | 1 つの操作の状態、進行状況の行、問いかけ、結果 |
 | `POST /api/jobs/{id}/answer` | 操作の問いかけへの回答 |
@@ -911,9 +943,9 @@ fdstoolkit calibrate speed --reference smb.fds --passes 5 --json | jq -r '.headl
 
 **ディスクシステムのフラックスキャプチャは存在しません。** Quick Disk はインデックス穴も標準的なステッピングも持たない 1 本の連続した渦巻きであり、KryoFlux や Greaseweazle はこの媒体を読むことができません。本ツールが読み込むのは FDSStick が生成するものだけです。
 
-**FDSStick ではドライブ速度の最後の 1 パーセントを測定できません。** この機器はハードウェアの側で各パルスを 3 種類の長さのいずれかへ丸め、時間情報ではなくクラスを送ってくるので、小さな速度のずれではクラスが変わりません。`calibrate speed` は許容範囲の外にあるドライブを見つけ、仕上げは実機側のテストかストロボで行います。
+**パルスクラスからはドライブ速度の最後の 1 パーセントを測定できません。** 現在のファームウェアは機器の中で各パルスを 3 種類の長さのいずれかへ丸め、時間情報ではなくクラスを送ってくるので、小さな速度のずれではクラスが変わりません。お手持ちのファームウェアがまだタイミングを送れるかは `probe` で確かめられます。`calibrate speed` は許容範囲の外にあるドライブを見つけ、仕上げは実機側のテストかストロボで行います。
 
-**ヘッドの精密な位置合わせはパルスクラスからは測定できません。** 信号振幅が必要です。`calibrate head` はブロックが読めたかどうかしか見ないので、位置が大きくずれたヘッドやハブは見つけられても、わずかに中心を外れただけのものは見つけられません。
+**ヘッドの精密な位置合わせはパルスクラスからは測定できません。** 信号振幅か、`probe` が見つけたモードで `calibrate --timing-mode` が示すパルスのタイミングが必要です。`calibrate head` はブロックが読めたかどうかしか見ないので、位置が大きくずれたヘッドやハブは見つけられても、わずかに中心を外れただけのものは見つけられません。
 
 **ベルトの不良とモーターの不良は切り分けられません。** プーリー比が必要ですが、信頼できる出典がその値を示していません。
 

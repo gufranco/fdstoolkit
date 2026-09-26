@@ -22,7 +22,7 @@
 
 </div>
 
-**27** commands, every one but `doctor` also on the local web page. **1,394** Python tests and **134** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**28** commands, every one but `doctor` also on the local web page. **1,421** Python tests and **134** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -511,7 +511,7 @@ Write a disk, read it back and compare. `--backup` saves the current contents fi
 
 A side carrying more than 54,958 bytes of blocks, the longest of 345 factory sides measured, is refused before anything is written, because its last files may run past the end of the track. `--long-side` writes it anyway. The readback then fails if anything is left on the disk past the image, since a reader takes old blocks there for hidden files.
 
-Two ways a drive refuses a write are named from the readback. A disk that reads back exactly as before did not take the write at all: check the write-protect tab, then the controller, FD3206P rather than FD7201P. A disk that took every block but its disk information block is a drive whose power board was never modified for writing, since only an FMD-POWER-01, or a later board modified for it, rewrites the Nintendo header. `surface` stops on either with the same reason.
+Two ways a drive refuses a write are named from the readback. A disk that reads back exactly as before did not take the write at all: check the controller, FD3206P rather than FD7201P. A side whose write-protect tab is broken off may be refused too, though whether the drive enforces the tab for an FDSStick is not documented. A disk that took every block but its disk information block is a drive whose power board was never modified for writing, since only an FMD-POWER-01, or a later board modified for it, rewrites the Nintendo header. `surface` stops on either with the same reason.
 
 `--calibration` writes the calibration disk described under `blank`, both sides, turning the disk once. It is the one write that can do lasting harm with a disk that verifies perfectly: a drive out of adjustment writes a disk that reads back on it and on nothing else, and that disk would then teach every drive it calibrates the same error. So the command first prints what the drive must already have been through, and refuses unless `--trusted-drive` confirms it:
 
@@ -665,7 +665,7 @@ Exit status is 0 only when every pattern held and the finish verified.
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--json]
+fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--timing-mode N] [--json]
 fdstoolkit calibrate speed|head --captures <bundle> [--reference <image>] [--side N] [--json]
 ```
 
@@ -769,11 +769,42 @@ The guides also publish the positions the parts should end up in. They come from
 
 The two speed figures differ by about a factor of two, and neither guide says why or ties its figure to the bit rate the RAM adapter checks. Treat them as a starting point for a strobe, not a target this command can confirm.
 
+`--timing-mode` reads with the mode `probe` found, so every read also prints how long each pulse class ran and how widely it spread, `timing: short 93.1±1.8, medium 139.6±1.9, long 186.0±1.8 counts, spread 1.4%, smaller is better`. A narrower spread means cleaner pulses, which is what the head adjustment is after; the FDSStick's author uses the same kind of spread to set the head. Without the option, every calibration starts with a warning that timing is off, and a timing mode that returns pulse classes on some read says so for that read and judges it from classes.
+
 Exit status is 0 when the last read was clean.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
 <img alt="The calibrate command on the local web page" src="assets/screenshots/calibrate-light.png">
+</picture>
+
+#### `probe`
+
+```bash
+fdstoolkit probe [--yes] [--json]
+```
+
+Finds whether this FDSStick's firmware can send how long each pulse was, instead of the pulse class it rounded it to. The hardware measures every pulse with a timer: the open firmware from 2015 sends those counts to the computer, and later firmware rounds them to three classes on the device before sending. Whether the firmware in your stick still has a mode that sends the counts is not documented, so the probe asks it.
+
+It starts a read with each unused mode byte, 0x02 to 0x07, and judges the answer: counts spread over the whole byte range, while packed classes are full of zero bytes. A mode only counts as timing when its counts, rounded, decode into blocks whose checksums pass. It stops at the first mode that returns timing.
+
+An undocumented mode could write instead of read, and nothing shows that a disk's write-protect tab stops an FDSStick from writing. So the probe asks for a scratch disk, such as the calibration disk, reads the side normally before it starts, and reads it again after every mode. If a mode changed the disk, the probe stops at once and names that mode.
+
+```
+mode 0x02: pulse classes only
+mode 0x03: pulse timing
+mode 0x03 returns pulse timing: calibrate with timing mode 3, --timing-mode 3 on the command line
+```
+
+When no mode returns timing, the last line is a warning and the exit status is 1:
+
+```
+warning: no mode tried returned pulse timing, so this firmware sends pulse classes only. calibrate keeps working from classes, but cannot show how long each pulse was or how widely the pulses spread
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/probe-dark.png">
+<img alt="The probe command on the local web page" src="assets/screenshots/probe-light.png">
 </picture>
 
 #### `web`
@@ -827,6 +858,7 @@ Saved captures travel the same way. A dump with `keep captures` set offers the b
 | `POST /api/jobs/write` | `write` |
 | `POST /api/jobs/surface` | `surface` |
 | `POST /api/jobs/calibrate` | `calibrate` |
+| `POST /api/jobs/probe` | `probe` |
 | `GET /api/jobs/current` | the disk job still running, if any |
 | `GET /api/jobs/{id}` | one job's state, progress lines, prompt and result |
 | `POST /api/jobs/{id}/answer` | the answer to a job's prompt |
@@ -922,9 +954,9 @@ fdstoolkit calibrate speed --reference smb.fds --passes 5 --json | jq -r '.headl
 
 **No FDS flux capture exists.** Quick Disk is one continuous spiral with no index hole and no standard stepping, so KryoFlux and Greaseweazle cannot read this medium at all. This toolkit reads only what an FDSStick produces.
 
-**An FDSStick cannot measure the last percent of drive speed.** The device rounds every pulse to one of three lengths in hardware and sends classes, not timing, so a small speed error changes no class. `calibrate speed` finds a drive outside the tolerance; a console test or a strobe finishes the job.
+**An FDSStick cannot measure the last percent of drive speed from pulse classes.** Current firmware rounds every pulse to one of three lengths on the device and sends classes, not timing, so a small speed error changes no class. `probe` finds out whether your firmware can still send timing. `calibrate speed` finds a drive outside the tolerance; a console test or a strobe finishes the job.
 
-**Fine head alignment is not measurable from pulse classes.** It needs signal amplitude. `calibrate head` sees only whether blocks read, so it finds a head or hub that is out of position, not one that is merely off-centre.
+**Fine head alignment is not measurable from pulse classes.** It needs signal amplitude, or the pulse timing `calibrate --timing-mode` shows when `probe` finds a mode that sends it. `calibrate head` sees only whether blocks read, so it finds a head or hub that is out of position, not one that is merely off-centre.
 
 **Belt and motor faults are not separable** without the pulley ratio, which no trustworthy source states.
 

@@ -159,3 +159,112 @@ def test_a_bracketed_calibration_asks_before_every_read_after_the_first(
 
     assert result.output.count("turn the adjustment one small step") == 2
     assert "it still reads: keep turning the same way until it stops" in result.output
+
+
+TIMING_MODE = 3
+
+
+def attach_timing(monkeypatch: pytest.MonkeyPatch, disk: Disk | None) -> SimulatedDrive:
+    drive = SimulatedDrive(disk, timing_mode=TIMING_MODE)
+    monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.open_fdsstick", lambda: drive)
+    return drive
+
+
+def test_the_probe_names_the_mode_that_returns_timing(monkeypatch: pytest.MonkeyPatch) -> None:
+    attach_timing(monkeypatch, disk_with(FILES))
+
+    result = runner.invoke(app, ["probe", "--yes"])
+
+    assert result.exit_code == 0
+    assert "mode 0x02: pulse classes only" in result.stdout
+    assert "mode 0x03: pulse timing" in result.stdout
+    assert "calibrate with timing mode 3, --timing-mode 3 on the command line" in result.stdout
+
+
+def test_a_probe_that_finds_no_timing_warns_and_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    attach(monkeypatch, disk_with(FILES))
+
+    result = runner.invoke(app, ["probe", "--yes"])
+
+    assert result.exit_code == 1
+    assert "warning: no mode tried returned pulse timing" in result.stdout
+
+
+def test_the_probe_warns_before_it_touches_the_drive(monkeypatch: pytest.MonkeyPatch) -> None:
+    attach(monkeypatch, disk_with(FILES))
+
+    result = runner.invoke(app, ["probe"], input="n\n")
+
+    assert result.exit_code == 1
+    assert "Put a scratch disk in the drive" in result.stderr
+    assert "declined the probe" in result.stdout
+
+
+def test_the_probe_reports_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    attach_timing(monkeypatch, disk_with(FILES))
+
+    result = runner.invoke(app, ["probe", "--yes", "--json"])
+
+    payload = json.loads(result.stdout)
+    assert payload["timing_mode"] == TIMING_MODE
+    assert payload["modes"][-1] == {"mode": TIMING_MODE, "answer": "pulse timing", "detail": ""}
+
+
+def test_a_probe_with_no_disk_fails_with_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    attach(monkeypatch, None)
+
+    result = runner.invoke(app, ["probe", "--yes"])
+
+    assert result.exit_code == 1
+    assert "no disk in the drive" in result.stdout
+
+
+def test_a_calibration_without_a_timing_mode_warns_that_timing_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attach(monkeypatch, disk_with(FILES))
+
+    result = runner.invoke(app, ["calibrate", "speed", "--passes", "1"])
+
+    assert "warning: timing is off" in result.stderr
+
+
+def test_a_calibration_with_a_timing_mode_shows_the_timing_of_each_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attach_timing(monkeypatch, disk_with(FILES))
+
+    result = runner.invoke(
+        app, ["calibrate", "speed", "--passes", "2", "--timing-mode", "3", "--json"]
+    )
+
+    payload = json.loads(result.stdout)
+    assert result.stderr.count("timing: short") == 2
+    assert len(payload["timing"]) == 2
+    assert payload["clean"] is True
+
+
+def test_a_timing_mode_the_firmware_ignores_falls_back_to_classes_with_a_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attach(monkeypatch, disk_with(FILES))
+
+    result = runner.invoke(app, ["calibrate", "speed", "--passes", "1", "--timing-mode", "3"])
+
+    assert "returned pulse classes only, so this read is judged from classes" in result.stderr
+    assert result.exit_code == 0
+
+
+def test_replayed_captures_warn_that_they_hold_no_timing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    disk = disk_with(FILES)
+    attach(monkeypatch, disk)
+    bundle = tmp_path / "raw"
+    runner.invoke(app, ["dump", "-o", str(tmp_path / "d.fds"), "--raw", str(bundle)])
+
+    result = runner.invoke(
+        app, ["calibrate", "speed", "--captures", str(bundle), "--timing-mode", "3"]
+    )
+
+    assert "saved captures hold pulse classes" in result.stderr
