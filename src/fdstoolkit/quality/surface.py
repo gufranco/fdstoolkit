@@ -30,6 +30,7 @@ from fdstoolkit.hardware.session import (
     SideFlipError,
     SideWrite,
     WriteNotTakenError,
+    WriteRefusedError,
     ask_for_flip,
     refuse_unturned,
     write_side_verified,
@@ -40,6 +41,9 @@ PATTERN_NAME: Final = "SURFACE"
 SIDE_CAPACITY: Final = fds.SIDE_SIZE
 HARD_FAILURES: Final = 2
 KEY_BYTES: Final = 16
+FINISH_INTERRUPTED: Final = (
+    "the finish was interrupted, so the side it was writing may be half written"
+)
 WEAR_SHARE: Final = 3
 
 
@@ -67,6 +71,8 @@ class StopReason(StrEnum):
     REFUSED = "the disk did not take a write, so every further pass would only wear it"
     INTERRUPTED = "the test was interrupted, so the disk holds a half-written test pattern"
     FAULT = "the drive stopped answering, so the disk holds a half-written test pattern"
+    UNTURNED = "the disk was not turned over, so the other side was not tested"
+    UNTOUCHED = "the test was stopped before it wrote anything, so the disk is as it was"
 
 
 class Finish(StrEnum):
@@ -193,12 +199,18 @@ class SurfaceReport:
 
     @property
     def recovered_blocks(self) -> tuple[tuple[int, int], ...]:
+        return tuple(sorted(block for side in self._sides for block in self._recovered_on(side)))
+
+    @property
+    def _sides(self) -> set[int]:
+        return {entry.side for entry in self.passes}
+
+    def _recovered_on(self, side: int) -> set[tuple[int, int]]:
+        entries = [entry for entry in self.passes if entry.side == side]
         seen: set[tuple[int, int]] = set()
-        last: set[tuple[int, int]] = set()
-        for entry in self.passes:
+        for entry in entries[:-1]:
             seen.update(entry.mismatched_blocks)
-            last = set(entry.mismatched_blocks)
-        return tuple(sorted(seen - last))
+        return seen - set(entries[-1].mismatched_blocks)
 
     @property
     def grade(self) -> Grade:
@@ -350,7 +362,7 @@ def _run_patterns(run: _Run) -> tuple[StopReason | None, str]:
             key = run.plan.key or secrets.token_bytes(KEY_BYTES)
             for position, pattern in enumerate(PATTERNS):
                 if run.plan.stopped():
-                    return StopReason.INTERRUPTED, ""
+                    return (StopReason.INTERRUPTED if run.results else StopReason.UNTOUCHED), ""
                 run.progress(f"side {side_index} pass {index + 1} pattern {pattern}")
                 target = pattern_disk(pattern, sides=run.sides, fill=run.plan.fill, key=key).sides[
                     side_index
@@ -397,8 +409,10 @@ def _finish(run: _Run, finish: Finish) -> tuple[bool, str]:
                 return False, ""
     except (WriteNotTakenError, HalfWriteError):
         return False, ""
-    except SideFlipError as unturned:
-        return False, str(unturned)
+    except (SideFlipError, HardwareFaultError, WriteRefusedError) as stopped:
+        return False, str(stopped)
+    except KeyboardInterrupt:
+        return False, FINISH_INTERRUPTED
     return True, ""
 
 
@@ -454,8 +468,10 @@ def surface_test(
         stopped, refusal = _run_patterns(run)
     except KeyboardInterrupt:
         stopped, refusal = StopReason.INTERRUPTED, ""
-    except HardwareFaultError as fault:
+    except (HardwareFaultError, WriteRefusedError) as fault:
         stopped, refusal = StopReason.FAULT, str(fault)
+    except SideFlipError as unturned:
+        stopped, refusal = StopReason.UNTURNED, str(unturned)
 
     finished, ran, problem = True, False, ""
     if plan.finish is not Finish.LEAVE and stopped is None:

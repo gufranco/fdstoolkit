@@ -611,7 +611,10 @@ The test stops as soon as its verdict is decided, because every further pass onl
 
 - the first block that fails on two patterns stops it as damaged;
 - a write the disk did not take stops it as not taking writes;
-- a stalled drive or Ctrl-C stops it at once, and the report still lists every pass that finished.
+- a stalled drive or Ctrl-C stops it at once, and the report still lists every pass that finished;
+- a disk that was not turned over when asked stops it with side A's passes kept.
+
+A test stopped before its first write says the disk is as it was. A fault or an interrupt during the finish is named in the report, since that side may be half written.
 
 A stopped test skips its `--finish`. A block that fails once does not stop anything, since one failure is the marginal case more passes are meant to separate.
 

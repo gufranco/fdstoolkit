@@ -14,7 +14,7 @@ from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.monitor import SpeedReading
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
-from fdstoolkit.hardware.session import Grade, SideFlipError
+from fdstoolkit.hardware.session import Grade
 from fdstoolkit.quality.surface import (
     PATTERNS,
     Finish,
@@ -485,12 +485,14 @@ def test_a_finish_whose_turn_was_skipped_writes_nothing_and_says_why() -> None:
     assert drive.disk.sides[1] == blank_disk(sides=2).sides[1]
 
 
-def test_a_second_side_that_was_not_turned_over_stops_the_test() -> None:
+def test_a_second_side_that_was_not_turned_over_stops_the_test_and_keeps_side_a() -> None:
     drive = FacingDrive(two_sided_scratch())
 
-    with pytest.raises(SideFlipError, match="not turned over"):
-        surface_test(drive, drive, sides=2, confirm=lambda _: True, flip=lambda _: True)
+    report = surface_test(drive, drive, sides=2, confirm=lambda _: True, flip=lambda _: True)
 
+    assert report.stopped is StopReason.UNTURNED
+    assert "not turned over" in report.refusal
+    assert len(report.passes) == len(PATTERNS)
     assert drive.write_count == len(PATTERNS)
 
 
@@ -677,3 +679,104 @@ def test_a_clean_run_has_no_wear_hint_and_no_cleaning_advice() -> None:
 
 def test_a_failed_run_suggests_cleaning_before_calling_the_disk_damaged() -> None:
     assert "clean the disk" in failing((5,), 14).advice
+
+
+def test_a_block_that_failed_on_side_a_is_not_recovered_by_side_b() -> None:
+    report = SurfaceReport(
+        passes=(
+            PatternPass(
+                SurfacePattern.SHORT,
+                verified=False,
+                mismatched_blocks=((0, 4),),
+                grade=Grade.FAILED,
+                side=0,
+            ),
+            PatternPass(
+                SurfacePattern.LONG, verified=True, mismatched_blocks=(), grade=Grade.CLEAN, side=1
+            ),
+        ),
+    )
+
+    assert report.recovered_blocks == ()
+
+
+def test_a_block_that_failed_early_and_held_later_on_its_side_is_recovered() -> None:
+    report = SurfaceReport(
+        passes=(
+            PatternPass(
+                SurfacePattern.SHORT,
+                verified=False,
+                mismatched_blocks=((0, 4),),
+                grade=Grade.FAILED,
+                side=0,
+            ),
+            PatternPass(
+                SurfacePattern.LONG, verified=True, mismatched_blocks=(), grade=Grade.CLEAN, side=0
+            ),
+        ),
+    )
+
+    assert report.recovered_blocks == ((0, 4),)
+
+
+def test_a_fault_during_the_finish_keeps_every_pass_and_says_why() -> None:
+    class FinishFault(SimulatedDrive):
+        def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+            if len(blocks) == BLANK_BLOCKS:
+                message = "the device stopped answering"
+                raise HardwareFaultError(message, kind=FaultKind.LINK)
+            super().write_side(side, blocks)
+
+    drive = FinishFault(scratch_disk())
+
+    report = surface_test(
+        drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(finish=Finish.BLANK)
+    )
+
+    assert len(report.passes) == len(PATTERNS)
+    assert not report.finish_verified
+    assert "the device stopped answering" in report.finish_problem
+
+
+def test_an_interrupt_during_the_finish_says_the_side_may_be_half_written() -> None:
+    class FinishInterrupt(SimulatedDrive):
+        def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+            if len(blocks) == BLANK_BLOCKS:
+                raise KeyboardInterrupt
+            super().write_side(side, blocks)
+
+    drive = FinishInterrupt(scratch_disk())
+
+    report = surface_test(
+        drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(finish=Finish.BLANK)
+    )
+
+    assert "may be half written" in report.finish_problem
+
+
+def test_a_stop_before_the_first_write_leaves_the_disk_as_it_was() -> None:
+    drive = SimulatedDrive(scratch_disk())
+
+    report = surface_test(
+        drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(stopped=lambda: True)
+    )
+
+    assert report.stopped is StopReason.UNTOUCHED
+    assert drive.write_count == 0
+
+
+def test_a_fault_during_a_pattern_write_keeps_the_passes_before_it() -> None:
+    class PatternFault(SimulatedDrive):
+        def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+            if self.write_count == 1:
+                message = "the device stopped answering"
+                raise HardwareFaultError(message, kind=FaultKind.LINK)
+            super().write_side(side, blocks)
+
+    drive = PatternFault(scratch_disk())
+
+    report = surface_test(drive, drive, sides=1, confirm=lambda _: True)
+
+    assert report.stopped is StopReason.FAULT
+    assert len(report.passes) == 1
+    assert "the device stopped answering" in report.refusal
