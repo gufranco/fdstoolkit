@@ -11,6 +11,7 @@ from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 UNMEASURED_CEILING_S: Final = 20.0
 MEASURED_MULTIPLE: Final = 3.0
 MEASURED_FLOOR_S: Final = 2.0
+RECENT_SIDES: Final = 4
 
 
 HALF_WRITTEN: Final = ". The side may be half written, so dump the disk before using it"
@@ -44,7 +45,7 @@ class Watchdog:
         self._multiple = multiple
         self._floor = floor
         self._now = now
-        self._measured: float | None = None
+        self._recent: tuple[float, ...] = ()
         self._until: float | None = None
         self._what = ""
         self._writing = False
@@ -52,13 +53,14 @@ class Watchdog:
 
     @property
     def measured(self) -> float | None:
-        return self._measured
+        return max(self._recent, default=None)
 
     @property
     def limit(self) -> float:
-        if self._measured is None:
+        slowest = self.measured
+        if slowest is None:
             return self._ceiling
-        return min(self._ceiling, max(self._floor, self._measured * self._multiple))
+        return min(self._ceiling, max(self._floor, slowest * self._multiple))
 
     @contextmanager
     def side(self, what: str, *, writing: bool = False) -> Generator[None]:
@@ -71,7 +73,7 @@ class Watchdog:
             yield
         finally:
             self._until = None
-        self._measured = self._now() - started
+        self._recent = (*self._recent, self._now() - started)[-RECENT_SIDES:]
 
     def call[T](self, action: Callable[[], T]) -> T:
         if self._until is None:

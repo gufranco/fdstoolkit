@@ -181,3 +181,26 @@ def test_a_limit_that_is_not_positive_is_refused(
 ) -> None:
     with pytest.raises(ValueError, match="positive"):
         Watchdog(on_stall=nothing, ceiling=ceiling, multiple=multiple, floor=floor)
+
+
+def test_a_quick_side_after_a_slow_one_keeps_the_slow_limit() -> None:
+    clock = Clock()
+    watchdog = Watchdog(on_stall=nothing, now=clock)
+
+    for seconds in (6.0, 0.1):
+        with watchdog.side("reading side 0"):
+            clock.value += seconds
+
+    assert watchdog.measured == pytest.approx(6.0)
+    assert watchdog.limit == pytest.approx(6.0 * MEASURED_MULTIPLE)
+
+
+def test_only_the_recent_sides_set_the_limit() -> None:
+    clock = Clock()
+    watchdog = Watchdog(on_stall=nothing, now=clock)
+
+    for seconds in (6.0, 1.0, 1.0, 1.0, 1.0):
+        with watchdog.side("reading side 0"):
+            clock.value += seconds
+
+    assert watchdog.measured == pytest.approx(1.0)
