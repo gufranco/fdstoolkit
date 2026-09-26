@@ -22,7 +22,7 @@
 
 </div>
 
-**27** commands, every one but `doctor` also on the local web page. **1,323** Python tests and **132** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**27** commands, every one but `doctor` also on the local web page. **1,391** Python tests and **132** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 

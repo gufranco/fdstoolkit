@@ -34,6 +34,7 @@ class FakeFdsStick:
     pads_last_chunk: bool = False
     accepts_writes: int | None = None
     short_reply: bool = False
+    echoes: bool = False
 
     opened: tuple[int, int] | None = None
     closed: bool = False
@@ -55,7 +56,14 @@ class FakeFdsStick:
             self.mode = data[1]
             self.starts.append(data[1])
             self.served = 0
+            self._turn_over_the_write(data[1])
         return len(data)
+
+    def _turn_over_the_write(self, mode: int) -> None:
+        if mode == MODE_WRITE:
+            self.written = bytearray()
+        elif self.echoes and self.written:
+            self.side = bytes(self.written)
 
     def write(self, data: bytes) -> int:
         self.seen.append(data[0])

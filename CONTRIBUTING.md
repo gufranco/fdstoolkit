@@ -14,6 +14,15 @@ That is deliberate and CI enforces it: anybody has to be able to work on this
 without owning a collection. The tests that want real images read the directory
 named by `FDSTOOLKIT_CORPUS` and skip when it is unset.
 
+The tests in `tests/hardware_live/` drive a real FDSStick and skip unless you ask
+for them. `FDSTOOLKIT_HARDWARE=1` runs the ones that only read, with a factory
+disk in the drive. `FDSTOOLKIT_SCRATCH_DISK=1` adds the ones that write, which
+overwrite side A, so set it only with a scratch disk in the drive:
+
+```bash
+FDSTOOLKIT_HARDWARE=1 uv run pytest tests/hardware_live -m hardware --no-cov
+```
+
 ## The gates
 
 | Gate | Command |

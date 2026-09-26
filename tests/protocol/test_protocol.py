@@ -5,7 +5,8 @@ from device import FakeFdsStick
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
-from fdstoolkit.codecs.raw import encode_block_stream
+from fdstoolkit.codecs.raw import encode_block_stream, encode_raw03
+from fdstoolkit.core.disk import Disk
 from fdstoolkit.hardware.fdsstick import (
     CHUNK_PAYLOAD,
     LEGACY_REPORTS,
@@ -21,6 +22,7 @@ from fdstoolkit.hardware.fdsstick import (
     ReportId,
 )
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.hardware.session import WriteNotTakenError, write_verified
 
 FLASH_REPORTS = frozenset({0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09})
 EMULATOR_REPORTS = frozenset({0x20, 0x21, 0x22, 0x23})
@@ -265,3 +267,26 @@ def test_a_device_that_sends_no_data_at_all_names_the_older_firmware() -> None:
 def test_the_driver_records_the_report_map_the_older_firmware_used() -> None:
     assert LEGACY_REPORTS == (0x11, 0x12, 0x13, 0x14)
     assert set(LEGACY_REPORTS).isdisjoint({int(report) for report in ReportId} - {0x11, 0x12})
+
+
+def formatted(game: str) -> Disk:
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=game))
+    return disk
+
+
+def test_a_write_through_the_driver_reads_back_as_written() -> None:
+    device = FakeFdsStick(side=encode_raw03(formatted("OLD"), side=0), echoes=True)
+    stick = stick_over(device)
+
+    report = write_verified(stick, stick, formatted("NEW"), confirm=lambda _: True, backup=None)
+
+    assert report.verified
+    assert device.starts == [MODE_READ, MODE_WRITE, MODE_READ]
+
+
+def test_a_write_the_device_drops_is_caught_by_the_driver_readback() -> None:
+    device = FakeFdsStick(side=encode_raw03(formatted("OLD"), side=0))
+    stick = stick_over(device)
+
+    with pytest.raises(WriteNotTakenError):
+        write_verified(stick, stick, formatted("NEW"), confirm=lambda _: True, backup=None)
