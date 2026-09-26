@@ -22,6 +22,7 @@ MAX_RETRIES: Final = 20
 MAX_PASSES: Final = 20
 MIN_PASSES = 2
 EMULATED_CAPACITY = 66560
+DISK_INFO_KIND: Final = bytes([BlockKind.DISK_INFO])
 
 
 class Grade(StrEnum):
@@ -72,10 +73,16 @@ def _ask_for_flip(reader: DiskReader, side: int, flip: Callable[[str], bool] | N
         raise SideFlipError(message)
 
 
+def _identified(side: SideDump) -> bool:
+    blocks = side.blocks
+    return bool(blocks) and blocks[0].crc_ok and blocks[0].payload[:1] == DISK_INFO_KIND
+
+
 def _reject_unflipped(dumped: Sequence[SideDump], side: int) -> None:
-    latest = tuple(block.payload for block in dumped[-1].blocks)
+    if not _identified(dumped[-1]):
+        return
     for earlier in dumped[:-1]:
-        if tuple(block.payload for block in earlier.blocks) == latest:
+        if _identified(earlier) and _same_blocks(earlier, dumped[-1]):
             message = (
                 f"side {side} read the same bytes as side {earlier.index}, "
                 "so the disk was not turned over. Nothing was written"
@@ -98,7 +105,7 @@ class SideDump:
 
     @property
     def grade(self) -> Grade:
-        if self.failed_blocks:
+        if self.failed_blocks or not self.blocks:
             return Grade.FAILED
         if self.marginal_blocks:
             return Grade.MARGINAL

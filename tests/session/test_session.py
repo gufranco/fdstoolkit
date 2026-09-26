@@ -6,9 +6,9 @@ import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image
-from fdstoolkit.codecs.fds import decode
+from fdstoolkit.codecs.fds import SIDE_SIZE, decode
 from fdstoolkit.core.blocks import FileKind
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import (
@@ -523,6 +523,16 @@ def test_a_disk_that_was_not_turned_over_is_caught() -> None:
 
     with pytest.raises(SideFlipError, match="not turned over"):
         dump(drive, sides=2, flip=lambda _: True)
+
+
+def test_two_unreadable_sides_are_failed_reads_rather_than_an_unturned_disk() -> None:
+    empty = Side(blocks=(), tail=b"", capacity=SIDE_SIZE)
+    drive = FacingDrive(Disk(sides=(empty, empty)))
+
+    result = dump(drive, sides=2, flip=drive.turn)
+
+    assert drive.turns == 1
+    assert [side.grade for side in result.sides] == [Grade.FAILED, Grade.FAILED]
 
 
 def test_a_single_face_drive_reads_one_side_without_being_asked() -> None:
