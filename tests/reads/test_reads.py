@@ -32,8 +32,18 @@ def test_a_single_read_is_refused() -> None:
 def test_reads_of_different_shapes_are_refused() -> None:
     two_sides = Disk(sides=(_disk().sides[0], _disk().sides[0]))
 
-    with pytest.raises(ValueError, match="different shapes"):
+    with pytest.raises(ValueError, match="different numbers of sides"):
         compare_reads([_disk(), two_sides])
+
+
+def test_a_read_that_missed_a_block_is_counted_rather_than_refused() -> None:
+    amount = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([BlockKind.FILE_AMOUNT, 0]))
+    full = Disk(sides=(Side(blocks=(*_disk().sides[0].blocks, amount), tail=b"", capacity=65500),))
+
+    stats = compare_reads([full, _disk(), full])
+
+    assert [entry.missing for entry in stats.blocks] == [0, 1]
+    assert stats.blocks[1].stable
 
 
 def test_identical_reads_are_perfectly_stable() -> None:

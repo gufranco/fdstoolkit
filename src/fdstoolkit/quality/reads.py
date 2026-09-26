@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Final
 
 from fdstoolkit.core.disk import Disk
+from fdstoolkit.quality.consensus import Matched, match_side, require_same_sides
 
 MIN_READS: Final = 2
 DECAY_RATIO: Final = 3.0
@@ -29,6 +30,7 @@ class BlockReads:
     bits_differing: int
     ones_lost: int
     ones_gained: int
+    missing: int = 0
 
     @property
     def flip_rate(self) -> float:
@@ -43,6 +45,10 @@ class BlockReads:
 class ReadStatistics:
     passes: int
     blocks: tuple[BlockReads, ...]
+
+    @property
+    def missing(self) -> tuple[tuple[int, int, int], ...]:
+        return tuple((item.side, item.block, item.missing) for item in self.blocks if item.missing)
 
     @property
     def unstable_blocks(self) -> tuple[tuple[int, int], ...]:
@@ -72,10 +78,6 @@ class ReadStatistics:
         return Decay.LOSS if lost > gained else Decay.GAIN
 
 
-def _shape(disk: Disk) -> tuple[int, ...]:
-    return (disk.side_count, *(len(side.blocks) for side in disk.sides))
-
-
 def _bit_drift(modal: bytes, other: bytes) -> tuple[int, int, int]:
     differing = lost = gained = 0
     for left, right in zip(modal, other, strict=False):
@@ -93,41 +95,39 @@ def _bit_drift(modal: bytes, other: bytes) -> tuple[int, int, int]:
     return differing, lost, gained
 
 
+def _block_reads(side: int, block: int, matched: Matched) -> BlockReads:
+    payloads = [copy.payload for copy in matched.copies]
+    counts = Counter(payloads)
+    modal, votes = counts.most_common(1)[0]
+    differing = lost = gained = 0
+    for payload in payloads:
+        if payload == modal:
+            continue
+        delta, one_lost, one_gained = _bit_drift(modal, payload)
+        differing += delta
+        lost += one_lost
+        gained += one_gained
+    return BlockReads(
+        side=side,
+        block=block,
+        kind=matched.block.kind.name.lower(),
+        variants=len(counts),
+        modal_share=votes / len(payloads),
+        bits_differing=differing,
+        ones_lost=lost,
+        ones_gained=gained,
+        missing=matched.missing,
+    )
+
+
 def compare_reads(disks: Sequence[Disk]) -> ReadStatistics:
     if len(disks) < MIN_READS:
         message = f"read statistics need at least two reads, got {len(disks)}"
         raise ValueError(message)
-
-    reference = _shape(disks[0])
-    if any(_shape(disk) != reference for disk in disks[1:]):
-        message = "the reads have different shapes, so they are not the same disk"
-        raise ValueError(message)
-
-    blocks: list[BlockReads] = []
-    for side_index, side in enumerate(disks[0].sides):
-        for block_index, block in enumerate(side.blocks):
-            payloads = [disk.sides[side_index].blocks[block_index].payload for disk in disks]
-            counts = Counter(payloads)
-            modal, votes = counts.most_common(1)[0]
-            differing = lost = gained = 0
-            for payload in payloads:
-                if payload == modal:
-                    continue
-                delta, one_lost, one_gained = _bit_drift(modal, payload)
-                differing += delta
-                lost += one_lost
-                gained += one_gained
-            blocks.append(
-                BlockReads(
-                    side=side_index,
-                    block=block_index,
-                    kind=block.kind.name.lower(),
-                    variants=len(counts),
-                    modal_share=votes / len(payloads),
-                    bits_differing=differing,
-                    ones_lost=lost,
-                    ones_gained=gained,
-                )
-            )
-
-    return ReadStatistics(passes=len(disks), blocks=tuple(blocks))
+    require_same_sides(disks, "reads")
+    blocks = tuple(
+        _block_reads(side, block, matched)
+        for side in range(disks[0].side_count)
+        for block, matched in enumerate(match_side([disk.sides[side] for disk in disks]))
+    )
+    return ReadStatistics(passes=len(disks), blocks=blocks)

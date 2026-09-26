@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -24,7 +23,7 @@ from fdstoolkit.core.disk import Side
 from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
 from fdstoolkit.drive.align import align_blocks, good_block
 from fdstoolkit.drive.bracket import Bracket
-from fdstoolkit.drive.vote import Identity, identities
+from fdstoolkit.drive.vote import Key, keyed
 
 MAX_READS: Final = 200
 DEFAULT_READS: Final = 20
@@ -38,7 +37,6 @@ RECOGNISED: Final = (
     "what the disk holds, including blocks that never read clean"
 )
 
-Key = tuple[Identity, int]
 SIDE_OFFSET: Final = FIELDS_BY_NAME["side"].offset
 
 NOT_THIS_DRIVE: Final = (
@@ -230,19 +228,10 @@ def _leaning(actual: bytes, expected: bytes) -> tuple[int, int, int]:
     return short, long, len(pairs)
 
 
-def _keys(blocks: Sequence[Block]) -> list[Key]:
-    seen: Counter[Identity] = Counter()
-    keys: list[Key] = []
-    for identity in identities(blocks):
-        keys.append((identity, seen[identity]))
-        seen[identity] += 1
-    return keys
-
-
 def learn(learned: Mapping[Key, bytes], blocks: Sequence[Block]) -> dict[Key, bytes]:
     fresh = {
         key: block.payload
-        for key, block in zip(_keys(blocks), blocks, strict=True)
+        for key, block in zip(keyed(blocks), blocks, strict=True)
         if good_block(block) and key not in learned
     }
     return {**learned, **fresh}
@@ -253,7 +242,7 @@ def _against_learned(
 ) -> tuple[int, int, int]:
     starts = block_starts(values)
     short = long = compared = 0
-    for key, start in zip(_keys(blocks), starts, strict=False):
+    for key, start in zip(keyed(blocks), starts, strict=False):
         payload = learned.get(key)
         if payload is None:
             continue

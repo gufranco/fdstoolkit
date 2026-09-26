@@ -84,23 +84,16 @@ def test_splicing_a_donor_of_another_shape_is_refused(tmp_path: Path) -> None:
     assert "different shape" in result.stdout
 
 
-def test_grading_against_a_dump_of_another_shape_is_refused(tmp_path: Path) -> None:
+def test_grading_against_a_dump_with_another_side_count_is_refused(tmp_path: Path) -> None:
     image = _write(tmp_path / "a.fds")
-    other = Disk(
-        sides=(
-            Side(
-                blocks=(
-                    Block(kind=BlockKind.DISK_INFO, payload=_payload()),
-                    Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([2, 1])),
-                ),
-                tail=b"",
-                capacity=65500,
-            ),
-        )
+    side = Side(
+        blocks=(Block(kind=BlockKind.DISK_INFO, payload=_payload()),),
+        tail=b"",
+        capacity=65500,
     )
-    second = _write(tmp_path / "b.fds", other)
+    second = _write(tmp_path / "b.fds", Disk(sides=(side, side)))
 
     result = runner.invoke(app, ["grade", str(image), "--read", str(second)])
 
     assert result.exit_code == 1
-    assert "different shapes" in result.stdout
+    assert "different numbers of sides" in result.stdout

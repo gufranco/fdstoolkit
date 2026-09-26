@@ -100,3 +100,32 @@ def test_grading_can_show_the_per_block_confidence(tmp_path: Path) -> None:
     result = runner.invoke(app, ["grade", str(_write(tmp_path / "a.fds")), "--map"])
 
     assert "disk_info" in result.stdout
+
+
+def _write_with_amount(path: Path) -> Path:
+    disk = Disk(
+        sides=(
+            Side(
+                blocks=(
+                    Block(kind=BlockKind.DISK_INFO, payload=_payload()),
+                    Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([BlockKind.FILE_AMOUNT, 0])),
+                ),
+                tail=b"",
+                capacity=65500,
+            ),
+        )
+    )
+    data, _ = fds.encode(disk, headered=False)
+    path.write_bytes(data)
+    return path
+
+
+def test_reads_name_a_block_one_dump_missed(tmp_path: Path) -> None:
+    full = _write_with_amount(tmp_path / "a.fds")
+    short = _write(tmp_path / "b.fds")
+
+    result = runner.invoke(app, ["reads", str(full), str(short), str(full)])
+    listed = runner.invoke(app, ["reads", str(full), str(short), str(full), "--json"])
+
+    assert "side 0 block   1  missing from 1 read(s)" in result.stdout
+    assert json.loads(listed.stdout)["missing"] == [[0, 1, 1]]

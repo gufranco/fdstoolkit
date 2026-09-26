@@ -43,15 +43,21 @@ def consensus(spec: ConsensusSpec) -> ReportedFile:
         result = build_consensus(disks)
     except ValueError as error:
         refuse(str(error), status=UNPROCESSABLE)
-    rows = [{"side": side, "block": block} for side, block in result.disagreements]
+    rows = [
+        {"side": side, "block": block, "finding": "the dumps disagree"}
+        for side, block in result.disagreements
+    ] + [
+        {"side": side, "block": block, "finding": f"missing from {absent} dump(s)"}
+        for side, block, absent in result.missing
+    ]
     headline = (
-        f"{len(rows)} block(s) disagree across the dumps"
-        if rows
+        f"{len(result.disagreements)} block(s) disagree across the dumps"
+        if result.disagreements
         else "every dump agrees on every block"
     )
     return ReportedFile(
         headline=headline,
         file=named_file("consensus.fds", encoded(result.disk)),
         rows=rows,
-        ok=not rows,
+        ok=not result.disagreements,
     )

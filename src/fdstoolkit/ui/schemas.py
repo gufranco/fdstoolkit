@@ -192,6 +192,7 @@ class ReadsResult(BaseModel):
     bits_lost: int
     bits_gained: int
     unstable_blocks: list[list[int]]
+    missing_blocks: list[list[int]]
 
     @classmethod
     def of(cls, stats: ReadStatistics) -> Self:
@@ -202,6 +203,7 @@ class ReadsResult(BaseModel):
             bits_lost=stats.ones_lost,
             bits_gained=stats.ones_gained,
             unstable_blocks=[list(pair) for pair in stats.unstable_blocks],
+            missing_blocks=[list(item) for item in stats.missing],
         )
 
 

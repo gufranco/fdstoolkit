@@ -5,10 +5,12 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds, qd
-from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.edit.files import FileSpec, insert_file
 
 runner = CliRunner()
 
@@ -142,3 +144,26 @@ def test_a_block_with_no_good_donor_is_reported(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "no donor carries a good copy" in result.stdout
+
+
+def test_a_consensus_names_a_block_one_dump_missed(tmp_path: Path) -> None:
+    full = insert_file(
+        fds.decode(blank_image(sides=1, headered=False, formatted=True))[0],
+        side=0,
+        spec=FileSpec(name="FILE", address=0x6000, kind=FileKind.PROGRAM, data=bytes(16)),
+    )
+    side = full.sides[0]
+    short = Disk(sides=(Side(blocks=side.blocks[:-2], tail=b"", capacity=side.capacity),))
+    paths = [
+        _write_fds(tmp_path / name, disk)
+        for name, disk in (("a.fds", full), ("b.fds", short), ("c.fds", full))
+    ]
+
+    result = runner.invoke(app, ["consensus", *map(str, paths), "-o", str(tmp_path / "o.fds")])
+    listed = runner.invoke(
+        app, ["consensus", *map(str, paths), "-o", str(tmp_path / "p.fds"), "--json"]
+    )
+
+    assert result.exit_code == 0
+    assert "missing from 1 dump(s), decided by the others" in result.stdout
+    assert len(json.loads(listed.stdout)["missing"]) == 2

@@ -46,6 +46,18 @@ def identities(blocks: Sequence[Block]) -> tuple[Identity, ...]:
     return tuple(found)
 
 
+Key = tuple[Identity, int]
+
+
+def keyed(blocks: Sequence[Block]) -> tuple[Key, ...]:
+    seen: Counter[Identity] = Counter()
+    keys: list[Key] = []
+    for identity in identities(blocks):
+        keys.append((identity, seen[identity]))
+        seen[identity] += 1
+    return tuple(keys)
+
+
 def parse_read(values: bytes) -> Read:
     side, _ = decode_raw03(values)
     return Read(values=values, blocks=side.blocks, regions=block_regions(values))

@@ -210,7 +210,7 @@ fdstoolkit reads <images>... [--json]
 fdstoolkit reads --captures <bundle> [--json]
 ```
 
-Compares repeated dumps of one physical disk block by block. Reports stability, which blocks move, and the direction of the bit flips. Magnetic decay loses transitions, so ones fall to zeros; the report names that as `loss`, the opposite as `gain`, and both as `mixed`.
+Compares repeated dumps of one physical disk block by block. Reports stability, which blocks move, and the direction of the bit flips. Magnetic decay loses transitions, so ones fall to zeros; the report names that as `loss`, the opposite as `gain`, and both as `mixed`. Blocks are matched by type and file number, so a dump that missed a block is counted as missing it rather than refused.
 
 With `--captures`, the same question is asked one layer down. Dumps can only disagree once a block has already failed its checksum; saved captures show the pulses that move between reads while every block still reads clean. Each weak block is listed with how many of its pulses differ, how many were invalid, and how many reads lost it altogether, the blocks some read never found first.
 
@@ -341,7 +341,7 @@ fdstoolkit consensus <dumps>... -o <out> [--captures <bundle>] [--map] [--json] 
 fdstoolkit consensus --captures <bundle> -o <out> [--json] [--force]
 ```
 
-Merges several dumps of one disk block by block, by majority, into one image, and reports every block the dumps disagree on. `--map` prints the per-block agreement.
+Merges several dumps of one disk block by block, by majority, into one image, and reports every block the dumps disagree on. `--map` prints the per-block agreement. Blocks are matched by their type and file number, never by position, so a dump that missed a block still joins the merge: the others decide that block and the report names how many dumps lacked it. Where the dumps carry checksums, as `.qd` dumps do, a copy whose checksum passes beats a majority whose checksum fails, and the verdict says `checksum`.
 
 `--captures` rebuilds a disk from a saved capture bundle by a pulse vote: for every block no read got right, the pulses of each read that reached it are compared one by one and the majority is kept. A read that gained or lost a pulse is realigned to the others before the vote, so one slipped pulse does not shift every pulse after it; `reads` counts that slip once rather than as a block of disagreement. It needs three reads of the block, and a block every read got wrong in the same place stays wrong, because a vote cannot outvote a shared error. Alone, the rebuilt disk is the output and every block it could not fix is named. With dumps, the rebuilt disk joins them as one more voter.
 

@@ -59,6 +59,18 @@ def test_consensus_of_one_disk_names_the_blocks_that_disagree(client: TestClient
     assert not body["ok"]
 
 
+def test_consensus_names_a_block_one_dump_missed_without_failing(client: TestClient) -> None:
+    short = bytearray(ONE_SIDE)
+    short[56:] = bytes(len(short) - 56)
+    missed = base64.b64encode(bytes(short)).decode("ascii")
+
+    body = client.post("/api/consensus", json={"images": [ONE, missed, ONE]}).json()
+
+    assert body["rows"] == [{"side": 0, "block": 1, "finding": "missing from 1 dump(s)"}]
+    assert body["headline"] == "every dump agrees on every block"
+    assert body["ok"]
+
+
 def test_consensus_across_an_empty_corpus_is_refused(client: TestClient) -> None:
     answer = client.post("/api/consensus", json={"images": [], "across": "corpus"})
 

@@ -75,6 +75,7 @@ def reads(
                     "ones_lost": stats.ones_lost,
                     "ones_gained": stats.ones_gained,
                     "unstable": [list(item) for item in stats.unstable_blocks],
+                    "missing": [list(item) for item in stats.missing],
                 }
             )
         )
@@ -93,6 +94,8 @@ def reads(
             f"{item.variants} variants, {item.flip_rate:.1%} flip rate, "
             f"{item.bits_differing} bits"
         )
+    for side, block, absent in stats.missing:
+        typer.echo(f"side {side} block {block:3d}  missing from {absent} read(s)")
     raise typer.Exit(code=0 if not stats.unstable_blocks else 1)
 
 

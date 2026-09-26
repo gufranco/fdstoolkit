@@ -133,6 +133,7 @@ def _disk_consensus(
                     "output": str(output),
                     "bytes": len(data),
                     "disagreements": [list(item) for item in result.disagreements],
+                    "missing": [list(item) for item in result.missing],
                 }
             )
         )
@@ -146,6 +147,11 @@ def _disk_consensus(
             )
     for side_index, block_index in result.disagreements:
         typer.echo(f"side {side_index} block {block_index}: the dumps disagree")
+    for side_index, block_index, absent in result.missing:
+        typer.echo(
+            f"side {side_index} block {block_index}: missing from {absent} dump(s), "
+            "decided by the others"
+        )
     typer.echo(f"wrote {output} ({len(data)} bytes)")
     raise typer.Exit(code=code)
 
