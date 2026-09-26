@@ -15,6 +15,7 @@ from fdstoolkit.codecs.raw import (
     unpack_raw03,
 )
 from fdstoolkit.drive.align import good_block
+from fdstoolkit.drive.vote import Key, keyed
 from fdstoolkit.hardware.ports import HardwareFaultError
 
 NORMAL_MODE: Final = 0x00
@@ -165,16 +166,20 @@ class Probe:
         return NO_TIMING
 
 
-def _payloads(packed: bytes) -> tuple[set[bytes], set[bytes]]:
+def _clean(packed: bytes) -> dict[Key, bytes]:
     side, _ = decode_raw03(unpack_raw03(packed))
-    every = {block.payload for block in side.blocks}
-    return every, {block.payload for block in side.blocks if good_block(block)}
+    return {
+        key: block.payload
+        for key, block in zip(keyed(side.blocks), side.blocks, strict=True)
+        if good_block(block)
+    }
 
 
 def _changed(before: bytes, after: bytes) -> bool:
-    known, clean = _payloads(before)
-    _, now = _payloads(after)
-    return bool(now - known) or (bool(clean) and not now)
+    was = _clean(before)
+    now = _clean(after)
+    rewritten = any(was[key] != payload for key, payload in now.items() if key in was)
+    return rewritten or (bool(was) and not now)
 
 
 def _quiet(message: str) -> None:

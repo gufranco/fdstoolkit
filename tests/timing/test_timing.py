@@ -9,7 +9,9 @@ from fdstoolkit.codecs.raw import (
     NOMINAL_LONG,
     NOMINAL_MEDIUM,
     NOMINAL_SHORT,
+    block_regions,
     encode_raw03,
+    pack_raw03,
     unpack_raw03,
 )
 from fdstoolkit.drive.timing import (
@@ -184,3 +186,42 @@ def test_a_timing_reader_falls_back_to_classes_and_warns() -> None:
         )
     ]
     assert reader.timings == []
+
+
+def test_a_block_that_only_reads_better_afterwards_is_no_change() -> None:
+    clean = packed_side()
+    values = bytearray(unpack_raw03(clean))
+    start, end = block_regions(bytes(values))[3]
+    values[(start + end) // 2] ^= 1
+    flaky = pack_raw03(bytes(values))
+
+    class FlakyDrive(ModeDrive):
+        def __init__(self) -> None:
+            super().__init__({0: clean})
+            self.normal_reads = 0
+
+        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
+            if mode == 0:
+                self.normal_reads += 1
+                self.modes.append(mode)
+                return flaky if self.normal_reads == 1 else clean
+            return super().read_raw_side(what=what, mode=mode)
+
+    found = probe(FlakyDrive(), modes=(2,))
+
+    assert found.changed_by is None
+
+
+def test_a_mode_that_rewrites_a_block_is_named() -> None:
+    other = encode_raw03(calibration_disk(2), side=1)
+
+    class RewritingDrive(ModeDrive):
+        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
+            data = super().read_raw_side(what=what, mode=mode)
+            if mode == 2:
+                self.answers[0] = other
+            return data
+
+    found = probe(RewritingDrive({0: packed_side()}), modes=(2, 3))
+
+    assert found.changed_by == 2
