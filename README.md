@@ -183,7 +183,7 @@ Structural and checksum findings, each with a code. `--strict` fails on warnings
 fdstoolkit grade <image> [--read <r>...] [--captures <bundle>] [--map] [--json]
 ```
 
-A grade with the measurement behind it. `--read` folds in repeated dumps, `--captures` counts the weak blocks a saved capture bundle shows, and `--map` prints the per-block confidence and the basis for each. A single weak block holds the grade at marginal, since a block whose pulses move between reads is the one that fails next.
+A grade with the measurement behind it. `--read` folds in repeated dumps, `--captures` counts the weak blocks a saved capture bundle shows, and `--map` prints the per-block confidence and the basis for each. A single weak block holds the grade at marginal, since a block whose pulses move between reads is the one that fails next. Captures whose disk information differs from the image's are refused, because they describe another disk.
 
 ```bash
 fdstoolkit grade disk.fds --read pass2.fds

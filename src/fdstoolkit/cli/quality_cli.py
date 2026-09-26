@@ -6,7 +6,10 @@ from typing import Annotated
 import typer
 
 from fdstoolkit.cli.common import Family, decode_image, fail, load_captures
+from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.drive.align import good_block
 from fdstoolkit.drive.captures import Bundle
+from fdstoolkit.drive.recovery import rebuild
 from fdstoolkit.drive.weak import bundle_weak_blocks
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
@@ -99,6 +102,24 @@ def reads(
     raise typer.Exit(code=0 if not stats.unstable_blocks else 1)
 
 
+def _weak_count(disk: Disk, bundle: Bundle) -> int:
+    rebuilt = rebuild(bundle).disk
+    for index, (ours, theirs) in enumerate(zip(disk.sides, rebuilt.sides, strict=False)):
+        if _differ(ours, theirs):
+            message = (
+                f"the captures are of another disk: their side {index} disk information "
+                "differs from the image's"
+            )
+            raise fail(message)
+    return len(bundle_weak_blocks(bundle))
+
+
+def _differ(ours: Side, theirs: Side) -> bool:
+    if not (ours.blocks and theirs.blocks and good_block(theirs.blocks[0])):
+        return False
+    return ours.blocks[0].payload != theirs.blocks[0].payload
+
+
 def grade(
     image: Annotated[Path, typer.Argument(help="the image to grade")],
     read: Annotated[
@@ -128,7 +149,7 @@ def grade(
 
     confidence = score_disk(disk, reads=stats)
 
-    weak = None if captures is None else len(bundle_weak_blocks(load_captures(captures)))
+    weak = None if captures is None else _weak_count(disk, load_captures(captures))
     report = grade_disk(confidence=confidence, findings=findings, reads=stats, weak_blocks=weak)
 
     if json_output:

@@ -6,6 +6,7 @@ from pathlib import Path
 from capture_fixture import CREATED, DAMAGED, IMAGE, captures_of, disk_with_a_file, image_of
 from typer.testing import CliRunner
 
+from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.disk import Disk
@@ -166,3 +167,24 @@ def test_consensus_from_captures_reports_json(tmp_path: Path) -> None:
     assert result.exit_code == 1
     assert payload["output"] == str(output)
     assert payload["unresolved"] == [[0, DAMAGED]]
+
+
+def test_grade_refuses_captures_of_another_disk(tmp_path: Path) -> None:
+    bundle, _ = bundle_of(tmp_path, (None, None, None))
+    other, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name="OTH"))
+    image = saved(other, tmp_path / "other.fds")
+
+    result = runner.invoke(app, ["grade", str(image), "--captures", str(bundle)])
+
+    assert result.exit_code == 1
+    assert "the captures are of another disk" in result.stdout
+
+
+def test_grade_cannot_compare_captures_with_an_image_that_holds_no_block(tmp_path: Path) -> None:
+    bundle, _ = bundle_of(tmp_path, (None, None, None))
+    empty = tmp_path / "empty.fds"
+    empty.write_bytes(bytes(fds.SIDE_SIZE))
+
+    result = runner.invoke(app, ["grade", str(empty), "--captures", str(bundle)])
+
+    assert "the captures are of another disk" not in result.stdout
