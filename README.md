@@ -341,7 +341,7 @@ fdstoolkit consensus <dumps>... -o <out> [--captures <bundle>] [--map] [--json] 
 fdstoolkit consensus --captures <bundle> -o <out> [--json] [--force]
 ```
 
-Merges several dumps of one disk block by block, by majority, into one image, and reports every block the dumps disagree on. `--map` prints the per-block agreement. Blocks are matched by their type and file number, never by position, so a dump that missed a block still joins the merge: the others decide that block and the report names how many dumps lacked it. A block only one dump holds has nothing to confirm it, so it is named as such and fails the merge like a disagreement. Where the dumps carry checksums, as `.qd` dumps do, a copy whose checksum passes beats a majority whose checksum fails, and the verdict says `checksum`.
+Merges several dumps of one disk block by block, by majority, into one image, and reports every block the dumps disagree on. `--map` prints the per-block agreement. Blocks are matched by their type and file number, never by position, so a dump that missed a block still joins the merge: the others decide that block and the report names how many dumps lacked it. A block only one dump holds has nothing to confirm it, so it is named as such and fails the merge like a disagreement. Where the dumps carry checksums, as `.qd` dumps do, a copy whose checksum passes beats a majority whose checksum fails, and the verdict says `checksum`. A block every dump reads clean but with different data was not misread: the disk changed between dumps, and the report says so, since that is what a game saving to the disk does.
 
 `--captures` rebuilds a disk from a saved capture bundle by a pulse vote: for every block no read got right, the pulses of each read that reached it are compared one by one and the majority is kept. A read that gained or lost a pulse is realigned to the others before the vote, so one slipped pulse does not shift every pulse after it; `reads` counts that slip once rather than as a block of disagreement. It needs three reads of the block, and a block every read got wrong in the same place stays wrong, because a vote cannot outvote a shared error. Alone, the rebuilt disk is the output and every block it could not fix is named. With dumps, the rebuilt disk joins them as one more voter.
 
@@ -730,6 +730,8 @@ The advice says whether to raise or lower the speed, never which way to turn the
 
 A clean `speed` reading means the drive sits inside the tolerance the RAM adapter accepts, not at the exact rate. For the last stretch, use a console-side test. Copy Master's speed test shows 1 to 9 and says "too slow" or "too fast"; ToToTEK and Bung recommend 5 with a disk in the drive, and running the test twice, because the first run starts with the head in an unknown position. A strobe works too, once you settle which speed to hold: the sources below disagree, so measure a drive you trust first and match the others to it. A strobe disc with `n` marks stands still at `RPM × n ÷ 60` flashes per second.
 
+The disk itself can slow the drive. The same reference warns that pressing a cleaning brush too hard against the disk slows it enough to put the bit rate out of range, so clean with the drive's own light pressure and read again before turning the pot after a clean.
+
 `head` reports which blocks of the side read:
 
 | Reading | Means |
@@ -756,6 +758,8 @@ The head tolerance is about 0.05 mm and a full turn of the head screw moves the 
 
 Each failing read also names the error a console would stop on for it, from the console's own table: `22` to `25` when block 1 to 4 is not found, `27` when a block is found and fails its checksum. These are the numbers the repair guides talk about, so a line reads the same way the television would. It is the stick's read translated, not a console's: a console reads with its own drive electronics, and could stop one block earlier or later.
 
+When most of the last read's failing pulses fit no class at all, rather than leaning short or long, the headline adds that this points at electrical noise on the read line. If the USB link reported no skipped packets, it names the fix the FDSStick's author [gives for read errors](https://www.fdsstick.com/101-2/): a series resistor of about 10k on the READ DATA pin.
+
 `--bracket` runs the method the repair guides use to set the head: move it until the disk stops reading, move it back until it stops reading on the other side, then settle in the middle. Before every read after the first, the command asks for one small step, the same size each time, an eighth of a turn for the head screw. It turns you round when the disk stops reading, and when it stops on the other side too it says how wide the range that read was and how many steps back to its middle. That works only if every step is the same size, so count them. One failed read does not mark an edge: the command asks you to read again without turning, and only two failures in a row at the same setting count, so a single unlucky read cannot shrink the range.
 
 ```bash
@@ -774,7 +778,7 @@ The guides also publish the positions the parts should end up in. They come from
 
 The two speed figures differ by about a factor of two, and neither guide says why or ties its figure to the bit rate the RAM adapter checks. Treat them as a starting point for a strobe, not a target this command can confirm.
 
-`--timing-mode` reads with the mode `probe` found, so every read also prints how long each pulse class ran and how widely it spread, `timing: short 93.1±1.8, medium 139.6±1.9, long 186.0±1.8 counts, spread 1.4%, smaller is better`. A narrower spread means cleaner pulses, which is what the head adjustment is after; the FDSStick's author uses the same kind of spread to set the head. Without the option, every calibration starts with a warning that timing is off, and a timing mode that returns pulse classes on some read says so for that read and judges it from classes.
+`--timing-mode` reads with the mode `probe` found, so every read also prints how long each pulse class ran, how widely it spread, and the bit rate those lengths give: `timing: short 62.1±1.2, medium 93.2±1.3, long 124.0±1.2 counts, spread 1.4%, smaller is better; bit rate 96.7 kHz, +0.3% from 96.4 kHz at an assumed 6 MHz capture clock, inside the ±10% the RAM adapter accepts`. A narrower spread means cleaner pulses, which is what the head adjustment is after; the FDSStick's author uses the same kind of spread to set the head. The bit rate is a live speed meter: turn the motor pot between reads and watch it move toward 96.4 kHz, the rate the RAM adapter expects within ±10% per [Brad Taylor's FDS technical reference](https://www.nesdev.org/FDS%20technical%20reference.txt). The 6 MHz clock is the one nesdev's forum gives for the FDSStick's flux images; no firmware documents the clock of a timing mode, so if the probe finds one on another clock the rate is off by the same ratio and the spread is still right. Without the option, every calibration starts with a warning that timing is off, and a timing mode that returns pulse classes on some read says so for that read and judges it from classes.
 
 Exit status is 0 when the last read was clean.
 
@@ -937,11 +941,13 @@ What each conversion costs:
 | From | To | Lost |
 |---|---|---|
 | `.fds` headered | `.fds` headerless | The declared side count |
-| `.qd` | `.fds` | Every stored checksum |
+| `.qd` | `.fds` | Every stored checksum; Mesen, for one, loads a `.fds` with the same placeholder checksum after every block and reads real ones only from a `.qd` |
 | `.fds` | `.qd` | Nothing, but the checksums are synthesised |
 | any | canonical | Everything the profile masks |
 
 A file header's size is a claim, and some copy protections make it false: a header declaring one byte in front of a data block that really holds 48 KiB. Where checksums exist, in a pulse capture or a `.qd`, the data block is read to the point where its own checksum matches and the next block or the gap begins, and `FDS016` names the difference. A `.fds` has no checksums to find that point, so it keeps the bytes but not the boundary, and every command that writes a `.fds`, on the command line or the page, names such a block and points at `.qd`. A header that declares more than its data block holds is found the same way in a `.qd` and named `FDS012`. One case stays ambiguous by nature: a block whose checksum ends in a zero byte, followed by a gap of zeros, reads equally well as a block one byte shorter with a different valid checksum, and the shorter reading is the one taken, since a zero final byte happens once in 256 blocks.
+
+A pulse capture also measures the gap in front of every block after the first. The RAM adapter ignores roughly the first 488 bits after a block ends, per the technical reference above, so a block whose gap is shorter can be missed by a console even when the stick reads it; `FDS017` names such a block and the gap it had.
 
 ## Exit codes and scripting
 
