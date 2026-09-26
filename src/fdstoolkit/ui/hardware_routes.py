@@ -21,10 +21,12 @@ from fdstoolkit.drive.timing import (
     TimingReader,
     probe,
 )
-from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
+from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
     LongSideError,
+    SideFlipError,
+    WriteRefusedError,
     read_disk,
     refuse_long_sides,
     write_verified,
@@ -71,6 +73,7 @@ if TYPE_CHECKING:
 
 BACKUP_NAME = "before.fds"
 DUMP_NAME = "dump.fds"
+DUMP_STOPS = (HardwareFaultError, WriteRefusedError, SideFlipError)
 DUMP_QD_NAME = "dump.qd"
 CAPTURES_NAME = "dump.captures.zip"
 
@@ -164,24 +167,38 @@ class Backup:
         self._controls.keep(named_file(BACKUP_NAME, data).model_dump())
 
 
+def _keep_failed_captures(spec: DumpSpec, drive: FdsStick, controls: Controls) -> None:
+    note = link_note(drive.resyncs)
+    if note:
+        controls.step(note)
+    if spec.keep_captures and drive.captures:
+        bundle = bundle_zip(drive.captures, image=DUMP_NAME, created=created_now())
+        controls.keep(named_file(CAPTURES_NAME, bundle).model_dump())
+
+
 def dump_job(spec: DumpSpec, request: Request) -> JobView:
     def work(drive: FdsStick, controls: Controls) -> DumpedResult:
-        reading = read_disk(
-            drive,
-            sides=spec.sides,
-            passes=spec.passes,
-            retries=spec.retries,
-            flip=controls.ask,
-            progress=controls.step,
-        )
+        try:
+            reading = read_disk(
+                drive,
+                sides=spec.sides,
+                passes=spec.passes,
+                retries=spec.retries,
+                flip=controls.ask,
+                progress=controls.step,
+            )
+        except DUMP_STOPS:
+            _keep_failed_captures(spec, drive, controls)
+            raise
         outcome = recover(reading.result, drive.captures)
         report = [
             *reading.lines,
             *(line.strip() for line in outcome.lines),
             *(line for side in outcome.result.sides for line in side.lines),
         ]
-        for line in report:
-            controls.step(line)
+        for line in (*report, link_note(drive.resyncs)):
+            if line:
+                controls.step(line)
         name = DUMP_QD_NAME if spec.qd else DUMP_NAME
         image = encoded_file(name, outcome.result.as_disk())
         kept = (
@@ -245,7 +262,7 @@ def write_job(spec: WriteSpec, request: Request) -> JobView:
         for note in report.notes:
             controls.step(note)
         headline = (
-            "the disk reads back as written, on this drive"
+            f"the disk reads back as written, on this drive, grade {report.grade}"
             if report.verified
             else f"{len(report.mismatched_blocks)} block(s) did not read back as written"
         )
@@ -412,7 +429,8 @@ def _calibrated(
         stopped=controls.stopped,
         bracket=controls.ask if bracket else None,
     )
-    return CalibrationResult.of(result)
+    timings = reader.timings if isinstance(reader, TimingReader) else ()
+    return CalibrationResult.of(result, timings)
 
 
 def current_job(request: Request) -> CurrentJob:

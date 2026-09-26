@@ -104,6 +104,13 @@ class Timing:
         ]
         return fmean(shares) * PERCENT if shares else 0.0
 
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "means": list(self.means),
+            "spreads": list(self.spreads),
+            "spread_percent": round(self.spread_percent, 3),
+        }
+
     def render(self) -> str:
         classes = ", ".join(
             f"{name} {mean:.1f}±{spread:.1f}"

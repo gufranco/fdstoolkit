@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Annotated, Any, Final, Self
 
 from pydantic import BaseModel, Field, Strict
@@ -8,6 +9,7 @@ from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.drive.monitor import DEFAULT_READS, MAX_READS, Calibration
+from fdstoolkit.drive.timing import Timing
 from fdstoolkit.hardware.session import MAX_PASSES, MAX_RETRIES
 from fdstoolkit.identify.hashes import Digests
 from fdstoolkit.quality.grade import GradedReport
@@ -217,14 +219,18 @@ class CalibrationResult(BaseModel):
     mode: str
     rows: list[dict[str, Any]]
     ok: bool
+    spread: dict[str, int]
+    timing: list[dict[str, object]]
 
     @classmethod
-    def of(cls, result: Calibration) -> Self:
+    def of(cls, result: Calibration, timings: Sequence[Timing] = ()) -> Self:
         return cls(
             headline=result.headline,
             mode=str(result.mode),
             rows=result.rows(),
             ok=result.clean,
+            spread=result.spread,
+            timing=[timing.as_dict() for timing in timings],
         )
 
 

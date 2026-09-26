@@ -6,10 +6,9 @@ from typing import Annotated
 import typer
 
 from fdstoolkit.cli.common import Family, decode_image, fail, load_captures
-from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.drive.align import good_block
+from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.captures import Bundle
-from fdstoolkit.drive.recovery import rebuild
+from fdstoolkit.drive.recovery import captures_of_another_disk
 from fdstoolkit.drive.weak import bundle_weak_blocks
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
@@ -103,21 +102,10 @@ def reads(
 
 
 def _weak_count(disk: Disk, bundle: Bundle) -> int:
-    rebuilt = rebuild(bundle).disk
-    for index, (ours, theirs) in enumerate(zip(disk.sides, rebuilt.sides, strict=False)):
-        if _differ(ours, theirs):
-            message = (
-                f"the captures are of another disk: their side {index} disk information "
-                "differs from the image's"
-            )
-            raise fail(message)
+    foreign = captures_of_another_disk(disk, bundle)
+    if foreign:
+        raise fail(foreign)
     return len(bundle_weak_blocks(bundle))
-
-
-def _differ(ours: Side, theirs: Side) -> bool:
-    if not (ours.blocks and theirs.blocks and good_block(theirs.blocks[0])):
-        return False
-    return ours.blocks[0].payload != theirs.blocks[0].payload
 
 
 def grade(

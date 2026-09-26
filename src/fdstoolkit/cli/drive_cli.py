@@ -67,14 +67,6 @@ def _live(
         raise fail(str(error)) from error
 
 
-def timing_json(timing: Timing) -> dict[str, object]:
-    return {
-        "means": list(timing.means),
-        "spreads": list(timing.spreads),
-        "spread_percent": round(timing.spread_percent, 3),
-    }
-
-
 def calibration_json(result: Calibration, timings: Sequence[Timing] = ()) -> dict[str, object]:
     return {
         "mode": result.mode.value,
@@ -82,7 +74,7 @@ def calibration_json(result: Calibration, timings: Sequence[Timing] = ()) -> dic
         "headline": result.headline,
         "spread": result.spread,
         "reads": result.rows(),
-        "timing": [timing_json(timing) for timing in timings],
+        "timing": [timing.as_dict() for timing in timings],
     }
 
 

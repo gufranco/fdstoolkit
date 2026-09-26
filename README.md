@@ -98,7 +98,7 @@ Digests print as `fdstoolkit:v1:<profile>/v1:<sha256>`. Under `release`, 142 of 
 
 **An FDSStick capture carries classes, not timing.** The device rounds every pulse to one of three nominal lengths in hardware, and `dump --raw` keeps those classes as `raw03` files. A pulse carries no duration, but it does carry a length class, and the bytes on a disk decide exactly which class each pulse should have. So against an image of the same disk, a pulse read one class shorter than its content requires means the drive runs fast, and one class longer means it runs slow. That is what `calibrate speed` counts. A drive a percent or two off still classifies every pulse correctly, so the last stretch of adjustment needs a console speed test or a strobe.
 
-**A saved capture is the disk as the drive saw it.** `dump --raw <dir>` writes every read of every side as `side{S}.read{NN}.raw03`, plus a `manifest.json` naming each file with its side, read number, size and SHA-256, the image it belongs to, and when it was kept. The web page hands the same bundle back as one zip. Every command that takes `--captures` reads either form and refuses a file whose digest no longer matches, so a bundle can be kept for years and read again without the disk. Because a class sits on every pulse, an error in a read is one pulse in the wrong class, never an extra or a missing pulse, and three reads that each went wrong in a different place can be voted back into the pulses the disk holds.
+**A saved capture is the disk as the drive saw it.** `dump --raw <dir>` writes every read of every side as `side{S}.read{NN}.raw03`, plus a `manifest.json` naming each file with its side, read number, size and SHA-256, the image it belongs to, and when it was kept. The web page hands the same bundle back as one zip. Every command that takes `--captures` reads either form and refuses a file whose digest no longer matches, so a bundle can be kept for years and read again without the disk. Most read errors are one pulse in the wrong class; a read that gained or lost a pulse is realigned to the others first. Either way, three reads that each went wrong in a different place can be voted back into the pulses the disk holds.
 
 **A game is one disk.** Every game uses a single disk, with one or two sides, and no game spans a second disk. An image holding more than two sides bundles several disks together, and every command refuses it.
 
@@ -584,7 +584,7 @@ The report classifies each failing block by how often it failed:
 
 | Class | Meaning |
 |---|---|
-| hard | Failed on more than one pattern. The surface itself is gone at that spot |
+| hard | Failed twice or more, on different patterns or on the same one in different passes. The surface itself is gone at that spot |
 | transient | Failed exactly once. Marginal rather than dead |
 | recovered | Failed on an early pass and read clean on every later one. The rewrite reflowed the magnetisation |
 

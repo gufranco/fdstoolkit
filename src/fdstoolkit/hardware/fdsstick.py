@@ -40,6 +40,16 @@ OLDER_FIRMWARE_HINT: Final = (
 )
 
 
+def link_note(resyncs: Sequence[tuple[int, int]]) -> str:
+    if not resyncs:
+        return ""
+    return (
+        f"the USB link skipped {len(resyncs)} packet(s) of pulse data during the reads, so a "
+        "block failing near one may be the link rather than the disk. Read it again before "
+        "blaming the disk"
+    )
+
+
 def _after(sequence: int) -> int:
     return (sequence + 1) & SEQUENCE_MASK
 

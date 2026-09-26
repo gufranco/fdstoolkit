@@ -202,3 +202,16 @@ def test_replayed_captures_warn_that_a_timing_mode_shows_nothing(
     )
 
     assert job["steps"][0].startswith("warning: saved captures hold pulse classes")
+
+
+def test_grade_refuses_uploaded_captures_of_another_disk(client: TestClient) -> None:
+    disk = disk_with_a_file()
+    other, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name="OTH"))
+
+    answer = client.post(
+        "/api/grade",
+        json={"data": b64(image_of(other)), "captures": b64(zipped(disk, (None, None, None)))},
+    )
+
+    assert answer.status_code == UNPROCESSABLE
+    assert "the captures are of another disk" in answer.json()["detail"]

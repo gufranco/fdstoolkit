@@ -111,3 +111,31 @@ def rebuild(bundle: Bundle) -> Rebuild:
         lines.extend(f"  side {side} {note}" for note in vote.notes)
         lines.extend(f"  side {side} block {block}: never read clean" for block in vote.unresolved)
     return Rebuild(disk=Disk(sides=tuple(sides)), unresolved=tuple(unresolved), lines=tuple(lines))
+
+
+def _clean_headers(side: Side) -> set[bytes]:
+    return {
+        block.payload
+        for block in side.blocks
+        if block.kind is BlockKind.FILE_HEADER and good_block(block)
+    }
+
+
+def _side_differs(ours: Side, theirs: Side) -> str:
+    if ours.blocks and theirs.blocks and good_block(theirs.blocks[0]):
+        return "disk information" if ours.blocks[0].payload != theirs.blocks[0].payload else ""
+    mine = {block.payload for block in ours.blocks if block.kind is BlockKind.FILE_HEADER}
+    seen = _clean_headers(theirs)
+    return "file headers" if mine and seen and not mine & seen else ""
+
+
+def captures_of_another_disk(disk: Disk, bundle: Bundle) -> str:
+    rebuilt = rebuild(bundle).disk
+    for index, (ours, theirs) in enumerate(zip(disk.sides, rebuilt.sides, strict=False)):
+        differs = _side_differs(ours, theirs)
+        if differs:
+            return (
+                f"the captures are of another disk: their side {index} {differs} differ "
+                "from the image's"
+            )
+    return ""

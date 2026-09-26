@@ -6,9 +6,9 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import block_regions, encode_block_stream, pack_raw03, unpack_raw03
 from fdstoolkit.core.blocks import FileKind
-from fdstoolkit.core.disk import Side
+from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.drive.captures import Bundle, Capture
-from fdstoolkit.drive.recovery import rebuild, recover
+from fdstoolkit.drive.recovery import captures_of_another_disk, rebuild, recover
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead
 from fdstoolkit.hardware.session import DumpResult, Grade, SideDump
@@ -143,3 +143,33 @@ def test_a_failed_block_with_no_saved_reads_stays_failed_and_says_so() -> None:
     assert not outcome.result.sides[0].blocks[DAMAGED].crc_ok
     assert outcome.recovered == ()
     assert outcome.lines == ("  side 0 no read found a single block on this side",)
+
+
+def test_captures_whose_disk_info_never_read_clean_are_judged_by_their_headers() -> None:
+    side = reference_side()
+    other = insert_file(
+        decode(blank_image(sides=1, headered=False, formatted=True, game_name="REC"))[0],
+        side=0,
+        spec=FileSpec(name="OTHER", address=0x6000, kind=FileKind.PROGRAM, data=bytes(64)),
+    )
+    values = bytearray(unpack_raw03(encode_block_stream([b.payload for b in side.blocks])))
+    start, _ = block_regions(bytes(values))[0]
+    values[start + 60] = 1 if values[start + 60] == 0 else 0
+    capture = Capture(side=0, read=1, data=pack_raw03(bytes(values) + bytes(4000)))
+    bundle = Bundle(captures=(capture,), image="x.fds", created="2026-09-26T00:00:00Z")
+
+    foreign = captures_of_another_disk(other, bundle)
+
+    assert foreign == (
+        "the captures are of another disk: their side 0 file headers differ from the image's"
+    )
+
+
+def test_captures_of_the_same_disk_are_accepted() -> None:
+    side = reference_side()
+    capture = Capture(side=0, read=1, data=damaged(side, 40))
+    bundle = Bundle(captures=(capture,), image="x.fds", created="2026-09-26T00:00:00Z")
+
+    foreign = captures_of_another_disk(Disk(sides=(side,)), bundle)
+
+    assert foreign == ""

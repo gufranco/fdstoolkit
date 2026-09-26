@@ -26,7 +26,7 @@ from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import created_now, write_bundle
 from fdstoolkit.drive.recovery import recover
-from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
+from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
     MAX_PASSES,
@@ -183,12 +183,9 @@ def dump(
 
 
 def report_link(drive: FdsStick) -> None:
-    if drive.resyncs:
-        typer.echo(
-            f"  the USB link skipped {len(drive.resyncs)} packet(s) of pulse data during the "
-            "reads, so a block failing near one may be the link rather than the disk. Read it "
-            "again before blaming the disk"
-        )
+    note = link_note(drive.resyncs)
+    if note:
+        typer.echo(f"  {note}")
 
 
 def _stopped(drive: FdsStick, raw: Path | None, output: Path, message: str) -> typer.Exit:

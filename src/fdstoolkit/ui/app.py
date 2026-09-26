@@ -19,8 +19,11 @@ from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.qd import CrcMode
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, restore
 from fdstoolkit.core.diagnostics import worst_severity
+from fdstoolkit.core.disk import Disk
 from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
 from fdstoolkit.doctor import CheckStatus, hardware_checks
+from fdstoolkit.drive.captures import Bundle
+from fdstoolkit.drive.recovery import captures_of_another_disk
 from fdstoolkit.drive.weak import bundle_weak_blocks
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.quality.confidence import score_disk
@@ -53,7 +56,14 @@ from fdstoolkit.ui.schemas import (
     WeakResult,
     WeakView,
 )
-from fdstoolkit.ui.shared import BAD_REQUEST, UNPROCESSABLE, bundle_of, decode_payload, named_file
+from fdstoolkit.ui.shared import (
+    BAD_REQUEST,
+    UNPROCESSABLE,
+    bundle_of,
+    decode_payload,
+    named_file,
+    refuse,
+)
 from fdstoolkit.version import VERSION
 
 STATIC_DIR: Final = Path(str(resources.files("fdstoolkit.ui") / "static"))
@@ -181,12 +191,19 @@ def hashes(spec: HashSpec) -> HashResult:
     )
 
 
+def _weak_count(disk: Disk, bundle: Bundle) -> int:
+    foreign = captures_of_another_disk(disk, bundle)
+    if foreign:
+        refuse(foreign, status=UNPROCESSABLE)
+    return len(bundle_weak_blocks(bundle))
+
+
 def grade(spec: GradeSpec) -> GradeResult:
     disk, _, findings = decode_payload(spec.data)
     others = [decode_payload(entry)[0] for entry in spec.reads]
     stats = compare_reads([disk, *others]) if others else None
     confidence = score_disk(disk, reads=stats)
-    weak = None if spec.captures is None else len(bundle_weak_blocks(bundle_of(spec.captures)))
+    weak = None if spec.captures is None else _weak_count(disk, bundle_of(spec.captures))
     return GradeResult.of(
         grade_disk(confidence=confidence, findings=findings, reads=stats, weak_blocks=weak)
     )

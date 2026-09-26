@@ -214,7 +214,7 @@ def test_a_confirmed_write_job_verifies_and_returns_the_backup(
     job = run(app, client, "/api/jobs/write", {"data": ONE, "confirm": True})
 
     assert job["state"] == JobState.DONE
-    assert job["result"]["headline"] == "the disk reads back as written, on this drive"
+    assert job["result"]["headline"] == "the disk reads back as written, on this drive, grade clean"
     assert any("read the disk on a second drive" in step for step in job["steps"])
     assert job["result"]["file"]["name"] == "before.fds"
     assert job["result"]["ok"]
@@ -559,6 +559,7 @@ def test_a_calibration_job_with_a_timing_mode_shows_the_timing(
 
     assert any(step.startswith("timing: short") for step in job["steps"])
     assert job["result"]["ok"] is True
+    assert len(job["result"]["timing"]) == 1
 
 
 @pytest.mark.usefixtures("attached")
@@ -567,3 +568,45 @@ def test_a_dump_job_can_save_a_qd(app: FastAPI, client: TestClient) -> None:
 
     assert job["result"]["name"] == "dump.qd"
     assert job["result"]["size"] % 65536 == 0
+
+
+def test_a_dump_job_that_fails_still_offers_its_captures(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class LostAndSkipping(SimulatedDrive):
+        @property
+        def resyncs(self) -> tuple[tuple[int, int], ...]:
+            return ((5, 6),)
+
+    serve(monkeypatch, LostAndSkipping(disk_of(TWO_SIDE), plan=FaultPlan(link_lost_after=1)))
+
+    job = run(app, client, "/api/jobs/dump", {"keep_captures": True})
+
+    assert job["state"] == JobState.FAILED
+    assert job["kept"]["name"].endswith(".zip")
+    assert any("the USB link skipped 1 packet(s)" in step for step in job["steps"])
+
+
+def test_a_dump_job_says_when_the_usb_link_skipped_packets(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Skipping(SimulatedDrive):
+        @property
+        def resyncs(self) -> tuple[tuple[int, int], ...]:
+            return ((5, 6),)
+
+    serve(monkeypatch, Skipping(disk_of(ONE_SIDE)))
+
+    job = run(app, client, "/api/jobs/dump", {})
+
+    assert any("the USB link skipped 1 packet(s)" in step for step in job["steps"])
+
+
+@pytest.mark.usefixtures("attached")
+def test_a_calibration_job_reports_the_spread_of_its_reads(
+    app: FastAPI, client: TestClient
+) -> None:
+    job = run(app, client, "/api/jobs/calibrate", {"mode": "speed", "reference": ONE, "passes": 2})
+
+    assert job["result"]["spread"] == {"reads clean": 2}
+    assert job["result"]["timing"] == []
