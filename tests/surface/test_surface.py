@@ -460,6 +460,29 @@ def test_a_two_side_blank_finish_turns_back_and_leaves_both_faces_blank() -> Non
     assert drive.disk.sides == blank_disk(sides=2).sides
 
 
+def test_a_finish_whose_turn_was_skipped_writes_nothing_and_says_why() -> None:
+    drive = FacingDrive(two_sided_scratch())
+    turns = iter([True, False])
+
+    def turn_once(message: str) -> bool:
+        return drive.turn(message) if next(turns) else True
+
+    report = surface_test(
+        drive,
+        drive,
+        sides=2,
+        confirm=lambda _: True,
+        flip=turn_once,
+        plan=SurfacePlan(finish=Finish.BLANK),
+    )
+
+    assert not report.finish_verified
+    assert "not turned over" in report.finish_problem
+    assert drive.write_count == 2 * len(PATTERNS) + 1
+    assert drive.disk is not None
+    assert drive.disk.sides[1] == blank_disk(sides=2).sides[1]
+
+
 def test_a_second_side_that_was_not_turned_over_stops_the_test() -> None:
     drive = FacingDrive(two_sided_scratch())
 

@@ -282,6 +282,7 @@ def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
                     "finish": str(report.finish),
                     "finish_ran": report.finish_ran,
                     "finish_verified": report.finish_verified,
+                    "finish_problem": report.finish_problem or None,
                     "refusal": report.refusal,
                     "pulses": report.pulse_summary or None,
                 }

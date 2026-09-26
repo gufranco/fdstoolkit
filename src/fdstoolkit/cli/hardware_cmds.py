@@ -374,7 +374,10 @@ def report_surface(report: SurfaceReport) -> None:
         typer.echo(f"stopped early: {report.stopped.value}")
     if report.refusal:
         typer.echo(f"  {report.refusal}")
+    _report_finish(report)
 
+
+def _report_finish(report: SurfaceReport) -> None:
     if report.finish is not Finish.LEAVE and not report.finish_ran:
         typer.echo("the finish was skipped because the test stopped early")
     elif report.finish is not Finish.LEAVE:
@@ -385,6 +388,8 @@ def report_surface(report: SurfaceReport) -> None:
         )
         state = "verified" if report.finish_verified else "which did not verify"
         typer.echo(f"left the disk {left}, {state}")
+    if report.finish_problem:
+        typer.echo(f"  {report.finish_problem}")
 
 
 def web_server() -> tuple[Callable[..., None], Callable[[], object]]:

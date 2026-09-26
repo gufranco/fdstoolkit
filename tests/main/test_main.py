@@ -1599,6 +1599,7 @@ def test_surface_names_every_class_of_failing_block(
         finish=Finish.ERASE,
         finish_verified=False,
         finish_ran=True,
+        finish_problem="side 0 reads back exactly what was just written to side 1",
     )
 
     def fixed_report(*args: object, **kwargs: object) -> SurfaceReport:
@@ -1616,6 +1617,7 @@ def test_surface_names_every_class_of_failing_block(
     assert "rewriting refreshed them" in result.stdout
     assert "erased, with nothing the adapter can read" in result.stdout
     assert "which did not verify" in result.stdout
+    assert "  side 0 reads back exactly what was just written to side 1" in result.stdout
     assert "side 0 pass 1 pattern short pulses: did not hold" in result.stdout
     assert "98.0% of the most any measured factory side carries" in result.stdout
     assert "42 read short and 1 read long" in result.stdout

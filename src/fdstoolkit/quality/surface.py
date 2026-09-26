@@ -26,6 +26,7 @@ from fdstoolkit.hardware.session import (
     Grade,
     Progress,
     SideDump,
+    SideFlipError,
     SideWrite,
     WriteNotTakenError,
     ask_for_flip,
@@ -109,6 +110,7 @@ class SurfaceReport:
     finish_ran: bool = False
     stopped: StopReason | None = None
     refusal: str = ""
+    finish_problem: str = ""
 
     @property
     def passed(self) -> bool:
@@ -276,9 +278,9 @@ class _Run:
     def turn_to(self, side: int) -> None:
         ask_for_flip(self.reader, side, self.flip)
 
-    def write(self, index: int, side: Side, *, keep: bool) -> SideWrite:
+    def write(self, index: int, side: Side, *, keep: bool, turned: bool) -> SideWrite:
         def check(present: SideDump) -> None:
-            refuse_unturned(self.reader, present, self.last if keep else None)
+            refuse_unturned(self.reader, present, self.last if turned else None)
             if keep:
                 self.originals.append(present)
                 if self.backup is not None:
@@ -320,7 +322,7 @@ def _run_patterns(run: _Run) -> tuple[StopReason | None, str]:
                 ]
                 keep = not index and not position
                 try:
-                    result = run.write(side_index, target, keep=keep)
+                    result = run.write(side_index, target, keep=keep, turned=keep)
                 except WriteNotTakenError as refused:
                     return StopReason.REFUSED, str(refused)
                 blocks = tuple((side_index, block) for block in result.mismatched)
@@ -345,7 +347,7 @@ def _run_patterns(run: _Run) -> tuple[StopReason | None, str]:
     return None, ""
 
 
-def _finish(run: _Run, finish: Finish) -> bool:
+def _finish(run: _Run, finish: Finish) -> tuple[bool, str]:
     final = blank_disk(sides=run.sides) if finish is Finish.BLANK else erased_disk(sides=run.sides)
     order = tuple(reversed(range(run.sides)))
     try:
@@ -353,11 +355,16 @@ def _finish(run: _Run, finish: Finish) -> bool:
             if position:
                 run.turn_to(side_index)
             run.progress(f"finishing side {side_index}")
-            if run.write(side_index, final.sides[side_index], keep=False).mismatched:
-                return False
+            written = run.write(
+                side_index, final.sides[side_index], keep=False, turned=bool(position)
+            )
+            if written.mismatched:
+                return False, ""
     except WriteNotTakenError:
-        return False
-    return True
+        return False, ""
+    except SideFlipError as unturned:
+        return False, str(unturned)
+    return True, ""
 
 
 def _confirmation_message(sides: int) -> str:
@@ -410,9 +417,9 @@ def surface_test(
     written = pattern_disk(PATTERNS[1], sides=sides, fill=plan.fill).sides[0]
     stopped, refusal = _run_patterns(run)
 
-    finished, ran = True, False
+    finished, ran, problem = True, False, ""
     if plan.finish is not Finish.LEAVE and stopped is None:
-        finished, ran = _finish(run, plan.finish), True
+        (finished, problem), ran = _finish(run, plan.finish), True
 
     return SurfaceReport(
         passes=tuple(run.results),
@@ -423,4 +430,5 @@ def surface_test(
         finish_ran=ran,
         stopped=stopped,
         refusal=refusal,
+        finish_problem=problem,
     )
