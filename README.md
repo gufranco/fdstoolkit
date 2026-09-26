@@ -485,7 +485,7 @@ Version, Python, platform, whether hardware support is installed, which devices 
 fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [--yes] [--force]
 ```
 
-Read a disk into a `.fds` or `.qd` file, chosen by the output's suffix. A `.qd` keeps the checksum each block carried on the disk, so a block that never read clean stays visibly bad in it. `--passes` reads each side more than once, `--retries` re-reads a side that has failed blocks up to that many more times, and `--raw` keeps every pulse capture the drive returned as a bundle the other commands read back.
+Read a disk into a `.fds` or `.qd` file, chosen by the output's suffix. A `.qd` keeps the checksum each block carried on the disk, so a block that never read clean stays visibly bad in it. `--passes` reads each side more than once, `--retries` re-reads a side that has failed blocks up to that many more times, and `--raw` keeps every pulse capture the drive returned as a bundle the other commands read back. The bundle is kept when the dump fails or is interrupted too, since a failing disk is the one whose captures matter.
 
 A block that failed on every read is not given up on. The captures of those reads go to the same pulse vote `consensus --captures` runs, and a block the vote rebuilds is written into the image, named on its own line, and leaves the grade at marginal rather than clean. A disk read once has a single capture per side, so the vote only has material after `--retries` or `--passes`.
 

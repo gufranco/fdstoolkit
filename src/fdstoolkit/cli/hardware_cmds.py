@@ -158,29 +158,14 @@ def dump(
     flip = prompter(yes=yes)
 
     try:
-        if passes > 1:
-            report = dump_repeated(
-                drive,
-                sides=sides,
-                passes=passes,
-                retries=retries,
-                flip=flip,
-                progress=step,
-            )
-            result = report.passes[0]
-            grade = report.grade
-            unsettled = Grade.UNSTABLE if report.unstable_blocks else Grade.CLEAN
-            for side_index, block_index in report.unstable_blocks:
-                typer.echo(f"side {side_index}: block {block_index} differs between passes")
-        else:
-            result = dump_disk(drive, sides=sides, retries=retries, flip=flip, progress=step)
-            grade = result.grade
-            unsettled = Grade.CLEAN
+        result, grade, unsettled = _read_disk(
+            drive, sides=sides, passes=passes, retries=retries, flip=flip
+        )
     except KeyboardInterrupt:
         message = "stopped on interrupt, nothing was written"
-        raise fail(message) from None
+        raise _stopped(drive, raw, output, message) from None
     except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
-        raise fail(str(error)) from error
+        raise _stopped(drive, raw, output, str(error)) from error
 
     outcome = recover(result, drive.captures)
     result = outcome.result
@@ -194,6 +179,32 @@ def dump(
     if raw is not None:
         keep_captures(drive, raw, image=output.name)
     raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
+
+
+def _read_disk(
+    drive: FdsStick,
+    *,
+    sides: int,
+    passes: int,
+    retries: int,
+    flip: Callable[[str], bool],
+) -> tuple[DumpResult, Grade, Grade]:
+    if passes == 1:
+        result = dump_disk(drive, sides=sides, retries=retries, flip=flip, progress=step)
+        return result, result.grade, Grade.CLEAN
+    report = dump_repeated(
+        drive, sides=sides, passes=passes, retries=retries, flip=flip, progress=step
+    )
+    for side_index, block_index in report.unstable_blocks:
+        typer.echo(f"side {side_index}: block {block_index} differs between passes")
+    unsettled = Grade.UNSTABLE if report.unstable_blocks else Grade.CLEAN
+    return report.passes[0], report.grade, unsettled
+
+
+def _stopped(drive: FdsStick, raw: Path | None, output: Path, message: str) -> typer.Exit:
+    if raw is not None:
+        keep_captures(drive, raw, image=output.name)
+    return fail(message)
 
 
 def report_blocks(result: DumpResult) -> None:

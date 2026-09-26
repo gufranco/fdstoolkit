@@ -1494,6 +1494,24 @@ def test_dump_keeps_the_drives_pulse_classes(
     assert list((tmp_path / "raw").glob("*.raw03"))
 
 
+def test_a_dump_that_fails_still_keeps_the_captures_it_took(
+    image: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attach(monkeypatch, image, plan=FaultPlan(link_lost_after=1))
+
+    result = runner.invoke(
+        app,
+        ["dump", "-o", str(tmp_path / "dump.fds"), "--raw", str(tmp_path / "raw")],
+    )
+
+    assert result.exit_code == 1
+    assert "the device stopped answering" in result.stdout
+    assert list((tmp_path / "raw").glob("side0.read01.raw03"))
+    assert not (tmp_path / "dump.fds").exists()
+
+
 def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     class CapturingStick(FdsStick):
         def __init__(self, disk: Disk) -> None:
