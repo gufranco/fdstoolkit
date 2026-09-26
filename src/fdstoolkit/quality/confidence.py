@@ -106,8 +106,9 @@ def score_disk(
                 basis.append(Basis.SINGLE_READ)
             else:
                 share, passes = entry
-                score, read_basis = _apply_reads(score, share, passes)
-                basis.append(read_basis)
+                if block.crc_status is not CrcStatus.MISMATCH or share < 1.0:
+                    score, read_basis = _apply_reads(score, share, passes)
+                    basis.append(read_basis)
 
             blocks.append(
                 BlockConfidence(

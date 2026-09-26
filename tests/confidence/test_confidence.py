@@ -118,3 +118,13 @@ def test_read_statistics_of_a_different_shape_are_refused() -> None:
 
     with pytest.raises(ValueError, match="do not describe this image"):
         score_disk(_disk(), reads=stats)
+
+
+def test_reads_that_agree_on_a_failing_checksum_do_not_raise_the_confidence() -> None:
+    failing = [_disk(crc="mismatch") for _ in range(5)]
+    stats = compare_reads(failing)
+
+    report = score_disk(failing[0], reads=stats)
+
+    assert report.blocks[0].confidence < LOW_CONFIDENCE
+    assert Basis.CRC_MISMATCH in report.blocks[0].basis
