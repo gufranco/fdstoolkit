@@ -18,6 +18,15 @@ class BlockVerdict(StrEnum):
     MAJORITY = "majority"
     CHECKSUM = "checksum"
     TIED = "tied"
+    SINGLE = "single"
+
+
+FINDINGS: Final[dict[BlockVerdict, str]] = {
+    BlockVerdict.MAJORITY: "the dumps disagree",
+    BlockVerdict.CHECKSUM: "the dumps disagree",
+    BlockVerdict.TIED: "the dumps disagree",
+    BlockVerdict.SINGLE: "only one dump holds it, so nothing confirms it",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +58,17 @@ class ConsensusResult:
     @property
     def missing(self) -> tuple[tuple[int, int, int], ...]:
         return tuple(
-            (entry.side, entry.block, entry.missing) for entry in self.stability if entry.missing
+            (entry.side, entry.block, entry.missing)
+            for entry in self.stability
+            if entry.missing and entry.verdict is not BlockVerdict.SINGLE
+        )
+
+    @property
+    def findings(self) -> tuple[tuple[int, int, str], ...]:
+        return tuple(
+            (entry.side, entry.block, FINDINGS[entry.verdict])
+            for entry in self.stability
+            if not entry.stable
         )
 
 
@@ -93,6 +112,8 @@ def _passing(copies: Sequence[Block]) -> list[bytes]:
 def _decide(copies: Sequence[Block]) -> tuple[Block, BlockVerdict]:
     payloads = [block.payload for block in copies]
     counts = Counter(payloads)
+    if len(copies) == 1:
+        return copies[0], BlockVerdict.SINGLE
     if len(counts) == 1:
         return copies[0], BlockVerdict.AGREED
     passing = Counter(_passing(copies))

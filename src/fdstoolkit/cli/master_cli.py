@@ -145,8 +145,8 @@ def _disk_consensus(
                 f"side {entry.side} block {entry.block:3d}  {entry.kind:<11} "
                 f"{entry.agreement:6.1%}  {entry.variants} variant(s)  {entry.verdict}"
             )
-    for side_index, block_index in result.disagreements:
-        typer.echo(f"side {side_index} block {block_index}: the dumps disagree")
+    for side_index, block_index, finding in result.findings:
+        typer.echo(f"side {side_index} block {block_index}: {finding}")
     for side_index, block_index, absent in result.missing:
         typer.echo(
             f"side {side_index} block {block_index}: missing from {absent} dump(s), "

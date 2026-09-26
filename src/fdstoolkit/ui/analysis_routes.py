@@ -44,8 +44,8 @@ def consensus(spec: ConsensusSpec) -> ReportedFile:
     except ValueError as error:
         refuse(str(error), status=UNPROCESSABLE)
     rows = [
-        {"side": side, "block": block, "finding": "the dumps disagree"}
-        for side, block in result.disagreements
+        {"side": side, "block": block, "finding": finding}
+        for side, block, finding in result.findings
     ] + [
         {"side": side, "block": block, "finding": f"missing from {absent} dump(s)"}
         for side, block, absent in result.missing

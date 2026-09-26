@@ -169,3 +169,14 @@ def test_the_copy_whose_checksum_passes_beats_a_majority_that_fails() -> None:
 
     assert result.disk.sides[0].blocks[3].payload == good
     assert result.verdicts[3] is BlockVerdict.CHECKSUM
+
+
+def test_a_block_only_one_dump_holds_is_named_unconfirmed() -> None:
+    full = with_files(1)
+
+    result = build_consensus([full, without_last_file(full)])
+
+    assert result.verdicts[-1] is BlockVerdict.SINGLE
+    assert result.findings[-1] == (0, 3, "only one dump holds it, so nothing confirms it")
+    assert (0, 3) in result.disagreements
+    assert all(entry[1] != 3 for entry in result.missing)
