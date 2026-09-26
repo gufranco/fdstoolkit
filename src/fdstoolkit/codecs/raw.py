@@ -23,8 +23,8 @@ GAP_VALUE_WRITE: Final = 2
 SYNC_VALUE: Final = 1
 SHORTEST_GAP_BITS: Final = 480
 MIN_GAP_VALUES: Final = SHORTEST_GAP_BITS
-LEAD_IN_PACKED: Final = 6750
-INTER_BLOCK_PACKED: Final = 224
+LEAD_IN_BITS: Final = 28300
+GAP_BITS: Final = 976
 GAP_FILL: Final = 0xAA
 SYNC_MARK: Final = 0x80
 CAPTURE_CLOCK_HZ: Final = 6_000_000
@@ -160,11 +160,11 @@ def encode_block_stream(
     encoding: RawEncoding = RawEncoding.ERA_B,
 ) -> bytes:
     encoder = encode_era_a if encoding is RawEncoding.ERA_A else encode_era_b
-    values = bytearray(bytes([GAP_VALUE]) * (LEAD_IN_PACKED * VALUES_PER_BYTE))
+    values = bytearray(bytes([GAP_VALUE]) * LEAD_IN_BITS)
 
     for index, payload in enumerate(payloads):
         if index:
-            values += bytes([GAP_VALUE]) * (INTER_BLOCK_PACKED * VALUES_PER_BYTE)
+            values += bytes([GAP_VALUE]) * GAP_BITS
         framed = bytes([SYNC_MARK]) + payload + encode_crc(block_crc(payload))
         values += encoder(framed)
 

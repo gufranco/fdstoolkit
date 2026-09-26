@@ -5,11 +5,13 @@ import pytest
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode as decode_fds
 from fdstoolkit.codecs.raw import (
+    BITS_PER_BYTE,
     CLASS0_LIMIT,
     CLASS1_LIMIT,
     CLASS2_LIMIT,
+    GAP_BITS,
     GAP_VALUE,
-    LEAD_IN_PACKED,
+    LEAD_IN_BITS,
     MIN_GAP_VALUES,
     NOMINAL_LONG,
     NOMINAL_MEDIUM,
@@ -17,7 +19,6 @@ from fdstoolkit.codecs.raw import (
     SHORT_LIMIT,
     SHORTEST_GAP_BITS,
     SYNC_MARK,
-    VALUES_PER_BYTE,
     RawEncoding,
     block_regions,
     block_starts,
@@ -187,7 +188,7 @@ def test_a_stream_without_a_gap_decodes_to_nothing() -> None:
 def test_a_corrupted_stream_reports_the_block_it_lost() -> None:
     disk = sample_disk(files=2)
     values = bytearray(unpack_raw03(encode_raw03(disk, side=0, encoding=RawEncoding.ERA_B)))
-    start = LEAD_IN_PACKED * VALUES_PER_BYTE + 200
+    start = LEAD_IN_BITS + 200
     values[start : start + 64] = bytes([0] * 64)
 
     _, findings = decode_raw03(bytes(values))
@@ -299,7 +300,7 @@ def test_a_damaged_data_block_keeps_its_declared_length() -> None:
 
 def test_blocks_behind_the_shortest_gap_the_format_allows_are_read() -> None:
     payloads = [block.payload for block in sample_disk(2).sides[0].blocks]
-    values = bytearray(bytes([GAP_VALUE]) * (LEAD_IN_PACKED * VALUES_PER_BYTE))
+    values = bytearray(bytes([GAP_VALUE]) * (LEAD_IN_BITS))
     for index, payload in enumerate(payloads):
         if index:
             values += bytes([GAP_VALUE]) * SHORTEST_GAP_BITS
@@ -308,3 +309,24 @@ def test_blocks_behind_the_shortest_gap_the_format_allows_are_read() -> None:
     side, _ = decode_raw03(bytes(values))
 
     assert [block.payload for block in side.blocks] == payloads
+
+
+def zero_runs_before_blocks(values: bytes) -> list[int]:
+    runs: list[int] = []
+    for start, _ in block_regions(values):
+        run = 0
+        while start - run - 1 >= 0 and values[start - run - 1] == GAP_VALUE:
+            run += 1
+        runs.append(run)
+    return runs
+
+
+def test_a_written_side_uses_the_lead_in_and_gaps_nintendo_wrote() -> None:
+    values = unpack_raw03(encode_raw03(sample_disk(2), side=0))
+
+    runs = zero_runs_before_blocks(values)
+
+    assert runs[0] == LEAD_IN_BITS
+    assert all(GAP_BITS <= run < GAP_BITS + BITS_PER_BYTE for run in runs[1:])
+    assert LEAD_IN_BITS >= 26150
+    assert GAP_BITS >= SHORTEST_GAP_BITS
