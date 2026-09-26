@@ -28,6 +28,10 @@ INSTRUCTIONS: Final[dict[Heading, str]] = {
 }
 
 STEP: Final[dict[Heading, int]] = {Heading.ONWARD: 1, Heading.BACK: -1}
+REREAD: Final = (
+    "do not turn the adjustment: confirm to read again at the same setting, since one "
+    "failed read can be chance rather than the edge"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,10 +41,11 @@ class Bracket:
     position: int = 0
     first_edge: int | None = None
     second_edge: int | None = None
+    doubting: bool = False
 
     @property
     def instruction(self) -> str:
-        return INSTRUCTIONS[self.heading]
+        return REREAD if self.doubting else INSTRUCTIONS[self.heading]
 
     @property
     def done(self) -> bool:
@@ -60,6 +65,8 @@ class Bracket:
 
     @property
     def verdict(self) -> str:
+        if self.doubting:
+            return "one read failed: reading again at the same setting before calling it an edge"
         if self.phase is Phase.SEEKING:
             return "no read was clean yet: keep turning the same way, or start again the other way"
         if self.phase is Phase.FIRST_EDGE:
@@ -76,7 +83,18 @@ class Bracket:
             return self
         if self.phase is Phase.SEEKING and clean:
             return self._move(phase=Phase.FIRST_EDGE)
-        if self.phase is Phase.FIRST_EDGE and not clean:
+        if not clean and not self.doubting and self.phase is not Phase.SEEKING:
+            return replace(self, doubting=True)
+        if self.doubting:
+            return self._confirmed(clean=clean)
+        return self._move(phase=self.phase)
+
+    def _confirmed(self, *, clean: bool) -> Bracket:
+        moved = self._move(phase=self.phase) if clean else self._edge()
+        return replace(moved, doubting=False)
+
+    def _edge(self) -> Bracket:
+        if self.phase is Phase.FIRST_EDGE:
             return replace(
                 self,
                 first_edge=self.position,
@@ -84,9 +102,7 @@ class Bracket:
                 phase=Phase.SECOND_EDGE,
                 position=self.position + STEP[Heading.BACK],
             )
-        if self.phase is Phase.SECOND_EDGE and not clean:
-            return replace(self, second_edge=self.position, phase=Phase.DONE)
-        return self._move(phase=self.phase)
+        return replace(self, second_edge=self.position, phase=Phase.DONE)
 
     def _move(self, *, phase: Phase) -> Bracket:
         return replace(self, phase=phase, position=self.position + STEP[self.heading])

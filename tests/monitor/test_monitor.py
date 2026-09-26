@@ -378,7 +378,7 @@ def test_a_bracketed_calibration_asks_for_a_step_between_reads_and_finds_the_mid
     side = reference_side()
     clean = stream(side)
     lost = stream(side, keep=slice(2, None))
-    reader = Reader([clean, clean, lost, clean, clean, lost])
+    reader = Reader([clean, clean, lost, lost, clean, clean, lost, lost])
     asked: list[str] = []
 
     def ask(prompt: str) -> bool:
@@ -387,9 +387,10 @@ def test_a_bracketed_calibration_asks_for_a_step_between_reads_and_finds_the_mid
 
     result = calibrate(reader, mode=Mode.HEAD, reads=20, reference=side, bracket=ask)
 
-    assert reader.reads == 6
-    assert len(asked) == 5
-    assert "the other way" in asked[-1]
+    assert reader.reads == 8
+    assert len(asked) == 7
+    assert "the other way" in asked[3]
+    assert "do not turn" in asked[-1]
     assert result.bracket is not None
     assert result.bracket.done
     assert result.headline.startswith("it reads across")
