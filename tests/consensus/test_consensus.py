@@ -8,7 +8,12 @@ from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.crc import block_crc
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.edit.files import FileSpec, insert_file
-from fdstoolkit.quality.consensus import BlockVerdict, build_consensus, compare_images
+from fdstoolkit.quality.consensus import (
+    REWRITTEN,
+    BlockVerdict,
+    build_consensus,
+    compare_images,
+)
 
 
 def sample() -> Disk:
@@ -180,3 +185,27 @@ def test_a_block_only_one_dump_holds_is_named_unconfirmed() -> None:
     assert result.findings[-1] == (0, 3, "only one dump holds it, so nothing confirms it")
     assert (0, 3) in result.disagreements
     assert all(entry[1] != 3 for entry in result.missing)
+
+
+def test_a_block_every_dump_reads_clean_with_different_data_is_named_rewritten() -> None:
+    full = with_files(1)
+    good = full.sides[0].blocks[3].payload
+    saved = good[:-1] + bytes([good[-1] ^ 0xFF])
+    before = with_block(full, 3, good, block_crc(good))
+    after = with_block(full, 3, saved, block_crc(saved))
+
+    result = build_consensus([before, after])
+
+    assert result.findings == ((0, 3, REWRITTEN),)
+
+
+def test_a_block_whose_copies_fail_their_checksum_is_not_named_rewritten() -> None:
+    full = with_files(1)
+    good = full.sides[0].blocks[3].payload
+    bad = good[:-1] + bytes([good[-1] ^ 0xFF])
+    right = with_block(full, 3, good, block_crc(good))
+    wrong = with_block(full, 3, bad, block_crc(good))
+
+    result = build_consensus([wrong, right])
+
+    assert result.findings == ((0, 3, "the dumps disagree"),)

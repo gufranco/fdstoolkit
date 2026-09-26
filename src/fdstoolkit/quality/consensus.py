@@ -27,6 +27,10 @@ FINDINGS: Final[dict[BlockVerdict, str]] = {
     BlockVerdict.TIED: "the dumps disagree",
     BlockVerdict.SINGLE: "only one dump holds it, so nothing confirms it",
 }
+REWRITTEN: Final = (
+    "every dump reads it clean yet they hold different data, so the disk itself changed "
+    "between dumps, which is what saved game data does"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,10 +42,15 @@ class BlockStability:
     variants: int
     agreement: float
     missing: int = 0
+    rewritten: bool = False
 
     @property
     def stable(self) -> bool:
         return self.verdict is BlockVerdict.AGREED
+
+    @property
+    def finding(self) -> str:
+        return REWRITTEN if self.rewritten else FINDINGS[self.verdict]
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,9 +75,7 @@ class ConsensusResult:
     @property
     def findings(self) -> tuple[tuple[int, int, str], ...]:
         return tuple(
-            (entry.side, entry.block, FINDINGS[entry.verdict])
-            for entry in self.stability
-            if not entry.stable
+            (entry.side, entry.block, entry.finding) for entry in self.stability if not entry.stable
         )
 
 
@@ -109,6 +116,10 @@ def _passing(copies: Sequence[Block]) -> list[bytes]:
     return [block.payload for block in copies if block.crc_status is CrcStatus.VALID]
 
 
+def _rewritten(copies: Sequence[Block]) -> bool:
+    return len({block.payload for block in copies}) > 1 and len(_passing(copies)) == len(copies)
+
+
 def _decide(copies: Sequence[Block]) -> tuple[Block, BlockVerdict]:
     payloads = [block.payload for block in copies]
     counts = Counter(payloads)
@@ -141,6 +152,7 @@ def _merge_side(side_index: int, sides: Sequence[Side]) -> tuple[Side, list[Bloc
                 variants=len(set(payloads)),
                 agreement=payloads.count(chosen.payload) / len(payloads),
                 missing=matched.missing,
+                rewritten=_rewritten(matched.copies),
             )
         )
         blocks.append(chosen)
