@@ -32,6 +32,8 @@ BIAS_PULSES: Final = 16
 BIAS_SHARE: Final = 0.75
 BLOCK_EXPECTED: Final = 0x21
 CRC_FAILED: Final = 0x27
+HEAD_BLOCKS: Final = 2
+BLOCKS_PER_FILE: Final = 2
 
 RECOGNISED: Final = (
     "this is the fdstoolkit calibration disk, side {side}: every pulse is compared with "
@@ -265,6 +267,17 @@ def _against_learned(
     return short, long, compared
 
 
+def _declared_blocks(decoded: Sequence[Block]) -> int:
+    for block in decoded:
+        if block.kind is BlockKind.FILE_AMOUNT and good_block(block):
+            return HEAD_BLOCKS + BLOCKS_PER_FILE * block.payload[1]
+    return 0
+
+
+def _file_block_kind(index: int) -> BlockKind:
+    return BlockKind.FILE_HEADER if index % BLOCKS_PER_FILE == 0 else BlockKind.FILE_DATA
+
+
 def sample(
     packed: bytes,
     reference: Side | None = None,
@@ -284,14 +297,19 @@ def measure(
     invalid = _invalid(values)
     if reference is None:
         short, long, compared = _against_learned(values, decoded, learned)
+        unread = max(_declared_blocks(decoded) - len(decoded), 0)
         return SideSample(
-            blocks=tuple(good_block(block) for block in decoded),
+            blocks=tuple(good_block(block) for block in decoded) + (False,) * unread,
             short=short,
             long=long,
             invalid=invalid,
             compared=compared,
             referenced=compared > 0,
-            kinds=tuple(block.kind for block in decoded),
+            found=(True,) * len(decoded) + (False,) * unread if unread else (),
+            kinds=tuple(block.kind for block in decoded)
+            + tuple(
+                _file_block_kind(index) for index in range(len(decoded), len(decoded) + unread)
+            ),
         )
 
     starts = block_starts(values)

@@ -188,6 +188,27 @@ def test_without_a_reference_only_the_checksums_judge() -> None:
     assert found.speed is SpeedReading.CLEAN
 
 
+def test_without_a_reference_a_read_that_stops_early_is_not_clean() -> None:
+    side = reference_side()
+
+    found = sample(stream(side, keep=slice(None, 4)))
+
+    assert found.expected == len(side.blocks)
+    assert found.missing == tuple(range(4, len(side.blocks)))
+    assert found.head is HeadReading.END
+    assert found.speed is SpeedReading.ERRORS
+    assert found.console_error == 0x21 + 3
+
+
+def test_without_a_reference_an_unreadable_file_amount_leaves_the_count_to_the_read() -> None:
+    side = reference_side()
+
+    found = sample(stream(side, keep=slice(None, 1)))
+
+    assert found.expected == 1
+    assert found.speed is SpeedReading.CLEAN
+
+
 def test_invalid_pulses_outside_the_gaps_are_counted() -> None:
     side = reference_side()
     values = bytearray(unpack_raw03(stream(side)))
