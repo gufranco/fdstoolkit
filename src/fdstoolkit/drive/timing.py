@@ -27,6 +27,10 @@ PEAK_SHARE: Final = 0.02
 COUNT_RANGE: Final = 256
 CLASS_NAMES: Final = ("short", "medium", "long")
 PERCENT: Final = 100
+CAPTURE_CLOCK_KHZ: Final = 6000
+NOMINAL_RATE_KHZ: Final = 96.4
+RATE_TOLERANCE: Final = 0.10
+CELLS_PER_CLASS: Final = (1.0, 1.5, 2.0)
 
 TIMING_OFF: Final = (
     "warning: timing is off, so every read is judged from pulse classes alone. Run the "
@@ -104,19 +108,48 @@ class Timing:
         ]
         return fmean(shares) * PERCENT if shares else 0.0
 
+    @property
+    def rate_khz(self) -> float:
+        cells = [
+            mean / width for mean, width in zip(self.means, CELLS_PER_CLASS, strict=True) if mean
+        ]
+        return CAPTURE_CLOCK_KHZ / fmean(cells) if cells else 0.0
+
+    @property
+    def rate_offset_percent(self) -> float:
+        return (self.rate_khz / NOMINAL_RATE_KHZ - 1) * PERCENT
+
+    @property
+    def rate_in_tolerance(self) -> bool:
+        return abs(self.rate_offset_percent) <= RATE_TOLERANCE * PERCENT
+
     def as_dict(self) -> dict[str, object]:
         return {
             "means": list(self.means),
             "spreads": list(self.spreads),
             "spread_percent": round(self.spread_percent, 3),
+            "rate_khz": round(self.rate_khz, 3),
+            "rate_offset_percent": round(self.rate_offset_percent, 3),
+            "rate_in_tolerance": self.rate_in_tolerance,
         }
+
+    def _rate_line(self) -> str:
+        where = "inside" if self.rate_in_tolerance else "outside"
+        return (
+            f"bit rate {self.rate_khz:.1f} kHz, {self.rate_offset_percent:+.1f}% from "
+            f"{NOMINAL_RATE_KHZ} kHz at an assumed {CAPTURE_CLOCK_KHZ // 1000} MHz capture clock, "
+            f"{where} the ±{RATE_TOLERANCE * PERCENT:.0f}% the RAM adapter accepts"
+        )
 
     def render(self) -> str:
         classes = ", ".join(
             f"{name} {mean:.1f}±{spread:.1f}"
             for name, mean, spread in zip(CLASS_NAMES, self.means, self.spreads, strict=True)
         )
-        return f"timing: {classes} counts, spread {self.spread_percent:.1f}%, smaller is better"
+        return (
+            f"timing: {classes} counts, spread {self.spread_percent:.1f}%, smaller is better; "
+            f"{self._rate_line()}"
+        )
 
 
 def measure_timing(counts: bytes) -> Timing:

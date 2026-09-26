@@ -31,6 +31,13 @@ SPREAD_READS: Final = 5
 DEFAULT_READS: Final = 20
 BIAS_PULSES: Final = 16
 BIAS_SHARE: Final = 0.75
+NOISY_PULSES: Final = 16
+NOISY_READ: Final = (
+    ". Most failing pulses fit no class at all, which points at electrical noise on the read "
+    "line more than at speed. If the USB link reported no skipped packets, the FDSStick's "
+    "author found that a series resistor of about 10k on the READ DATA pin, pin 9 of the "
+    "FDSStick pinout, helps with read errors"
+)
 
 RECOGNISED: Final = (
     "this is the fdstoolkit calibration disk, side {side}: every pulse is compared with "
@@ -204,6 +211,10 @@ class SideSample:
 
     def score(self) -> tuple[int, int]:
         return (self.read, -(self.short + self.long + self.invalid))
+
+    @property
+    def noisy(self) -> bool:
+        return self.invalid >= NOISY_PULSES and self.invalid > self.short + self.long
 
 
 def _framed(payload: bytes) -> bytes:
@@ -408,7 +419,8 @@ class Calibration:
         window = (
             f"; the last {sum(spread.values())} reads: {counted}" if len(self.samples) > 1 else ""
         )
-        return f"{verdict(self.mode, last)}: {advice(self.mode, last)}{window}"
+        noise = NOISY_READ if last.noisy else ""
+        return f"{verdict(self.mode, last)}: {advice(self.mode, last)}{window}{noise}"
 
     @property
     def spread(self) -> dict[str, int]:

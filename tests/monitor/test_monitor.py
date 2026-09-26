@@ -18,6 +18,9 @@ from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.monitor import (
     MAX_READS,
+    NOISY_PULSES,
+    NOISY_READ,
+    Calibration,
     HeadReading,
     Mode,
     Replay,
@@ -512,3 +515,37 @@ def test_a_fast_drive_still_reads_fast_when_every_block_gained_a_pulse() -> None
 
     assert lean(found.short, found.long) is SpeedReading.FAST
     assert found.long * 10 < found.short
+
+
+def noisy_sample(*, invalid: int, leaning: int) -> SideSample:
+    return SideSample(
+        blocks=(True, False),
+        short=leaning,
+        long=0,
+        invalid=invalid,
+        compared=1000,
+        referenced=True,
+    )
+
+
+def test_a_read_failing_mostly_on_invalid_pulses_names_the_read_line_resistor() -> None:
+    result = Calibration(mode=Mode.SPEED, samples=(noisy_sample(invalid=NOISY_PULSES, leaning=2),))
+
+    assert result.headline.endswith(NOISY_READ)
+    assert "10k on the READ DATA pin" in result.headline
+
+
+def test_a_read_whose_failures_lean_with_speed_carries_no_noise_hint() -> None:
+    result = Calibration(
+        mode=Mode.SPEED, samples=(noisy_sample(invalid=NOISY_PULSES, leaning=NOISY_PULSES),)
+    )
+
+    assert NOISY_READ not in result.headline
+
+
+def test_a_few_invalid_pulses_carry_no_noise_hint() -> None:
+    result = Calibration(
+        mode=Mode.HEAD, samples=(noisy_sample(invalid=NOISY_PULSES - 1, leaning=0),)
+    )
+
+    assert NOISY_READ not in result.headline

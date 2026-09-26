@@ -106,7 +106,7 @@ def test_the_timing_line_names_every_class_and_the_spread() -> None:
     assert line.startswith("timing: short ")
     assert "medium" in line
     assert "long" in line
-    assert line.endswith("%, smaller is better")
+    assert "%, smaller is better; bit rate " in line
 
 
 def test_the_probe_stops_at_the_first_mode_that_returns_timing() -> None:
@@ -225,3 +225,18 @@ def test_a_mode_that_rewrites_a_block_is_named() -> None:
     found = probe(RewritingDrive({0: packed_side()}), modes=(2, 3))
 
     assert found.changed_by == 2
+
+
+def test_the_timing_line_names_the_bit_rate_against_the_adapter_tolerance() -> None:
+    timing = measure_timing(counts_of(packed_side(), scale=1.0))
+
+    assert timing.rate_khz == pytest.approx(96.8, abs=0.5)
+    assert "bit rate 96." in timing.render()
+    assert "inside the ±10% the RAM adapter accepts" in timing.render()
+
+
+def test_a_rate_far_off_nominal_is_named_outside_the_tolerance() -> None:
+    timing = measure_timing(counts_of(packed_side(), scale=1.25))
+
+    assert timing.rate_khz < 96.4 * 0.9
+    assert "outside the ±10% the RAM adapter accepts" in timing.render()
