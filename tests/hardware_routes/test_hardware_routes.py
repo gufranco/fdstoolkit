@@ -212,7 +212,9 @@ def test_a_write_job_reports_blocks_that_did_not_read_back(
     job = run(app, client, "/api/jobs/write", {"data": ONE, "confirm": True})
 
     assert job["state"] == JobState.DONE
-    assert job["result"]["rows"] == [{"side": 0, "block": 1}]
+    assert job["result"]["rows"] == [
+        {"side": 0, "block": 1, "finding": "did not read back as written"}
+    ]
     assert "did not read back as written" in job["result"]["headline"]
     assert not job["result"]["ok"]
 

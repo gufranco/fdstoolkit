@@ -234,7 +234,10 @@ def write_job(spec: WriteSpec, request: Request) -> JobView:
         return ReportedFile(
             headline=headline,
             file=named_file(BACKUP_NAME, backup.data),
-            rows=[{"side": side, "block": block} for side, block in report.mismatched_blocks],
+            rows=[
+                {"side": side, "block": block, "finding": text}
+                for side, block, text in report.findings
+            ],
             ok=report.verified,
         )
 

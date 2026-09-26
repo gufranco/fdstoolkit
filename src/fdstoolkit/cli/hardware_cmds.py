@@ -285,8 +285,8 @@ def write(
     except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
         raise fail(str(error)) from error
 
-    for side_index, block_index in report.mismatched_blocks:
-        typer.echo(f"side {side_index}: block {block_index} did not read back as written")
+    for line in report.lines:
+        typer.echo(line)
     typer.echo(f"verified {report.verified}, grade {report.grade}")
     for note in report.notes:
         typer.echo(f"  {note}")

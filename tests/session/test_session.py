@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 
 import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
@@ -12,6 +12,7 @@ from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import (
+    STALE_BLOCK,
     Grade,
     SideFlipError,
     WriteNotTakenError,
@@ -146,6 +147,26 @@ def test_a_dump_retries_a_flaky_block_and_grades_it_marginal() -> None:
     assert result.grade is Grade.MARGINAL
     assert result.sides[0].blocks[1].attempts == 3
     assert result.sides[0].marginal_blocks == (1,)
+
+
+class OverlayDrive(SimulatedDrive):
+    def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+        current = self._side(side)
+        kept = [block.payload for block in current.blocks[len(blocks) :]]
+        super().write_side(side, [*blocks, *kept])
+
+
+def test_old_blocks_left_after_a_shorter_image_fail_the_verification() -> None:
+    drive = OverlayDrive(disk_with_files())
+    image = disk_with_files(1)
+
+    report = write_verified(drive, drive, image, confirm=lambda _: True, backup=None)
+
+    written = len(image.sides[0].blocks)
+    assert not report.verified
+    assert report.stale_blocks == tuple((0, index) for index in range(written, written + 8))
+    assert report.mismatched_blocks == report.stale_blocks
+    assert report.lines[0] == f"side 0: block {written} {STALE_BLOCK}"
 
 
 def test_a_block_that_never_reads_cleanly_fails_the_dump() -> None:

@@ -157,6 +157,11 @@ PORTABILITY_NOTE: Final = (
     "verified on this drive only: a drive with misaligned heads writes disks that it reads "
     "back and other drives cannot, so read the disk on a second drive before trusting it"
 )
+CHANGED_BLOCK: Final = "did not read back as written"
+STALE_BLOCK: Final = (
+    "is old data past the end of the image, which the write did not reach and a reader "
+    "would take for a hidden file"
+)
 REFUSED_WRITE: Final = (
     "the disk reads back exactly as it was before the write, so it did not take the write. "
     "That is what a drive with an FD3206 controller does when it silently refuses a "
@@ -170,6 +175,7 @@ class WriteReport:
     verified: bool
     mismatched_blocks: tuple[tuple[int, int], ...]
     dump: DumpResult
+    stale_blocks: tuple[tuple[int, int], ...] = ()
 
     @property
     def grade(self) -> Grade:
@@ -182,6 +188,18 @@ class WriteReport:
         if self.verified:
             return (PORTABILITY_NOTE,)
         return ()
+
+    @property
+    def findings(self) -> tuple[tuple[int, int, str], ...]:
+        stale = set(self.stale_blocks)
+        return tuple(
+            (side, block, STALE_BLOCK if (side, block) in stale else CHANGED_BLOCK)
+            for side, block in self.mismatched_blocks
+        )
+
+    @property
+    def lines(self) -> tuple[str, ...]:
+        return tuple(f"side {side}: block {block} {text}" for side, block, text in self.findings)
 
 
 def _require_readable(reader: DiskReader) -> None:
@@ -312,6 +330,7 @@ class SideWrite:
     before: SideDump
     after: SideDump
     mismatched: tuple[int, ...]
+    stale: tuple[int, ...] = ()
 
 
 def write_side_verified(
@@ -338,12 +357,13 @@ def write_side_verified(
     if _same_blocks(after, before) and _payloads(side) != _dumped(before):
         raise WriteNotTakenError(REFUSED_WRITE)
     written = after.blocks
-    mismatched = tuple(
+    changed = tuple(
         block_index
         for block_index, block in enumerate(side.blocks)
         if block_index >= len(written) or written[block_index].payload != block.payload
     )
-    return SideWrite(before=before, after=after, mismatched=mismatched)
+    stale = tuple(range(len(side.blocks), len(written)))
+    return SideWrite(before=before, after=after, mismatched=changed + stale, stale=stale)
 
 
 def refuse_unturned(reader: DiskReader, present: SideDump, previous: SideDump | None) -> None:
@@ -408,6 +428,7 @@ def write_verified(
             (item.after.index, block) for item in writes for block in item.mismatched
         ),
         dump=DumpResult(sides=tuple(item.after for item in writes)),
+        stale_blocks=tuple((item.after.index, block) for item in writes for block in item.stale),
     )
 
 
