@@ -5,6 +5,7 @@ import pytest
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode as decode_fds
 from fdstoolkit.codecs.raw import (
+    ADAPTER_BLIND_BITS,
     BITS_PER_BYTE,
     CLASS0_LIMIT,
     CLASS1_LIMIT,
@@ -356,3 +357,27 @@ def test_a_checksum_ending_in_zero_before_a_zero_gap_reads_one_byte_short() -> N
 
     assert side.blocks[3].payload == payloads[3][:-1]
     assert side.blocks[3].crc_status.value == "valid"
+
+
+def two_blocks_with_gap(bits: int) -> bytes:
+    first = bytes([0x80, 0x01]) + bytes(55)
+    second = bytes([0x80, 0x02, 0x00])
+    return (
+        encoded(first + encode_crc(block_crc(first[1:])))
+        + bytes([GAP_VALUE]) * bits
+        + encode_era_b(second + encode_crc(block_crc(second[1:])))
+    )
+
+
+def test_a_gap_shorter_than_the_adapter_ignores_is_named_with_its_length() -> None:
+    _, findings = decode_raw03(two_blocks_with_gap(SHORTEST_GAP_BITS + 2))
+
+    short = [finding for finding in findings if finding.code == "FDS017"]
+    assert len(short) == 1
+    assert short[0].detail["bits"] in range(ADAPTER_BLIND_BITS)
+
+
+def test_a_gap_the_adapter_reads_past_is_not_flagged() -> None:
+    _, findings = decode_raw03(two_blocks_with_gap(GAP_BITS))
+
+    assert "FDS017" not in [finding.code for finding in findings]

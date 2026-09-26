@@ -24,6 +24,7 @@ SHORTEST_GAP_BITS: Final = 480
 MIN_GAP_VALUES: Final = SHORTEST_GAP_BITS
 LEAD_IN_BITS: Final = 28300
 GAP_BITS: Final = 976
+ADAPTER_BLIND_BITS: Final = 488
 GAP_FILL: Final = 0xAA
 WRITE_HEADER: Final = bytes([0xC0, 0x00, 0xAB])
 WRITE_GAP_BYTE: Final = 0xAA
@@ -389,6 +390,13 @@ def block_regions(values: bytes) -> tuple[tuple[int, int], ...]:
     return regions
 
 
+def _short_gap(gap: int, previous_end: int, *, after_block: bool) -> tuple[Diagnostic, ...]:
+    bits = gap - previous_end
+    if not after_block or bits >= ADAPTER_BLIND_BITS:
+        return ()
+    return (_diagnostic("FDS017", Severity.WARNING, {"offset": gap, "bits": bits}),)
+
+
 def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int, int], ...]]:
     findings: list[Diagnostic] = []
     blocks: list[Block] = []
@@ -400,6 +408,7 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
         gap = _gap_end(values, cursor)
         if gap is None:
             break
+        findings.extend(_short_gap(gap, cursor, after_block=bool(blocks)))
         data, cursor, needed = _decode_region(values, gap, pending)
         if not data or data[0] != SYNC_MARK or needed is None:
             findings.append(_diagnostic("FDS015", Severity.WARNING, {"offset": gap}))

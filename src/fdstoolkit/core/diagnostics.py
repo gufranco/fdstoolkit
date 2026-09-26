@@ -23,6 +23,7 @@ CODES: Final[Mapping[str, str]] = {
     "FDS014": "no block was recovered from the pulse stream",
     "FDS015": "a decoded region does not start with the sync mark",
     "FDS016": "file data block runs past the size its header declares",
+    "FDS017": "gap before this block is shorter than the bits the RAM adapter ignores",
 }
 
 
