@@ -24,7 +24,7 @@ from fdstoolkit.core.disk import Side
 from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
 from fdstoolkit.drive.align import align_blocks, good_block
 from fdstoolkit.drive.bracket import Bracket
-from fdstoolkit.drive.vote import Key, keyed
+from fdstoolkit.drive.vote import Key, align_to, keyed
 
 MAX_READS: Final = 200
 SPREAD_READS: Final = 5
@@ -225,7 +225,9 @@ def _invalid(values: bytes) -> int:
 
 def _leaning(actual: bytes, expected: bytes) -> tuple[int, int, int]:
     pairs = [
-        (have, want) for have, want in zip(actual, expected, strict=False) if have != MAX_CLASS
+        (have, want)
+        for have, want in zip(align_to(expected, actual), expected, strict=True)
+        if have is not None and have != MAX_CLASS
     ]
     short = sum(1 for have, want in pairs if have < want)
     long = sum(1 for have, want in pairs if have > want)

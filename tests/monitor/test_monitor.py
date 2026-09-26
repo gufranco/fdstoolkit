@@ -27,6 +27,7 @@ from fdstoolkit.drive.monitor import (
     advice,
     calibrate,
     describe,
+    lean,
     learn,
     sample,
     trend,
@@ -497,3 +498,17 @@ def test_a_single_read_has_no_spread_in_its_headline() -> None:
     result = calibrate(Reader([stream(side)]), mode=Mode.SPEED, reads=1, reference=side)
 
     assert "; the last" not in result.headline
+
+
+def test_a_fast_drive_still_reads_fast_when_every_block_gained_a_pulse() -> None:
+    side = reference_side()
+    values = unpack_raw03(nudged(stream(side), shorter=True))
+    for start in reversed(block_starts(values)):
+        spot = start + SKIP_SYNC // 2
+        values = values[:spot] + values[spot : spot + 1] + values[spot:]
+    slipped = pack_raw03(values)
+
+    found = sample(slipped, side)
+
+    assert lean(found.short, found.long) is SpeedReading.FAST
+    assert found.long * 10 < found.short
