@@ -36,6 +36,7 @@ from fdstoolkit.hardware.session import (
     SideFlipError,
     WriteRefusedError,
     dump_repeated,
+    worst_grade,
     write_verified,
 )
 from fdstoolkit.hardware.session import dump as dump_disk
@@ -166,11 +167,13 @@ def dump(
             )
             result = report.passes[0]
             grade = report.grade
+            unsettled = Grade.UNSTABLE if report.unstable_blocks else Grade.CLEAN
             for side_index, block_index in report.unstable_blocks:
                 typer.echo(f"side {side_index}: block {block_index} differs between passes")
         else:
             result = dump_disk(drive, sides=sides, retries=retries, flip=flip, progress=step)
             grade = result.grade
+            unsettled = Grade.CLEAN
     except KeyboardInterrupt:
         message = "stopped on interrupt, nothing was written"
         raise fail(message) from None
@@ -179,7 +182,7 @@ def dump(
 
     outcome = recover(result, drive.captures)
     result = outcome.result
-    grade = result.grade if outcome.recovered else grade
+    grade = worst_grade(result.grade, unsettled) if outcome.recovered else grade
     data = encode_image(result.as_disk(), container)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")

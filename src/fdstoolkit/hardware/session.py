@@ -32,6 +32,13 @@ class Grade(StrEnum):
     FAILED = "failed"
 
 
+SEVERITY: Final = (Grade.FAILED, Grade.UNSTABLE, Grade.MARGINAL, Grade.CLEAN)
+
+
+def worst_grade(*grades: Grade) -> Grade:
+    return min(grades, key=SEVERITY.index, default=Grade.CLEAN)
+
+
 class WriteRefusedError(Exception):
     pass
 

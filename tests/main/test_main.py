@@ -846,6 +846,24 @@ def test_dump_reports_unstable_blocks(
     assert result.exit_code == 0
 
 
+def test_a_recovered_block_does_not_hide_that_the_passes_disagreed(
+    image: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attach(
+        monkeypatch,
+        image,
+        plan=FaultPlan(bad_crc_blocks=frozenset({1}), unstable_blocks=frozenset({0})),
+    )
+
+    result = runner.invoke(
+        app, ["dump", "-o", str(tmp_path / "d.fds"), "--passes", "3", "--retries", "0"]
+    )
+
+    assert "recovered" in result.stdout
+    assert "grade unstable" in result.stdout
+    assert result.exit_code == 1
+
+
 def test_dump_reports_a_drive_fault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     empty = tmp_path / "empty.fds"
     empty.write_bytes(bytes(SIDE_SIZE))
