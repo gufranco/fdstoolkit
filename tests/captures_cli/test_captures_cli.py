@@ -51,6 +51,19 @@ def test_consensus_merges_saved_captures_with_image_dumps(tmp_path: Path) -> Non
     assert output.is_file()
 
 
+def test_consensus_of_dumps_and_captures_prints_only_json_on_stdout(tmp_path: Path) -> None:
+    bundle, disk = bundle_of(tmp_path, (10, 90, 170))
+    dump = saved(disk, tmp_path / "dump.fds")
+    output = tmp_path / "merged.fds"
+
+    result = runner.invoke(
+        app, ["consensus", str(dump), "--captures", str(bundle), "-o", str(output), "--json"]
+    )
+
+    assert json.loads(result.stdout)["output"] == str(output)
+    assert "recovered by a pulse vote" in result.stderr
+
+
 def test_consensus_says_which_block_the_captures_could_not_fix(tmp_path: Path) -> None:
     bundle, _ = bundle_of(tmp_path, (10,))
 

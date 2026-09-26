@@ -79,7 +79,7 @@ def consensus(
         _write_rebuilt(rebuilt, output, json_output=json_output)
     if rebuilt is not None:
         for line in rebuilt.lines:
-            typer.echo(line)
+            typer.echo(line, err=json_output)
         disks.append(rebuilt.disk)
     _disk_consensus(disks, output, stability_map=stability_map, json_output=json_output)
 

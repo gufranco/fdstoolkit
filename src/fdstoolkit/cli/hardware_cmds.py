@@ -78,15 +78,15 @@ STATUS_NOTE: Final = (
 def prompter(*, yes: bool) -> Callable[[str], bool]:
     def ask(message: str) -> bool:
         if yes:
-            typer.echo(message)
+            typer.echo(message, err=True)
             return True
-        return typer.confirm(message)
+        return typer.confirm(message, err=True)
 
     return ask
 
 
 def step(message: str) -> None:
-    typer.echo(f"  {message}")
+    typer.echo(f"  {message}", err=True)
 
 
 def status(

@@ -105,8 +105,9 @@ def test_a_calibration_prints_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
         app, ["calibrate", "speed", "--reference", str(reference), "--passes", "1", "--json"]
     )
 
-    payload = json.loads(result.output[result.output.index("{") :])
+    payload = json.loads(result.stdout)
     assert payload["mode"] == "speed"
+    assert "judge the drive only with a disk it did not write" in result.stderr
     assert payload["clean"] is True
     assert payload["reads"][0]["verdict"] == "reads clean"
 

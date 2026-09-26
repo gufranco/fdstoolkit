@@ -888,7 +888,7 @@ What each conversion costs:
 
 `0` means nothing failed, `1` means something did. What counts as failure is command-specific and documented above: an unrepaired block for `splice`, a block the dumps disagree on for `consensus`, a last read that was not clean for `calibrate`.
 
-Every reporting command takes `--json`, and the JSON is the same data the human output renders. Commands that write files refuse to overwrite without `--force`.
+Every reporting command takes `--json`, and the JSON is the same data the human output renders. Standard output carries only the result; progress lines, notices and questions to the operator go to standard error, so a pipe into `jq` sees nothing else. Commands that write files refuse to overwrite without `--force`.
 
 ```bash
 fdstoolkit verify disk.fds --json | jq -r '.findings[] | "\(.code) \(.message)"'

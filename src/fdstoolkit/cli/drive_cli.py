@@ -111,7 +111,7 @@ def calibrate_command(
             replay, mode=mode, reads=len(replay.captures), reference=wanted, progress=step
         )
     else:
-        typer.echo(NOT_THIS_DRIVE)
+        typer.echo(NOT_THIS_DRIVE, err=True)
         drive = open_drive()
         try:
             result = _live(drive, mode=mode, passes=passes, wanted=wanted, bracket=bracket)

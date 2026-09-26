@@ -444,8 +444,8 @@ def test_write_turns_the_disk_once_for_a_two_side_image(
 
     result = runner.invoke(app, ["write", str(image)])
 
-    assert result.exit_code == 0, result.stdout
-    assert "  writing side 1" in result.stdout
+    assert result.exit_code == 0, result.output
+    assert "  writing side 1" in result.stderr
     assert drive.turns == 1
 
 
@@ -467,7 +467,7 @@ def test_a_prompt_answered_by_yes_is_still_shown(capsys: pytest.CaptureFixture[s
     answered = ask("turn the disk over")
 
     assert answered
-    assert "turn the disk over" in capsys.readouterr().out
+    assert "turn the disk over" in capsys.readouterr().err
 
 
 def test_extract_writes_every_file(tmp_path: Path) -> None:
@@ -1537,8 +1537,8 @@ def test_dump_asks_the_operator_to_turn_the_disk_over(
         del args, kwargs
         return drive
 
-    def flipped(message: str) -> bool:
-        del message
+    def flipped(message: str, *, err: bool) -> bool:
+        del message, err
         drive.facing = 1
         return True
 
@@ -1660,7 +1660,7 @@ def test_dump_can_be_told_the_disk_is_already_turned_over(
     )
 
     assert result.exit_code == 0
-    assert "turn the disk over" in result.stdout
+    assert "turn the disk over" in result.stderr
 
 
 def test_web_opens_a_browser_unless_told_not_to(monkeypatch: pytest.MonkeyPatch) -> None:
