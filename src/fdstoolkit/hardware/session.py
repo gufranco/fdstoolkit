@@ -9,7 +9,8 @@ from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.bitstream import emulated_side_size
 from fdstoolkit.core.blocks import Block, BlockKind, declared_blocks
-from fdstoolkit.core.disk import Disk, Side, require_readable_sides
+from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side, require_readable_sides
+from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
 from fdstoolkit.hardware.ports import (
     BlockRead,
     DiskReader,
@@ -24,6 +25,8 @@ MAX_PASSES: Final = 20
 MIN_PASSES = 2
 EMULATED_CAPACITY = 66560
 DISK_INFO_KIND: Final = bytes([BlockKind.DISK_INFO])
+SIDE_OFFSET: Final = FIELDS_BY_NAME["side"].offset
+SIDE_NAMES: Final = ("A", "B")
 FILE_AMOUNT_KIND: Final = bytes([BlockKind.FILE_AMOUNT])
 
 
@@ -138,7 +141,23 @@ class SideDump:
                 f"side {self.index}: {self.missing_blocks} block(s) the side declares were never "
                 f"found, after block {len(self.blocks) - 1}"
             )
+        note = self.side_note
+        if note:
+            found.append(note)
         return tuple(found)
+
+    @property
+    def side_note(self) -> str:
+        if not _identified(self):
+            return ""
+        named = self.blocks[0].payload[SIDE_OFFSET] % SIDES_PER_DISK
+        if named == self.index % SIDES_PER_DISK:
+            return ""
+        face = SIDE_NAMES[named]
+        return (
+            f"side {self.index}: its disk information says side {face}, so the disk may be in "
+            f"the drive with side {face}'s label up"
+        )
 
     @property
     def grade(self) -> Grade:
@@ -483,6 +502,8 @@ def write_verified(
 
     def keep(present: SideDump) -> None:
         refuse_unturned(reader, present, writes[-1].after if writes else None)
+        if present.side_note:
+            progress(present.side_note)
         before.append(present)
         if backup is not None:
             data, _ = fds.encode(DumpResult(sides=tuple(before)).as_disk(), headered=False)

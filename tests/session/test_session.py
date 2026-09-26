@@ -675,3 +675,30 @@ def test_repeated_passes_on_one_side_need_no_flip() -> None:
     report = dump_repeated(drive, sides=1, passes=2)
 
     assert report.unstable_blocks == ()
+
+
+def test_a_side_whose_disk_information_names_the_other_side_is_named() -> None:
+    disk = sample_disk(sides=2)
+    swapped = Disk(sides=(disk.sides[1], disk.sides[0]))
+
+    result = dump(SimulatedDrive(swapped), sides=2)
+
+    assert result.sides[0].lines == (
+        (
+            "side 0: its disk information says side B, so the disk may be in the drive with "
+            "side B's label up"
+        ),
+    )
+    assert result.sides[1].lines[0].startswith("side 1: its disk information says side A")
+
+
+def test_a_write_names_a_side_whose_disk_information_names_the_other_side() -> None:
+    disk = sample_disk(sides=2)
+    drive = SimulatedDrive(Disk(sides=(disk.sides[1], disk.sides[0])))
+    steps: list[str] = []
+
+    write_verified(
+        drive, drive, sample_disk(), confirm=lambda _: True, backup=None, progress=steps.append
+    )
+
+    assert any("its disk information says side B" in step for step in steps)
