@@ -1725,6 +1725,7 @@ def test_surface_names_every_class_of_failing_block(
         finish_verified=False,
         finish_ran=True,
         finish_problem="side 0 reads back exactly what was just written to side 1",
+        blocks_per_side=14,
     )
 
     def fixed_report(*args: object, **kwargs: object) -> SurfaceReport:
@@ -1747,6 +1748,8 @@ def test_surface_names_every_class_of_failing_block(
     assert "98.0% of the most any measured factory side carries" in result.stdout
     assert "42 read short and 1 read long" in result.stdout
     assert "the drive running fast" in result.stdout
+    assert "the failures are spread across the side" in result.stdout
+    assert "clean the disk surface gently" in result.stdout
     assert result.exit_code == 1
 
 

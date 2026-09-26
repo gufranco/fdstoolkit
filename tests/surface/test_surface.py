@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
@@ -11,7 +11,9 @@ from fdstoolkit.codecs.fds import decode, encode
 from fdstoolkit.codecs.raw import class_histogram, encode_era_b
 from fdstoolkit.core.blocks import BlockKind
 from fdstoolkit.core.crc import block_crc, encode_crc
+from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.monitor import SpeedReading
+from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import Grade, SideFlipError
 from fdstoolkit.quality.surface import (
     PATTERNS,
@@ -605,3 +607,73 @@ def test_a_drive_that_keeps_the_nintendo_header_stops_the_test_with_the_reason()
 
     assert report.stopped is StopReason.REFUSED
     assert "FMD-POWER" in report.refusal
+
+
+class StopsAfterReads(SimulatedDrive):
+    def __init__(self, disk: Disk, *, reads: int, stop: BaseException) -> None:
+        super().__init__(disk)
+        self.limit = reads
+        self.stop = stop
+
+    def read_side(self, side: int) -> Iterator[BlockRead]:
+        if self.read_count >= self.limit:
+            raise self.stop
+        return super().read_side(side)
+
+
+def test_an_interrupted_test_keeps_the_passes_it_finished() -> None:
+    drive = StopsAfterReads(scratch_disk(), reads=4, stop=KeyboardInterrupt())
+
+    report = surface_test(drive, drive, sides=1, confirm=lambda _: True)
+
+    assert report.stopped is StopReason.INTERRUPTED
+    assert len(report.passes) == 2
+    assert report.grade is Grade.FAILED
+
+
+def test_a_drive_that_stops_answering_keeps_the_passes_it_finished() -> None:
+    fault = HardwareFaultError("the device stopped answering", kind=FaultKind.LINK)
+    drive = StopsAfterReads(scratch_disk(), reads=4, stop=fault)
+
+    report = surface_test(drive, drive, sides=1, confirm=lambda _: True)
+
+    assert report.stopped is StopReason.FAULT
+    assert report.refusal == "the device stopped answering"
+    assert len(report.passes) == 2
+
+
+def failing(blocks: tuple[int, ...], per_side: int) -> SurfaceReport:
+    return SurfaceReport(
+        passes=(
+            PatternPass(
+                SurfacePattern.SHORT,
+                verified=False,
+                mismatched_blocks=tuple((0, block) for block in blocks),
+                grade=Grade.FAILED,
+            ),
+        ),
+        blocks_per_side=per_side,
+    )
+
+
+def test_failures_at_the_end_of_the_side_point_at_wear() -> None:
+    assert "last third of the side" in failing((11, 13), 14).wear_hint
+
+
+def test_a_single_failing_block_points_at_one_spot() -> None:
+    assert "one spot" in failing((5,), 14).wear_hint
+
+
+def test_failures_across_the_side_are_called_spread() -> None:
+    assert "spread across the side" in failing((2, 12), 14).wear_hint
+
+
+def test_a_clean_run_has_no_wear_hint_and_no_cleaning_advice() -> None:
+    report = failing((), 14)
+
+    assert report.wear_hint == ""
+    assert report.advice == ""
+
+
+def test_a_failed_run_suggests_cleaning_before_calling_the_disk_damaged() -> None:
+    assert "clean the disk" in failing((5,), 14).advice

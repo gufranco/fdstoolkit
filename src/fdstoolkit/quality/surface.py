@@ -21,7 +21,7 @@ from fdstoolkit.core.disk import Disk, Side, require_readable_sides
 from fdstoolkit.drive.captures import latest_capture
 from fdstoolkit.drive.monitor import SpeedReading, lean, sample
 from fdstoolkit.edit.files import FileSpec, insert_file
-from fdstoolkit.hardware.ports import DiskReader, DiskWriter, selects_sides
+from fdstoolkit.hardware.ports import DiskReader, DiskWriter, HardwareFaultError, selects_sides
 from fdstoolkit.hardware.session import (
     Grade,
     HalfWriteError,
@@ -40,6 +40,7 @@ PATTERN_NAME: Final = "SURFACE"
 SIDE_CAPACITY: Final = fds.SIDE_SIZE
 HARD_FAILURES: Final = 2
 KEY_BYTES: Final = 16
+WEAR_SHARE: Final = 3
 
 
 class SurfacePattern(StrEnum):
@@ -64,6 +65,8 @@ class SurfaceTestRefusedError(Exception):
 class StopReason(StrEnum):
     DAMAGED = "a block failed on two patterns, so the surface is damaged"
     REFUSED = "the disk did not take a write, so every further pass would only wear it"
+    INTERRUPTED = "the test was interrupted, so the disk holds a half-written test pattern"
+    FAULT = "the drive stopped answering, so the disk holds a half-written test pattern"
 
 
 class Finish(StrEnum):
@@ -112,6 +115,7 @@ class SurfaceReport:
     stopped: StopReason | None = None
     refusal: str = ""
     finish_problem: str = ""
+    blocks_per_side: int = 0
 
     @property
     def passed(self) -> bool:
@@ -148,6 +152,29 @@ class SurfaceReport:
             for block in entry.mismatched_blocks:
                 counts[block] = counts.get(block, 0) + 1
         return counts
+
+    @property
+    def wear_hint(self) -> str:
+        failing = sorted(block for _, block in self.failure_counts)
+        if not failing:
+            return ""
+        per_side = self.blocks_per_side
+        if per_side and failing[0] * WEAR_SHARE >= per_side * (WEAR_SHARE - 1):
+            return (
+                "the failures sit in the last third of the side, where the head wears a disk first"
+            )
+        if len(set(failing)) == 1:
+            return "the failures sit in one spot, which looks like damage rather than wear"
+        return "the failures are spread across the side"
+
+    @property
+    def advice(self) -> str:
+        if not self.failure_counts:
+            return ""
+        return (
+            "clean the disk surface gently and run the test again before calling it damaged. "
+            "Cleaning cannot bring back data a failing surface already lost"
+        )
 
     @property
     def hard_blocks(self) -> tuple[tuple[int, int], ...]:
@@ -416,7 +443,12 @@ def surface_test(
         progress=progress,
     )
     written = pattern_disk(PATTERNS[1], sides=sides, fill=plan.fill).sides[0]
-    stopped, refusal = _run_patterns(run)
+    try:
+        stopped, refusal = _run_patterns(run)
+    except KeyboardInterrupt:
+        stopped, refusal = StopReason.INTERRUPTED, ""
+    except HardwareFaultError as fault:
+        stopped, refusal = StopReason.FAULT, str(fault)
 
     finished, ran, problem = True, False, ""
     if plan.finish is not Finish.LEAVE and stopped is None:
@@ -432,4 +464,5 @@ def surface_test(
         stopped=stopped,
         refusal=refusal,
         finish_problem=problem,
+        blocks_per_side=len(written.blocks),
     )

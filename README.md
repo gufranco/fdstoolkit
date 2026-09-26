@@ -586,6 +586,8 @@ The report classifies each failing block by how often it failed:
 | transient | Failed exactly once. Marginal rather than dead |
 | recovered | Failed on an early pass and read clean on every later one. The rewrite reflowed the magnetisation |
 
+The report also says where the failures sit. Wear concentrates at the end of a side, so failures in its last third point at wear, a single failing block points at one damaged spot, and anything else is called spread. A failed test ends by suggesting a gentle clean and a second run before calling the disk damaged, since dirt fails a block as surely as a worn coating does and cleaning cannot bring back data already lost.
+
 The recovered count is the repair case. Rewriting a cell that had drifted toward the threshold
 restores its margin, and a disk that starts with failures and ends clean has been refreshed rather
 than merely measured. It is not a substitute for a dump: back the disk up with `--backup` first,
@@ -607,7 +609,7 @@ The test stops as soon as its verdict is decided, because every further pass onl
 
 - the first block that fails on two patterns stops it as damaged;
 - a write the disk did not take stops it as not taking writes;
-- a stalled drive stops it at once, like any other command.
+- a stalled drive or Ctrl-C stops it at once, and the report still lists every pass that finished.
 
 A stopped test skips its `--finish`. A block that fails once does not stop anything, since one failure is the marginal case more passes are meant to separate.
 

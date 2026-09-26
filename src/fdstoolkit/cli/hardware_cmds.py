@@ -407,6 +407,9 @@ def report_surface(report: SurfaceReport) -> None:
         typer.echo(f"stopped early: {report.stopped.value}")
     if report.refusal:
         typer.echo(f"  {report.refusal}")
+    for line in (report.wear_hint, report.advice):
+        if line:
+            typer.echo(line)
     _report_finish(report)
 
 

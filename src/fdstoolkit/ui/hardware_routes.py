@@ -296,6 +296,8 @@ def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
                     "finish_problem": report.finish_problem or None,
                     "refusal": report.refusal,
                     "pulses": report.pulse_summary or None,
+                    "where": report.wear_hint or None,
+                    "advice": report.advice or None,
                 }
             ],
             ok=report.passed,
