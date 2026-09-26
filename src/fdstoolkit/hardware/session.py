@@ -56,6 +56,10 @@ class LongSideError(WriteRefusedError):
     pass
 
 
+class HalfWriteError(WriteRefusedError):
+    pass
+
+
 class SideFlipError(Exception):
     pass
 
@@ -224,9 +228,15 @@ STALE_BLOCK: Final = (
 )
 REFUSED_WRITE: Final = (
     "the disk reads back exactly as it was before the write, so it did not take the write. "
-    "That is what a drive with an FD3206 controller does when it silently refuses a "
-    "full-surface write; check the chip marking, FD3206P rather than FD7201P, before "
-    "suspecting the image"
+    "Check the disk's write-protect tab first. After that, this is what a drive with an "
+    "FD3206 controller does when it silently refuses a full-surface write; check the chip "
+    "marking, FD3206P rather than FD7201P, before suspecting the image"
+)
+HALF_WRITE: Final = (
+    "the disk took everything but its disk information block, which still reads as it was "
+    "before the write. That is a drive whose power board is not modified for writing: only "
+    "an FMD-POWER-01 board, or a later one modified for it, rewrites the Nintendo header. "
+    "The disk is now half written; dump it before using it"
 )
 
 
@@ -450,6 +460,8 @@ def write_side_verified(
     after = SideDump(index=index, blocks=_read_side_with_retries(reader, index, retries))
     if _same_blocks(after, before) and _payloads(side) != _dumped(before):
         raise WriteNotTakenError(REFUSED_WRITE)
+    if _kept_header(side, before, after):
+        raise HalfWriteError(HALF_WRITE)
     written = after.blocks
     changed = tuple(
         block_index
@@ -556,6 +568,14 @@ def refuse_long_sides(disk: Disk) -> None:
                 "last files may run past the end of the track. Nothing was written"
             )
             raise LongSideError(message)
+
+
+def _kept_header(side: Side, before: SideDump, after: SideDump) -> bool:
+    wanted = _payloads(side)
+    was, now = _dumped(before), _dumped(after)
+    if not (wanted and was and now) or wanted[0] == was[0] or now[0] != was[0]:
+        return False
+    return now[1:] == wanted[1 : len(now)]
 
 
 def _same_blocks(first: SideDump, second: SideDump) -> bool:

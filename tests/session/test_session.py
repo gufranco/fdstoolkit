@@ -8,13 +8,14 @@ from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE, calibration_disk
 from fdstoolkit.codecs.fds import SIDE_SIZE, decode
-from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import (
     STALE_BLOCK,
     Grade,
+    HalfWriteError,
     LongSideError,
     SideFlipError,
     WriteNotTakenError,
@@ -211,6 +212,47 @@ def test_a_side_longer_than_any_factory_side_is_refused() -> None:
 
 def test_a_side_as_long_as_the_calibration_disk_is_accepted() -> None:
     refuse_long_sides(calibration_disk())
+
+
+class HeaderLockedDrive(SimulatedDrive):
+    def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+        kept = self._side(side).blocks[0].payload
+        super().write_side(side, [kept, *blocks[1:]])
+
+
+def test_a_drive_that_keeps_the_nintendo_header_is_named_as_half_modified() -> None:
+    drive = HeaderLockedDrive(disk_with_files())
+    image = disk_with_files(2)
+    image = Disk(
+        sides=(
+            Side(
+                blocks=(
+                    Block(
+                        kind=BlockKind.DISK_INFO,
+                        payload=decode(
+                            blank_image(sides=1, headered=False, formatted=True, game_name="ZEL")
+                        )[0]
+                        .sides[0]
+                        .blocks[0]
+                        .payload,
+                    ),
+                    *image.sides[0].blocks[1:],
+                ),
+                tail=b"",
+                capacity=SIDE_SIZE,
+            ),
+        )
+    )
+
+    with pytest.raises(HalfWriteError, match="FMD-POWER"):
+        write_verified(drive, drive, image, confirm=lambda _: True, backup=None)
+
+
+def test_a_refused_write_names_the_write_protect_tab() -> None:
+    drive = SimulatedDrive(sample_disk(), plan=FaultPlan(writes_do_not_stick=True))
+
+    with pytest.raises(WriteNotTakenError, match="write-protect tab"):
+        write_verified(drive, drive, disk_with_files(), confirm=lambda _: True, backup=None)
 
 
 class OverlayDrive(SimulatedDrive):

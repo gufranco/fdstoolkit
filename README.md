@@ -511,6 +511,8 @@ Write a disk, read it back and compare. `--backup` saves the current contents fi
 
 A side carrying more than 54,958 bytes of blocks, the longest of 345 factory sides measured, is refused before anything is written, because its last files may run past the end of the track. `--long-side` writes it anyway. The readback then fails if anything is left on the disk past the image, since a reader takes old blocks there for hidden files.
 
+Two ways a drive refuses a write are named from the readback. A disk that reads back exactly as before did not take the write at all: check the write-protect tab, then the controller, FD3206P rather than FD7201P. A disk that took every block but its disk information block is a drive whose power board was never modified for writing, since only an FMD-POWER-01, or a later board modified for it, rewrites the Nintendo header. `surface` stops on either with the same reason.
+
 `--calibration` writes the calibration disk described under `blank`, both sides, turning the disk once. It is the one write that can do lasting harm with a disk that verifies perfectly: a drive out of adjustment writes a disk that reads back on it and on nothing else, and that disk would then teach every drive it calibrates the same error. So the command first prints what the drive must already have been through, and refuses unless `--trusted-drive` confirms it:
 
 1. Clean the read head. Contamination reads as a media fault.

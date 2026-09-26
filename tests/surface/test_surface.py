@@ -590,3 +590,18 @@ def test_a_failed_pass_counts_the_misread_pulses_from_the_capture() -> None:
     assert failed
     assert all(entry.compared > 0 for entry in failed)
     assert report.pulse_reading is not None
+
+
+class HeaderLockedDrive(SimulatedDrive):
+    def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+        kept = self._side(side).blocks[0].payload
+        super().write_side(side, [kept, *blocks[1:]])
+
+
+def test_a_drive_that_keeps_the_nintendo_header_stops_the_test_with_the_reason() -> None:
+    drive = HeaderLockedDrive(scratch_disk())
+
+    report = surface_test(drive, drive, sides=1, confirm=lambda _: True)
+
+    assert report.stopped is StopReason.REFUSED
+    assert "FMD-POWER" in report.refusal

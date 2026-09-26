@@ -24,6 +24,7 @@ from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import DiskReader, DiskWriter, selects_sides
 from fdstoolkit.hardware.session import (
     Grade,
+    HalfWriteError,
     Progress,
     SideDump,
     SideFlipError,
@@ -323,7 +324,7 @@ def _run_patterns(run: _Run) -> tuple[StopReason | None, str]:
                 keep = not index and not position
                 try:
                     result = run.write(side_index, target, keep=keep, turned=keep)
-                except WriteNotTakenError as refused:
+                except (WriteNotTakenError, HalfWriteError) as refused:
                     return StopReason.REFUSED, str(refused)
                 blocks = tuple((side_index, block) for block in result.mismatched)
                 short, long, compared = _misreads(run, side_index, target, failed=bool(blocks))
@@ -360,7 +361,7 @@ def _finish(run: _Run, finish: Finish) -> tuple[bool, str]:
             )
             if written.mismatched:
                 return False, ""
-    except WriteNotTakenError:
+    except (WriteNotTakenError, HalfWriteError):
         return False, ""
     except SideFlipError as unturned:
         return False, str(unturned)
