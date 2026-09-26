@@ -114,7 +114,11 @@ class SideDump:
     def as_side(self, capacity: int) -> Side:
         return Side(
             blocks=tuple(
-                Block(kind=BlockKind(block.payload[0]), payload=block.payload, stored_crc=None)
+                Block(
+                    kind=BlockKind(block.payload[0]),
+                    payload=block.payload,
+                    stored_crc=block.stored_crc,
+                )
                 for block in self.blocks
             ),
             tail=b"",
@@ -246,11 +250,13 @@ def _read_side_with_retries(reader: DiskReader, side: int, retries: int) -> tupl
                 continue
             identity = wanted[position]
             match = clean.get(identity) if identity is not None else None
+            found = match or block
             resolved[position] = BlockRead(
                 index=position,
-                payload=match.payload if match is not None else block.payload,
+                payload=found.payload,
                 crc_ok=match is not None,
                 attempts=reads,
+                stored_crc=found.stored_crc,
             )
     return tuple(resolved)
 

@@ -13,6 +13,7 @@ from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, Hardwar
 DAMAGE_OFFSET = 40
 DAMAGE_STRIDE = 7
 TRAILING_GAP = 4000
+CRC_DAMAGE = 0xFFFF
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,11 +120,13 @@ class SimulatedDrive:
             if self._plan.link_lost_after is not None and index >= self._plan.link_lost_after:
                 message = "the device stopped answering"
                 raise HardwareFaultError(message, kind=FaultKind.LINK)
+            crc_ok = self._crc_ok_for(side, index)
             yield BlockRead(
                 index=index,
                 payload=self._payload_for(side, index, block),
-                crc_ok=self._crc_ok_for(side, index),
+                crc_ok=crc_ok,
                 attempts=1,
+                stored_crc=block.computed_crc if crc_ok else block.computed_crc ^ CRC_DAMAGE,
             )
 
     def read_raw_side(self, *, what: str) -> bytes:

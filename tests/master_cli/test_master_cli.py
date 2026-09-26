@@ -109,6 +109,18 @@ def test_dumps_of_one_disk_can_report_json(tmp_path: Path) -> None:
     assert output.is_file()
 
 
+def test_a_consensus_written_to_a_qd_file_is_quick_disk(tmp_path: Path) -> None:
+    root = _corpus(tmp_path)
+    output = tmp_path / "merged.qd"
+
+    result = runner.invoke(
+        app, ["consensus", str(root / "a.fds"), str(root / "a.fds"), "-o", str(output)]
+    )
+
+    assert result.exit_code == 0
+    assert output.stat().st_size == qd.SIDE_SIZE
+
+
 def test_a_bad_block_is_spliced_from_a_donor(tmp_path: Path) -> None:
     broken = _write_qd(tmp_path / "broken.qd", _disk(data_byte=1), corrupt=True)
     donor = _write_qd(tmp_path / "donor.qd", _disk(data_byte=1))

@@ -5,8 +5,15 @@ from typing import Annotated, NoReturn
 
 import typer
 
-from fdstoolkit.cli.common import Family, decode_image, fail, guard_output, load_captures
-from fdstoolkit.codecs import fds
+from fdstoolkit.cli.common import (
+    Family,
+    container_of,
+    decode_image,
+    encode_image,
+    fail,
+    guard_output,
+    load_captures,
+)
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.recovery import Rebuild, rebuild
 from fdstoolkit.master.splice import splice
@@ -24,6 +31,7 @@ def splice_command(
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
     """Repair a bad block by taking it from another dump of the same disk."""
+    container = container_of(output)
     guard_output(output, force=force)
     primary, _, _, _ = decode_image(image)
     donors = [decode_image(path)[0] for path in donor]
@@ -33,7 +41,7 @@ def splice_command(
     except ValueError as error:
         raise fail(str(error)) from error
 
-    data, _ = fds.encode(result.disk, headered=False)
+    data = encode_image(result.disk, container)
     output.write_bytes(data)
 
     for item in result.splices:
@@ -72,6 +80,7 @@ def consensus(
     if missing:
         message = f"not found: {', '.join(str(path) for path in missing)}"
         raise fail(message)
+    container_of(output)
     guard_output(output, force=force)
     rebuilt = None if captures is None else rebuild(load_captures(captures))
     disks = [decode_image(path)[0] for path in dumps]
@@ -85,7 +94,7 @@ def consensus(
 
 
 def _write_rebuilt(rebuilt: Rebuild, output: Path, *, json_output: bool) -> NoReturn:
-    data, _ = fds.encode(rebuilt.disk, headered=False)
+    data = encode_image(rebuilt.disk, container_of(output))
     output.write_bytes(data)
     code = 0 if not rebuilt.unresolved else 1
     if json_output:
@@ -113,7 +122,7 @@ def _disk_consensus(
     except ValueError as error:
         raise fail(str(error)) from error
 
-    data, _ = fds.encode(result.disk, headered=False)
+    data = encode_image(result.disk, container_of(output))
     output.write_bytes(data)
     code = 0 if not result.disagreements else 1
 

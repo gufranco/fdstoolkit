@@ -14,10 +14,10 @@ from typer.testing import CliRunner
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli import common, hardware_cmds, inspect_cmds
 from fdstoolkit.cli.main import app
-from fdstoolkit.codecs import fds
+from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.fds import SIDE_SIZE
 from fdstoolkit.codecs.qd import encode as encode_qd
-from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.doctor import Check, CheckStatus, DoctorReport
 from fdstoolkit.drive.captures import Capture, load_bundle
@@ -340,6 +340,36 @@ def test_dump_reads_the_disk_in_the_drive(
     assert result.exit_code == 0
     assert "grade clean" in result.stdout
     assert out.stat().st_size == SIDE_SIZE
+
+
+def test_dump_to_a_qd_file_writes_quick_disk_bytes_with_the_checksums_read(
+    image: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attach(monkeypatch, image, plan=FaultPlan(bad_crc_blocks=frozenset({1})))
+    out = tmp_path / "dump.qd"
+
+    result = runner.invoke(app, ["dump", "-o", str(out), "--retries", "0"])
+
+    disk, findings = qd.decode(out.read_bytes())
+    assert result.exit_code == 1
+    assert out.stat().st_size == qd.SIDE_SIZE
+    assert [block.crc_status for block in disk.sides[0].blocks] == [
+        CrcStatus.VALID,
+        CrcStatus.MISMATCH,
+    ]
+    assert findings != ()
+
+
+def test_dump_refuses_an_output_it_cannot_encode_before_reading(
+    image: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drive = attach(monkeypatch, image)
+
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.bin")])
+
+    assert result.exit_code == 1
+    assert "expected a .fds or .qd file" in result.stdout
+    assert drive.read_count == 0
 
 
 def test_dump_names_blocks_that_only_read_clean_on_a_re_read(

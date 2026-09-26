@@ -165,6 +165,7 @@ class FdsStick:
                 payload=block.payload,
                 crc_ok=block.stored_crc == block.computed_crc,
                 attempts=1,
+                stored_crc=block.stored_crc,
             )
 
     def write_side(self, side: int, blocks: Sequence[bytes]) -> None:

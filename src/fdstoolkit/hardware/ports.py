@@ -102,6 +102,7 @@ class BlockRead:
     payload: bytes
     crc_ok: bool
     attempts: int
+    stored_crc: int | None = None
 
     @property
     def is_marginal(self) -> bool:

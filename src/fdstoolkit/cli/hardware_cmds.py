@@ -15,12 +15,13 @@ from fdstoolkit.build.calibration import (
 )
 from fdstoolkit.cli.common import (
     Family,
+    container_of,
     decode_image,
+    encode_image,
     fail,
     guard_output,
     writer_for,
 )
-from fdstoolkit.codecs import fds
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import created_now, write_bundle
@@ -147,6 +148,7 @@ def dump(
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
     """Dump a disk through the FDSStick."""
+    container = container_of(output)
     guard_output(output, force=force)
     drive = open_drive()
 
@@ -178,7 +180,7 @@ def dump(
     outcome = recover(result, drive.captures)
     result = outcome.result
     grade = result.grade if outcome.recovered else grade
-    data, _ = fds.encode(result.as_disk(), headered=False)
+    data = encode_image(result.as_disk(), container)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
     for line in outcome.lines:

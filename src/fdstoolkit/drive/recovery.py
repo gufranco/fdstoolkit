@@ -55,7 +55,11 @@ def _side(
             continue
         block, voted = found
         blocks[position] = BlockRead(
-            index=position, payload=block.payload, crc_ok=True, attempts=len(captures)
+            index=position,
+            payload=block.payload,
+            crc_ok=True,
+            attempts=len(captures),
+            stored_crc=block.computed_crc,
         )
         recovered.append((position, voted))
     return SideDump(index=dumped.index, blocks=tuple(blocks)), recovered, list(vote.notes)

@@ -88,6 +88,14 @@ def decode_image(path: Path) -> tuple[Disk, tuple[Diagnostic, ...], bytes, Conta
     return disk, findings, data, container
 
 
+def encode_image(disk: Disk, container: Container) -> bytes:
+    if container is Container.QD:
+        data, _ = qd.encode(disk, crc_mode=qd.CrcMode.PRESERVE)
+        return data
+    data, _ = fds.encode(disk, headered=False)
+    return data
+
+
 def guard_output(output: Path, *, force: bool) -> None:
     if output.exists() and not force:
         message = f"{output} exists, pass --force to overwrite"
