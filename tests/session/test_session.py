@@ -6,6 +6,7 @@ import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE, calibration_disk
 from fdstoolkit.codecs.fds import SIDE_SIZE, decode
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk, Side
@@ -14,11 +15,13 @@ from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import (
     STALE_BLOCK,
     Grade,
+    LongSideError,
     SideFlipError,
     WriteNotTakenError,
     WriteRefusedError,
     dump,
     dump_repeated,
+    refuse_long_sides,
     write_verified,
 )
 
@@ -147,6 +150,29 @@ def test_a_dump_retries_a_flaky_block_and_grades_it_marginal() -> None:
     assert result.grade is Grade.MARGINAL
     assert result.sides[0].blocks[1].attempts == 3
     assert result.sides[0].marginal_blocks == (1,)
+
+
+def longer_than_any_factory_side() -> Disk:
+    disk = sample_disk()
+    return insert_file(
+        disk,
+        side=0,
+        spec=FileSpec(
+            name="LONG",
+            address=0x6000,
+            kind=FileKind.PROGRAM,
+            data=bytes(LARGEST_FACTORY_SIDE),
+        ),
+    )
+
+
+def test_a_side_longer_than_any_factory_side_is_refused() -> None:
+    with pytest.raises(LongSideError, match="54958 bytes"):
+        refuse_long_sides(longer_than_any_factory_side())
+
+
+def test_a_side_as_long_as_the_calibration_disk_is_accepted() -> None:
+    refuse_long_sides(calibration_disk())
 
 
 class OverlayDrive(SimulatedDrive):

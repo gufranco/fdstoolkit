@@ -10,8 +10,11 @@ from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 from fastapi.testclient import TestClient
 
 from fdstoolkit.build.blank import blank_image
-from fdstoolkit.codecs.fds import decode
+from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
+from fdstoolkit.codecs.fds import decode, encode
+from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
+from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.ui.app import create_app
 from fdstoolkit.ui.jobs import JobBoard, JobBusyError, JobState
@@ -161,6 +164,40 @@ def test_a_dump_of_more_sides_than_a_disk_has_is_refused(client: TestClient) -> 
     answer = client.post("/api/jobs/dump", json={"sides": 4})
 
     assert answer.status_code == UNPROCESSABLE
+
+
+def long_image() -> str:
+    disk = insert_file(
+        disk_of(ONE_SIDE),
+        side=0,
+        spec=FileSpec(
+            name="LONG", address=0x6000, kind=FileKind.PROGRAM, data=bytes(LARGEST_FACTORY_SIDE)
+        ),
+    )
+    data, _ = encode(disk, headered=False)
+    return base64.b64encode(data).decode("ascii")
+
+
+@pytest.mark.usefixtures("attached")
+def test_a_write_job_refuses_a_side_longer_than_any_factory_side(client: TestClient) -> None:
+    answer = client.post("/api/jobs/write", json={"data": long_image(), "confirm": True})
+
+    assert answer.status_code == UNPROCESSABLE
+    assert "Tick long side to write it anyway" in answer.json()["detail"]
+
+
+def test_a_write_job_writes_a_long_side_when_told_to(
+    app: FastAPI, client: TestClient, attached: SimulatedDrive
+) -> None:
+    job = run(
+        app,
+        client,
+        "/api/jobs/write",
+        {"data": long_image(), "confirm": True, "long_side": True},
+    )
+
+    assert job["state"] == JobState.DONE
+    assert attached.write_count == 1
 
 
 @pytest.mark.usefixtures("attached")

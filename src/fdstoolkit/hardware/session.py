@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.bitstream import emulated_side_size
 from fdstoolkit.core.blocks import Block, BlockKind
@@ -44,6 +45,10 @@ class WriteRefusedError(Exception):
 
 
 class WriteNotTakenError(WriteRefusedError):
+    pass
+
+
+class LongSideError(WriteRefusedError):
     pass
 
 
@@ -462,6 +467,17 @@ def _require_writable(writer: DiskWriter, disk: Disk) -> None:
             f"{EMULATED_CAPACITY}"
         )
         raise WriteRefusedError(message)
+
+
+def refuse_long_sides(disk: Disk) -> None:
+    for index, side in enumerate(disk.sides):
+        if side.content_size > LARGEST_FACTORY_SIDE:
+            message = (
+                f"side {index} carries {side.content_size} bytes, more than the "
+                f"{LARGEST_FACTORY_SIDE} bytes of the longest factory side measured, so its "
+                "last files may run past the end of the track. Nothing was written"
+            )
+            raise LongSideError(message)
 
 
 def _same_blocks(first: SideDump, second: SideDump) -> bool:

@@ -12,15 +12,17 @@ from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
 from fdstoolkit.cli import common, hardware_cmds, inspect_cmds
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.fds import SIDE_SIZE
 from fdstoolkit.codecs.qd import encode as encode_qd
-from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus
+from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus, FileKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.doctor import Check, CheckStatus, DoctorReport
 from fdstoolkit.drive.captures import Capture, load_bundle
+from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware import session
 from fdstoolkit.hardware.fdsstick import FdsStick, HidApiTransport
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
@@ -431,6 +433,44 @@ def test_write_verifies_by_reading_back(
     assert result.exit_code == 0
     assert "verified True" in result.stdout
     assert backup.exists()
+
+
+def long_side_image(single_side: Path, tmp_path: Path) -> Path:
+    disk, _, _, _ = common.decode_image(single_side)
+    longer = insert_file(
+        disk,
+        side=0,
+        spec=FileSpec(
+            name="LONG", address=0x6000, kind=FileKind.PROGRAM, data=bytes(LARGEST_FACTORY_SIDE)
+        ),
+    )
+    path = tmp_path / "long.fds"
+    path.write_bytes(fds.encode(longer, headered=False)[0])
+    return path
+
+
+def test_write_refuses_a_side_longer_than_any_factory_side(
+    single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drive = attach(monkeypatch, single_side)
+
+    result = runner.invoke(app, ["write", str(long_side_image(single_side, tmp_path)), "--yes"])
+
+    assert result.exit_code == 1
+    assert "Pass --long-side to write it anyway" in result.stdout
+    assert drive.write_count == 0
+
+
+def test_write_writes_a_long_side_when_told_to(
+    single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drive = attach(monkeypatch, single_side)
+    image = long_side_image(single_side, tmp_path)
+
+    result = runner.invoke(app, ["write", str(image), "--yes", "--long-side"])
+
+    assert result.exit_code == 0
+    assert drive.write_count == 1
 
 
 def test_write_stops_when_the_confirmation_is_declined(

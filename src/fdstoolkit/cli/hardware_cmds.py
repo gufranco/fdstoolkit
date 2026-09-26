@@ -33,9 +33,11 @@ from fdstoolkit.hardware.session import (
     MAX_RETRIES,
     DumpResult,
     Grade,
+    LongSideError,
     SideFlipError,
     WriteRefusedError,
     dump_repeated,
+    refuse_long_sides,
     worst_grade,
     write_verified,
 )
@@ -266,6 +268,13 @@ def write(
             help="re-read a side with failed blocks up to this many more times",
         ),
     ] = 3,
+    long_side: Annotated[
+        bool,
+        typer.Option(
+            "--long-side",
+            help="write a side longer than any factory side, accepting that it may not fit",
+        ),
+    ] = False,
 ) -> None:
     """Write an image, or the calibration disk, then read it back and compare."""
     disk = calibration_target(image, calibration=calibration, trusted_drive=trusted_drive)
@@ -274,6 +283,8 @@ def write(
     ask = prompter(yes=yes)
 
     try:
+        if not long_side:
+            refuse_long_sides(disk)
         report = write_verified(
             drive,
             drive,
@@ -287,6 +298,9 @@ def write(
     except KeyboardInterrupt:
         message = "stopped on interrupt, the disk may be half written, dump it before using it"
         raise fail(message) from None
+    except LongSideError as error:
+        message = f"{error}. Pass --long-side to write it anyway"
+        raise fail(message) from error
     except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
         raise fail(str(error)) from error
 

@@ -384,6 +384,7 @@ class WriteSpec(BaseModel):
     calibration: bool = False
     trusted_drive: bool = False
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
+    long_side: bool = False
     confirm: bool = False
 
 

@@ -503,11 +503,13 @@ Every read and write runs against a deadline. Before anything has been measured 
 #### `write`
 
 ```bash
-fdstoolkit write <image> [--backup <p>] [--retries N] [--yes]
+fdstoolkit write <image> [--backup <p>] [--retries N] [--long-side] [--yes]
 fdstoolkit write --calibration --trusted-drive [--backup <p>] [--retries N] [--yes]
 ```
 
 Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`.
+
+A side carrying more than 54,958 bytes of blocks, the longest of 345 factory sides measured, is refused before anything is written, because its last files may run past the end of the track. `--long-side` writes it anyway. The readback then fails if anything is left on the disk past the image, since a reader takes old blocks there for hidden files.
 
 `--calibration` writes the calibration disk described under `blank`, both sides, turning the disk once. It is the one write that can do lasting harm with a disk that verifies perfectly: a drive out of adjustment writes a disk that reads back on it and on nothing else, and that disk would then teach every drive it calibrates the same error. So the command first prints what the drive must already have been through, and refuses unless `--trusted-drive` confirms it:
 

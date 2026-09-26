@@ -17,7 +17,14 @@ from fdstoolkit.drive.monitor import MAX_READS, NOT_THIS_DRIVE, Mode, RawReader,
 from fdstoolkit.drive.recovery import recover
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
-from fdstoolkit.hardware.session import DumpResult, dump, dump_repeated, write_verified
+from fdstoolkit.hardware.session import (
+    DumpResult,
+    LongSideError,
+    dump,
+    dump_repeated,
+    refuse_long_sides,
+    write_verified,
+)
 from fdstoolkit.quality.surface import Finish, SurfacePlan, surface_test
 from fdstoolkit.ui.jobs import (
     Controls,
@@ -201,9 +208,13 @@ def _write_target(spec: WriteSpec) -> Disk:
         if spec.calibration:
             detail = "\n".join([detail, *TRUSTED_DRIVE])
         raise HTTPException(status_code=UNPROCESSABLE, detail=detail) from error
-    if spec.data is None:
-        return calibration_disk()
-    disk, _, _ = decode_payload(spec.data)
+    disk = calibration_disk() if spec.data is None else decode_payload(spec.data)[0]
+    if not spec.long_side:
+        try:
+            refuse_long_sides(disk)
+        except LongSideError as error:
+            detail = f"{error}. Tick long side to write it anyway"
+            raise HTTPException(status_code=UNPROCESSABLE, detail=detail) from error
     return disk
 
 
