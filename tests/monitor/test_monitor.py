@@ -477,3 +477,22 @@ def test_head_advice_names_a_fine_turn_for_a_head_nearly_in_place() -> None:
 
     assert "45 degrees" in advice(Mode.HEAD, found)
     assert "one track" in advice(Mode.HEAD, found)
+
+
+def test_a_speed_headline_counts_the_verdicts_of_the_last_reads() -> None:
+    side = reference_side()
+    fast = nudged(stream(side), shorter=True)
+    reader = Reader([stream(side), fast, stream(side), stream(side)])
+
+    result = calibrate(reader, mode=Mode.SPEED, reads=4, reference=side)
+
+    assert result.spread == {"reads clean": 3, "reads fast": 1}
+    assert result.headline.endswith("; the last 4 reads: 3 reads clean, 1 reads fast")
+
+
+def test_a_single_read_has_no_spread_in_its_headline() -> None:
+    side = reference_side()
+
+    result = calibrate(Reader([stream(side)]), mode=Mode.SPEED, reads=1, reference=side)
+
+    assert "; the last" not in result.headline

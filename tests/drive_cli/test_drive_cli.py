@@ -110,6 +110,7 @@ def test_a_calibration_prints_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     assert "judge the drive only with a disk it did not write" in result.stderr
     assert payload["clean"] is True
     assert payload["reads"][0]["verdict"] == "reads clean"
+    assert payload["spread"] == {"reads clean": 1}
 
 
 def test_a_reference_side_the_image_lacks_is_refused(

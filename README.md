@@ -718,12 +718,12 @@ judge the drive only with a disk it did not write: a factory disk, or one writte
   read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, first read
   read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, the same as the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
-reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table
+reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table; the last 3 reads: 2 reads fast, 1 reads clean
 ```
 
 The advice says whether to raise or lower the speed, never which way to turn the screw. One repair guide reports that turning counter-clockwise raises the speed; check it on your drive with a small turn before relying on it.
 
-A clean `speed` reading means the drive sits inside the tolerance the RAM adapter accepts, not at the exact rate. For the last stretch, use a console-side test. Copy Master's speed test shows 1 to 9 and says "too slow" or "too fast"; ToToTEK and Bung recommend 5 with a disk in the drive, and running the test twice, because the first run starts with the head in an unknown position. A strobe app works too: the disk table shaft turns at 400 RPM.
+A clean `speed` reading means the drive sits inside the tolerance the RAM adapter accepts, not at the exact rate. For the last stretch, use a console-side test. Copy Master's speed test shows 1 to 9 and says "too slow" or "too fast"; ToToTEK and Bung recommend 5 with a disk in the drive, and running the test twice, because the first run starts with the head in an unknown position. A strobe works too, once you settle which speed to hold: the sources below disagree, so measure a drive you trust first and match the others to it. A strobe disc with `n` marks stands still at `RPM × n ÷ 60` flashes per second.
 
 `head` reports which blocks of the side read:
 
@@ -744,7 +744,7 @@ judge the drive only with a disk it did not write: a factory disk, or one writte
   read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, first read
   read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, better than the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
-reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another
+reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another; the last 3 reads: 2 the start of the side is not read, 1 reads clean
 ```
 
 The head tolerance is about 0.05 mm and a full turn of the head screw moves the head about one track, so adjust about 45 degrees at a time and read again, as the FDSStick's author advises. Once it reads clean, repeat with two more factory disks: a head can be set to suit one disk and miss another. Neither mode can say which way to turn, only whether the last turn helped.

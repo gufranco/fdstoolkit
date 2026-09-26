@@ -707,12 +707,12 @@ judge the drive only with a disk it did not write: a factory disk, or one writte
   read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, first read
   read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, the same as the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
-reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table
+reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table; the last 3 reads: 2 reads fast, 1 reads clean
 ```
 
 助言は速度を上げるか下げるかだけを示し、ねじをどちらへ回すかは示しません。反時計回りで速度が上がると書いた修理ガイドがありますが、頼る前に、小さく回して自分のドライブで確かめてください。
 
-`speed` の reads clean は、RAM アダプタが受け付ける許容範囲に入っていることを意味し、正確な速度であることは意味しません。最後の詰めには実機側のテストを使います。Copy Master の速度テストは 1 から 9 を表示し、「too slow」「too fast」も示します。ToToTEK と Bung は、ディスクを入れた状態で 5 に合わせること、そして最初の 1 回はヘッドの位置が不定のまま始まるのでテストを 2 回続けて行うことを勧めています。ストロボのアプリも使えます。ディスクテーブルの軸は 400 RPM で回ります。
+`speed` の reads clean は、RAM アダプタが受け付ける許容範囲に入っていることを意味し、正確な速度であることは意味しません。最後の詰めには実機側のテストを使います。Copy Master の速度テストは 1 から 9 を表示し、「too slow」「too fast」も示します。ToToTEK と Bung は、ディスクを入れた状態で 5 に合わせること、そして最初の 1 回はヘッドの位置が不定のまま始まるのでテストを 2 回続けて行うことを勧めています。ストロボも使えますが、どの速度に合わせるかを先に決める必要があります。下の出典どうしで値が食い違うため、まず信頼できるドライブを測り、ほかのドライブをそれに合わせてください。`n` 個の目盛りを持つストロボ円盤は、毎秒 `RPM × n ÷ 60` 回の発光で静止して見えます。
 
 `head` は面のどのブロックが読めたかを報告します。
 
@@ -733,7 +733,7 @@ judge the drive only with a disk it did not write: a factory disk, or one writte
   read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, first read
   read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, better than the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
-reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another
+reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another; the last 3 reads: 2 the start of the side is not read, 1 reads clean
 ```
 
 ヘッドの許容誤差はおよそ 0.05 mm で、ヘッドのねじを 1 回転させるとヘッドはおよそ 1 トラック動きます。そのため FDSStick の作者の助言どおり、およそ 45 度ずつ調整して読み直します。正しく読めたら、さらに 2 枚の工場出荷のディスクで繰り返します。ヘッドは 1 枚のディスクに合っても別のディスクには合わないことがあるからです。どちらのモードも、どちらへ回すべきかは示せず、直前の調整がよくなったかどうかだけを示します。

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -26,6 +27,7 @@ from fdstoolkit.drive.bracket import Bracket
 from fdstoolkit.drive.vote import Key, keyed
 
 MAX_READS: Final = 200
+SPREAD_READS: Final = 5
 DEFAULT_READS: Final = 20
 BIAS_PULSES: Final = 16
 BIAS_SHARE: Final = 0.75
@@ -399,7 +401,17 @@ class Calibration:
             return "stopped before the first read"
         if self.bracket is not None:
             return self.bracket.verdict
-        return f"{verdict(self.mode, last)}: {advice(self.mode, last)}"
+        spread = self.spread
+        counted = ", ".join(f"{count} {name}" for name, count in spread.items())
+        window = (
+            f"; the last {sum(spread.values())} reads: {counted}" if len(self.samples) > 1 else ""
+        )
+        return f"{verdict(self.mode, last)}: {advice(self.mode, last)}{window}"
+
+    @property
+    def spread(self) -> dict[str, int]:
+        recent = Counter(verdict(self.mode, sample) for sample in self.samples[-SPREAD_READS:])
+        return dict(recent.most_common())
 
 
 def _clean(mode: Mode, current: SideSample) -> bool:

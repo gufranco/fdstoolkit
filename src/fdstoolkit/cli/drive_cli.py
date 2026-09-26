@@ -61,6 +61,7 @@ def calibration_json(result: Calibration) -> dict[str, object]:
         "mode": result.mode.value,
         "clean": result.clean,
         "headline": result.headline,
+        "spread": result.spread,
         "reads": result.rows(),
     }
 
