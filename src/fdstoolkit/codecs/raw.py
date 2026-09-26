@@ -12,7 +12,7 @@ from fdstoolkit.core.blocks import (
     BlockKind,
     FileHeader,
 )
-from fdstoolkit.core.crc import CRC_SIZE, block_crc, decode_crc, encode_crc
+from fdstoolkit.core.crc import CRC_SIZE, block_crc, crc_boundary, decode_crc, encode_crc
 from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
 from fdstoolkit.core.disk import Disk, Side
 
@@ -271,6 +271,19 @@ def _expected_length(kind: int, pending: int) -> int | None:
     return None
 
 
+def _bounded_by_crc(values: bytes, gap: int) -> tuple[bytes, int, int] | None:
+    following = _gap_end(values, gap + 1)
+    end = len(values) if following is None else following
+    region, _, _ = _decode_region(values[:end], gap, len(values))
+    body = region[1:]
+    shortest = max(len(body.rstrip(b"\0")) - CRC_SIZE, 1)
+    size = crc_boundary(body, range(shortest, len(body) - CRC_SIZE + 1))
+    if size is None:
+        return None
+    resume = len(values) if following is None else following - MIN_GAP_VALUES
+    return body[:size], decode_crc(body[size : size + CRC_SIZE]), resume
+
+
 def decode_raw03(values: bytes) -> tuple[Side, tuple[Diagnostic, ...]]:
     side, findings, _ = _walk(values)
     return side, findings
@@ -313,6 +326,17 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
             continue
         payload = body[:length]
         stored = decode_crc(body[length : length + CRC_SIZE])
+        if payload[0] == BlockKind.FILE_DATA and stored != block_crc(payload):
+            found = _bounded_by_crc(values, gap)
+            if found is not None:
+                payload, stored, cursor = found
+                findings.append(
+                    _diagnostic(
+                        "FDS016",
+                        Severity.WARNING,
+                        {"offset": gap, "declared": length - 1, "actual": len(payload) - 1},
+                    ),
+                )
         block = Block(kind=BlockKind(payload[0]), payload=payload, stored_crc=stored)
         if stored != block_crc(payload):
             findings.append(

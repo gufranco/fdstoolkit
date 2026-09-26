@@ -177,3 +177,38 @@ def test_a_partial_second_side_is_still_a_warning() -> None:
 
     finding = next(entry for entry in findings if entry.code == "FDS010")
     assert finding.severity is Severity.WARNING
+
+
+DATA_OFFSET = 56 + 2 + 2 + 2 + 16 + 2
+
+
+def with_long_data(payloads: list[bytes], *, actual: bytes) -> bytes:
+    changed = [*payloads]
+    changed[3] = bytes([0x04]) + actual
+    out = bytearray()
+    for payload in changed:
+        out += payload + encode_crc(block_crc(payload))
+    return bytes(out).ljust(SIDE_SIZE, b"\0")
+
+
+def test_decode_reads_a_data_block_past_the_size_its_header_declares() -> None:
+    actual = bytes(range(256)) * 2
+    data = with_long_data(blocks(files=2), actual=actual)
+
+    disk, findings = decode(data)
+
+    assert disk.sides[0].blocks[3].payload == bytes([0x04]) + actual
+    assert disk.sides[0].blocks[3].crc_status is CrcStatus.VALID
+    assert len(disk.sides[0].blocks) == 6
+    assert "FDS016" in [finding.code for finding in findings]
+
+
+def test_decode_keeps_the_declared_size_of_a_damaged_data_block() -> None:
+    payloads = blocks(files=1)
+    data = bytearray(side_bytes(1))
+    data[DATA_OFFSET + 2] ^= 0xFF
+
+    disk, findings = decode(bytes(data))
+
+    assert len(disk.sides[0].blocks[3].payload) == len(payloads[3])
+    assert "FDS016" not in [finding.code for finding in findings]

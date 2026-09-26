@@ -15,6 +15,7 @@ from fdstoolkit.codecs.raw import (
     NOMINAL_MEDIUM,
     NOMINAL_SHORT,
     SHORT_LIMIT,
+    SYNC_MARK,
     VALUES_PER_BYTE,
     RawEncoding,
     block_regions,
@@ -30,7 +31,7 @@ from fdstoolkit.codecs.raw import (
     to_write_alphabet,
     unpack_raw03,
 )
-from fdstoolkit.core.crc import encode_crc
+from fdstoolkit.core.crc import block_crc, encode_crc
 
 
 def sample_disk(files: int = 1):  # noqa: ANN201
@@ -241,3 +242,55 @@ def test_every_decoded_block_carries_where_it_starts_and_ends() -> None:
     assert all(start < end for start, end in regions)
     assert regions[0][1] <= regions[1][0]
     assert block_starts(values) == tuple(start for start, _ in regions)
+
+
+def file_payloads(*, declared: int, actual: bytes) -> list[bytes]:
+    header = (
+        bytes([0x03, 0, 0])
+        + b"HIDDEN  "
+        + (0x6000).to_bytes(2, "little")
+        + declared.to_bytes(2, "little")
+        + bytes([0x00])
+    )
+    info = sample_disk(0).sides[0].blocks[0].payload
+    return [info, bytes([0x02, 1]), header, bytes([0x04]) + actual]
+
+
+def test_a_data_block_longer_than_its_header_declares_is_read_whole() -> None:
+    actual = bytes(range(256)) * 3
+    payloads = file_payloads(declared=1, actual=actual)
+
+    side, findings = decode_raw03(unpack_raw03(encode_block_stream(payloads)))
+
+    assert [block.payload for block in side.blocks] == payloads
+    assert side.blocks[3].crc_status.value == "valid"
+    assert "FDS016" in [finding.code for finding in findings]
+
+
+def test_a_data_block_whose_header_was_lost_is_still_read_whole() -> None:
+    actual = bytes(range(1, 200))
+    payloads = file_payloads(declared=len(actual), actual=actual)
+    del payloads[2]
+
+    side, _ = decode_raw03(unpack_raw03(encode_block_stream(payloads)))
+
+    assert side.blocks[-1].payload == payloads[-1]
+    assert side.blocks[-1].crc_status.value == "valid"
+
+
+def test_a_damaged_data_block_keeps_its_declared_length() -> None:
+    actual = bytes(range(1, 200))
+    payloads = file_payloads(declared=len(actual), actual=actual)
+    damaged = payloads[3][:-1] + bytes([payloads[3][-1] ^ 0xFF])
+    framed = bytes([SYNC_MARK]) + damaged + encode_crc(block_crc(payloads[3]))
+    values = (
+        unpack_raw03(encode_block_stream(payloads[:3]))
+        + bytes([GAP_VALUE]) * MIN_GAP_VALUES
+        + encode_era_b(framed)
+        + bytes([GAP_VALUE]) * MIN_GAP_VALUES
+    )
+
+    side, findings = decode_raw03(values)
+
+    assert len(side.blocks[3].payload) == len(payloads[3])
+    assert "FDS016" not in [finding.code for finding in findings]

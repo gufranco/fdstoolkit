@@ -886,6 +886,8 @@ What each conversion costs:
 | `.fds` | `.qd` | Nothing, but the checksums are synthesised |
 | any | canonical | Everything the profile masks |
 
+A file header's size is a claim, and some copy protections make it false: a header declaring one byte in front of a data block that really holds 48 KiB. Where checksums exist, in a pulse capture or a `.qd`, the data block is read to the point where its own checksum matches and the next block or the gap begins, and `FDS016` names the difference. A `.fds` has no checksums to find that point, so it keeps the bytes but not the boundary.
+
 ## Exit codes and scripting
 
 `0` means nothing failed, `1` means something did. What counts as failure is command-specific and documented above: an unrepaired block for `splice`, a block the dumps disagree on for `consensus`, a last read that was not clean for `calibrate`.

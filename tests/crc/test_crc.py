@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from fdstoolkit.core.crc import block_crc, decode_crc, encode_crc
+from fdstoolkit.core.crc import block_crc, decode_crc, encode_crc, prefix_crcs
 
 
 def test_crc_of_a_file_amount_block_matches_the_drive_algorithm() -> None:
@@ -39,3 +39,11 @@ def test_decode_reverses_encode() -> None:
 def test_decode_rejects_a_short_slice() -> None:
     with pytest.raises(ValueError, match="needs 2 bytes"):
         decode_crc(bytes([0x01]))
+
+
+def test_prefix_crcs_match_the_crc_of_every_prefix() -> None:
+    data = bytes(range(40))
+
+    found = prefix_crcs(data)
+
+    assert found == tuple(block_crc(data[:size]) for size in range(len(data) + 1))

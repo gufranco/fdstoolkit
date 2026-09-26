@@ -12,7 +12,7 @@ from fdstoolkit.core.blocks import (
     CrcStatus,
     FileHeader,
 )
-from fdstoolkit.core.crc import CRC_SIZE, decode_crc
+from fdstoolkit.core.crc import CRC_SIZE, block_crc, crc_boundary, decode_crc
 from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
 from fdstoolkit.core.disk import Side
 from fdstoolkit.core.diskinfo import VERIFICATION_STRING, DiskInfo
@@ -75,6 +75,40 @@ def _check_crc(block: Block, side_index: int, offset: int) -> Diagnostic | None:
     return None
 
 
+def _ends_a_block(data: bytes, end: int) -> bool:
+    rest = data[end:]
+    return not rest.strip(b"\0") or rest[0] == BlockKind.FILE_HEADER
+
+
+def _longer_data(data: bytes, offset: int, declared: int) -> int | None:
+    block = data[offset:]
+    return crc_boundary(
+        block,
+        range(declared + 1, len(block) - CRC_SIZE + 1),
+        lambda size: _ends_a_block(block, size + CRC_SIZE),
+    )
+
+
+def _true_length(walk: _Walk, data: bytes, offset: int, length: int, side_index: int) -> int:
+    payload = data[offset : offset + length]
+    stored = decode_crc(data[offset + length : offset + length + CRC_SIZE])
+    if walk.expected is not BlockKind.FILE_DATA or stored == block_crc(payload):
+        return length
+    longer = _longer_data(data, offset, length)
+    if longer is None:
+        return length
+    walk.findings.append(
+        _diagnostic(
+            "FDS016",
+            Severity.WARNING,
+            side_index,
+            offset,
+            {"declared": length - 1, "actual": longer - 1},
+        )
+    )
+    return longer
+
+
 def _walk(data: bytes, *, has_crc: bool, side_index: int) -> _Walk:
     walk = _Walk(blocks=[], findings=[], position=0, expected=BlockKind.DISK_INFO, pending_size=0)
     while walk.position < len(data):
@@ -119,7 +153,9 @@ def _walk(data: bytes, *, has_crc: bool, side_index: int) -> _Walk:
                     )
                 )
                 break
-            stored = decode_crc(crc_bytes)
+            length = _true_length(walk, data, offset, length, side_index)
+            payload = data[offset : offset + length]
+            stored = decode_crc(data[offset + length : offset + length + CRC_SIZE])
         block = Block(kind=walk.expected, payload=payload, stored_crc=stored)
         finding = _check_crc(block, side_index, offset)
         if finding is not None:
