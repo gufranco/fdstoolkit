@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from fdstoolkit.codecs.raw import decode_write_stream, encode_block_stream
+
 CHUNK_PAYLOAD = 0xFE
 WRITE_PAYLOAD = 0xFF
 SEQUENCE_MASK = 0xFF
@@ -10,6 +12,7 @@ FIRST_SEQUENCE = 1
 ID_DISK_START = 0x10
 ID_DISK_CHUNK = 0x11
 ID_DISK_WRITE = 0x12
+ID_FINISH_WRITE = 0x20
 
 MODE_READ = 0x00
 MODE_WRITE = 0x01
@@ -43,6 +46,7 @@ class FakeFdsStick:
     written: bytearray = field(default_factory=bytearray)
     starts: list[int] = field(default_factory=list[int])
     seen: list[int] = field(default_factory=list[int])
+    finishes: list[bytes] = field(default_factory=list[bytes])
 
     def open(self, vendor_id: int, product_id: int) -> None:
         self.opened = (vendor_id, product_id)
@@ -52,6 +56,8 @@ class FakeFdsStick:
 
     def send_feature_report(self, data: bytes) -> int:
         self.seen.append(data[0])
+        if data[0] == ID_FINISH_WRITE:
+            self.finishes.append(bytes(data))
         if data[0] == ID_DISK_START:
             self.mode = data[1]
             self.starts.append(data[1])
@@ -63,7 +69,7 @@ class FakeFdsStick:
         if mode == MODE_WRITE:
             self.written = bytearray()
         elif self.echoes and self.written:
-            self.side = bytes(self.written)
+            self.side = encode_block_stream(decode_write_stream(bytes(self.written)))
 
     def write(self, data: bytes) -> int:
         self.seen.append(data[0])

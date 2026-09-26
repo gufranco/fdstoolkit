@@ -19,13 +19,22 @@ from fdstoolkit.core.disk import Disk, Side
 VALUES_PER_BYTE: Final = 4
 MAX_CLASS: Final = 3
 GAP_VALUE: Final = 0
-GAP_VALUE_WRITE: Final = 2
 SYNC_VALUE: Final = 1
 SHORTEST_GAP_BITS: Final = 480
 MIN_GAP_VALUES: Final = SHORTEST_GAP_BITS
 LEAD_IN_BITS: Final = 28300
 GAP_BITS: Final = 976
 GAP_FILL: Final = 0xAA
+WRITE_HEADER: Final = bytes([0xC0, 0x00, 0xAB])
+WRITE_GAP_BYTE: Final = 0xAA
+WRITE_LEAD_IN_BYTES: Final = 6750
+WRITE_GAP_BYTES: Final = 224
+WRITE_PACKET_BYTES: Final = 255
+WRITE_BIT_ONE: Final = 1
+WRITE_ZERO_THEN_ZERO: Final = 2
+WRITE_ZERO_THEN_ONE: Final = 3
+NIBBLE_BITS: Final = 4
+BYTE_VALUES: Final = 8
 SYNC_MARK: Final = 0x80
 CAPTURE_CLOCK_HZ: Final = 6_000_000
 KEY_ONE_ONE: Final = 0x11
@@ -188,12 +197,84 @@ def encode_raw03(
     )
 
 
-def to_write_alphabet(values: bytes) -> bytes:
-    return bytes(min(value + 1, MAX_CLASS) for value in values)
+def _write_value(bit: int, following: int) -> int:
+    if bit:
+        return WRITE_BIT_ONE
+    return WRITE_ZERO_THEN_ONE if following else WRITE_ZERO_THEN_ZERO
 
 
-def to_read_alphabet(values: bytes) -> bytes:
-    return bytes(max(value - 1, 0) for value in values)
+def encode_write_block(framed: bytes) -> bytes:
+    values = bytearray()
+    for index, byte in enumerate(framed):
+        following = framed[(index + 1) % len(framed)]
+        values += bytes(
+            _write_value((byte >> bit) & 1, (byte >> (bit - 1)) & 1) for bit in range(7, 3, -1)
+        )
+        values += bytes(
+            _write_value(
+                (following >> bit) & 1,
+                (following >> (bit - 1)) & 1 if bit else (byte >> 7) & 1,
+            )
+            for bit in range(3, -1, -1)
+        )
+    return bytes(values)
+
+
+def encode_write_stream(payloads: Sequence[bytes]) -> bytes:
+    stream = bytearray(WRITE_HEADER + bytes([WRITE_GAP_BYTE]) * WRITE_LEAD_IN_BYTES)
+    for index, payload in enumerate(payloads):
+        if index:
+            stream += bytes([WRITE_GAP_BYTE]) * WRITE_GAP_BYTES
+        framed = bytes([SYNC_MARK]) + payload + encode_crc(block_crc(payload))
+        stream += pack_raw03(encode_write_block(framed))
+    short = -len(stream) % WRITE_PACKET_BYTES
+    return bytes(stream + bytes([WRITE_GAP_BYTE]) * short)
+
+
+def _nibble(values: bytes) -> int:
+    return sum(
+        (value == WRITE_BIT_ONE) << (NIBBLE_BITS - 1 - index) for index, value in enumerate(values)
+    )
+
+
+def _unframe(values: bytes, size: int) -> bytes:
+    chunks = [values[start : start + NIBBLE_BITS] for start in range(0, len(values), NIBBLE_BITS)]
+    return bytes(
+        (_nibble(chunks[2 * index]) << NIBBLE_BITS) | _nibble(chunks[2 * index - 1])
+        for index in range(size)
+    )
+
+
+def _block_size(kind: int, pending: int) -> int:
+    length = _expected_length(kind, pending)
+    if length is None:
+        message = f"a written block has kind {kind:#04x}, which no side carries"
+        raise ValueError(message)
+    return length
+
+
+def decode_write_stream(stream: bytes) -> tuple[bytes, ...]:
+    if not stream.startswith(WRITE_HEADER):
+        message = "the stream does not start with the write header"
+        raise ValueError(message)
+    cursor = len(WRITE_HEADER) + WRITE_LEAD_IN_BYTES
+    payloads: list[bytes] = []
+    pending = 0
+    while stream[cursor:].strip(bytes([WRITE_GAP_BYTE])):
+        kind = _unframe(unpack_raw03(stream[cursor : cursor + NIBBLE_BITS]), 2)[1]
+        size = 1 + _block_size(kind, pending) + CRC_SIZE
+        framed = _unframe(unpack_raw03(stream[cursor : cursor + 2 * size]), size)
+        payload = framed[1 : size - CRC_SIZE]
+        if decode_crc(framed[size - CRC_SIZE :]) != block_crc(payload):
+            message = (
+                f"a written block of kind {kind:#04x} carries a checksum its data does not match"
+            )
+            raise ValueError(message)
+        if kind == BlockKind.FILE_HEADER:
+            pending = FileHeader.parse(payload).size
+        payloads.append(payload)
+        cursor += 2 * size + WRITE_GAP_BYTES
+    return tuple(payloads)
 
 
 def _diagnostic(code: str, severity: Severity, detail: dict[str, object]) -> Diagnostic:

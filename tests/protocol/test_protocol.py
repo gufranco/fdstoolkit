@@ -25,7 +25,8 @@ from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import WriteNotTakenError, write_verified
 
 FLASH_REPORTS = frozenset({0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09})
-EMULATOR_REPORTS = frozenset({0x20, 0x21, 0x22, 0x23})
+EMULATOR_REPORTS = frozenset({0x21, 0x22, 0x23})
+FINISH = bytes([0x20, 0x00])
 WRITE_REPORT_LENGTH = 0x100
 PACKETS_PAST_THE_WRAP = 300
 
@@ -43,7 +44,7 @@ def test_the_device_is_the_one_both_reference_tools_open() -> None:
 
 
 def test_the_driver_knows_only_the_reports_that_reach_a_real_drive() -> None:
-    assert {int(report) for report in ReportId} == {0x10, 0x11, 0x12}
+    assert {int(report) for report in ReportId} == {0x10, 0x11, 0x12, 0x20}
 
 
 def test_a_whole_side_comes_back_byte_for_byte() -> None:
@@ -240,6 +241,22 @@ def test_nothing_on_the_wire_touches_the_flash_reports() -> None:
 
 def test_nothing_on_the_wire_drives_the_disk_emulator() -> None:
     assert set(a_full_session().seen).isdisjoint(EMULATOR_REPORTS)
+
+
+def test_every_side_written_ends_with_the_finish_report() -> None:
+    device = FakeFdsStick(side=raw_side()[:CHUNK_PAYLOAD])
+
+    stick_over(device).write_raw_side(bytes(WRITE_PAYLOAD))
+
+    assert device.finishes == [FINISH]
+
+
+def test_the_last_write_packet_is_filled_with_gap() -> None:
+    device = FakeFdsStick(side=raw_side()[:CHUNK_PAYLOAD])
+
+    stick_over(device).write_raw_side(bytes(3))
+
+    assert device.written == bytes(3) + bytes([0xAA]) * (WRITE_PAYLOAD - 3)
 
 
 def test_every_report_the_device_sees_is_one_the_driver_declares() -> None:

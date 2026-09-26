@@ -29,8 +29,6 @@ from fdstoolkit.codecs.raw import (
     encode_raw03,
     pack_raw03,
     quantise,
-    to_read_alphabet,
-    to_write_alphabet,
     unpack_raw03,
 )
 from fdstoolkit.core.crc import block_crc, encode_crc
@@ -149,13 +147,6 @@ def test_era_a_uses_the_published_nibble_table() -> None:
     values = unpack_raw03(encode_raw03(disk, side=0, encoding=RawEncoding.ERA_A))
 
     assert set(values) <= {GAP_VALUE, 1, 2}
-
-
-def test_the_write_alphabet_shifts_every_class_up_by_one() -> None:
-    values = bytes([0, 1, 2])
-
-    assert to_write_alphabet(values) == bytes([1, 2, 3])
-    assert to_read_alphabet(to_write_alphabet(values)) == values
 
 
 def test_a_stream_round_trips_back_to_the_same_blocks() -> None:

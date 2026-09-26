@@ -64,14 +64,20 @@ a factor of two and carry no tolerance.
   and this machine, and it is a drive emulator that plays images off its own
   flash. Only the first is in scope, so the driver speaks three reports and no
   more: `0x10` starts a transfer and carries the mode, `0x11` streams a read
-  chunk, `0x12` carries a write chunk as an output report.
-- Reports `0x01` through `0x09` drive the onboard SPI flash, and `0x20` through
+  chunk, `0x12` carries a write chunk as an output report, and `0x20` with a
+  zero byte finishes a physical write.
+- Reports `0x01` through `0x09` drive the onboard SPI flash, and `0x21` through
   `0x23` drive the emulator. Neither group is ever sent. A read does not need the
-  flash, one published reading of `0x06` is a 64 KB block erase, and `0x20` with
-  a zero byte ejects an emulated disk rather than finishing a physical write.
-- How a physical write ends is unknown. The one set of notes taken from the
-  official binary lists the write-to-adapter terminator and its acknowledgement
-  as never traced, so the driver streams the side and stops.
+  flash, and one published reading of `0x06` is a 64 KB block erase.
+- The write stream follows the one captured write of the official tool, as
+  fdsstick-cli documents it from a USB capture of `fdsstick_20160926.exe`: a
+  `C0 00 AB` header, then values 1 to 3 packed four to a byte, each data bit
+  one value, bytes taken in nibble-interleaved order, a lead-in of 6,750 and
+  gaps of 224 bytes of `0xAA`, the last packet filled with `0xAA`, and `0x20 00`
+  after the data. The official tool sends that report once after the last side;
+  this driver sends it after every side, because it reads each side back before
+  writing the next. An earlier reading took `0x20 00` for an emulator eject; the
+  capture shows the official tool sending it to finish a physical write.
 - The report map changed between firmware generations. A console app that opened
   this same device in 2015 started a read with `0x11` and took data from `0x12`,
   with separate `0x13` and `0x14` for writing and no mode byte anywhere. The two

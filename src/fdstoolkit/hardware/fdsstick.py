@@ -5,7 +5,12 @@ from collections.abc import Iterator, Sequence
 from enum import IntEnum
 from typing import Final, Protocol, cast, runtime_checkable
 
-from fdstoolkit.codecs.raw import decode_raw03, encode_block_stream, unpack_raw03
+from fdstoolkit.codecs.raw import (
+    WRITE_GAP_BYTE,
+    decode_raw03,
+    encode_write_stream,
+    unpack_raw03,
+)
 from fdstoolkit.drive.captures import Capture
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, Watchdog
@@ -24,6 +29,7 @@ FIRST_SEQUENCE: Final = 1
 MODE_READ: Final = 0x00
 MODE_WRITE: Final = 0x01
 SETTLED_PACKETS: Final = 400
+WRITE_FILL: Final = bytes([WRITE_GAP_BYTE])
 
 LEGACY_REPORTS: Final = (0x11, 0x12, 0x13, 0x14)
 
@@ -42,6 +48,7 @@ class ReportId(IntEnum):
     DISK_START = 0x10
     DISK_CHUNK = 0x11
     DISK_WRITE = 0x12
+    FINISH_WRITE = 0x20
 
 
 @runtime_checkable
@@ -139,12 +146,14 @@ class FdsStick:
     def write_raw_side(self, values: bytes, *, what: str = "writing a side") -> None:
         with self._watchdog.side(what, writing=True):
             self._write_raw(values)
+            finish = bytes([ReportId.FINISH_WRITE, 0x00])
+            self._watchdog.call(lambda: self._transport.send_feature(finish))
 
     def _write_raw(self, values: bytes) -> None:
         self._start(MODE_WRITE)
         for index, start in enumerate(range(0, len(values), WRITE_PAYLOAD)):
             chunk = values[start : start + WRITE_PAYLOAD]
-            packet = bytes([ReportId.DISK_WRITE]) + chunk.ljust(WRITE_PAYLOAD, b"\0")
+            packet = bytes([ReportId.DISK_WRITE]) + chunk.ljust(WRITE_PAYLOAD, WRITE_FILL)
             try:
                 self._watchdog.call(lambda packet=packet: self._transport.write_output(packet))
             except OSError as error:
@@ -169,7 +178,7 @@ class FdsStick:
             )
 
     def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
-        self.write_raw_side(encode_block_stream(blocks), what=f"writing side {side}")
+        self.write_raw_side(encode_write_stream(blocks), what=f"writing side {side}")
 
 
 @runtime_checkable
