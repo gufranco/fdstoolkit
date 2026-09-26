@@ -321,3 +321,38 @@ def test_a_written_side_uses_the_lead_in_and_gaps_nintendo_wrote() -> None:
     assert all(GAP_BITS <= run < GAP_BITS + BITS_PER_BYTE for run in runs[1:])
     assert LEAD_IN_BITS >= 26150
     assert GAP_BITS >= SHORTEST_GAP_BITS
+
+
+def oversized(extra: int) -> bytes:
+    return bytes((index * 7 + extra) & 0xFF for index in range(300 + extra))
+
+
+UNAMBIGUOUS = [extra for extra in range(40) if block_crc(bytes([0x04]) + oversized(extra)) >> 8]
+
+
+@pytest.mark.parametrize("extra", UNAMBIGUOUS)
+def test_an_oversized_data_block_is_read_whole_when_another_file_follows(extra: int) -> None:
+    actual = oversized(extra)
+    following = [
+        bytes([0x03, 1, 1])
+        + b"NEXT    "
+        + (0x6000).to_bytes(2, "little")
+        + (4).to_bytes(2, "little")
+        + bytes([0]),
+        bytes([0x04, 9, 9, 9, 9]),
+    ]
+    payloads = [*file_payloads(declared=1, actual=actual), *following]
+
+    side, _ = decode_raw03(unpack_raw03(encode_block_stream(payloads)))
+
+    assert [block.payload for block in side.blocks] == payloads
+
+
+def test_a_checksum_ending_in_zero_before_a_zero_gap_reads_one_byte_short() -> None:
+    extra = next(extra for extra in range(40) if extra not in UNAMBIGUOUS)
+    payloads = file_payloads(declared=1, actual=oversized(extra))
+
+    side, _ = decode_raw03(unpack_raw03(encode_block_stream(payloads)))
+
+    assert side.blocks[3].payload == payloads[3][:-1]
+    assert side.blocks[3].crc_status.value == "valid"

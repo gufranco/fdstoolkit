@@ -34,6 +34,7 @@ WRITE_BIT_ONE: Final = 1
 WRITE_ZERO_THEN_ZERO: Final = 2
 WRITE_ZERO_THEN_ONE: Final = 3
 NIBBLE_BITS: Final = 4
+GAP_BYTES: Final = frozenset({0x00, 0xFF})
 BYTE_VALUES: Final = 8
 SYNC_MARK: Final = 0x80
 CAPTURE_CLOCK_HZ: Final = 6_000_000
@@ -354,13 +355,20 @@ def _expected_length(kind: int, pending: int) -> int | None:
     return None
 
 
+def _only_gap(rest: bytes) -> bool:
+    return len(set(rest)) <= 1 and set(rest) <= GAP_BYTES
+
+
 def _bounded_by_crc(values: bytes, gap: int) -> tuple[bytes, int, int] | None:
     following = _gap_end(values, gap + 1)
     end = len(values) if following is None else following
     region, _, _ = _decode_region(values[:end], gap, len(values))
     body = region[1:]
-    shortest = max(len(body.rstrip(b"\0")) - CRC_SIZE, 1)
-    size = crc_boundary(body, range(shortest, len(body) - CRC_SIZE + 1))
+
+    def ends_at_gap(size: int) -> bool:
+        return _only_gap(body[size + CRC_SIZE :])
+
+    size = crc_boundary(body, range(1, len(body) - CRC_SIZE + 1), ends_at_gap)
     if size is None:
         return None
     resume = len(values) if following is None else following - MIN_GAP_VALUES

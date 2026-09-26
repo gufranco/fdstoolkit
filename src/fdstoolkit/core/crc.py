@@ -40,17 +40,11 @@ def prefix_crcs(data: bytes) -> tuple[int, ...]:
     return tuple(found)
 
 
-def _anywhere(size: int) -> bool:
-    del size
-    return True
-
-
-def crc_boundary(
-    data: bytes, sizes: range, accept: Callable[[int], bool] = _anywhere
-) -> int | None:
+def crc_boundary(data: bytes, sizes: range, accept: Callable[[int], bool]) -> int | None:
     crcs = prefix_crcs(data[: max(len(data) - CRC_SIZE, 0)])
-    for size in range(sizes.start, min(sizes.stop, len(crcs))):
-        if crcs[size] == decode_crc(data[size : size + CRC_SIZE]) and accept(size):
+    for size in sizes:
+        matches = size < len(crcs) and crcs[size] == decode_crc(data[size : size + CRC_SIZE])
+        if matches and accept(size):
             return size
     return None
 
