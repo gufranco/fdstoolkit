@@ -343,7 +343,7 @@ fdstoolkit consensus --captures <bundle> -o <out> [--json] [--force]
 
 Merges several dumps of one disk block by block, by majority, into one image, and reports every block the dumps disagree on. `--map` prints the per-block agreement.
 
-`--captures` rebuilds a disk from a saved capture bundle by a pulse vote: for every block no read got right, the pulses of each read that reached it are compared one by one and the majority is kept. It needs three reads of the block, and a block every read got wrong in the same place stays wrong, because a vote cannot outvote a shared error. Alone, the rebuilt disk is the output and every block it could not fix is named. With dumps, the rebuilt disk joins them as one more voter.
+`--captures` rebuilds a disk from a saved capture bundle by a pulse vote: for every block no read got right, the pulses of each read that reached it are compared one by one and the majority is kept. A read that gained or lost a pulse is realigned to the others before the vote, so one slipped pulse does not shift every pulse after it; `reads` counts that slip once rather than as a block of disagreement. It needs three reads of the block, and a block every read got wrong in the same place stays wrong, because a vote cannot outvote a shared error. Alone, the rebuilt disk is the output and every block it could not fix is named. With dumps, the rebuilt disk joins them as one more voter.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/consensus-dark.png">

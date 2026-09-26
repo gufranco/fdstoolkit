@@ -132,3 +132,49 @@ def test_the_repair_rounds_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_a_pulse_only_one_read_reaches_is_not_voted_into_the_block() -> None:
     assert vote.majority([b"\x00\x01", b"\x00\x01", b"\x00\x01\x02\x02"]) == b"\x00\x01"
+
+
+def slipped(side: Side, block: int, offset: int) -> bytes:
+    values = bytearray(unpack_raw03(encode_block_stream([b.payload for b in side.blocks])))
+    start, _ = block_regions(bytes(values))[block]
+    position = start + SKIP_SYNC + offset
+    return pack_raw03(
+        bytes(values[:position]) + bytes([values[position]]) + bytes(values[position:])
+    )
+
+
+def test_a_read_that_gained_a_pulse_still_votes_after_the_slip() -> None:
+    side = reference_side()
+    reads = [
+        slipped(side, DAMAGED, 10),
+        damaged(side, DAMAGED, (90,)),
+        damaged(side, DAMAGED, (170,)),
+    ]
+
+    result = vote_side(reads)
+
+    assert DAMAGED in result.recovered
+    assert [block.payload for block in result.side.blocks] == [b.payload for b in side.blocks]
+
+
+def test_positions_alone_cannot_vote_past_a_slip() -> None:
+    side = reference_side()
+    reads = [
+        slipped(side, DAMAGED, 10),
+        damaged(side, DAMAGED, (90,)),
+        damaged(side, DAMAGED, (170,)),
+    ]
+    windows = [
+        vote.window_of(read, vote.locate(read, *vote.occurrence_of(read, DAMAGED)) or 0)
+        for read in (vote.parse_read(unpack_raw03(packed)) for packed in reads)
+    ]
+
+    positional = vote.majority(windows)
+    aligned = vote.aligned_majority(windows, 1)
+
+    clean = vote.window_of(
+        vote.parse_read(unpack_raw03(encode_block_stream([b.payload for b in side.blocks]))),
+        DAMAGED,
+    )
+    assert positional[: len(clean)] != clean
+    assert aligned[: len(clean)] == clean

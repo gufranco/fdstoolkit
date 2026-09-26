@@ -11,6 +11,7 @@ from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.align import good_block
 
 MIN_VOTERS: Final = 3
+LOOKAHEAD: Final = 8
 ROUNDS_PER_BLOCK: Final = MIN_VOTERS
 NO_FILE: Final = -1
 NOTHING_FOUND: Final = "no read found a single block on this side"
@@ -79,6 +80,58 @@ def majority(windows: Sequence[bytes]) -> bytes:
     return bytes(voted)
 
 
+def _agree(first: bytes, at: int, second: bytes, other_at: int) -> int:
+    return sum(
+        1
+        for step in range(LOOKAHEAD)
+        if at + step < len(first)
+        and other_at + step < len(second)
+        and first[at + step] == second[other_at + step]
+    )
+
+
+def align_to(reference: bytes, other: bytes) -> tuple[int | None, ...]:
+    placed, _ = alignment(reference, other)
+    return placed
+
+
+def alignment(reference: bytes, other: bytes) -> tuple[tuple[int | None, ...], int]:
+    placed: list[int | None] = []
+    here = there = skipped = 0
+    for _ in range(len(reference) + len(other)):
+        if here >= len(reference):
+            continue
+        if there >= len(other) or reference[here] == other[there]:
+            placed.append(other[there] if there < len(other) else None)
+            here, there = here + 1, there + 1
+            continue
+        swapped = _agree(reference, here + 1, other, there + 1)
+        extra = _agree(reference, here, other, there + 1)
+        lost = _agree(reference, here + 1, other, there)
+        if extra > swapped and extra >= lost:
+            there += 1
+            skipped += 1
+            continue
+        if lost > swapped:
+            placed.append(None)
+            here += 1
+            continue
+        placed.append(other[there])
+        here, there = here + 1, there + 1
+    return (*placed, *(None,) * (len(reference) - len(placed))), skipped
+
+
+def aligned_majority(windows: Sequence[bytes], reference: int) -> bytes:
+    base = windows[reference]
+    columns = [align_to(base, window) for index, window in enumerate(windows) if index != reference]
+    voted = bytearray()
+    for position, own in enumerate(base):
+        seen = [own, *[value for column in columns if (value := column[position]) is not None]]
+        value, count = Counter(seen).most_common(1)[0]
+        voted.append(value if count * 2 > len(seen) else own)
+    return bytes(voted)
+
+
 def _splice(working: Read, slot: int, window: bytes) -> Read:
     start, end = working.regions[slot]
     return parse_read(working.values[:start] + window + working.values[end:])
@@ -101,9 +154,14 @@ def _repair(working: Read, slot: int, reads: Sequence[Read]) -> Repair | None:
     if len(found) < MIN_VOTERS:
         note = f"block {slot}: {len(found)} read(s) reached it and a vote needs {MIN_VOTERS}"
         return Repair(working, "short", note)
-    voted = _splice(working, slot, majority([window_of(read, pos) for read, pos in found]))
-    if slot < len(voted.blocks) and good_block(voted.blocks[slot]):
-        return Repair(voted, "voted")
+    windows = [window_of(read, pos) for read, pos in found]
+    for candidate in (
+        majority(windows),
+        *(aligned_majority(windows, index) for index in range(len(windows))),
+    ):
+        voted = _splice(working, slot, candidate)
+        if slot < len(voted.blocks) and good_block(voted.blocks[slot]):
+            return Repair(voted, "voted")
     return None
 
 

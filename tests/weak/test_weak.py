@@ -12,6 +12,7 @@ from fdstoolkit.drive.weak import bundle_weak_blocks, weak_blocks
 from fdstoolkit.edit.files import FileSpec, insert_file
 
 DATA_BLOCK = 3
+TRAILING_GAP = 4000
 INVALID = 3
 
 
@@ -113,3 +114,22 @@ def test_a_read_that_runs_past_its_block_counts_only_the_pulse_that_moved() -> N
     found = weak_blocks(reads)
 
     assert [(entry.block, entry.unstable) for entry in found] == [(DATA_BLOCK, 1)]
+
+
+def with_extra_pulse(side: Side, block: int) -> bytes:
+    values = clean_values(side)
+    start, _ = block_regions(bytes(values))[block]
+    position = start + 50
+    slipped = bytes(values[:position]) + bytes([values[position]]) + bytes(values[position:])
+    return pack_raw03(slipped + bytes(TRAILING_GAP))
+
+
+def test_one_extra_pulse_counts_once_rather_than_shifting_the_block() -> None:
+    side = reference_side()
+    clean = pack_raw03(bytes(clean_values(side)))
+
+    found = weak_blocks([clean, with_extra_pulse(side, DATA_BLOCK), clean])
+
+    assert found[0].block == DATA_BLOCK
+    assert found[0].reads == 3
+    assert found[0].unstable <= 2

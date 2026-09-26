@@ -9,6 +9,7 @@ from fdstoolkit.core.blocks import BlockKind
 from fdstoolkit.drive.captures import Bundle
 from fdstoolkit.drive.vote import (
     Read,
+    alignment,
     locate,
     occurrence_of,
     parse_read,
@@ -46,11 +47,14 @@ class WeakBlock:
 
 
 def _unstable(windows: Sequence[bytes]) -> int:
-    return sum(
+    base = next(window for window in windows if len(window) == shared_length(windows))
+    aligned = [alignment(base, window) for window in windows if window is not base]
+    differing = sum(
         1
-        for position in range(shared_length(windows))
-        if len({window[position] for window in windows if position < len(window)}) > 1
+        for position, own in enumerate(base)
+        if any(column[position] != own for column, _ in aligned)
     )
+    return differing + sum(skipped for _, skipped in aligned)
 
 
 def _weak(base: Read, slot: int, reads: Sequence[Read]) -> WeakBlock:
