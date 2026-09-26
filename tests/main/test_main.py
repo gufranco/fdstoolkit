@@ -18,6 +18,7 @@ from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.fds import SIDE_SIZE
 from fdstoolkit.codecs.qd import encode as encode_qd
+from fdstoolkit.codecs.raw import encode_raw03
 from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus, FileKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.doctor import Check, CheckStatus, DoctorReport
@@ -1517,6 +1518,7 @@ def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.Mo
         def __init__(self, disk: Disk) -> None:
             self._drive = SimulatedDrive(disk)
             self._captures = [Capture(side=0, read=1, data=b"\\x55" * 8)]
+            self._resyncs = []
 
         def status(self):  # noqa: ANN202
             return self._drive.status()
@@ -1606,6 +1608,19 @@ def test_the_web_server_loader_returns_a_runner_and_a_factory() -> None:
     assert callable(build)
 
 
+def test_dump_says_when_the_usb_link_skipped_packets(
+    image: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    disk, _, _, _ = common.decode_image(image)
+    packed = encode_raw03(disk, side=0)
+    stick = FdsStick(HidApiTransport(FakeFdsStick(side=packed, drop_after=3)))
+    monkeypatch.setattr(hardware_cmds, "open_fdsstick", lambda: stick)
+
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "d.fds")])
+
+    assert "the USB link skipped 1 packet(s) of pulse data" in result.stdout
+
+
 def test_a_drive_that_returned_no_capture_says_so(tmp_path: Path) -> None:
     drive = FdsStick(HidApiTransport(FakeFdsStick()))
 
@@ -1635,6 +1650,10 @@ def test_dump_asks_the_operator_to_turn_the_disk_over(
         @property
         def captures(self):  # noqa: ANN202
             return self._inner.captures
+
+        @property
+        def resyncs(self):  # noqa: ANN202
+            return self._inner.resyncs
 
     disk, _, _, _ = common.decode_image(image)
     drive = OneFace(disk)
@@ -1753,6 +1772,10 @@ def test_dump_can_be_told_the_disk_is_already_turned_over(
         @property
         def captures(self):  # noqa: ANN202
             return self._inner.captures
+
+        @property
+        def resyncs(self):  # noqa: ANN202
+            return self._inner.resyncs
 
     disk, _, _, _ = common.decode_image(image)
 

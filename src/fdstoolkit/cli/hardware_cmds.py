@@ -176,6 +176,7 @@ def dump(
     for line in outcome.lines:
         typer.echo(line)
     report_blocks(result)
+    report_link(drive)
     if raw is not None:
         keep_captures(drive, raw, image=output.name)
     raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
@@ -201,7 +202,17 @@ def _read_disk(
     return report.passes[0], report.grade, unsettled
 
 
+def report_link(drive: FdsStick) -> None:
+    if drive.resyncs:
+        typer.echo(
+            f"  the USB link skipped {len(drive.resyncs)} packet(s) of pulse data during the "
+            "reads, so a block failing near one may be the link rather than the disk. Read it "
+            "again before blaming the disk"
+        )
+
+
 def _stopped(drive: FdsStick, raw: Path | None, output: Path, message: str) -> typer.Exit:
+    report_link(drive)
     if raw is not None:
         keep_captures(drive, raw, image=output.name)
     return fail(message)

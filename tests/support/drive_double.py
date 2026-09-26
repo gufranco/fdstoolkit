@@ -56,6 +56,10 @@ class SimulatedDrive:
     def captures(self) -> tuple[Capture, ...]:
         return tuple(self._captures)
 
+    @property
+    def resyncs(self) -> tuple[tuple[int, int], ...]:
+        return ()
+
     def _capture(self, side: Side, read: int = 1) -> bytes:
         packed = encode_block_stream([block.payload for block in side.blocks])
         if not self._plan.bad_crc_blocks:
