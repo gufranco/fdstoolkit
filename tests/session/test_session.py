@@ -772,3 +772,60 @@ def test_a_clean_side_names_no_console_error() -> None:
 
     assert result.sides[0].console_error is None
     assert result.sides[0].lines == ()
+
+
+def test_a_block_that_reads_back_with_a_bad_checksum_fails_the_write() -> None:
+    drive = SimulatedDrive(sample_disk(), plan=FaultPlan(bad_crc_blocks=frozenset({1})))
+
+    report = write_verified(drive, drive, disk_with_files(), confirm=lambda _: True, backup=None)
+
+    assert not report.verified
+    assert (0, 1) in report.mismatched_blocks
+
+
+def test_a_pass_that_missed_a_block_does_not_shift_the_blocks_after_it() -> None:
+    disk = disk_with_files()
+    drive = DroppingDrive(disk, dropped=3, plan=FaultPlan())
+
+    report = dump_repeated(drive, sides=1, passes=2, retries=0)
+
+    assert report.unstable_blocks == ()
+
+
+class MiddleLostDrive(SimulatedDrive):
+    def read_side(self, side: int) -> Iterator[BlockRead]:
+        blocks = list(super().read_side(side))
+        if self.read_count == 1:
+            return iter(blocks[:3] + blocks[5:])
+        return iter(blocks)
+
+
+def test_blocks_found_on_a_re_read_keep_their_place_on_the_side() -> None:
+    disk = disk_with_files()
+    drive = MiddleLostDrive(disk)
+
+    result = dump(drive, sides=1, retries=1)
+
+    assert [block.payload for block in result.sides[0].blocks] == [
+        block.payload for block in disk.sides[0].blocks
+    ]
+    assert [block.index for block in result.sides[0].blocks] == list(
+        range(len(disk.sides[0].blocks))
+    )
+
+
+def test_a_failed_hidden_block_raises_no_console_error() -> None:
+    disk = disk_with_files(2)
+    side = disk.sides[0]
+    amount = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([BlockKind.FILE_AMOUNT, 1]))
+    hidden = Disk(
+        sides=(
+            Side(blocks=(side.blocks[0], amount, *side.blocks[2:]), tail=b"", capacity=SIDE_SIZE),
+        )
+    )
+    drive = SimulatedDrive(hidden, plan=FaultPlan(bad_crc_blocks=frozenset({5})))
+
+    result = dump(drive, sides=1, retries=0)
+
+    assert result.sides[0].failed_blocks == (5,)
+    assert result.sides[0].console_error is None

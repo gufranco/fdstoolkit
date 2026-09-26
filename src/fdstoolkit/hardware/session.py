@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Final
 
@@ -161,7 +162,8 @@ class SideDump:
     def console_error(self) -> int | None:
         if not self.blocks:
             return BLOCK_EXPECTED + BlockKind.DISK_INFO
-        if self.failed_blocks:
+        declared = _declared(self.blocks)
+        if any(index < declared or not declared for index in self.failed_blocks):
             return CRC_FAILED
         if self.missing_blocks:
             return BLOCK_EXPECTED + expected_kind(len(self.blocks))
@@ -328,24 +330,22 @@ def _unfinished(blocks: Sequence[BlockRead]) -> bool:
     return any(not block.crc_ok for block in blocks) or len(blocks) < _declared(blocks)
 
 
-def _missing_from(
+def _keys(blocks: Sequence[BlockRead]) -> list[tuple[Identity | None, int]]:
+    seen: Counter[Identity | None] = Counter()
+    keys: list[tuple[Identity | None, int]] = []
+    for identity in _identities(blocks):
+        keys.append((identity, seen[identity]))
+        seen[identity] += 1
+    return keys
+
+
+def _merged(
     resolved: Sequence[BlockRead], again: Sequence[BlockRead], reads: int
 ) -> list[BlockRead]:
-    have = set(_identities(resolved))
-    return [
-        BlockRead(
-            index=len(resolved) + offset,
-            payload=block.payload,
-            crc_ok=block.crc_ok,
-            attempts=reads,
-            stored_crc=block.stored_crc,
-        )
-        for offset, block in enumerate(
-            block
-            for identity, block in zip(_identities(again), again, strict=True)
-            if identity is not None and identity not in have
-        )
-    ]
+    if len(resolved) >= _declared(resolved) or len(again) <= len(resolved):
+        return list(resolved)
+    first = {block.payload: block.attempts for block in resolved if block.crc_ok}
+    return [replace(block, attempts=first.get(block.payload, reads)) for block in again]
 
 
 def _read_side_with_retries(reader: DiskReader, side: int, retries: int) -> tuple[BlockRead, ...]:
@@ -373,7 +373,7 @@ def _read_side_with_retries(reader: DiskReader, side: int, retries: int) -> tupl
                 attempts=reads,
                 stored_crc=found.stored_crc,
             )
-        resolved += _missing_from(resolved, again, reads)
+        resolved = _merged(resolved, again, reads)
     return tuple(resolved)
 
 
@@ -426,18 +426,26 @@ def dump_repeated(
             raise SideFlipError(message)
         collected.append(dump(reader, sides=sides, retries=retries, flip=flip, progress=progress))
     results = tuple(collected)
-    unstable: list[tuple[int, int]] = []
-    first = results[0]
-    for side_index, side in enumerate(first.sides):
-        for block in side.blocks:
-            payloads = {
-                other.sides[side_index].blocks[block.index].payload
-                for other in results
-                if block.index < len(other.sides[side_index].blocks)
-            }
-            if len(payloads) > 1:
-                unstable.append((side_index, block.index))
-    return StabilityReport(passes=results, unstable_blocks=tuple(unstable))
+    unstable = tuple(
+        (side_index, block.index)
+        for side_index, side in enumerate(results[0].sides)
+        for block in _moving(side_index, side, results)
+    )
+    return StabilityReport(passes=results, unstable_blocks=unstable)
+
+
+def _moving(side_index: int, side: SideDump, results: Sequence[DumpResult]) -> list[BlockRead]:
+    maps = [
+        dict(
+            zip(_keys(other.sides[side_index].blocks), other.sides[side_index].blocks, strict=True)
+        )
+        for other in results
+    ]
+    return [
+        block
+        for key, block in zip(_keys(side.blocks), side.blocks, strict=True)
+        if len({found[key].payload for found in maps if key in found}) > 1
+    ]
 
 
 @dataclass(frozen=True, slots=True)
@@ -523,7 +531,9 @@ def write_side_verified(
     changed = tuple(
         block_index
         for block_index, block in enumerate(side.blocks)
-        if block_index >= len(written) or written[block_index].payload != block.payload
+        if block_index >= len(written)
+        or written[block_index].payload != block.payload
+        or not written[block_index].crc_ok
     )
     stale = tuple(range(len(side.blocks), len(written)))
     return SideWrite(before=before, after=after, mismatched=changed + stale, stale=stale)
