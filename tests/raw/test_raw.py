@@ -15,6 +15,7 @@ from fdstoolkit.codecs.raw import (
     NOMINAL_MEDIUM,
     NOMINAL_SHORT,
     SHORT_LIMIT,
+    SHORTEST_GAP_BITS,
     SYNC_MARK,
     VALUES_PER_BYTE,
     RawEncoding,
@@ -294,3 +295,16 @@ def test_a_damaged_data_block_keeps_its_declared_length() -> None:
 
     assert len(side.blocks[3].payload) == len(payloads[3])
     assert "FDS016" not in [finding.code for finding in findings]
+
+
+def test_blocks_behind_the_shortest_gap_the_format_allows_are_read() -> None:
+    payloads = [block.payload for block in sample_disk(2).sides[0].blocks]
+    values = bytearray(bytes([GAP_VALUE]) * (LEAD_IN_PACKED * VALUES_PER_BYTE))
+    for index, payload in enumerate(payloads):
+        if index:
+            values += bytes([GAP_VALUE]) * SHORTEST_GAP_BITS
+        values += encode_era_b(bytes([SYNC_MARK]) + payload + encode_crc(block_crc(payload)))
+
+    side, _ = decode_raw03(bytes(values))
+
+    assert [block.payload for block in side.blocks] == payloads
