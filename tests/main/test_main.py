@@ -1163,16 +1163,13 @@ def test_dump_stops_cleanly_on_an_interrupt(
     single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     attach(monkeypatch, single_side)
-    original = session.dump
 
     def interrupt(*_: object, **__: object) -> object:
         raise KeyboardInterrupt
 
-    hardware_cmds.dump_disk = interrupt  # type: ignore[assignment]
-    try:
-        result = runner.invoke(app, ["dump", "-o", str(tmp_path / "d.fds")])
-    finally:
-        hardware_cmds.dump_disk = original  # type: ignore[assignment]
+    monkeypatch.setattr(hardware_cmds, "read_disk", interrupt)
+
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "d.fds")])
 
     assert result.exit_code == 1
     assert "nothing was written" in result.stdout

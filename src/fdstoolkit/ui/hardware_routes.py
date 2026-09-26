@@ -18,10 +18,8 @@ from fdstoolkit.drive.recovery import recover
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
-    DumpResult,
     LongSideError,
-    dump,
-    dump_repeated,
+    read_disk,
     refuse_long_sides,
     write_verified,
 )
@@ -98,6 +96,7 @@ def _view(job: Job) -> JobView:
         prompt=job.prompt,
         result=job.result,
         error=job.error,
+        kept=job.kept,
     )
 
 
@@ -147,35 +146,33 @@ def _launch(
 
 
 class Backup:
-    def __init__(self) -> None:
+    def __init__(self, controls: Controls) -> None:
         self.data = b""
+        self._controls = controls
 
     def keep(self, data: bytes) -> None:
         self.data = data
+        self._controls.keep(named_file(BACKUP_NAME, data).model_dump())
 
 
 def dump_job(spec: DumpSpec, request: Request) -> JobView:
     def work(drive: FdsStick, controls: Controls) -> DumpedResult:
-        if spec.passes > 1:
-            result: DumpResult = dump_repeated(
-                drive,
-                sides=spec.sides,
-                passes=spec.passes,
-                retries=spec.retries,
-                flip=controls.ask,
-                progress=controls.step,
-            ).passes[0]
-        else:
-            result = dump(
-                drive,
-                sides=spec.sides,
-                retries=spec.retries,
-                flip=controls.ask,
-                progress=controls.step,
-            )
-        outcome = recover(result, drive.captures)
-        for line in outcome.lines:
-            controls.step(line.strip())
+        reading = read_disk(
+            drive,
+            sides=spec.sides,
+            passes=spec.passes,
+            retries=spec.retries,
+            flip=controls.ask,
+            progress=controls.step,
+        )
+        outcome = recover(reading.result, drive.captures)
+        report = [
+            *reading.lines,
+            *(line.strip() for line in outcome.lines),
+            *(line for side in outcome.result.sides for line in side.lines),
+        ]
+        for line in report:
+            controls.step(line)
         body = encoded(outcome.result.as_disk())
         kept = (
             named_file(
@@ -189,7 +186,7 @@ def dump_job(spec: DumpSpec, request: Request) -> JobView:
             name=DUMP_NAME,
             data=base64.b64encode(body).decode("ascii"),
             size=len(body),
-            grade=str(outcome.result.grade),
+            grade=str(reading.settled(outcome.result, changed=bool(outcome.recovered))),
             captures=kept,
         )
 
@@ -226,7 +223,7 @@ def write_job(spec: WriteSpec, request: Request) -> JobView:
         if spec.calibration:
             for line in TRUSTED_DRIVE:
                 controls.step(line)
-        backup = Backup()
+        backup = Backup(controls)
         report = write_verified(
             drive,
             drive,
@@ -237,6 +234,8 @@ def write_job(spec: WriteSpec, request: Request) -> JobView:
             flip=controls.ask,
             progress=controls.step,
         )
+        for note in report.notes:
+            controls.step(note)
         headline = (
             "the disk reads back as written, on this drive"
             if report.verified
@@ -263,14 +262,19 @@ def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
 
     def work(drive: FdsStick, controls: Controls) -> ReportedFile:
-        backup = Backup()
+        backup = Backup(controls)
         report = surface_test(
             drive,
             drive,
             sides=spec.sides,
             confirm=lambda _: True,
             backup=backup.keep,
-            plan=SurfacePlan(rounds=spec.passes, fill=not spec.quick, finish=finish),
+            plan=SurfacePlan(
+                rounds=spec.passes,
+                fill=not spec.quick,
+                finish=finish,
+                stopped=controls.stopped,
+            ),
             flip=controls.ask,
             progress=controls.step,
         )
@@ -303,7 +307,7 @@ def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
             ok=report.passed,
         )
 
-    return _start(request, "surface", writes=True, work=work)
+    return _start(request, "surface", writes=True, work=work, stoppable=True)
 
 
 def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:

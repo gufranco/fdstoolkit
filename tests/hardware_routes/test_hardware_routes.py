@@ -215,6 +215,7 @@ def test_a_confirmed_write_job_verifies_and_returns_the_backup(
 
     assert job["state"] == JobState.DONE
     assert job["result"]["headline"] == "the disk reads back as written, on this drive"
+    assert any("read the disk on a second drive" in step for step in job["steps"])
     assert job["result"]["file"]["name"] == "before.fds"
     assert job["result"]["ok"]
     assert attached.closed
@@ -236,6 +237,46 @@ def test_a_two_side_write_job_turns_the_disk_once(
     assert done["state"] == JobState.DONE
     assert done["result"]["ok"]
     assert "writing side 1" in done["steps"]
+
+
+def test_a_multi_pass_dump_job_keeps_its_unstable_grade_and_names_the_blocks(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan = FaultPlan(bad_crc_blocks=frozenset({1}), unstable_blocks=frozenset({0}))
+    serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), plan=plan))
+
+    job = run(app, client, "/api/jobs/dump", {"passes": 3, "retries": 0})
+
+    assert job["result"]["grade"] == "unstable"
+    assert "side 0: block 0 differs between passes" in job["steps"]
+
+
+def test_a_write_job_that_fails_still_offers_the_backup(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), plan=FaultPlan(writes_do_not_stick=True)))
+
+    job = run(app, client, "/api/jobs/write", {"data": OTHER, "confirm": True})
+
+    assert job["state"] == JobState.FAILED
+    assert job["kept"]["name"] == "before.fds"
+    assert base64.b64decode(job["kept"]["data"])[:1] == bytes([0x01])
+
+
+def test_a_surface_job_can_be_stopped_between_patterns(
+    app: FastAPI, client: TestClient, attached: SimulatedDrive
+) -> None:
+    started = client.post("/api/jobs/surface", json={"confirm": True, "passes": 3}).json()
+    client.post(f"/api/jobs/{started['id']}/stop", json={})
+    assert app.state.jobs.wait(started["id"], SETTLE)
+
+    job = client.get(f"/api/jobs/{started['id']}").json()
+
+    assert started["stoppable"] is True
+    assert job["state"] == JobState.DONE
+    assert job["result"]["rows"][0]["refusal"] == ""
+    assert "interrupted" in job["result"]["headline"]
+    assert attached.write_count < 3 * 4
 
 
 def test_a_write_job_reports_blocks_that_did_not_read_back(

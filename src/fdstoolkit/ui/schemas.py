@@ -437,6 +437,7 @@ class JobView(BaseModel):
     prompt: str = ""
     result: dict[str, Any] | None = None
     error: str = ""
+    kept: dict[str, Any] | None = None
 
 
 class CurrentJob(BaseModel):

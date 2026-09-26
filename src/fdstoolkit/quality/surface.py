@@ -82,6 +82,10 @@ PULSE_VERDICTS: Final[dict[SpeedReading, str]] = {
 }
 
 
+def _never() -> bool:
+    return False
+
+
 @dataclass(frozen=True, slots=True)
 class SurfacePlan:
     rounds: int = 1
@@ -89,6 +93,7 @@ class SurfacePlan:
     finish: Finish = Finish.LEAVE
     retries: int = 3
     key: bytes | None = None
+    stopped: Callable[[], bool] = _never
 
 
 @dataclass(frozen=True, slots=True)
@@ -344,6 +349,8 @@ def _run_patterns(run: _Run) -> tuple[StopReason | None, str]:
         for index in range(run.plan.rounds):
             key = run.plan.key or secrets.token_bytes(KEY_BYTES)
             for position, pattern in enumerate(PATTERNS):
+                if run.plan.stopped():
+                    return StopReason.INTERRUPTED, ""
                 run.progress(f"side {side_index} pass {index + 1} pattern {pattern}")
                 target = pattern_disk(pattern, sides=run.sides, fill=run.plan.fill, key=key).sides[
                     side_index

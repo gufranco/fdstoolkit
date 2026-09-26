@@ -76,6 +76,20 @@ describe("jobView", () => {
     expect(view.querySelector(".reason").textContent).toBe("the drive stalled");
     expect(view.querySelector(".quiet")).toBeNull();
   });
+
+  it("still offers the disk's contents read before a failed write", () => {
+    const kept = { name: "before.fds", data: "AQ==", size: 1 };
+
+    const view = jobView({ ...running, state: "failed", error: "refused", kept }, () => {});
+
+    expect(view.querySelector(".download").getAttribute("download")).toBe("before.fds");
+  });
+
+  it("offers nothing extra when a failed job kept no file", () => {
+    const view = jobView({ ...running, state: "failed", error: "refused" }, () => {});
+
+    expect(view.querySelector(".download")).toBeNull();
+  });
 });
 
 describe("follow", () => {

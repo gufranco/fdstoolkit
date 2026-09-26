@@ -806,7 +806,21 @@ Saved captures travel the same way. A dump with `keep captures` set offers the b
 | `POST /api/hash` | `hash` |
 | `POST /api/grade` | `grade` |
 | `POST /api/reads` | `reads` |
+| `POST /api/boot` | `boot` |
+| `POST /api/provenance` | `provenance` |
+| `POST /api/diff` | `diff` |
+| `POST /api/rebuild` | `rebuild` |
+| `POST /api/set` | `set` |
+| `POST /api/insert` | `insert` |
+| `POST /api/extract` | `extract` |
+| `POST /api/patch` | `patch` |
+| `POST /api/splice` | `splice` |
+| `POST /api/consensus` | `consensus` |
+| `POST /api/save` | `save` |
+| `POST /api/export` | `export` |
+| `POST /api/build` | `build` |
 | `GET /api/status` | `status` |
+| `GET /api/hardware` | whether an FDSStick is connected, for the banner on every page |
 | `POST /api/blank` | `blank` |
 | `POST /api/convert` | `convert` |
 | `POST /api/jobs/dump` | `dump` |
@@ -816,7 +830,7 @@ Saved captures travel the same way. A dump with `keep captures` set offers the b
 | `GET /api/jobs/current` | the disk job still running, if any |
 | `GET /api/jobs/{id}` | one job's state, progress lines, prompt and result |
 | `POST /api/jobs/{id}/answer` | the answer to a job's prompt |
-| `POST /api/jobs/{id}/stop` | stop a calibration after the read in progress |
+| `POST /api/jobs/{id}/stop` | stop a calibration after the read in progress, or a surface test before its next pattern |
 
 Images and captures travel base64 encoded in the request body. `GET /docs` serves the generated API reference, so the page is one client of the endpoints rather than the only one.
 
@@ -827,7 +841,7 @@ The choices the page offers come from `catalogue`, which is built over the enums
 The page adds what a terminal gives for free:
 
 - `write` and `surface` open a dialog that names what will be destroyed before anything starts. Focus lands on Cancel, so pressing Enter by reflex does not erase a disk. A request that skips the dialog is refused until it confirms the erase.
-- When a job needs the disk turned over, the page shows the prompt with two buttons, The disk is turned over and Stop. An unanswered prompt is taken as no after 10 minutes, and the drive is released.
+- When a job needs the disk turned over, the page shows the prompt with two buttons, The disk is turned over and Stop. An unanswered prompt is taken as no after 10 minutes, and the drive is released. A calibration and a surface test also show a Stop button while they run; a surface test stops before its next pattern, never in the middle of writing one, and still reports the passes it finished. A failed write or surface test offers `before.fds` next to the reason it failed.
 - Closing or reloading the tab while a job runs asks first, since closing it does not stop the drive. A page opened while a job is running picks that job up rather than starting a second one.
 - `write` and `surface` offer the read taken before writing as `before.fds`, whatever the outcome.
 - A job that stalls while writing says the side may be half written, as the command does.

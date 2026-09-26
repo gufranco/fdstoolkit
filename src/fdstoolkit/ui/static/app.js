@@ -732,6 +732,9 @@ export function jobView(job, answer, stop) {
   if (job.state === 'failed') {
     box.append(element('p', { className: 'reason', textContent: job.error }));
   }
+  if (job.state === 'failed' && isDownload(job.kept)) {
+    box.append(download(job.kept));
+  }
   return box;
 }
 

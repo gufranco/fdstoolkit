@@ -36,12 +36,10 @@ from fdstoolkit.hardware.session import (
     LongSideError,
     SideFlipError,
     WriteRefusedError,
-    dump_repeated,
+    read_disk,
     refuse_long_sides,
-    worst_grade,
     write_verified,
 )
-from fdstoolkit.hardware.session import dump as dump_disk
 from fdstoolkit.quality.surface import (
     Finish,
     SurfacePlan,
@@ -158,8 +156,8 @@ def dump(
     flip = prompter(yes=yes)
 
     try:
-        result, grade, unsettled = _read_disk(
-            drive, sides=sides, passes=passes, retries=retries, flip=flip
+        reading = read_disk(
+            drive, sides=sides, passes=passes, retries=retries, flip=flip, progress=step
         )
     except KeyboardInterrupt:
         message = "stopped on interrupt, nothing was written"
@@ -167,9 +165,11 @@ def dump(
     except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
         raise _stopped(drive, raw, output, str(error)) from error
 
-    outcome = recover(result, drive.captures)
+    for line in reading.lines:
+        typer.echo(line)
+    outcome = recover(reading.result, drive.captures)
     result = outcome.result
-    grade = worst_grade(result.grade, unsettled) if outcome.recovered else grade
+    grade = reading.settled(result, changed=bool(outcome.recovered))
     data = encode_image(result.as_disk(), container)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
@@ -180,26 +180,6 @@ def dump(
     if raw is not None:
         keep_captures(drive, raw, image=output.name)
     raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
-
-
-def _read_disk(
-    drive: FdsStick,
-    *,
-    sides: int,
-    passes: int,
-    retries: int,
-    flip: Callable[[str], bool],
-) -> tuple[DumpResult, Grade, Grade]:
-    if passes == 1:
-        result = dump_disk(drive, sides=sides, retries=retries, flip=flip, progress=step)
-        return result, result.grade, Grade.CLEAN
-    report = dump_repeated(
-        drive, sides=sides, passes=passes, retries=retries, flip=flip, progress=step
-    )
-    for side_index, block_index in report.unstable_blocks:
-        typer.echo(f"side {side_index}: block {block_index} differs between passes")
-    unsettled = Grade.UNSTABLE if report.unstable_blocks else Grade.CLEAN
-    return report.passes[0], report.grade, unsettled
 
 
 def report_link(drive: FdsStick) -> None:

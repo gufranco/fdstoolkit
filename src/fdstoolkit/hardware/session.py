@@ -439,6 +439,45 @@ def dump_repeated(
     return StabilityReport(passes=results, unstable_blocks=tuple(unstable))
 
 
+@dataclass(frozen=True, slots=True)
+class Reading:
+    result: DumpResult
+    grade: Grade
+    unstable_blocks: tuple[tuple[int, int], ...] = ()
+
+    @property
+    def lines(self) -> tuple[str, ...]:
+        return tuple(
+            f"side {side}: block {block} differs between passes"
+            for side, block in self.unstable_blocks
+        )
+
+    def settled(self, recovered: DumpResult, *, changed: bool) -> Grade:
+        if not changed:
+            return self.grade
+        return worst_grade(recovered.grade, Grade.UNSTABLE if self.unstable_blocks else Grade.CLEAN)
+
+
+def read_disk(
+    reader: DiskReader,
+    *,
+    sides: int,
+    passes: int,
+    retries: int = DEFAULT_RETRIES,
+    flip: Callable[[str], bool] | None = None,
+    progress: Progress = _quiet,
+) -> Reading:
+    if passes == 1:
+        result = dump(reader, sides=sides, retries=retries, flip=flip, progress=progress)
+        return Reading(result=result, grade=result.grade)
+    report = dump_repeated(
+        reader, sides=sides, passes=passes, retries=retries, flip=flip, progress=progress
+    )
+    return Reading(
+        result=report.passes[0], grade=report.grade, unstable_blocks=report.unstable_blocks
+    )
+
+
 def _confirmation_message(disk: Disk) -> str:
     return (
         f"overwrite the disk in the drive with {disk.side_count} side(s) of new data, "

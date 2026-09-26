@@ -795,7 +795,21 @@ fdstoolkit web
 | `POST /api/hash` | `hash` |
 | `POST /api/grade` | `grade` |
 | `POST /api/reads` | `reads` |
+| `POST /api/boot` | `boot` |
+| `POST /api/provenance` | `provenance` |
+| `POST /api/diff` | `diff` |
+| `POST /api/rebuild` | `rebuild` |
+| `POST /api/set` | `set` |
+| `POST /api/insert` | `insert` |
+| `POST /api/extract` | `extract` |
+| `POST /api/patch` | `patch` |
+| `POST /api/splice` | `splice` |
+| `POST /api/consensus` | `consensus` |
+| `POST /api/save` | `save` |
+| `POST /api/export` | `export` |
+| `POST /api/build` | `build` |
 | `GET /api/status` | `status` |
+| `GET /api/hardware` | FDSStick が接続されているか。各ページの表示に使います |
 | `POST /api/blank` | `blank` |
 | `POST /api/convert` | `convert` |
 | `POST /api/jobs/dump` | `dump` |
@@ -805,7 +819,7 @@ fdstoolkit web
 | `GET /api/jobs/current` | 実行中のディスク操作があれば、その操作 |
 | `GET /api/jobs/{id}` | 1 つの操作の状態、進行状況の行、問いかけ、結果 |
 | `POST /api/jobs/{id}/answer` | 操作の問いかけへの回答 |
-| `POST /api/jobs/{id}/stop` | 読み取り中の 1 回が終わったところで調整を止める |
+| `POST /api/jobs/{id}/stop` | 読み取り中の 1 回が終わったところで調整を止める。表面テストなら次のパターンの前で止める |
 
 イメージとキャプチャは base64 で符号化してリクエストボディに載せます。`GET /docs` は生成された API リファレンスを提供するため、このページはエンドポイントの唯一の利用者ではなく、その 1 つにすぎません。
 
@@ -816,7 +830,7 @@ fdstoolkit web
 端末なら自然に得られるものを、ページが補います。
 
 - `write` と `surface` は、開始前に何が消えるかを示すダイアログを開きます。フォーカスは「キャンセル」に置かれるため、反射的に Enter を押してもディスクは消えません。ダイアログを経ないリクエストは、消去を確認するまで拒否されます。
-- 操作がディスクの裏返しを必要とすると、ページは「ディスクを裏返しました」と「中止」の 2 つのボタンとともに問いかけを表示します。10 分間回答がなければ「いいえ」とみなし、ドライブを解放します。
+- 操作がディスクの裏返しを必要とすると、ページは「ディスクを裏返しました」と「中止」の 2 つのボタンとともに問いかけを表示します。10 分間回答がなければ「いいえ」とみなし、ドライブを解放します。調整と表面テストは、実行中に「中止」ボタンも表示します。表面テストはパターンの書き込み途中では止まらず、次のパターンの前で止まり、終わったパスは報告に残ります。失敗した書き込みや表面テストは、失敗の理由の隣に `before.fds` を示します。
 - 操作の実行中にタブを閉じたり再読み込みしたりすると、先に確認を求めます。タブを閉じてもドライブは止まらないからです。操作の実行中に開いたページは、2 つ目を始めるのではなく、その操作を引き継ぎます。
 - `write` と `surface` は、結果にかかわらず、書き込み前の読み取りを `before.fds` として提供します。
 - 書き込み中に止まった操作は、コマンドと同じく、その面が書きかけの可能性があると伝えます。

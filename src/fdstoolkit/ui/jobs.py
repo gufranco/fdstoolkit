@@ -56,6 +56,7 @@ class Job:
     prompt: str = ""
     result: dict[str, Any] | None = None
     error: str = ""
+    kept: dict[str, Any] | None = None
 
 
 class Controls:
@@ -71,6 +72,9 @@ class Controls:
 
     def stopped(self) -> bool:
         return self._board.stopping(self._job_id)
+
+    def keep(self, file: dict[str, Any]) -> None:
+        self._board.keep(self._job_id, file)
 
 
 class JobBoard:
@@ -144,6 +148,10 @@ class JobBoard:
                 raise NotWaitingError(message)
             self._replies = self._replies | {job_id: yes}
             self._changed.notify_all()
+
+    def keep(self, job_id: str, file: dict[str, Any]) -> None:
+        with self._changed:
+            self._put(replace(self._jobs[job_id], kept=file))
 
     def stop(self, job_id: str) -> None:
         with self._changed:
