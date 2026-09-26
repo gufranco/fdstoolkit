@@ -116,7 +116,13 @@ function download(entry) {
   });
   const row = element('div', { className: 'download-row' });
   row.append(link, element('span', { className: 'download-size', textContent: bytes(entry.size) }));
-  return row;
+  const notes = Array.isArray(entry.notes) ? entry.notes : [];
+  if (!notes.length) {
+    return row;
+  }
+  const box = element('div', { className: 'download-notes' });
+  box.append(row, ...notes.map((note) => banner('warn', note)));
+  return box;
 }
 
 export function scalar(value) {

@@ -8,8 +8,7 @@ from fdstoolkit.ui.shared import (
     UNPROCESSABLE,
     bundle_of,
     decode_payload,
-    encoded,
-    named_file,
+    encoded_file,
     refuse,
 )
 
@@ -20,7 +19,7 @@ def splice_blocks(spec: SpliceSpec) -> FileResult:
     primary, _, _ = decode_payload(spec.data)
     donors = [decode_payload(entry)[0] for entry in spec.donors]
     result = splice(primary, donors)
-    return named_file(spec.name, encoded(result.disk))
+    return encoded_file(spec.name, result.disk)
 
 
 def consensus(spec: ConsensusSpec) -> ReportedFile:
@@ -34,7 +33,7 @@ def consensus(spec: ConsensusSpec) -> ReportedFile:
             return ReportedFile(
                 headline="; ".join(line.strip() for line in rebuilt.lines)
                 or "every block read clean in the captures",
-                file=named_file("consensus.fds", encoded(rebuilt.disk)),
+                file=encoded_file("consensus.fds", rebuilt.disk),
                 rows=rows,
                 ok=not rows,
             )
@@ -57,7 +56,7 @@ def consensus(spec: ConsensusSpec) -> ReportedFile:
     )
     return ReportedFile(
         headline=headline,
-        file=named_file("consensus.fds", encoded(result.disk)),
+        file=encoded_file("consensus.fds", result.disk),
         rows=rows,
         ok=not result.disagreements,
     )

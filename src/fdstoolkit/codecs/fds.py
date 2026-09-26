@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Final
 
+from fdstoolkit.core.blocks import BlockKind, FileHeader
 from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side
 from fdstoolkit.core.parse import parse_side
 
 MAGIC: Final = b"FDS\x1a"
 HEADER_SIZE: Final = 16
+LOST_IN_FDS: Final = frozenset({"FDS012", "FDS016"})
+KEEP_AS_QD: Final = (
+    "a .fds keeps these bytes but not where the block ends, since it carries no checksums; "
+    "write a .qd to keep the boundary"
+)
 SIDE_SIZE: Final = 65500
 
 
@@ -95,6 +102,34 @@ def encode_side(side: Side) -> bytes:
     return content.ljust(target, b"\0")
 
 
+def _lost_lengths(side: Side, index: int) -> list[Diagnostic]:
+    lost: list[Diagnostic] = []
+    declared: int | None = None
+    number = 0
+    for block in side.blocks:
+        if block.kind is BlockKind.FILE_HEADER:
+            header = FileHeader.parse(block.payload)
+            declared, number = header.size, header.number
+        elif block.kind is BlockKind.FILE_DATA and declared is not None:
+            actual = block.size - 1
+            if actual != declared:
+                code = "FDS016" if actual > declared else "FDS012"
+                detail: dict[str, object] = {
+                    "declared": declared,
+                    "actual": actual,
+                    "file": number,
+                }
+                lost.append(_diagnostic(code, Severity.WARNING, side=index, detail=detail))
+    return lost
+
+
+def export_notes(findings: Sequence[Diagnostic]) -> tuple[str, ...]:
+    notes = [finding.render() for finding in findings]
+    if any(finding.code in LOST_IN_FDS for finding in findings):
+        notes.append(KEEP_AS_QD)
+    return tuple(notes)
+
+
 def encode(disk: Disk, *, headered: bool) -> tuple[bytes, tuple[Diagnostic, ...]]:
     if not disk.sides:
         message = "an image needs at least one side"
@@ -105,6 +140,7 @@ def encode(disk: Disk, *, headered: bool) -> tuple[bytes, tuple[Diagnostic, ...]
     if headered:
         out += build_header(disk.side_count)
     for index, side in enumerate(disk.sides):
+        findings.extend(_lost_lengths(side, index))
         encoded = encode_side(side)
         if len(encoded) > SIDE_SIZE:
             findings.append(

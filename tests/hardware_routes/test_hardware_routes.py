@@ -559,3 +559,11 @@ def test_a_calibration_job_with_a_timing_mode_shows_the_timing(
 
     assert any(step.startswith("timing: short") for step in job["steps"])
     assert job["result"]["ok"] is True
+
+
+@pytest.mark.usefixtures("attached")
+def test_a_dump_job_can_save_a_qd(app: FastAPI, client: TestClient) -> None:
+    job = run(app, client, "/api/jobs/dump", {"qd": True})
+
+    assert job["result"]["name"] == "dump.qd"
+    assert job["result"]["size"] % 65536 == 0

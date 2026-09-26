@@ -14,6 +14,7 @@ from fdstoolkit.ui.shared import (
     bytes_of,
     decode_payload,
     encoded,
+    encoded_file,
     named_file,
     refuse,
     rows_of,
@@ -67,13 +68,13 @@ def test_an_image_from_another_system_is_refused() -> None:
 def test_a_disk_encodes_back_to_the_bytes_it_came_from() -> None:
     disk, _, _ = decode_payload(ENCODED)
 
-    assert encoded(disk) == IMAGE
+    assert encoded(disk) == (IMAGE, ())
 
 
 def test_a_headered_encoding_is_longer() -> None:
     disk, _, _ = decode_payload(ENCODED)
 
-    assert len(encoded(disk, headered=True)) > len(IMAGE)
+    assert len(encoded(disk, headered=True)[0]) > len(IMAGE)
 
 
 def test_a_named_file_carries_its_size_and_payload() -> None:
@@ -106,3 +107,13 @@ def test_anything_else_renders_as_a_value() -> None:
 def test_an_empty_rows_result_carries_an_empty_list() -> None:
     assert RowsResult().rows == []
     assert FilesResult().files == []
+
+
+def test_a_qd_file_keeps_the_checksums_and_says_nothing_extra() -> None:
+    disk, _, _ = decode_payload(base64.b64encode(IMAGE).decode("ascii"))
+
+    result = encoded_file("dump.qd", disk)
+
+    assert result.name == "dump.qd"
+    assert result.notes == []
+    assert result.size % 65536 == 0

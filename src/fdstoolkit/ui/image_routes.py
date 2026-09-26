@@ -42,7 +42,7 @@ from fdstoolkit.ui.shared import (
     UNPROCESSABLE,
     bytes_of,
     decode_payload,
-    encoded,
+    encoded_file,
     named_file,
     refuse,
     rows_of,
@@ -64,7 +64,7 @@ def _disk(spec: ImageSpec) -> Disk:
 
 
 def _emit(disk: Disk, name: str, *, headered: bool = False) -> FileResult:
-    return named_file(name, encoded(disk, headered=headered))
+    return encoded_file(name, disk, headered=headered)
 
 
 def diff(spec: DiffSpec) -> DiffResult:

@@ -3,18 +3,20 @@ from __future__ import annotations
 import base64
 import binascii
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, is_dataclass
 from typing import Any, Final, NoReturn
 
 from fastapi import HTTPException
 
-from fdstoolkit.codecs import fds
+from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.captures import Bundle, BundleError, read_zip
 from fdstoolkit.ui.schemas import FileResult
+
+QD_NAME: Final = ".qd"
 
 BAD_REQUEST: Final = 400
 NOT_FOUND: Final = 404
@@ -57,16 +59,27 @@ def bundle_of(payload: str) -> Bundle:
         raise HTTPException(status_code=UNPROCESSABLE, detail=str(error)) from error
 
 
-def encoded(disk: Disk, *, headered: bool = False) -> bytes:
-    data, _ = fds.encode(disk, headered=headered)
-    return data
+def encoded(disk: Disk, *, headered: bool = False) -> tuple[bytes, tuple[str, ...]]:
+    data, findings = fds.encode(disk, headered=headered)
+    return data, fds.export_notes(findings)
 
 
-def named_file(name: str, data: bytes) -> FileResult:
+def encoded_qd(disk: Disk) -> tuple[bytes, tuple[str, ...]]:
+    data, findings = qd.encode(disk, crc_mode=qd.CrcMode.PRESERVE)
+    return data, fds.export_notes(findings)
+
+
+def encoded_file(name: str, disk: Disk, *, headered: bool = False) -> FileResult:
+    data, notes = encoded_qd(disk) if name.endswith(QD_NAME) else encoded(disk, headered=headered)
+    return named_file(name, data, notes)
+
+
+def named_file(name: str, data: bytes, notes: Sequence[str] = ()) -> FileResult:
     return FileResult(
         name=name,
         data=base64.b64encode(data).decode("ascii"),
         size=len(data),
+        notes=list(notes),
     )
 
 

@@ -167,3 +167,39 @@ def test_a_consensus_names_a_block_one_dump_missed(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "missing from 1 dump(s), decided by the others" in result.stdout
     assert len(json.loads(listed.stdout)["missing"]) == 2
+
+
+def long_data_disk() -> Disk:
+    info = Block(kind=BlockKind.DISK_INFO, payload=_payload())
+    amount = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([0x02, 1]))
+    header = Block(
+        kind=BlockKind.FILE_HEADER,
+        payload=bytes([0x03, 0, 0])
+        + b"FILE    "
+        + (0x6000).to_bytes(2, "little")
+        + (1).to_bytes(2, "little")
+        + bytes([0]),
+    )
+    data = Block(kind=BlockKind.FILE_DATA, payload=bytes([0x04]) + bytes(range(1, 101)))
+    return Disk(sides=(Side(blocks=(info, amount, header, data), tail=b"", capacity=65500),))
+
+
+def test_a_consensus_into_fds_says_a_block_boundary_is_lost(tmp_path: Path) -> None:
+    source = _write_qd(tmp_path / "a.qd", long_data_disk())
+
+    result = runner.invoke(
+        app, ["consensus", str(source), str(source), "-o", str(tmp_path / "o.fds")]
+    )
+
+    assert "[FDS016]" in result.stderr
+    assert "write a .qd to keep the boundary" in result.stderr
+
+
+def test_a_consensus_into_qd_keeps_the_boundary_quietly(tmp_path: Path) -> None:
+    source = _write_qd(tmp_path / "a.qd", long_data_disk())
+
+    result = runner.invoke(
+        app, ["consensus", str(source), str(source), "-o", str(tmp_path / "o.qd")]
+    )
+
+    assert "FDS016" not in result.stderr

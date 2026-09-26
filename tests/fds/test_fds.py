@@ -149,3 +149,39 @@ def test_decode_of_an_empty_image_yields_no_sides() -> None:
 
     assert disk.side_count == 0
     assert findings == ()
+
+
+def side_with_data(declared: int, actual: int) -> Disk:
+    info = Block(kind=BlockKind.DISK_INFO, payload=disk_info())
+    amount = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([0x02, 1]))
+    header_block = Block(
+        kind=BlockKind.FILE_HEADER,
+        payload=bytes([0x03, 0, 0])
+        + b"FILE    "
+        + (0x6000).to_bytes(2, "little")
+        + declared.to_bytes(2, "little")
+        + bytes([0]),
+    )
+    data = Block(kind=BlockKind.FILE_DATA, payload=bytes([0x04]) + bytes(actual))
+    return Disk(
+        sides=(Side(blocks=(info, amount, header_block, data), tail=b"", capacity=SIDE_SIZE),)
+    )
+
+
+def test_a_data_block_longer_than_its_header_is_flagged_as_lost_in_fds() -> None:
+    _, findings = encode(side_with_data(declared=1, actual=300), headered=False)
+
+    assert [finding.code for finding in findings] == ["FDS016"]
+    assert findings[0].detail == {"declared": 1, "actual": 300, "file": 0}
+
+
+def test_a_data_block_shorter_than_its_header_is_flagged_as_lost_in_fds() -> None:
+    _, findings = encode(side_with_data(declared=300, actual=100), headered=False)
+
+    assert [finding.code for finding in findings] == ["FDS012"]
+
+
+def test_a_data_block_that_matches_its_header_raises_nothing() -> None:
+    _, findings = encode(side_with_data(declared=100, actual=100), headered=False)
+
+    assert findings == ()

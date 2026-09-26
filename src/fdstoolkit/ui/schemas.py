@@ -121,10 +121,15 @@ class DigestView(BaseModel):
         )
 
 
+def _no_notes() -> list[str]:
+    return []
+
+
 class FileResult(BaseModel):
     name: str
     data: str
     size: int
+    notes: list[str] = Field(default_factory=_no_notes)
 
 
 class HashResult(BaseModel):
@@ -380,6 +385,7 @@ class DumpSpec(BaseModel):
     passes: int = Field(1, ge=1, le=MAX_PASSES)
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
     keep_captures: bool = False
+    qd: bool = False
 
 
 class WriteSpec(BaseModel):

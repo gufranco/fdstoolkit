@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -60,7 +59,7 @@ from fdstoolkit.ui.shared import (
     UNPROCESSABLE,
     bundle_of,
     decode_payload,
-    encoded,
+    encoded_file,
     named_file,
     refuse,
 )
@@ -72,6 +71,7 @@ if TYPE_CHECKING:
 
 BACKUP_NAME = "before.fds"
 DUMP_NAME = "dump.fds"
+DUMP_QD_NAME = "dump.qd"
 CAPTURES_NAME = "dump.captures.zip"
 
 
@@ -182,19 +182,18 @@ def dump_job(spec: DumpSpec, request: Request) -> JobView:
         ]
         for line in report:
             controls.step(line)
-        body = encoded(outcome.result.as_disk())
+        name = DUMP_QD_NAME if spec.qd else DUMP_NAME
+        image = encoded_file(name, outcome.result.as_disk())
         kept = (
             named_file(
                 CAPTURES_NAME,
-                bundle_zip(drive.captures, image=DUMP_NAME, created=created_now()),
+                bundle_zip(drive.captures, image=name, created=created_now()),
             )
             if spec.keep_captures and drive.captures
             else None
         )
         return DumpedResult(
-            name=DUMP_NAME,
-            data=base64.b64encode(body).decode("ascii"),
-            size=len(body),
+            **image.model_dump(),
             grade=str(reading.settled(outcome.result, changed=bool(outcome.recovered))),
             captures=kept,
         )

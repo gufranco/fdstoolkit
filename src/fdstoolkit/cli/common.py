@@ -90,9 +90,11 @@ def decode_image(path: Path) -> tuple[Disk, tuple[Diagnostic, ...], bytes, Conta
 
 def encode_image(disk: Disk, container: Container) -> bytes:
     if container is Container.QD:
-        data, _ = qd.encode(disk, crc_mode=qd.CrcMode.PRESERVE)
-        return data
-    data, _ = fds.encode(disk, headered=False)
+        data, findings = qd.encode(disk, crc_mode=qd.CrcMode.PRESERVE)
+    else:
+        data, findings = fds.encode(disk, headered=False)
+    for note in fds.export_notes(findings):
+        typer.echo(f"  {note}", err=True)
     return data
 
 

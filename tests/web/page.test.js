@@ -607,6 +607,15 @@ describe('the rest of the result layouts', () => {
     expect(target.querySelector('.change-values').textContent).toContain('A');
   });
 
+  it('shows the notes an export carries next to its file', () => {
+    const target = document.createElement('div');
+
+    renderResult(target, { name: 'dump.fds', data: 'AQ==', size: 1, notes: ['[FDS016] lost'] });
+
+    expect(target.querySelector('.download').getAttribute('download')).toBe('dump.fds');
+    expect(target.querySelector('.download-notes .banner.warn').textContent).toBe('[FDS016] lost');
+  });
+
   it('lays out a list that mixes values and records as pairs', () => {
     const target = document.createElement('div');
 

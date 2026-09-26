@@ -212,3 +212,19 @@ def test_decode_keeps_the_declared_size_of_a_damaged_data_block() -> None:
 
     assert len(disk.sides[0].blocks[3].payload) == len(payloads[3])
     assert "FDS016" not in [finding.code for finding in findings]
+
+
+def test_decode_reads_a_data_block_shorter_than_its_header_declares() -> None:
+    payloads = blocks(files=2)
+    header = bytearray(payloads[2])
+    header[0x0D:0x0F] = (200).to_bytes(2, "little")
+    payloads[2] = bytes(header)
+    out = bytearray()
+    for payload in payloads:
+        out += payload + encode_crc(block_crc(payload))
+
+    disk, findings = decode(bytes(out).ljust(SIDE_SIZE, bytes(1)))
+
+    assert disk.sides[0].blocks[3].payload == payloads[3]
+    assert len(disk.sides[0].blocks) == 6
+    assert "FDS012" in [finding.code for finding in findings]

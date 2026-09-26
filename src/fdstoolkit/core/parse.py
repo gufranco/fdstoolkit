@@ -80,13 +80,13 @@ def _ends_a_block(data: bytes, end: int) -> bool:
     return not rest.strip(b"\0") or rest[0] == BlockKind.FILE_HEADER
 
 
-def _longer_data(data: bytes, offset: int, declared: int) -> int | None:
+def _other_length(data: bytes, offset: int, declared: int) -> int | None:
     block = data[offset:]
-    return crc_boundary(
-        block,
-        range(declared + 1, len(block) - CRC_SIZE + 1),
-        lambda size: _ends_a_block(block, size + CRC_SIZE),
-    )
+
+    def ends(size: int) -> bool:
+        return size != declared and _ends_a_block(block, size + CRC_SIZE)
+
+    return crc_boundary(block, range(2, len(block) - CRC_SIZE + 1), ends)
 
 
 def _true_length(walk: _Walk, data: bytes, offset: int, length: int, side_index: int) -> int:
@@ -94,19 +94,19 @@ def _true_length(walk: _Walk, data: bytes, offset: int, length: int, side_index:
     stored = decode_crc(data[offset + length : offset + length + CRC_SIZE])
     if walk.expected is not BlockKind.FILE_DATA or stored == block_crc(payload):
         return length
-    longer = _longer_data(data, offset, length)
-    if longer is None:
+    found = _other_length(data, offset, length)
+    if found is None:
         return length
     walk.findings.append(
         _diagnostic(
-            "FDS016",
+            "FDS016" if found > length else "FDS012",
             Severity.WARNING,
             side_index,
             offset,
-            {"declared": length - 1, "actual": longer - 1},
+            {"declared": length - 1, "actual": found - 1},
         )
     )
-    return longer
+    return found
 
 
 def _walk(data: bytes, *, has_crc: bool, side_index: int) -> _Walk:
