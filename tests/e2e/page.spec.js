@@ -101,7 +101,7 @@ test('a two-sided write asks for one turn and offers the backup', async ({ page,
 
   await prompt.getByRole('button', { name: TURNED }).click();
 
-  await expect(page.locator('#panel .output .banner')).toHaveText('the disk reads back as written, on this drive');
+  await expect(page.locator('#panel .output .banner')).toHaveText('the disk reads back as written, on this drive, grade clean');
   await expect(page.getByRole('link', { name: 'Download before.fds' })).toBeVisible();
   expect(await nothingRunning(request)).toBe(true);
 });
@@ -213,7 +213,7 @@ test('the calibration disk is written only after the trusted drive is confirmed'
   await expect(page.locator('#panel .steps li').first()).toContainText('Write this disk only on a drive you already trust');
   await prompt.getByRole('button', { name: TURNED }).click();
 
-  await expect(page.locator('#panel .output .banner')).toHaveText('the disk reads back as written, on this drive');
+  await expect(page.locator('#panel .output .banner')).toHaveText('the disk reads back as written, on this drive, grade clean');
   expect(await shortControls(page, '#panel')).toEqual([]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
