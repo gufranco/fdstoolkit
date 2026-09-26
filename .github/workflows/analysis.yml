@@ -19,7 +19,7 @@ concurrency:
 jobs:
   codeql:
     name: CodeQL
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read
@@ -38,7 +38,7 @@ jobs:
 
   scorecard:
     name: Scorecard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name != 'pull_request'
     permissions:
       contents: read

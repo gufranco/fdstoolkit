@@ -15,7 +15,7 @@ concurrency:
 jobs:
   lint:
     name: Lint and format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -59,7 +59,7 @@ jobs:
 
   browser:
     name: The page in a browser
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -92,7 +92,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
         python: ["3.12", "3.13"]
         include:
           - os: ubuntu-24.04-arm
@@ -112,7 +112,7 @@ jobs:
 
   determinism:
     name: Determinism under a different environment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
@@ -132,7 +132,7 @@ jobs:
 
   distribution:
     name: What a clone actually carries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
