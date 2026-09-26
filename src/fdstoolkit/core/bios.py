@@ -13,6 +13,9 @@ from fdstoolkit.edit.files import ExtractedFile, extract_files
 APPROVAL_ADDRESS: Final = 0x2800
 APPROVAL_LENGTH: Final = 224
 
+BLOCK_EXPECTED: Final = 0x21
+CRC_FAILED: Final = 0x27
+
 BIOS_ERRORS: Final[Mapping[int, str]] = {
     0x01: "disk set",
     0x02: "battery",

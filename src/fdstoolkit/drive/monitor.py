@@ -16,8 +16,8 @@ from fdstoolkit.codecs.raw import (
     encode_era_b,
     unpack_raw03,
 )
-from fdstoolkit.core.bios import BIOS_ERRORS
-from fdstoolkit.core.blocks import BLOCKS_PER_FILE, Block, BlockKind, declared_blocks
+from fdstoolkit.core.bios import BIOS_ERRORS, BLOCK_EXPECTED, CRC_FAILED
+from fdstoolkit.core.blocks import Block, BlockKind, declared_blocks, expected_kind
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Side
 from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
@@ -29,8 +29,6 @@ MAX_READS: Final = 200
 DEFAULT_READS: Final = 20
 BIAS_PULSES: Final = 16
 BIAS_SHARE: Final = 0.75
-BLOCK_EXPECTED: Final = 0x21
-CRC_FAILED: Final = 0x27
 
 RECOGNISED: Final = (
     "this is the fdstoolkit calibration disk, side {side}: every pulse is compared with "
@@ -261,10 +259,6 @@ def _declared_blocks(decoded: Sequence[Block]) -> int:
     return 0
 
 
-def _file_block_kind(index: int) -> BlockKind:
-    return BlockKind.FILE_HEADER if index % BLOCKS_PER_FILE == 0 else BlockKind.FILE_DATA
-
-
 def sample(
     packed: bytes,
     reference: Side | None = None,
@@ -294,9 +288,7 @@ def measure(
             referenced=compared > 0,
             found=(True,) * len(decoded) + (False,) * unread if unread else (),
             kinds=tuple(block.kind for block in decoded)
-            + tuple(
-                _file_block_kind(index) for index in range(len(decoded), len(decoded) + unread)
-            ),
+            + tuple(expected_kind(index) for index in range(len(decoded), len(decoded) + unread)),
         )
 
     starts = block_starts(values)

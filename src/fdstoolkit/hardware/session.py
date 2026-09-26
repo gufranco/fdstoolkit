@@ -7,8 +7,9 @@ from typing import Final
 
 from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
 from fdstoolkit.codecs import fds
+from fdstoolkit.core.bios import BIOS_ERRORS, BLOCK_EXPECTED, CRC_FAILED
 from fdstoolkit.core.bitstream import emulated_side_size
-from fdstoolkit.core.blocks import Block, BlockKind, declared_blocks
+from fdstoolkit.core.blocks import Block, BlockKind, declared_blocks, expected_kind
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side, require_readable_sides
 from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
 from fdstoolkit.hardware.ports import (
@@ -148,7 +149,23 @@ class SideDump:
         note = self.side_note
         if note:
             found.append(note)
+        error = self.console_error
+        if error is not None:
+            found.append(
+                f"side {self.index}: a console stops this side with error {error:02X}, "
+                f"{BIOS_ERRORS[error]}"
+            )
         return tuple(found)
+
+    @property
+    def console_error(self) -> int | None:
+        if not self.blocks:
+            return BLOCK_EXPECTED + BlockKind.DISK_INFO
+        if self.failed_blocks:
+            return CRC_FAILED
+        if self.missing_blocks:
+            return BLOCK_EXPECTED + expected_kind(len(self.blocks))
+        return None
 
     @property
     def side_note(self) -> str:

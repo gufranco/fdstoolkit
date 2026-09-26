@@ -98,6 +98,7 @@ def test_a_side_that_never_reads_its_declared_files_fails() -> None:
     assert result.sides[0].missing_blocks == missing
     assert result.sides[0].lines == (
         f"side 0: {missing} block(s) the side declares were never found, after block 2",
+        "side 0: a console stops this side with error 25, block 4 expected",
     )
 
 
@@ -660,6 +661,7 @@ def test_two_unreadable_sides_are_failed_reads_rather_than_an_unturned_disk() ->
 
     assert drive.turns == 1
     assert [side.grade for side in result.sides] == [Grade.FAILED, Grade.FAILED]
+    assert result.sides[0].console_error == 0x22
 
 
 def test_a_single_face_drive_reads_one_side_without_being_asked() -> None:
@@ -744,3 +746,29 @@ def test_a_write_names_a_side_whose_disk_information_names_the_other_side() -> N
     )
 
     assert any("its disk information says side B" in step for step in steps)
+
+
+def test_a_side_with_a_failed_block_names_the_console_error() -> None:
+    drive = SimulatedDrive(disk_with_files(), plan=FaultPlan(bad_crc_blocks=frozenset({3})))
+
+    result = dump(drive, sides=1, retries=0)
+
+    assert result.sides[0].console_error == 0x27
+    assert "side 0: a console stops this side with error 27, block failed CRC" in (
+        result.sides[0].lines
+    )
+
+
+def test_a_side_that_stops_early_names_the_block_the_console_expected() -> None:
+    drive = ShortFirstReadDrive(disk_with_files(), kept=3)
+
+    result = dump(drive, sides=1, retries=0)
+
+    assert result.sides[0].console_error == 0x25
+
+
+def test_a_clean_side_names_no_console_error() -> None:
+    result = dump(SimulatedDrive(disk_with_files()), sides=1)
+
+    assert result.sides[0].console_error is None
+    assert result.sides[0].lines == ()

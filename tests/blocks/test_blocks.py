@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus, FileHeader, FileKind
+from fdstoolkit.core.blocks import (
+    Block,
+    BlockKind,
+    CrcStatus,
+    FileHeader,
+    FileKind,
+    expected_kind,
+)
 from fdstoolkit.core.crc import block_crc
 
 
@@ -133,3 +140,16 @@ def test_disk_info_block_accepts_the_canonical_payload() -> None:
     block = Block(kind=BlockKind.DISK_INFO, payload=disk_info_payload())
 
     assert block.size == 56
+
+
+def test_the_expected_kind_follows_the_order_a_side_is_written_in() -> None:
+    kinds = [expected_kind(index) for index in range(6)]
+
+    assert kinds == [
+        BlockKind.DISK_INFO,
+        BlockKind.FILE_AMOUNT,
+        BlockKind.FILE_HEADER,
+        BlockKind.FILE_DATA,
+        BlockKind.FILE_HEADER,
+        BlockKind.FILE_DATA,
+    ]

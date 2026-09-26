@@ -31,6 +31,12 @@ class BlockKind(IntEnum):
     FILE_DATA = 4
 
 
+def expected_kind(index: int) -> BlockKind:
+    if index < HEAD_BLOCKS:
+        return BlockKind(index + 1)
+    return BlockKind.FILE_HEADER if index % BLOCKS_PER_FILE == 0 else BlockKind.FILE_DATA
+
+
 class CrcStatus(StrEnum):
     ABSENT = "absent"
     VALID = "valid"
