@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from fdstoolkit.codecs.raw import block_regions, decode_raw03, unpack_raw03
+from fdstoolkit.codecs.raw import block_regions, decode_raw03, unpack_detected
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.align import good_block
@@ -178,7 +178,7 @@ def _repair(working: Read, slot: int, reads: Sequence[Read]) -> Repair | None:
 
 
 def vote_side(captures: Sequence[bytes]) -> VoteResult:
-    reads = [parse_read(unpack_raw03(packed)) for packed in captures]
+    reads = [parse_read(unpack_detected(packed)) for packed in captures]
     working = max(reads, key=lambda read: len(read.blocks), default=None)
     if working is None or not working.blocks:
         empty = Side(blocks=(), tail=b"", capacity=0)

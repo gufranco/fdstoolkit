@@ -7,9 +7,8 @@ from typing import Final, Protocol, cast, runtime_checkable
 
 from fdstoolkit.codecs.raw import (
     WRITE_GAP_BYTE,
-    decode_raw03,
+    decode_packed,
     encode_write_stream,
-    unpack_raw03,
 )
 from fdstoolkit.drive.captures import Capture
 from fdstoolkit.drive.pulse import PulseFinding, findings_of
@@ -182,8 +181,7 @@ class FdsStick:
         packed = self.read_raw_side(what=f"reading side {side}")
         read = sum(1 for capture in self._captures if capture.side == side) + 1
         self._captures.append(Capture(side=side, read=read, data=packed))
-        values = unpack_raw03(packed)
-        decoded, found = decode_raw03(values)
+        decoded, found = decode_packed(packed)
         self._pulse.extend(findings_of(side, read, found))
         for index, block in enumerate(decoded.blocks):
             yield BlockRead(

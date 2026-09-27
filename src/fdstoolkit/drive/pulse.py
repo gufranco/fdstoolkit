@@ -5,11 +5,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Final
 
-from fdstoolkit.codecs.raw import decode_raw03, unpack_raw03
+from fdstoolkit.codecs.raw import decode_packed
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.drive.captures import Capture
 
-PULSE_CODES: Final = frozenset({"FDS004", "FDS015", "FDS016", "FDS017"})
+PULSE_CODES: Final = frozenset({"FDS004", "FDS015", "FDS016", "FDS017", "FDS019"})
 
 Key = tuple[int, str, object]
 
@@ -37,9 +37,7 @@ def captured_findings(captures: Sequence[Capture]) -> tuple[PulseFinding, ...]:
     return tuple(
         item
         for capture in captures
-        for item in findings_of(
-            capture.side, capture.read, decode_raw03(unpack_raw03(capture.data))[1]
-        )
+        for item in findings_of(capture.side, capture.read, decode_packed(capture.data)[1])
     )
 
 

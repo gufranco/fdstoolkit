@@ -85,3 +85,19 @@ def test_a_finding_without_a_block_names_nothing_after_it() -> None:
     lines = pulse_lines(findings_of(0, 1, [lost]), captures)
 
     assert lines == (f"side 0: [FDS015] {CODES['FDS015']}",)
+
+
+def low_first(values: bytes) -> bytes:
+    padded = values + bytes(-len(values) % 4)
+    return bytes(
+        padded[index] | padded[index + 1] << 2 | padded[index + 2] << 4 | padded[index + 3] << 6
+        for index in range(0, len(padded), 4)
+    )
+
+
+def test_a_capture_packed_low_bits_first_names_its_order() -> None:
+    captures = [Capture(side=0, read=1, data=low_first(side_values()))]
+
+    lines = pulse_lines(captured_findings(captures), captures)
+
+    assert lines == (f"side 0: [FDS019] {CODES['FDS019']}",)

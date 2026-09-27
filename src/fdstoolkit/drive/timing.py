@@ -9,10 +9,10 @@ from typing import Final, Protocol
 
 from fdstoolkit.codecs.raw import (
     NOMINAL_SHORT,
+    decode_packed,
     decode_raw03,
     pack_raw03,
     quantise,
-    unpack_raw03,
 )
 from fdstoolkit.drive.align import good_block
 from fdstoolkit.drive.vote import Key, keyed
@@ -207,7 +207,7 @@ class Probe:
 
 
 def _clean(packed: bytes) -> dict[Key, bytes]:
-    side, _ = decode_raw03(unpack_raw03(packed))
+    side, _ = decode_packed(packed)
     return {
         key: block.payload
         for key, block in zip(keyed(side.blocks), side.blocks, strict=True)

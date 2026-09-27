@@ -16,7 +16,7 @@ from fdstoolkit.codecs.raw import (
     decode_raw03,
     encode_era_b,
     lead_in_bits,
-    unpack_raw03,
+    unpack_detected,
 )
 from fdstoolkit.core.bios import BIOS_ERRORS, BLOCK_EXPECTED, CRC_FAILED
 from fdstoolkit.core.blocks import Block, BlockKind, declared_blocks, expected_kind
@@ -285,7 +285,7 @@ def sample(
     reference: Side | None = None,
     learned: Mapping[Key, bytes] | None = None,
 ) -> SideSample:
-    values = unpack_raw03(packed)
+    values = unpack_detected(packed)
     decoded, _ = decode_raw03(values)
     return measure(values, decoded.blocks, reference, learned or {})
 
@@ -487,7 +487,7 @@ def calibrate(
             packed = reader.read_raw_side(what=f"calibration read {number}")
         except KeyboardInterrupt:
             break
-        values = unpack_raw03(packed)
+        values = unpack_detected(packed)
         decoded, _ = decode_raw03(values)
         if known is None:
             known = matching_side(decoded.blocks)

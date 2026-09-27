@@ -20,6 +20,7 @@ from fdstoolkit.codecs.raw import (
     SHORT_LIMIT,
     SHORTEST_GAP_BITS,
     SYNC_MARK,
+    PackOrder,
     RawEncoding,
     block_regions,
     block_starts,
@@ -29,8 +30,10 @@ from fdstoolkit.codecs.raw import (
     encode_era_b,
     encode_raw03,
     lead_in_bits,
+    pack_order,
     pack_raw03,
     quantise,
+    unpack_detected,
     unpack_raw03,
 )
 from fdstoolkit.core.crc import block_crc, encode_crc
@@ -424,3 +427,44 @@ def test_the_lead_in_counts_the_gap_right_before_the_first_sync() -> None:
     stream = bytes([2, 1]) + bytes([GAP_VALUE]) * MIN_GAP_VALUES + bytes([1, 2])
 
     assert lead_in_bits(stream) == MIN_GAP_VALUES
+
+
+def packed_low_first(values: bytes) -> bytes:
+    padded = values + bytes(-len(values) % 4)
+    return bytes(
+        padded[index] | padded[index + 1] << 2 | padded[index + 2] << 4 | padded[index + 3] << 6
+        for index in range(0, len(padded), 4)
+    )
+
+
+def calibration_values() -> bytes:
+    return unpack_raw03(encode_raw03(sample_disk(files=2), side=0, encoding=RawEncoding.ERA_B))
+
+
+def test_a_capture_packed_low_bits_first_is_recognised() -> None:
+    packed = packed_low_first(calibration_values())
+
+    order = pack_order(packed)
+
+    assert order is PackOrder.LOW_FIRST
+
+
+def test_a_capture_packed_low_bits_first_decodes_whole() -> None:
+    values = calibration_values()
+
+    side, _ = decode_raw03(unpack_detected(packed_low_first(values)))
+
+    assert [block.payload for block in side.blocks] == [
+        block.payload for block in decode_raw03(values)[0].blocks
+    ]
+
+
+def test_a_capture_in_the_device_order_keeps_it() -> None:
+    packed = pack_raw03(calibration_values())
+
+    assert pack_order(packed) is PackOrder.HIGH_FIRST
+    assert unpack_detected(packed) == unpack_raw03(packed)
+
+
+def test_a_capture_neither_order_decodes_keeps_the_device_order() -> None:
+    assert pack_order(bytes([0x1B]) * 4096) is PackOrder.HIGH_FIRST

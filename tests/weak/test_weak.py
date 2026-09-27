@@ -133,3 +133,22 @@ def test_one_extra_pulse_counts_once_rather_than_shifting_the_block() -> None:
     assert found[0].block == DATA_BLOCK
     assert found[0].reads == 3
     assert found[0].unstable <= 2
+
+
+def repacked_low_first(packed: bytes) -> bytes:
+    values = unpack_raw03(packed)
+    return bytes(
+        values[index] | values[index + 1] << 2 | values[index + 2] << 4 | values[index + 3] << 6
+        for index in range(0, len(values), 4)
+    )
+
+
+def test_reads_packed_low_bits_first_map_the_same_weak_blocks() -> None:
+    side = reference_side()
+    clean = pack_raw03(bytes(clean_values(side)))
+    reads = [clean, with_invalid_pulse(side, DATA_BLOCK), clean]
+
+    found = weak_blocks([repacked_low_first(read) for read in reads])
+
+    assert found == weak_blocks(reads)
+    assert [entry.block for entry in found] == [DATA_BLOCK]

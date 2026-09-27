@@ -18,6 +18,8 @@ from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
 from fdstoolkit.core.disk import Disk, Side
 
 VALUES_PER_BYTE: Final = 4
+LOW_FIRST_SHIFTS: Final = (0, 2, 4, 6)
+ORDER_PROBE_BYTES: Final = 16384
 MAX_CLASS: Final = 3
 GAP_VALUE: Final = 0
 SYNC_VALUE: Final = 1
@@ -96,6 +98,40 @@ def quantise(counts: bytes, scale: float = 1.0) -> bytes:
         else:
             out.append(MAX_CLASS)
     return bytes(out)
+
+
+class PackOrder(StrEnum):
+    HIGH_FIRST = "high bits first"
+    LOW_FIRST = "low bits first"
+
+
+def _unpack_low_first(packed: bytes) -> bytes:
+    return bytes(byte >> shift & 0x03 for byte in packed for shift in LOW_FIRST_SHIFTS)
+
+
+def unpack_in(packed: bytes, order: PackOrder) -> bytes:
+    return unpack_raw03(packed) if order is PackOrder.HIGH_FIRST else _unpack_low_first(packed)
+
+
+def pack_order(packed: bytes) -> PackOrder:
+    probe = packed[:ORDER_PROBE_BYTES]
+    for order in (PackOrder.HIGH_FIRST, PackOrder.LOW_FIRST):
+        side, _ = decode_raw03(unpack_in(probe, order))
+        if any(block.stored_crc == block.computed_crc for block in side.blocks):
+            return order
+    return PackOrder.HIGH_FIRST
+
+
+def unpack_detected(packed: bytes) -> bytes:
+    return unpack_in(packed, pack_order(packed))
+
+
+def decode_packed(packed: bytes) -> tuple[Side, tuple[Diagnostic, ...]]:
+    order = pack_order(packed)
+    side, findings = decode_raw03(unpack_in(packed, order))
+    if order is PackOrder.HIGH_FIRST:
+        return side, findings
+    return side, (*findings, _diagnostic("FDS019", Severity.INFO, {"order": order.value}))
 
 
 def unpack_raw03(packed: bytes) -> bytes:

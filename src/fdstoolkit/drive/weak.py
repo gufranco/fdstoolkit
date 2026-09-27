@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from fdstoolkit.codecs.raw import MAX_CLASS, unpack_raw03
+from fdstoolkit.codecs.raw import MAX_CLASS, unpack_detected
 from fdstoolkit.core.blocks import BlockKind
 from fdstoolkit.drive.captures import Bundle
 from fdstoolkit.drive.vote import (
@@ -75,7 +75,7 @@ def _weak(base: Read, slot: int, reads: Sequence[Read]) -> WeakBlock:
 
 
 def weak_blocks(captures: Sequence[bytes]) -> tuple[WeakBlock, ...]:
-    reads = [parse_read(unpack_raw03(packed)) for packed in captures]
+    reads = [parse_read(unpack_detected(packed)) for packed in captures]
     if not reads:
         return ()
     base = max(reads, key=lambda read: len(read.blocks))
