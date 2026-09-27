@@ -31,6 +31,7 @@ from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.quality.reads import compare_reads
 from fdstoolkit.ui import analysis_routes, hardware_routes, image_routes
+from fdstoolkit.ui.body_limit import BodyLimit
 from fdstoolkit.ui.forms import FAMILY_ORDER, forms
 from fdstoolkit.ui.jobs import JobBoard
 from fdstoolkit.ui.schemas import (
@@ -330,25 +331,6 @@ SERVER_FAULT: Final = 500
 logger = logging.getLogger("uvicorn.error")
 
 MAX_BODY_BYTES: Final = 64 * 1024 * 1024
-TOO_LARGE: Final = 413
-
-
-async def _reject_oversized(
-    request: Request,
-    call_next: Callable[[Request], Awaitable[Response]],
-) -> Response:
-    declared = request.headers.get("content-length")
-    if declared is not None and declared.isdigit() and int(declared) > MAX_BODY_BYTES:
-        return JSONResponse(
-            status_code=TOO_LARGE,
-            content={
-                "detail": (
-                    f"the request carries {int(declared)} bytes, and this server accepts "
-                    f"{MAX_BODY_BYTES} at most. A two-side disk image is about 131,000 bytes"
-                )
-            },
-        )
-    return await call_next(request)
 
 
 async def _label_asset_lifetime(
@@ -382,7 +364,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(Exception, _report_fault)
     app.state.jobs = JobBoard()
     app.middleware("http")(_label_asset_lifetime)
-    app.middleware("http")(_reject_oversized)
+    app.add_middleware(BodyLimit, limit=MAX_BODY_BYTES)
     _register_core(app)
     _register_image(app)
     _register_analysis(app)

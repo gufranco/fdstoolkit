@@ -16,9 +16,9 @@ from fdstoolkit.identify.hashes import digests_of
 from fdstoolkit.ui.app import (
     DEVICE_CHECK,
     MAX_BODY_BYTES,
-    TOO_LARGE,
     create_app,
 )
+from fdstoolkit.ui.body_limit import TOO_LARGE
 from fdstoolkit.ui.forms import forms, opens_a_drive
 
 OK = 200
