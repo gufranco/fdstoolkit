@@ -177,13 +177,27 @@ def _member(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
         raise BundleError(message) from error
 
 
-def read_zip(data: bytes) -> Bundle:
+def _archive(data: bytes) -> zipfile.ZipFile:
     try:
-        archive = zipfile.ZipFile(io.BytesIO(data))
+        return zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as error:
         message = "the capture bundle is not a zip archive"
         raise BundleError(message) from error
-    with archive:
+
+
+def zip_names(data: bytes) -> tuple[str, ...]:
+    with _archive(data) as archive:
+        return tuple(info.filename for info in archive.infolist() if not info.is_dir())
+
+
+def zip_files(data: bytes, names: Sequence[str], *, limit: int) -> dict[str, bytes]:
+    with _archive(data) as archive:
+        members = {name: _member(archive, name, limit) for name in names}
+    return {name: member for name, member in members.items() if member is not None}
+
+
+def read_zip(data: bytes) -> Bundle:
+    with _archive(data) as archive:
         manifest = _member(archive, MANIFEST, MAX_MANIFEST_BYTES)
         names = [str(entry.get("file", "")) for entry in _listed(manifest)]
         members = {name: _member(archive, name, MAX_CAPTURE_BYTES) for name in names}

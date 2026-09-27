@@ -13,7 +13,8 @@ from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.drive.captures import Bundle, BundleError, read_zip
+from fdstoolkit.drive.captures import Bundle, BundleError
+from fdstoolkit.drive.imported import bundle_from_bytes
 from fdstoolkit.ui.schemas import FileResult
 
 QD_NAME: Final = ".qd"
@@ -54,7 +55,7 @@ def decode_payload(payload: str) -> tuple[Disk, bytes, tuple[Diagnostic, ...]]:
 
 def bundle_of(payload: str) -> Bundle:
     try:
-        return read_zip(bytes_of(payload))
+        return bundle_from_bytes(bytes_of(payload))
     except BundleError as error:
         raise HTTPException(status_code=UNPROCESSABLE, detail=str(error)) from error
 

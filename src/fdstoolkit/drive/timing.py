@@ -87,6 +87,10 @@ def _scale(counts: bytes) -> float:
     return nominal / NOMINAL_SHORT if nominal else 1.0
 
 
+def classes_of(counts: bytes) -> bytes:
+    return quantise(counts, _scale(counts))
+
+
 def classify(data: bytes) -> Nature:
     if not data:
         return Nature.NOTHING
@@ -274,4 +278,4 @@ class TimingReader:
         timing = measure_timing(data)
         self.timings.append(timing)
         self.note(timing.render())
-        return pack_raw03(quantise(data, _scale(data)))
+        return pack_raw03(classes_of(data))

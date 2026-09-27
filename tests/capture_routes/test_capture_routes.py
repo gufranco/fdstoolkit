@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import io
+import zipfile
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -10,6 +12,8 @@ from capture_fixture import (
     IMAGE,
     disk_with_a_file,
     image_of,
+    loopy_raw,
+    qdc_raw,
     short_gapped,
     zipped,
 )
@@ -133,7 +137,7 @@ def test_consensus_refuses_captures_that_are_not_a_bundle(client: TestClient) ->
     answer = client.post("/api/consensus", json={"captures": b64(b"not a zip")})
 
     assert answer.status_code == UNPROCESSABLE
-    assert "not a zip archive" in answer.json()["detail"]
+    assert "is neither a capture bundle, a zip holding manifest.json" in answer.json()["detail"]
 
 
 def test_consensus_of_a_single_dump_is_refused_rather_than_crashing(client: TestClient) -> None:
@@ -237,3 +241,15 @@ def test_grade_refuses_uploaded_captures_of_another_disk(client: TestClient) -> 
 
     assert answer.status_code == UNPROCESSABLE
     assert "the captures are of another disk" in answer.json()["detail"]
+
+
+def test_reads_accepts_an_uploaded_zip_of_raw_timing_files(client: TestClient) -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("game-A.raw", loopy_raw())
+        archive.writestr("game2-A.raw", qdc_raw())
+
+    body = client.post("/api/reads", json={"captures": b64(buffer.getvalue())}).json()
+
+    assert body["reads"] == 2
+    assert body["weak"] == []

@@ -4,8 +4,15 @@ import hashlib
 from typing import Final
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs import fds
-from fdstoolkit.codecs.raw import block_regions, encode_block_stream, pack_raw03, unpack_raw03
+from fdstoolkit.codecs.raw import (
+    block_regions,
+    encode_block_stream,
+    encode_raw03,
+    pack_raw03,
+    unpack_raw03,
+)
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.captures import Capture, bundle_zip
@@ -63,3 +70,29 @@ def short_gapped(disk: Disk, read: int) -> Capture:
     regions = block_regions(values)
     cut = values[: regions[0][1]] + bytes(SHORT_GAP) + values[regions[1][0] :]
     return Capture(side=0, read=read, data=pack_raw03(cut + bytes(TRAILING_GAP)))
+
+
+LOOPY_COUNTS = (62, 93, 124)
+QDC_COUNTS = (26, 39, 52)
+JITTER = 2
+
+
+def side_values(side: int = 0) -> bytes:
+    return unpack_raw03(encode_raw03(calibration_disk(2), side=side)) + bytes(TRAILING_GAP)
+
+
+def jittered(values: bytes, nominal: tuple[int, int, int]) -> list[int]:
+    noise = hashlib.shake_256(b"imported").digest(len(values))
+    return [
+        nominal[value] + offset % (2 * JITTER + 1) - JITTER
+        for value, offset in zip(values, noise, strict=True)
+    ]
+
+
+def loopy_raw(side: int = 0) -> bytes:
+    return bytes(jittered(side_values(side), LOOPY_COUNTS))
+
+
+def qdc_raw(side: int = 0) -> bytes:
+    body = bytes(jittered(side_values(side), QDC_COUNTS))
+    return bytes([0, 0, 0, 0]) + body + bytes([0, 0, 0, 0xFF])

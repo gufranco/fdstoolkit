@@ -10,6 +10,8 @@ from capture_fixture import (
     captures_of,
     disk_with_a_file,
     image_of,
+    loopy_raw,
+    qdc_raw,
     short_gapped,
 )
 from typer.testing import CliRunner
@@ -97,7 +99,7 @@ def test_consensus_refuses_a_bundle_that_does_not_load(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 1
-    assert "no manifest.json" in result.output
+    assert "there is no manifest.json and no capture file to import" in result.output
 
 
 def test_reads_maps_the_weak_blocks_in_saved_captures(tmp_path: Path) -> None:
@@ -210,3 +212,15 @@ def test_grade_names_a_short_gap_every_saved_read_shows(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "side 0: [FDS017] gap before this block is shorter" in result.stdout
+
+
+def test_reads_accepts_a_directory_of_raw_timing_files(tmp_path: Path) -> None:
+    directory = tmp_path / "raw"
+    directory.mkdir()
+    (directory / "game-A.raw").write_bytes(loopy_raw())
+    (directory / "game2-A.raw").write_bytes(qdc_raw())
+
+    result = runner.invoke(app, ["reads", "--captures", str(directory), "--json"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["reads"] == 2

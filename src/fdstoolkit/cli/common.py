@@ -12,7 +12,8 @@ from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.drive.captures import Bundle, BundleError, load_bundle
+from fdstoolkit.drive.captures import Bundle, BundleError
+from fdstoolkit.drive.imported import bundle_from_path
 
 FDS_SUFFIX: Final = ".fds"
 QD_SUFFIX: Final = ".qd"
@@ -144,6 +145,6 @@ def side_summary(index: int, side: Side) -> dict[str, object]:
 
 def load_captures(path: Path) -> Bundle:
     try:
-        return load_bundle(path)
+        return bundle_from_path(path)
     except BundleError as error:
         raise fail(str(error)) from error
