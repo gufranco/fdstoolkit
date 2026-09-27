@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
@@ -17,7 +18,7 @@ from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.ui.app import create_app
-from fdstoolkit.ui.jobs import JobBoard, JobBusyError, JobState
+from fdstoolkit.ui.jobs import Controls, JobState
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -400,20 +401,34 @@ def test_the_running_job_is_reported_as_current(
     assert client.get("/api/jobs/current").json() == {"job": None}
 
 
-def test_a_job_that_loses_the_race_for_the_drive_closes_it(
-    client: TestClient, attached: SimulatedDrive, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def busy(*args: object, **kwargs: object) -> None:
-        del args, kwargs
-        message = "write is already running, so the drive is busy"
-        raise JobBusyError(message)
+class Nothing(BaseModel):
+    pass
 
-    monkeypatch.setattr(JobBoard, "start", busy)
+
+def test_a_job_that_loses_the_race_for_the_drive_closes_it(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drive = SimulatedDrive(disk_of(ONE_SIDE))
+    release = threading.Event()
+
+    def racer(controls: Controls) -> Nothing:
+        del controls
+        release.wait(SETTLE)
+        return Nothing()
+
+    def opened_while_another_job_starts() -> SimulatedDrive:
+        app.state.jobs.start("write", writes=True, work=racer)
+        return drive
+
+    monkeypatch.setattr(
+        "fdstoolkit.ui.hardware_routes.open_fdsstick", opened_while_another_job_starts
+    )
 
     answer = client.post("/api/jobs/dump", json={"sides": 1})
 
+    release.set()
     assert answer.status_code == CONFLICT
-    assert attached.closed
+    assert drive.closed
 
 
 @pytest.mark.usefixtures("attached")

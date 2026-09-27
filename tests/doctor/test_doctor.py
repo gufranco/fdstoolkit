@@ -5,7 +5,16 @@ from typing import Any
 import pytest
 
 from fdstoolkit import doctor as doctor_module
-from fdstoolkit.doctor import CheckStatus, DoctorReport, diagnose, firmware_text, load_hid
+from fdstoolkit.core.diagnostics import Diagnostic
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.doctor import (
+    CheckStatus,
+    DoctorReport,
+    codec_check,
+    diagnose,
+    firmware_text,
+    load_hid,
+)
 from fdstoolkit.hardware.device_lock import acquire_drive_lock
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
 
@@ -259,35 +268,27 @@ def test_every_check_can_report_more_than_one_outcome() -> None:
     assert len({check.status for check in report.checks}) > 1
 
 
-def test_a_codec_that_does_not_round_trip_is_reported(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_a_codec_that_does_not_round_trip_is_reported() -> None:
     def empty_encode(disk: object, *, headered: bool) -> tuple[bytes, tuple[()]]:
         del disk, headered
         return b"", ()
 
-    monkeypatch.setattr("fdstoolkit.doctor.fds.encode", empty_encode)
+    check = codec_check(encode=empty_encode)
 
-    report = diagnose(load_hid=missing_hid)
-
-    assert status_of(report, "codec") is CheckStatus.FAILED
-    assert "differ" in detail_of(report, "codec")
+    assert check.status is CheckStatus.FAILED
+    assert "differ" in check.detail
 
 
-def test_a_codec_that_raises_is_reported_rather_than_crashing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def boom(data: bytes) -> object:
+def test_a_codec_that_raises_is_reported_rather_than_crashing() -> None:
+    def boom(data: bytes) -> tuple[Disk, tuple[Diagnostic, ...]]:
         del data
         message = "the decoder gave up"
         raise ValueError(message)
 
-    monkeypatch.setattr("fdstoolkit.doctor.fds.decode", boom)
+    check = codec_check(decode=boom)
 
-    report = diagnose(load_hid=missing_hid)
-
-    assert status_of(report, "codec") is CheckStatus.FAILED
-    assert "did not survive" in detail_of(report, "codec")
+    assert check.status is CheckStatus.FAILED
+    assert "did not survive" in check.detail
 
 
 def test_a_blank_that_misses_its_published_digest_is_reported(

@@ -15,6 +15,8 @@ from fdstoolkit.build.blank import (
     blank_image,
 )
 from fdstoolkit.codecs import fds
+from fdstoolkit.core.diagnostics import Diagnostic
+from fdstoolkit.core.disk import Disk
 from fdstoolkit.hardware.device_lock import acquire_drive_lock
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
 from fdstoolkit.hardware.ports import HardwareFaultError
@@ -157,11 +159,15 @@ def hardware_checks(loader: Callable[[], Enumerator] = load_hid) -> tuple[Check,
     return support, present, _access_check(hid, first)
 
 
-def _codec_check() -> Check:
+def codec_check(
+    *,
+    decode: Callable[[bytes], tuple[Disk, tuple[Diagnostic, ...]]] = fds.decode,
+    encode: Callable[..., tuple[bytes, tuple[Diagnostic, ...]]] = fds.encode,
+) -> Check:
     built = blank_image(sides=SELF_TEST_SIDES, headered=False, formatted=True, game_name="TST")
     try:
-        disk, findings = fds.decode(built)
-        again, _ = fds.encode(disk, headered=False)
+        disk, findings = decode(built)
+        again, _ = encode(disk, headered=False)
     except (ValueError, OSError) as error:
         return Check(
             "codec", CheckStatus.FAILED, f"a known disk did not survive a round trip: {error}"
@@ -212,7 +218,7 @@ def diagnose(
             _python_check(interpreter),
             Check("platform", CheckStatus.OK, f"{platform.system()} {platform.machine()}"),
             *hardware_checks(load_hid),
-            _codec_check(),
+            codec_check(),
             _identity_check(),
         )
     )

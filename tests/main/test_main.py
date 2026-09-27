@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import click
@@ -14,7 +15,7 @@ from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
-from fdstoolkit.cli import common, hardware_cmds, inspect_cmds
+from fdstoolkit.cli import common, hardware_cmds
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.fds import SIDE_SIZE
@@ -22,12 +23,12 @@ from fdstoolkit.codecs.qd import encode as encode_qd
 from fdstoolkit.codecs.raw import encode_raw03
 from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus, FileKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.doctor import Check, CheckStatus, DoctorReport
+from fdstoolkit.doctor import Check, CheckStatus
 from fdstoolkit.drive.captures import Capture, load_bundle
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware import session
 from fdstoolkit.hardware.fdsstick import FdsStick, HidApiTransport
-from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import Grade
 from fdstoolkit.quality.surface import (
     Finish,
@@ -1185,12 +1186,14 @@ def test_the_help_lists_the_commands() -> None:
 def test_dump_stops_cleanly_on_an_interrupt(
     single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    attach(monkeypatch, single_side)
+    disk, _, _, _ = common.decode_image(single_side)
 
-    def interrupt(*_: object, **__: object) -> object:
-        raise KeyboardInterrupt
+    class Interrupted(SimulatedDrive):
+        def read_side(self, side: int) -> Iterator[BlockRead]:
+            del side
+            raise KeyboardInterrupt
 
-    monkeypatch.setattr(hardware_cmds, "read_disk", interrupt)
+    monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.open_fdsstick", lambda: Interrupted(disk))
 
     result = runner.invoke(app, ["dump", "-o", str(tmp_path / "d.fds")])
 
@@ -1624,8 +1627,23 @@ def test_doctor_can_emit_json() -> None:
 
 
 def test_doctor_fails_on_an_unhealthy_installation(monkeypatch: pytest.MonkeyPatch) -> None:
-    unhealthy = DoctorReport(checks=(Check("python", CheckStatus.FAILED, "3.10.0"),))
-    monkeypatch.setattr(inspect_cmds, "diagnose", lambda: unhealthy)
+    class RefusingHandle:
+        def open_path(self, path: bytes) -> None:
+            del path
+            message = "Permission denied"
+            raise PermissionError(message)
+
+        def close(self) -> None:
+            return None
+
+    class RefusingHid:
+        def device(self) -> RefusingHandle:
+            return RefusingHandle()
+
+        def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, object]]:
+            return [{"vendor_id": vendor_id, "product_id": product_id, "path": b"usb:1"}]
+
+    monkeypatch.setitem(sys.modules, "hid", RefusingHid())
 
     result = runner.invoke(app, ["doctor"])
 
@@ -1781,10 +1799,7 @@ def test_surface_says_why_it_stopped_and_that_the_finish_was_skipped(
     assert "the finish was skipped because the test stopped early" in result.stdout
 
 
-def test_surface_names_every_class_of_failing_block(
-    single_side: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_surface_names_every_class_of_failing_block(capsys: pytest.CaptureFixture[str]) -> None:
     report = SurfaceReport(
         passes=(
             PatternPass(
@@ -1818,29 +1833,23 @@ def test_surface_names_every_class_of_failing_block(
         blocks_per_side=14,
     )
 
-    def fixed_report(*args: object, **kwargs: object) -> SurfaceReport:
-        del args, kwargs
-        return report
+    hardware_cmds.report_surface(report)
 
-    monkeypatch.setattr(hardware_cmds, "surface_test", fixed_report)
+    result = capsys.readouterr()
 
-    attach(monkeypatch, single_side)
-
-    result = runner.invoke(app, ["surface", "--yes"])
-
-    assert "failed on more than one pattern" in result.stdout
-    assert "marginal rather than dead" in result.stdout
-    assert "rewriting refreshed them" in result.stdout
-    assert "erased, with nothing the adapter can read" in result.stdout
-    assert "which did not verify" in result.stdout
-    assert "  side 0 reads back exactly what was just written to side 1" in result.stdout
-    assert "side 0 pass 1 pattern short pulses: did not hold" in result.stdout
-    assert "98.0% of the most any measured factory side carries" in result.stdout
-    assert "42 read short and 1 read long" in result.stdout
-    assert "the drive running fast" in result.stdout
-    assert "the failures are spread across the side" in result.stdout
-    assert "clean the disk surface gently" in result.stdout
-    assert result.exit_code == 1
+    assert "failed on more than one pattern" in result.out
+    assert "marginal rather than dead" in result.out
+    assert "rewriting refreshed them" in result.out
+    assert "erased, with nothing the adapter can read" in result.out
+    assert "which did not verify" in result.out
+    assert "  side 0 reads back exactly what was just written to side 1" in result.out
+    assert "side 0 pass 1 pattern short pulses: did not hold" in result.out
+    assert "98.0% of the most any measured factory side carries" in result.out
+    assert "42 read short and 1 read long" in result.out
+    assert "the drive running fast" in result.out
+    assert "the failures are spread across the side" in result.out
+    assert "clean the disk surface gently" in result.out
+    assert not report.passed
 
 
 def test_dump_can_be_told_the_disk_is_already_turned_over(
