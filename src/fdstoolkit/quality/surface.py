@@ -23,6 +23,7 @@ from fdstoolkit.drive.monitor import SpeedReading, lean, sample
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import DiskReader, DiskWriter, HardwareFaultError, selects_sides
 from fdstoolkit.hardware.session import (
+    MAX_PASSES,
     Grade,
     HalfWriteError,
     Progress,
@@ -407,8 +408,6 @@ def _finish(run: _Run, finish: Finish) -> tuple[bool, str]:
             )
             if written.mismatched:
                 return False, ""
-    except (WriteNotTakenError, HalfWriteError):
-        return False, ""
     except (SideFlipError, HardwareFaultError, WriteRefusedError) as stopped:
         return False, str(stopped)
     except KeyboardInterrupt:
@@ -436,8 +435,8 @@ def surface_test(
 ) -> SurfaceReport:
     require_readable_sides(sides)
     plan = plan or SurfacePlan()
-    if plan.rounds < 1:
-        message = "a surface test runs at least one round"
+    if not 1 <= plan.rounds <= MAX_PASSES:
+        message = f"a surface test runs at least one round and at most {MAX_PASSES}"
         raise SurfaceTestRefusedError(message)
     status = writer.status()
     if not status.can_write:

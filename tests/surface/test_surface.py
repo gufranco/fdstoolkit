@@ -14,7 +14,7 @@ from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.monitor import SpeedReading
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
-from fdstoolkit.hardware.session import Grade
+from fdstoolkit.hardware.session import MAX_PASSES, Grade
 from fdstoolkit.quality.surface import (
     PATTERNS,
     Finish,
@@ -426,6 +426,18 @@ def test_a_finish_that_does_not_stick_is_reported() -> None:
     assert report.finish_ran
     assert not report.finish_verified
     assert not report.passed
+    assert "did not take the write" in report.finish_problem
+
+
+def test_a_surface_test_past_the_largest_pass_count_is_refused() -> None:
+    drive = SimulatedDrive(scratch_disk())
+
+    with pytest.raises(SurfaceTestRefusedError, match="at most"):
+        surface_test(
+            drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(rounds=MAX_PASSES + 1)
+        )
+
+    assert drive.write_count == 0
 
 
 def two_sided_scratch():  # noqa: ANN201
