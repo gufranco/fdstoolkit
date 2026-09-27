@@ -49,10 +49,10 @@ check_range() {
 }
 
 case "${1:-}" in
-  --message) check_subject "$(subject_of_file "$2")" ;;
-  --range) check_range "$2" ;;
-  *)
-    printf '%s\n' "${USAGE}" >&2
-    exit 2
-    ;;
+--message) check_subject "$(subject_of_file "$2")" ;;
+--range) check_range "$2" ;;
+*)
+  printf '%s\n' "${USAGE}" >&2
+  exit 2
+  ;;
 esac
