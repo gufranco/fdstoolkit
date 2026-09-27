@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import zipfile
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -168,7 +169,12 @@ def _member(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
     if info.file_size > limit:
         message = f"{name} is larger than any capture a drive returns"
         raise BundleError(message)
-    return archive.read(info)
+    try:
+        with archive.open(info) as member:
+            return member.read(limit + 1)
+    except zipfile.BadZipFile as error:
+        message = f"{name} is damaged inside the capture bundle: {error}"
+        raise BundleError(message) from error
 
 
 def read_zip(data: bytes) -> Bundle:
@@ -195,7 +201,15 @@ def _listed(raw: bytes | None) -> list[dict[str, object]]:
             message = f"an entry in {MANIFEST} does not describe a capture: {entry}"
             raise BundleError(message)
         listed.append(cast("dict[str, object]", entry))
+    _refuse_repeats([str(entry.get("file", "")) for entry in listed])
     return listed
+
+
+def _refuse_repeats(names: Sequence[str]) -> None:
+    repeated = sorted(name for name, count in Counter(names).items() if count > 1)
+    if repeated:
+        message = f"{MANIFEST} lists {', '.join(repeated)} more than once"
+        raise BundleError(message)
 
 
 def _directory(directory: Path) -> Bundle:

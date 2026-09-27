@@ -3,6 +3,8 @@ from __future__ import annotations
 import io
 import json
 import re
+import struct
+import tracemalloc
 import zipfile
 from pathlib import Path
 
@@ -215,3 +217,61 @@ def test_the_latest_capture_of_a_side_is_its_last_read() -> None:
 def test_a_source_without_captures_or_without_that_side_gives_none() -> None:
     assert latest_capture(object(), 0) is None
     assert latest_capture(Recorder(CAPTURES[:2]), 1) is None
+
+
+INFLATED = 32 * 1024 * 1024
+CLAIMED = 50
+LOCAL_SIZE_AT = 22
+CENTRAL_SIZE_AT = 24
+PEAK_BUDGET = 4 * 1024 * 1024
+
+
+def manifest_listing(*names: str) -> str:
+    return json.dumps(
+        {
+            "format": "fdstoolkit-captures",
+            "version": 1,
+            "tool": "x",
+            "created": CREATED,
+            "image": "g.fds",
+            "captures": [
+                {"file": name, "side": 0, "read": 1, "size": 1, "sha256": "0" * 64}
+                for name in names
+            ],
+        }
+    )
+
+
+def forged_bundle() -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(MANIFEST, manifest_listing("bomb.raw03"))
+        archive.writestr("bomb.raw03", bytes(INFLATED))
+    data = bytearray(buffer.getvalue())
+    local = data.find(b"PK\x03\x04", data.find(b"bomb.raw03") - 64)
+    central = data.rfind(b"PK\x01\x02")
+    struct.pack_into("<I", data, local + LOCAL_SIZE_AT, CLAIMED)
+    struct.pack_into("<I", data, central + CENTRAL_SIZE_AT, CLAIMED)
+    return bytes(data)
+
+
+def test_a_member_that_inflates_past_its_claimed_size_is_refused_without_inflating() -> None:
+    bundle = forged_bundle()
+    tracemalloc.start()
+
+    with pytest.raises(BundleError, match=r"bomb\.raw03 is damaged"):
+        read_zip(bundle)
+
+    _, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert peak < PEAK_BUDGET
+
+
+def test_a_manifest_listing_one_capture_twice_is_refused() -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr(MANIFEST, manifest_listing("same.raw03", "same.raw03"))
+        archive.writestr("same.raw03", b"\x01")
+
+    with pytest.raises(BundleError, match=r"lists same\.raw03 more than once"):
+        read_zip(buffer.getvalue())
