@@ -3,8 +3,8 @@ class Fdstoolkit < Formula
 
   desc "Read, judge, reconstruct and write Famicom Disk System media"
   homepage "https://github.com/gufranco/fdstoolkit"
-  url "https://github.com/gufranco/fdstoolkit/archive/refs/tags/v1.3.0.tar.gz"
-  sha256 "e0041d33a7f1bf567905ba5c18b4b1256cfeaa8c4c2a742a66b78c6cd06b8f30"
+  url "https://github.com/gufranco/fdstoolkit/archive/refs/tags/v1.4.0.tar.gz"
+  sha256 "dae1158388c9a762d1ecefc3ba027f1476bbc68cc73d2e1c7502f63bdf313690"
   license "MIT"
   head "https://github.com/gufranco/fdstoolkit.git", branch: "main"
 
