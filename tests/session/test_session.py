@@ -256,6 +256,13 @@ def test_a_refused_write_names_the_write_protect_tab() -> None:
         write_verified(drive, drive, disk_with_files(), confirm=lambda _: True, backup=None)
 
 
+def test_a_refused_write_names_the_write_lockout_circuit() -> None:
+    drive = SimulatedDrive(sample_disk(), plan=FaultPlan(writes_do_not_stick=True))
+
+    with pytest.raises(WriteNotTakenError, match="lockout circuit"):
+        write_verified(drive, drive, disk_with_files(), confirm=lambda _: True, backup=None)
+
+
 class OverlayDrive(SimulatedDrive):
     def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
         current = self._side(side)

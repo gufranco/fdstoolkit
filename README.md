@@ -513,7 +513,7 @@ A side carrying more than 54,958 bytes of blocks, the longest of 345 factory sid
 
 The stream sent to the FDSStick follows the one captured write of the official FDSStick tool, as the fdsstick-cli project documents it: a short header, a lead-in and gaps of the tool's own lengths, each block's bits in the order the tool sends them, and a finishing report after each side. It has been checked against that description and against its own decoder, not yet against a drive, so write the calibration disk to a scratch disk before trusting a write with anything else.
 
-Two ways a drive refuses a write are named from the readback. A disk that reads back exactly as before did not take the write at all: check the controller, FD3206P rather than FD7201P. A side whose write-protect tab is broken off may be refused too, though whether the drive enforces the tab for an FDSStick is not documented. A disk that took every block but its disk information block is a drive whose power board was never modified for writing, since only an FMD-POWER-01, or a later board modified for it, rewrites the Nintendo header. `surface` stops on either with the same reason.
+Two ways a drive refuses a write are named from the readback. A disk that reads back exactly as before did not take the write at all: check the controller, FD3206P rather than FD7201P. A side whose write-protect tab is broken off may be refused too, though whether the drive enforces the tab for an FDSStick is not documented. Some drives also carry a lockout circuit that blocks the write gate, with no error, when it rises before the drive reports ready or stays up past about a second, per a [nesdev forum thread](https://forums.nesdev.org/viewtopic.php?t=26678) citing the Backup Utilisation Guide. A disk that took every block but its disk information block is a drive whose power board was never modified for writing, since only an FMD-POWER-01, or a later board modified for it, rewrites the Nintendo header. `surface` stops on either with the same reason.
 
 `--calibration` writes the calibration disk described under `blank`, both sides, turning the disk once. It is the one write that can do lasting harm with a disk that verifies perfectly: a drive out of adjustment writes a disk that reads back on it and on nothing else, and that disk would then teach every drive it calibrates the same error. So the command first prints what the drive must already have been through, and refuses unless `--trusted-drive` confirms it:
 
@@ -756,7 +756,7 @@ reads clean: the whole side reads. Repeat with two more factory disks, since a h
 
 The head tolerance is about 0.05 mm and a full turn of the head screw moves the head about one track, so adjust about 45 degrees at a time and read again, as the FDSStick's author advises. Once it reads clean, repeat with two more factory disks: a head can be set to suit one disk and miss another. Neither mode can say which way to turn, only whether the last turn helped.
 
-Each failing read also names the error a console would stop on for it, from the console's own table: `22` to `25` when block 1 to 4 is not found, `27` when a block is found and fails its checksum. These are the numbers the repair guides talk about, so a line reads the same way the television would. It is the stick's read translated, not a console's: a console reads with its own drive electronics, and could stop one block earlier or later.
+Each failing read also names the error a console would stop on for it, from the console's own table: `22` to `25` when block 1 to 4 is not found, `27` when a block is found and fails its checksum. These are the numbers the repair guides talk about, so a line reads the same way the television would. It is the stick's read translated, not a console's: a console reads with its own drive electronics, and could stop one block earlier or later. Errors 01 and 02 never appear here: the [BIOS table](https://www.nesdev.org/wiki/FDS_BIOS) raises 01 when the drive says no disk is set and 02 when it reports a power supply failure, and the stick reports neither signal.
 
 When most of the last read's failing pulses fit no class at all, rather than leaning short or long, the headline adds that this points at electrical noise on the read line. If the USB link reported no skipped packets, it names the fix the FDSStick's author [gives for read errors](https://www.fdsstick.com/101-2/): a series resistor of about 10k on the READ DATA pin.
 
@@ -895,7 +895,7 @@ The interface is in English and Japanese. Both dictionaries carry the same keys,
 
 ### Preserving a disk
 
-One dump says what the drive read once. Two say whether it read the same thing twice.
+One dump says what the drive read once. Two say whether it read the same thing twice. Clean the disk before the first dump and again before the second, as [dumping.guide](https://dumping.guide/other/nintendo/fds) advises, so dirt that moved between dumps is not taken for a weak surface.
 
 ```bash
 fdstoolkit dump -o pass1.fds --passes 3 --raw captures/

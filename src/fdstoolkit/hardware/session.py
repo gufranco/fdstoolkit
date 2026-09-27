@@ -250,7 +250,9 @@ REFUSED_WRITE: Final = (
     "That is what a drive with an FD3206 controller does when it silently refuses a "
     "full-surface write; check the chip marking, FD3206P rather than FD7201P, before "
     "suspecting the image. A side whose write-protect tab is broken off may be refused too, "
-    "though whether the drive enforces the tab for an FDSStick is not documented"
+    "though whether the drive enforces the tab for an FDSStick is not documented. Some drives "
+    "also carry a lockout circuit that blocks the write gate, with no error, when it rises "
+    "before the drive reports ready or stays up past about a second"
 )
 HALF_WRITE: Final = (
     "the disk took everything but its disk information block, which still reads as it was "
