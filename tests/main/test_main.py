@@ -1150,6 +1150,16 @@ def test_surface_stops_when_declined(single_side: Path, monkeypatch: pytest.Monk
     assert "declined" in result.stdout
 
 
+def test_surface_closes_the_drive_when_declined(
+    single_side: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drive = attach(monkeypatch, single_side)
+
+    runner.invoke(app, ["surface"], input="n\n")
+
+    assert drive.closed
+
+
 def test_surface_runs_without_a_backup(single_side: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     attach(monkeypatch, single_side)
 
@@ -1489,6 +1499,37 @@ def test_a_sharp_mz_disk_is_refused_by_name(tmp_path: Path) -> None:
     assert "Sharp MZ Quick Disk image in QDF form, not a Famicom" in result.stdout
 
 
+def test_dump_closes_the_drive_when_it_finishes(
+    single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drive = attach(monkeypatch, single_side)
+
+    runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.fds")])
+
+    assert drive.closed
+
+
+def test_dump_closes_the_drive_when_the_link_is_lost(
+    image: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drive = attach(monkeypatch, image, plan=FaultPlan(link_lost_after=1))
+
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.fds")])
+
+    assert result.exit_code == 1
+    assert drive.closed
+
+
+def test_write_closes_the_drive(
+    single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drive = attach(monkeypatch, single_side)
+
+    runner.invoke(app, ["write", str(single_side), "--yes", "--backup", str(tmp_path / "b.fds")])
+
+    assert drive.closed
+
+
 def test_dump_keeps_the_drives_pulse_classes(
     single_side: Path,
     tmp_path: Path,
@@ -1701,6 +1742,9 @@ def test_dump_asks_the_operator_to_turn_the_disk_over(
         def pulse_findings(self):  # noqa: ANN202
             return self._inner.pulse_findings
 
+        def close(self) -> None:
+            self._inner.close()
+
     disk, _, _, _ = common.decode_image(image)
     drive = OneFace(disk)
 
@@ -1829,6 +1873,9 @@ def test_dump_can_be_told_the_disk_is_already_turned_over(
         @property
         def pulse_findings(self):  # noqa: ANN202
             return self._inner.pulse_findings
+
+        def close(self) -> None:
+            self._inner.close()
 
     disk, _, _, _ = common.decode_image(image)
 

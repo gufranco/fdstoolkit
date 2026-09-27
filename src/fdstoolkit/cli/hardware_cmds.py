@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import webbrowser
 from collections.abc import Callable
+from contextlib import closing
 from pathlib import Path
 from typing import Annotated, Final
 
@@ -153,35 +154,34 @@ def dump(
     """Dump a disk through the FDSStick."""
     container = container_of(output)
     guard_output(output, force=force)
-    drive = open_drive()
+    with closing(open_drive()) as drive:
+        flip = prompter(yes=yes)
 
-    flip = prompter(yes=yes)
+        try:
+            reading = read_disk(
+                drive, sides=sides, passes=passes, retries=retries, flip=flip, progress=step
+            )
+        except KeyboardInterrupt:
+            message = "stopped on interrupt, nothing was written"
+            raise _stopped(drive, raw, output, message) from None
+        except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
+            raise _stopped(drive, raw, output, str(error)) from error
 
-    try:
-        reading = read_disk(
-            drive, sides=sides, passes=passes, retries=retries, flip=flip, progress=step
-        )
-    except KeyboardInterrupt:
-        message = "stopped on interrupt, nothing was written"
-        raise _stopped(drive, raw, output, message) from None
-    except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
-        raise _stopped(drive, raw, output, str(error)) from error
-
-    for line in reading.lines:
-        typer.echo(line)
-    outcome = recover(reading.result, drive.captures)
-    result = outcome.result
-    grade = reading.settled(result, changed=bool(outcome.recovered))
-    data = encode_image(result.as_disk(), container)
-    output.write_bytes(data)
-    typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
-    for line in outcome.lines:
-        typer.echo(line)
-    report_blocks(result)
-    report_link(drive)
-    if raw is not None:
-        keep_captures(drive, raw, image=output.name)
-    raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
+        for line in reading.lines:
+            typer.echo(line)
+        outcome = recover(reading.result, drive.captures)
+        result = outcome.result
+        grade = reading.settled(result, changed=bool(outcome.recovered))
+        data = encode_image(result.as_disk(), container)
+        output.write_bytes(data)
+        typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
+        for line in outcome.lines:
+            typer.echo(line)
+        report_blocks(result)
+        report_link(drive)
+        if raw is not None:
+            keep_captures(drive, raw, image=output.name)
+        raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
 
 
 def report_link(drive: FdsStick) -> None:
@@ -273,38 +273,37 @@ def write(
 ) -> None:
     """Write an image, or the calibration disk, then read it back and compare."""
     disk = calibration_target(image, calibration=calibration, trusted_drive=trusted_drive)
-    drive = open_drive()
+    with closing(open_drive()) as drive:
+        ask = prompter(yes=yes)
 
-    ask = prompter(yes=yes)
+        try:
+            if not long_side:
+                refuse_long_sides(disk)
+            report = write_verified(
+                drive,
+                drive,
+                disk,
+                confirm=ask,
+                flip=ask,
+                progress=step,
+                backup=None if backup is None else writer_for(backup),
+                retries=retries,
+            )
+        except KeyboardInterrupt:
+            message = "stopped on interrupt, the disk may be half written, dump it before using it"
+            raise fail(message) from None
+        except LongSideError as error:
+            message = f"{error}. Pass --long-side to write it anyway"
+            raise fail(message) from error
+        except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
+            raise fail(str(error)) from error
 
-    try:
-        if not long_side:
-            refuse_long_sides(disk)
-        report = write_verified(
-            drive,
-            drive,
-            disk,
-            confirm=ask,
-            flip=ask,
-            progress=step,
-            backup=None if backup is None else writer_for(backup),
-            retries=retries,
-        )
-    except KeyboardInterrupt:
-        message = "stopped on interrupt, the disk may be half written, dump it before using it"
-        raise fail(message) from None
-    except LongSideError as error:
-        message = f"{error}. Pass --long-side to write it anyway"
-        raise fail(message) from error
-    except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
-        raise fail(str(error)) from error
-
-    for line in report.lines:
-        typer.echo(line)
-    typer.echo(f"verified {report.verified}, grade {report.grade}")
-    for note in report.notes:
-        typer.echo(f"  {note}")
-    raise typer.Exit(code=0 if report.verified else 1)
+        for line in report.lines:
+            typer.echo(line)
+        typer.echo(f"verified {report.verified}, grade {report.grade}")
+        for note in report.notes:
+            typer.echo(f"  {note}")
+        raise typer.Exit(code=0 if report.verified else 1)
 
 
 def surface(
@@ -333,29 +332,33 @@ def surface(
     yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
 ) -> None:
     """Write and read back every pulse length to grade a scratch disk."""
-    drive = open_drive()
+    with closing(open_drive()) as drive:
+        ask = prompter(yes=yes)
 
-    ask = prompter(yes=yes)
+        sink = None if backup is None else writer_for(backup)
 
-    sink = None if backup is None else writer_for(backup)
+        try:
+            report = surface_test(
+                drive,
+                drive,
+                sides=sides,
+                confirm=ask,
+                flip=ask,
+                progress=step,
+                backup=sink,
+                plan=SurfacePlan(rounds=passes, fill=not quick, finish=finish),
+            )
+        except (
+            HardwareFaultError,
+            WriteRefusedError,
+            SideFlipError,
+            SurfaceTestRefusedError,
+        ) as error:
+            raise fail(str(error)) from error
 
-    try:
-        report = surface_test(
-            drive,
-            drive,
-            sides=sides,
-            confirm=ask,
-            flip=ask,
-            progress=step,
-            backup=sink,
-            plan=SurfacePlan(rounds=passes, fill=not quick, finish=finish),
-        )
-    except (HardwareFaultError, WriteRefusedError, SideFlipError, SurfaceTestRefusedError) as error:
-        raise fail(str(error)) from error
-
-    report_surface(report)
-    typer.echo(f"grade {report.grade}")
-    raise typer.Exit(code=0 if report.passed else 1)
+        report_surface(report)
+        typer.echo(f"grade {report.grade}")
+        raise typer.Exit(code=0 if report.passed else 1)
 
 
 def report_surface(report: SurfaceReport) -> None:
