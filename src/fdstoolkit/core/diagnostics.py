@@ -24,6 +24,7 @@ CODES: Final[Mapping[str, str]] = {
     "FDS015": "a decoded region does not start with the sync mark",
     "FDS016": "file data block runs past the size its header declares",
     "FDS017": "gap before this block is shorter than the bits the RAM adapter ignores",
+    "FDS018": "undecodable pulses after the last declared block, which most disks carry",
 }
 
 

@@ -12,6 +12,7 @@ from fdstoolkit.codecs.raw import (
     unpack_raw03,
 )
 from fdstoolkit.drive.captures import Capture
+from fdstoolkit.drive.pulse import PulseFinding, findings_of
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, Watchdog
 
@@ -81,6 +82,7 @@ class FdsStick:
         self._watchdog = Watchdog(on_stall=self.close, ceiling=ceiling)
         self._captures: list[Capture] = []
         self._resyncs: list[tuple[int, int]] = []
+        self._pulse: list[PulseFinding] = []
 
     @property
     def captures(self) -> tuple[Capture, ...]:
@@ -89,6 +91,10 @@ class FdsStick:
     @property
     def resyncs(self) -> tuple[tuple[int, int], ...]:
         return tuple(self._resyncs)
+
+    @property
+    def pulse_findings(self) -> tuple[PulseFinding, ...]:
+        return tuple(self._pulse)
 
     def close(self) -> None:
         self._transport.close()
@@ -177,7 +183,8 @@ class FdsStick:
         read = sum(1 for capture in self._captures if capture.side == side) + 1
         self._captures.append(Capture(side=side, read=read, data=packed))
         values = unpack_raw03(packed)
-        decoded, _ = decode_raw03(values)
+        decoded, found = decode_raw03(values)
+        self._pulse.extend(findings_of(side, read, found))
         for index, block in enumerate(decoded.blocks):
             yield BlockRead(
                 index=index,

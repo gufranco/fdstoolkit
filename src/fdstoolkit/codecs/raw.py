@@ -11,6 +11,7 @@ from fdstoolkit.core.blocks import (
     Block,
     BlockKind,
     FileHeader,
+    declared_blocks,
 )
 from fdstoolkit.core.crc import CRC_SIZE, block_crc, crc_boundary, decode_crc, encode_crc
 from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
@@ -390,11 +391,24 @@ def block_regions(values: bytes) -> tuple[tuple[int, int], ...]:
     return regions
 
 
-def _short_gap(gap: int, previous_end: int, *, after_block: bool) -> tuple[Diagnostic, ...]:
+def _short_gap(gap: int, previous_end: int, *, block: int) -> tuple[Diagnostic, ...]:
     bits = gap - previous_end
-    if not after_block or bits >= ADAPTER_BLIND_BITS:
+    if not block or bits >= ADAPTER_BLIND_BITS:
         return ()
-    return (_diagnostic("FDS017", Severity.WARNING, {"offset": gap, "bits": bits}),)
+    detail: dict[str, object] = {"offset": gap, "bits": bits, "block": block}
+    return (_diagnostic("FDS017", Severity.WARNING, detail),)
+
+
+def _past_declared(blocks: Sequence[Block]) -> bool:
+    amounts = [block for block in blocks if block.kind is BlockKind.FILE_AMOUNT]
+    return bool(amounts) and len(blocks) >= declared_blocks(amounts[0].payload)
+
+
+def _lost_region(gap: int, blocks: Sequence[Block]) -> Diagnostic:
+    detail: dict[str, object] = {"offset": gap, "block": len(blocks)}
+    if _past_declared(blocks):
+        return _diagnostic("FDS018", Severity.INFO, detail)
+    return _diagnostic("FDS015", Severity.WARNING, detail)
 
 
 def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int, int], ...]]:
@@ -408,10 +422,10 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
         gap = _gap_end(values, cursor)
         if gap is None:
             break
-        findings.extend(_short_gap(gap, cursor, after_block=bool(blocks)))
+        findings.extend(_short_gap(gap, cursor, block=len(blocks)))
         data, cursor, needed = _decode_region(values, gap, pending)
         if not data or data[0] != SYNC_MARK or needed is None:
-            findings.append(_diagnostic("FDS015", Severity.WARNING, {"offset": gap}))
+            findings.append(_lost_region(gap, blocks))
             continue
         body = data[1:]
         length = needed - 1 - CRC_SIZE
@@ -420,7 +434,7 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
                 _diagnostic(
                     "FDS004",
                     Severity.ERROR,
-                    {"offset": gap, "recovered": len(body)},
+                    {"offset": gap, "recovered": len(body), "block": len(blocks)},
                 ),
             )
             continue

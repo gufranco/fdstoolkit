@@ -17,6 +17,7 @@ from fdstoolkit.codecs.raw import (
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.drive.captures import Capture
+from fdstoolkit.drive.pulse import PulseFinding, captured_findings
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
 
 DAMAGE_OFFSET = 40
@@ -27,6 +28,7 @@ COUNT_SCALE = 1.5
 COUNT_JITTER = 3
 BYTE_MAX = 255
 CRC_DAMAGE = 0xFFFF
+SHORT_GAP = 482
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +40,7 @@ class FaultPlan:
     unstable_blocks: frozenset[int] = frozenset()
     link_lost_after: int | None = None
     writes_do_not_stick: bool = False
+    short_gap_before: int | None = None
 
 
 def counts_of(packed: bytes) -> bytes:
@@ -89,8 +92,21 @@ class SimulatedDrive:
     def resyncs(self) -> tuple[tuple[int, int], ...]:
         return ()
 
+    @property
+    def pulse_findings(self) -> tuple[PulseFinding, ...]:
+        return captured_findings(self._captures)
+
+    def _shortened(self, packed: bytes) -> bytes:
+        block = self._plan.short_gap_before
+        if block is None:
+            return packed
+        values = unpack_raw03(packed)
+        regions = block_regions(values)
+        cut = values[: regions[block - 1][1]] + bytes(SHORT_GAP) + values[regions[block][0] :]
+        return pack_raw03(cut)
+
     def _capture(self, side: Side, read: int = 1) -> bytes:
-        packed = encode_block_stream([block.payload for block in side.blocks])
+        packed = self._shortened(encode_block_stream([block.payload for block in side.blocks]))
         if not self._plan.bad_crc_blocks:
             return packed
         values = bytearray(unpack_raw03(packed))

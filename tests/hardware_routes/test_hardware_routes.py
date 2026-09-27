@@ -602,6 +602,16 @@ def test_a_dump_job_says_when_the_usb_link_skipped_packets(
     assert any("the USB link skipped 1 packet(s)" in step for step in job["steps"])
 
 
+def test_a_dump_job_names_a_gap_the_ram_adapter_would_skip(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), plan=FaultPlan(short_gap_before=1)))
+
+    job = run(app, client, "/api/jobs/dump", {})
+
+    assert any(step.startswith("side 0: [FDS017] ") for step in job["steps"])
+
+
 @pytest.mark.usefixtures("attached")
 def test_a_calibration_job_reports_the_spread_of_its_reads(
     app: FastAPI, client: TestClient

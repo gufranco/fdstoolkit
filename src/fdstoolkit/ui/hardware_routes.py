@@ -13,6 +13,7 @@ from fdstoolkit.build.calibration import (
 )
 from fdstoolkit.drive.captures import bundle_zip, created_now
 from fdstoolkit.drive.monitor import MAX_READS, NOT_THIS_DRIVE, Mode, RawReader, Replay, calibrate
+from fdstoolkit.drive.pulse import pulse_lines
 from fdstoolkit.drive.recovery import recover
 from fdstoolkit.drive.timing import (
     PROBE_WARNING,
@@ -167,10 +168,14 @@ class Backup:
         self._controls.keep(named_file(BACKUP_NAME, data).model_dump())
 
 
-def _keep_failed_captures(spec: DumpSpec, drive: FdsStick, controls: Controls) -> None:
+def _drive_lines(drive: FdsStick) -> tuple[str, ...]:
     note = link_note(drive.resyncs)
-    if note:
-        controls.step(note)
+    return (*pulse_lines(drive.pulse_findings, drive.captures), *((note,) if note else ()))
+
+
+def _keep_failed_captures(spec: DumpSpec, drive: FdsStick, controls: Controls) -> None:
+    for line in _drive_lines(drive):
+        controls.step(line)
     if spec.keep_captures and drive.captures:
         bundle = bundle_zip(drive.captures, image=DUMP_NAME, created=created_now())
         controls.keep(named_file(CAPTURES_NAME, bundle).model_dump())
@@ -196,9 +201,8 @@ def dump_job(spec: DumpSpec, request: Request) -> JobView:
             *(line.strip() for line in outcome.lines),
             *(line for side in outcome.result.sides for line in side.lines),
         ]
-        for line in (*report, link_note(drive.resyncs)):
-            if line:
-                controls.step(line)
+        for line in (*report, *_drive_lines(drive)):
+            controls.step(line)
         name = DUMP_QD_NAME if spec.qd else DUMP_NAME
         image = encoded_file(name, outcome.result.as_disk())
         kept = (

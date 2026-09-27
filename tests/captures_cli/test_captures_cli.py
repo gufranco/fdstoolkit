@@ -3,7 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from capture_fixture import CREATED, DAMAGED, IMAGE, captures_of, disk_with_a_file, image_of
+from capture_fixture import (
+    CREATED,
+    DAMAGED,
+    IMAGE,
+    captures_of,
+    disk_with_a_file,
+    image_of,
+    short_gapped,
+)
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
@@ -188,3 +196,17 @@ def test_grade_cannot_compare_captures_with_an_image_that_holds_no_block(tmp_pat
     result = runner.invoke(app, ["grade", str(empty), "--captures", str(bundle)])
 
     assert "the captures are of another disk" not in result.stdout
+
+
+def test_grade_names_a_short_gap_every_saved_read_shows(tmp_path: Path) -> None:
+    disk = disk_with_a_file()
+    directory = tmp_path / "captures"
+    write_bundle(
+        directory, (short_gapped(disk, 1), short_gapped(disk, 2)), image=IMAGE, created=CREATED
+    )
+    image = saved(disk, tmp_path / "dump.fds")
+
+    result = runner.invoke(app, ["grade", str(image), "--captures", str(directory)])
+
+    assert result.exit_code == 1
+    assert "side 0: [FDS017] gap before this block is shorter" in result.stdout

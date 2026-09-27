@@ -33,6 +33,7 @@ from fdstoolkit.codecs.raw import (
     unpack_raw03,
 )
 from fdstoolkit.core.crc import block_crc, encode_crc
+from fdstoolkit.core.diagnostics import Severity
 
 
 def sample_disk(files: int = 1):  # noqa: ANN201
@@ -381,3 +382,34 @@ def test_a_gap_the_adapter_reads_past_is_not_flagged() -> None:
     _, findings = decode_raw03(two_blocks_with_gap(GAP_BITS))
 
     assert "FDS017" not in [finding.code for finding in findings]
+
+
+def garbage_after(values: bytes) -> bytes:
+    return values + bytes([GAP_VALUE]) * MIN_GAP_VALUES + bytes([1, 2, 1, 2, 3, 2, 1]) * 40
+
+
+def test_undecodable_pulses_after_the_last_declared_block_are_information() -> None:
+    values = unpack_raw03(encode_raw03(sample_disk(files=1), side=0, encoding=RawEncoding.ERA_B))
+
+    _, findings = decode_raw03(garbage_after(values))
+
+    trailing = [finding for finding in findings if finding.code == "FDS018"]
+    assert [finding.severity for finding in trailing] == [Severity.INFO]
+    assert "FDS015" not in [finding.code for finding in findings]
+
+
+def test_a_lost_sync_mark_inside_the_declared_blocks_stays_a_warning() -> None:
+    first = bytes([0x80, 0x01]) + bytes(55)
+    _, findings = decode_raw03(
+        encoded(first + encode_crc(block_crc(first[1:]))) + encoded(bytes([0x41, 0x02, 0x00, 0x00]))
+    )
+
+    lost = [finding for finding in findings if finding.code == "FDS015"]
+    assert [finding.detail["block"] for finding in lost] == [1]
+
+
+def test_a_short_gap_names_the_block_it_precedes() -> None:
+    _, findings = decode_raw03(two_blocks_with_gap(SHORTEST_GAP_BITS + 2))
+
+    short = [finding for finding in findings if finding.code == "FDS017"]
+    assert short[0].detail["block"] == 1

@@ -8,6 +8,7 @@ import typer
 from fdstoolkit.cli.common import Family, decode_image, fail, load_captures
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.captures import Bundle
+from fdstoolkit.drive.pulse import bundle_findings
 from fdstoolkit.drive.recovery import captures_of_another_disk
 from fdstoolkit.drive.weak import bundle_weak_blocks
 from fdstoolkit.quality.confidence import score_disk
@@ -137,8 +138,12 @@ def grade(
 
     confidence = score_disk(disk, reads=stats)
 
-    weak = None if captures is None else _weak_count(disk, load_captures(captures))
-    report = grade_disk(confidence=confidence, findings=findings, reads=stats, weak_blocks=weak)
+    bundle = None if captures is None else load_captures(captures)
+    weak = None if bundle is None else _weak_count(disk, bundle)
+    pulse = () if bundle is None else bundle_findings(bundle.captures)
+    report = grade_disk(
+        confidence=confidence, findings=(*findings, *pulse), reads=stats, weak_blocks=weak
+    )
 
     if json_output:
         typer.echo(
@@ -161,6 +166,8 @@ def grade(
         raise typer.Exit(code=0 if report.grade.value == "clean" else 1)
 
     typer.echo(report.render())
+    for finding in pulse:
+        typer.echo(f"  {finding.render()}")
     for reason in report.reasons:
         mark = "ok " if reason.passed else "bad"
         typer.echo(f"  {mark}  {reason.render()}")

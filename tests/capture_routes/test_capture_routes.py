@@ -4,13 +4,21 @@ import base64
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from capture_fixture import DAMAGED, disk_with_a_file, image_of, zipped
+from capture_fixture import (
+    CREATED,
+    DAMAGED,
+    IMAGE,
+    disk_with_a_file,
+    image_of,
+    short_gapped,
+    zipped,
+)
 from drive_double import FaultPlan, SimulatedDrive
 from fastapi.testclient import TestClient
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs import fds
-from fdstoolkit.drive.captures import read_zip
+from fdstoolkit.drive.captures import bundle_zip, read_zip
 from fdstoolkit.ui.app import create_app
 
 if TYPE_CHECKING:
@@ -154,6 +162,20 @@ def test_grade_counts_weak_blocks_from_uploaded_captures(client: TestClient) -> 
 
     assert body["grade"] == "marginal"
     assert any(reason["metric"] == "weak blocks" for reason in body["reasons"])
+
+
+def test_grade_fails_on_a_short_gap_every_uploaded_read_shows(client: TestClient) -> None:
+    disk = disk_with_a_file()
+    bundle = bundle_zip(
+        (short_gapped(disk, 1), short_gapped(disk, 2)), image=IMAGE, created=CREATED
+    )
+
+    body = client.post(
+        "/api/grade", json={"data": b64(image_of(disk)), "captures": b64(bundle)}
+    ).json()
+
+    assert body["grade"] != "clean"
+    assert [reason["value"] for reason in body["reasons"] if reason["metric"] == "warnings"] == [1]
 
 
 def test_calibration_replays_uploaded_captures_without_opening_the_drive(

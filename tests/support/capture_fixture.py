@@ -16,6 +16,7 @@ TRAILING_GAP: Final = 4000
 SKIP_SYNC: Final = 40
 CREATED: Final = "2026-09-25T12:00:00Z"
 IMAGE: Final = "game.fds"
+SHORT_GAP: Final = 482
 
 
 def disk_with_a_file() -> Disk:
@@ -55,3 +56,10 @@ def zipped(disk: Disk, offsets: tuple[int | None, ...]) -> bytes:
 def image_of(disk: Disk) -> bytes:
     data, _ = fds.encode(disk, headered=False)
     return data
+
+
+def short_gapped(disk: Disk, read: int) -> Capture:
+    values = unpack_raw03(encode_block_stream([block.payload for block in disk.sides[0].blocks]))
+    regions = block_regions(values)
+    cut = values[: regions[0][1]] + bytes(SHORT_GAP) + values[regions[1][0] :]
+    return Capture(side=0, read=read, data=pack_raw03(cut + bytes(TRAILING_GAP)))

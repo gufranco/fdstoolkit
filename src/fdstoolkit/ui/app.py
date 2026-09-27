@@ -23,6 +23,7 @@ from fdstoolkit.core.disk import Disk
 from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
 from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import Bundle
+from fdstoolkit.drive.pulse import bundle_findings
 from fdstoolkit.drive.recovery import captures_of_another_disk
 from fdstoolkit.drive.weak import bundle_weak_blocks
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
@@ -203,9 +204,13 @@ def grade(spec: GradeSpec) -> GradeResult:
     others = [decode_payload(entry)[0] for entry in spec.reads]
     stats = compare_reads([disk, *others]) if others else None
     confidence = score_disk(disk, reads=stats)
-    weak = None if spec.captures is None else _weak_count(disk, bundle_of(spec.captures))
+    bundle = None if spec.captures is None else bundle_of(spec.captures)
+    weak = None if bundle is None else _weak_count(disk, bundle)
+    pulse = () if bundle is None else bundle_findings(bundle.captures)
     return GradeResult.of(
-        grade_disk(confidence=confidence, findings=findings, reads=stats, weak_blocks=weak)
+        grade_disk(
+            confidence=confidence, findings=(*findings, *pulse), reads=stats, weak_blocks=weak
+        )
     )
 
 

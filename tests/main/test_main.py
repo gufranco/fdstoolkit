@@ -1492,6 +1492,19 @@ def test_dump_keeps_the_drives_pulse_classes(
     assert list((tmp_path / "raw").glob("*.raw03"))
 
 
+def test_a_dump_names_a_gap_the_ram_adapter_would_skip(
+    single_side: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attach(monkeypatch, single_side, plan=FaultPlan(short_gap_before=1))
+
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.fds")])
+
+    assert "side 0: [FDS017] gap before this block is shorter" in result.stdout
+    assert "(block 1, " in result.stdout
+
+
 def test_a_dump_that_fails_still_keeps_the_captures_it_took(
     image: Path,
     tmp_path: Path,
@@ -1516,6 +1529,7 @@ def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.Mo
             self._drive = SimulatedDrive(disk)
             self._captures = [Capture(side=0, read=1, data=b"\\x55" * 8)]
             self._resyncs = []
+            self._pulse = []
 
         def status(self):  # noqa: ANN202
             return self._drive.status()
@@ -1652,6 +1666,10 @@ def test_dump_asks_the_operator_to_turn_the_disk_over(
         def resyncs(self):  # noqa: ANN202
             return self._inner.resyncs
 
+        @property
+        def pulse_findings(self):  # noqa: ANN202
+            return self._inner.pulse_findings
+
     disk, _, _, _ = common.decode_image(image)
     drive = OneFace(disk)
 
@@ -1776,6 +1794,10 @@ def test_dump_can_be_told_the_disk_is_already_turned_over(
         @property
         def resyncs(self):  # noqa: ANN202
             return self._inner.resyncs
+
+        @property
+        def pulse_findings(self):  # noqa: ANN202
+            return self._inner.pulse_findings
 
     disk, _, _, _ = common.decode_image(image)
 
