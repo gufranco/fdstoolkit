@@ -23,6 +23,7 @@ NEXT_KIND: Final[dict[BlockKind, BlockKind]] = {
     BlockKind.FILE_HEADER: BlockKind.FILE_DATA,
     BlockKind.FILE_DATA: BlockKind.FILE_HEADER,
 }
+RESCAN_SIDES: Final = 2
 
 
 @dataclass(slots=True)
@@ -32,6 +33,7 @@ class _Walk:
     position: int
     expected: BlockKind
     pending_size: int
+    rescan_budget: int
 
 
 def _diagnostic(
@@ -94,6 +96,10 @@ def _true_length(walk: _Walk, data: bytes, offset: int, length: int, side_index:
     stored = decode_crc(data[offset + length : offset + length + CRC_SIZE])
     if walk.expected is not BlockKind.FILE_DATA or stored == block_crc(payload):
         return length
+    remaining = len(data) - offset
+    if remaining > walk.rescan_budget:
+        return length
+    walk.rescan_budget -= remaining
     found = _other_length(data, offset, length)
     if found is None:
         return length
@@ -110,7 +116,14 @@ def _true_length(walk: _Walk, data: bytes, offset: int, length: int, side_index:
 
 
 def _walk(data: bytes, *, has_crc: bool, side_index: int) -> _Walk:
-    walk = _Walk(blocks=[], findings=[], position=0, expected=BlockKind.DISK_INFO, pending_size=0)
+    walk = _Walk(
+        blocks=[],
+        findings=[],
+        position=0,
+        expected=BlockKind.DISK_INFO,
+        pending_size=0,
+        rescan_budget=RESCAN_SIDES * len(data),
+    )
     while walk.position < len(data):
         offset = walk.position
         code = data[offset]

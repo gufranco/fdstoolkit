@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from fdstoolkit.build.blank import blank_image
@@ -228,3 +230,39 @@ def test_decode_reads_a_data_block_shorter_than_its_header_declares() -> None:
     assert disk.sides[0].blocks[3].payload == payloads[3]
     assert len(disk.sides[0].blocks) == 6
     assert "FDS012" in [finding.code for finding in findings]
+
+
+HOSTILE_FILES = 500
+DECODE_BUDGET_S = 2.0
+
+
+def framed(payload: bytes, *, damaged: bool) -> bytes:
+    crc = block_crc(payload) ^ (0xFFFF if damaged else 0)
+    return payload + encode_crc(crc)
+
+
+def side_with_failing_data(files: int) -> bytes:
+    pairs = b"".join(
+        framed(header, damaged=False) + framed(bytes([0x04]) + bytes([0xAA]) * 4, damaged=True)
+        for header in (
+            bytes([0x03, number % 256, number % 256])
+            + b"FILE    "
+            + (0x6000).to_bytes(2, "little")
+            + (4).to_bytes(2, "little")
+            + bytes([0x00])
+            for number in range(files)
+        )
+    )
+    head = framed(disk_info(), damaged=False) + framed(bytes([0x02, 0xFF]), damaged=False)
+    return (head + pairs).ljust(SIDE_SIZE, b"\0")
+
+
+def test_a_side_of_many_failing_data_blocks_decodes_in_linear_time() -> None:
+    hostile = side_with_failing_data(HOSTILE_FILES)
+    started = time.perf_counter()
+
+    disk, findings = decode(hostile)
+
+    assert time.perf_counter() - started < DECODE_BUDGET_S
+    assert [finding.code for finding in findings].count("FDS002") == HOSTILE_FILES
+    assert disk.sides[0].file_count == HOSTILE_FILES
