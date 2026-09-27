@@ -7,7 +7,7 @@
 [![ci](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#貢献)
-[![python](https://img.shields.io/badge/python-3.13-blue)](pyproject.toml)
+[![python](https://img.shields.io/badge/python-3.14-blue)](pyproject.toml)
 
 <p align="center">
   <a href="#インストール">インストール</a> &nbsp;|&nbsp;
@@ -65,7 +65,7 @@ fdstoolkit doctor
 
 ```
 fdstoolkit        0.6.0
-python            3.13.15
+python            3.14.7
 platform          Darwin arm64
 hardware support  hidapi is installed
 fdsstick          1 device(s) connected, loopy FDSStick, serial 0001, firmware 1.04

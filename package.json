@@ -22,5 +22,8 @@
     "semantic-release": "25.0.9",
     "vitest": "^5.0.1"
   },
-  "packageManager": "pnpm@12.5.1"
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=24"
+  }
 }

@@ -39,7 +39,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install the page test tooling
@@ -74,7 +74,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install the page test tooling
@@ -92,11 +92,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest, windows-latest]
-        python: ["3.12", "3.13"]
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        python: ["3.12", "3.13", "3.14"]
         include:
           - os: ubuntu-24.04-arm
-            python: "3.13"
+            python: "3.14"
     steps:
       - uses: actions/checkout@v7
 
@@ -182,7 +182,7 @@ jobs:
 
   formula:
     name: Homebrew formula
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
 
