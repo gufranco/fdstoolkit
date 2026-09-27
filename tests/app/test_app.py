@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import base64
 import inspect
+import logging
 import re
+import threading
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app as cli_app
@@ -17,10 +20,12 @@ from fdstoolkit.identify.hashes import digests_of
 from fdstoolkit.ui.app import (
     DEVICE_CHECK,
     MAX_BODY_BYTES,
+    SHUTDOWN_WAIT_S,
     create_app,
 )
 from fdstoolkit.ui.body_limit import TOO_LARGE
 from fdstoolkit.ui.forms import forms, opens_a_drive
+from fdstoolkit.ui.jobs import Controls
 
 OK = 200
 BAD_REQUEST = 400
@@ -315,3 +320,52 @@ def test_an_unexpected_failure_answers_a_reference_the_terminal_log_carries(
     assert any(
         reference.group(1) in record.getMessage() and record.exc_info for record in caplog.records
     )
+
+
+class Nothing(BaseModel):
+    pass
+
+
+def test_stopping_the_server_mid_write_says_the_disk_may_be_half_written(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app = create_app()
+    release = threading.Event()
+
+    def work(controls: Controls) -> Nothing:
+        del controls
+        release.wait(SHUTDOWN_WAIT_S * 5)
+        return Nothing()
+
+    with caplog.at_level(logging.WARNING), TestClient(app, base_url="http://127.0.0.1"):
+        app.state.jobs.start("write", writes=True, work=work)
+
+    release.set()
+    assert any("may be half written" in record.getMessage() for record in caplog.records)
+
+
+def test_stopping_the_server_mid_read_says_nothing_was_written(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app = create_app()
+    release = threading.Event()
+
+    def work(controls: Controls) -> Nothing:
+        del controls
+        release.wait(SHUTDOWN_WAIT_S * 5)
+        return Nothing()
+
+    with caplog.at_level(logging.WARNING), TestClient(app, base_url="http://127.0.0.1"):
+        app.state.jobs.start("dump", writes=False, work=work)
+
+    release.set()
+    assert any("nothing was written" in record.getMessage() for record in caplog.records)
+
+
+def test_stopping_an_idle_server_warns_of_nothing(caplog: pytest.LogCaptureFixture) -> None:
+    app = create_app()
+
+    with caplog.at_level(logging.WARNING), TestClient(app, base_url="http://127.0.0.1"):
+        pass
+
+    assert not any("still running" in record.getMessage() for record in caplog.records)

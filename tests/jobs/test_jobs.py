@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Callable
 
@@ -258,3 +259,75 @@ def test_a_job_that_is_not_stoppable_refuses_a_stop() -> None:
     finished(board, job.id)
     with pytest.raises(NotStoppableError):
         board.stop("nothing")
+
+
+def test_a_hardware_fault_is_logged_with_its_job_and_command(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    board = JobBoard()
+
+    def work(controls: Controls) -> Answer:
+        del controls
+        message = "the device stopped answering"
+        raise HardwareFaultError(message, kind=FaultKind.LINK)
+
+    with caplog.at_level(logging.WARNING, logger="fdstoolkit.ui.jobs"):
+        job = board.start("write", writes=True, work=work)
+        finished(board, job.id)
+
+    assert any(
+        job.id in record.getMessage()
+        and "write" in record.getMessage()
+        and "the device stopped answering" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_every_step_is_logged_at_debug(caplog: pytest.LogCaptureFixture) -> None:
+    board = JobBoard()
+
+    def work(controls: Controls) -> Answer:
+        controls.step("reading side 0")
+        return Answer(value=1)
+
+    with caplog.at_level(logging.DEBUG, logger="fdstoolkit.ui.jobs"):
+        job = board.start("dump", writes=False, work=work)
+        finished(board, job.id)
+
+    assert any("reading side 0" in record.getMessage() for record in caplog.records)
+
+
+def test_shutting_down_with_nothing_running_returns_nothing() -> None:
+    board = JobBoard()
+
+    left = board.shutdown(BRIEF)
+
+    assert left is None
+
+
+def test_shutting_down_asks_a_running_job_to_stop_and_returns_it() -> None:
+    board = JobBoard()
+    release = threading.Event()
+
+    def work(controls: Controls) -> Answer:
+        release.wait(SETTLE)
+        del controls
+        return Answer(value=1)
+
+    job = board.start("write", writes=True, work=work, stoppable=True)
+
+    left = board.shutdown(BRIEF)
+
+    release.set()
+    assert left is not None
+    assert left.id == job.id
+    assert left.stopping
+
+
+def test_shutting_down_waits_for_a_job_that_ends_in_time() -> None:
+    board = JobBoard()
+    board.start("dump", writes=False, work=answering(1))
+
+    left = board.shutdown(SETTLE)
+
+    assert left is None

@@ -823,10 +823,12 @@ warning: no mode tried returned pulse timing, so this firmware sends pulse class
 #### `web`
 
 ```bash
-fdstoolkit web [--host <h>] [--port N] [--no-open]
+fdstoolkit web [--host <h>] [--port N] [--no-open] [--verbose]
 ```
 
-Open the local web interface. Every command above except `doctor` is reachable from it, and each route calls exactly what the command calls. `doctor` checks the installation, so it belongs in the terminal where the install happened. `--no-open` starts the server without opening a browser, which is what you want over SSH. Binds `127.0.0.1:8000` by default.
+Open the local web interface. Every command above except `doctor` is reachable from it, and each route calls exactly what the command calls. `doctor` checks the installation, so it belongs in the terminal where the install happened. `--no-open` starts the server without opening a browser, which is what you want over SSH. Binds `127.0.0.1:8000` by default. A disk job that fails is logged in the terminal, and `--verbose` prints every step of every job there too. Stopping the server while a job runs says so in the terminal, and for a write, that the disk may be half written.
+
+Only one program can hold the FDSStick at a time. While a dump, write or calibration runs, from the page or from another terminal, a second one is refused with a message naming the reason, and the device check reports the stick as in use rather than opening it.
 
 ## Web interface
 

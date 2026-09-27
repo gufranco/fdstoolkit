@@ -126,6 +126,7 @@ class JobBoard:
         with self._changed:
             job = self._jobs[job_id]
             self._put(replace(job, steps=(*job.steps, message)))
+        logger.debug("%s job %s: %s", job.command, job_id, message)
 
     def ask(self, job_id: str, prompt: str) -> bool:
         with self._changed:
@@ -169,6 +170,7 @@ class JobBoard:
         try:
             result = work(Controls(self, job_id))
         except FAULTS as error:
+            logger.warning("%s job %s failed: %s", self._command_of(job_id), job_id, error)
             self._end(job_id, state=JobState.FAILED, error=str(error))
         except Exception as error:
             logger.exception("disk job %s stopped unexpectedly", job_id)
@@ -187,6 +189,19 @@ class JobBoard:
         with self._changed:
             job = self._jobs[job_id]
             self._put(replace(job, state=state, error=error, result=result, prompt=""))
+
+    def shutdown(self, timeout: float) -> Job | None:
+        with self._changed:
+            job = self._active()
+            if job is None:
+                return None
+            self._put(replace(job, stopping=True))
+            ended = self._changed.wait_for(lambda: self._active() is None, timeout)
+            return None if ended else self._jobs[job.id]
+
+    def _command_of(self, job_id: str) -> str:
+        with self._changed:
+            return self._jobs[job_id].command
 
     def _put(self, job: Job) -> None:
         self._jobs = self._jobs | {job.id: job}

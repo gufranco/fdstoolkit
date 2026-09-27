@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -1613,6 +1614,21 @@ def test_web_starts_the_application(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.exit_code == 0
     assert started == [("127.0.0.1", 9123)]
     assert answered == [frozenset({"127.0.0.1"})]
+
+
+def test_web_verbose_prints_every_job_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hardware_cmds, "_require_web", _stub_web)
+    package = logging.getLogger("fdstoolkit")
+    before = (package.level, list(package.handlers))
+
+    result = runner.invoke(app, ["web", "--verbose", "--no-open"])
+
+    level, handlers = package.level, list(package.handlers)
+    package.setLevel(before[0])
+    package.handlers = before[1]
+    assert result.exit_code == 0
+    assert level == logging.DEBUG
+    assert len(handlers) == len(before[1]) + 1
 
 
 def test_web_says_which_extra_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:

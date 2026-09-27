@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import secrets
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from hashlib import sha256
 from importlib import resources
 from pathlib import Path
@@ -87,6 +89,10 @@ ASSET_STAMP: Final = asset_stamp()
 ASSET_ROOT: Final = f"/assets/{ASSET_STAMP}"
 A_YEAR: Final = 31536000
 NONCE_BYTES: Final = 16
+SHUTDOWN_WAIT_S: Final = 1.0
+LEFT_RUNNING: Final = "the server stopped while %s was still running: %s"
+WRITE_LEFT: Final = "the disk may be half written, so dump it before using it"
+READ_LEFT: Final = "nothing was written, but the read did not finish"
 FAULT_REFERENCE_BYTES: Final = 6
 PAGE_SCRIPT: Final = '<script type="module">'
 PAGE_POLICY: Final = (
@@ -381,8 +387,18 @@ async def _report_fault(request: Request, error: Exception) -> JSONResponse:
     )
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    yield
+    board: JobBoard = app.state.jobs
+    left = await asyncio.to_thread(board.shutdown, SHUTDOWN_WAIT_S)
+    if left is not None:
+        logger.warning(LEFT_RUNNING, left.command, WRITE_LEFT if left.writes else READ_LEFT)
+
+
 def create_app(*, allowed_hosts: frozenset[str] = frozenset()) -> FastAPI:
     app = FastAPI(
+        lifespan=_lifespan,
         title="Famicom Disk System Toolkit",
         version=VERSION,
         docs_url=None,

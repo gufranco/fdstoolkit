@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
@@ -424,6 +425,7 @@ def _require_web() -> tuple[Callable[..., None], Callable[..., object]]:
 
 
 LOOPBACK: Final = frozenset({"127.0.0.1", "::1", "localhost"})
+PACKAGE_LOGGER: Final = "fdstoolkit"
 
 PUBLISHED_HINT: Final = (
     "anyone who can reach this machine on that port can drive it, and there is no password. "
@@ -431,8 +433,18 @@ PUBLISHED_HINT: Final = (
 )
 
 
-def _start_web(*, host: str, port: int, open_browser: bool) -> None:
+def _log_steps() -> None:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    package = logging.getLogger(PACKAGE_LOGGER)
+    package.setLevel(logging.DEBUG)
+    package.addHandler(handler)
+
+
+def _start_web(*, host: str, port: int, open_browser: bool, verbose: bool = False) -> None:
     run, build = _require_web()
+    if verbose:
+        _log_steps()
     address = f"http://{host}:{port}"
     if host in LOOPBACK:
         typer.echo(f"serving on {address}, and nothing leaves this machine")
@@ -452,9 +464,13 @@ def web(
         bool,
         typer.Option("--no-open", help="start the server without opening a browser"),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", help="print every step of every disk job in this terminal"),
+    ] = False,
 ) -> None:
     """Open the local web interface, which reports exactly what these commands report."""
-    _start_web(host=host, port=port, open_browser=not no_open)
+    _start_web(host=host, port=port, open_browser=not no_open, verbose=verbose)
 
 
 def register(app: typer.Typer) -> None:
