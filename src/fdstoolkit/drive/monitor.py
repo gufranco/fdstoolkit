@@ -18,7 +18,7 @@ from fdstoolkit.codecs.raw import (
     lead_in_bits,
     unpack_detected,
 )
-from fdstoolkit.core.bios import BIOS_ERRORS, BLOCK_EXPECTED, CRC_FAILED
+from fdstoolkit.core.bios import BIOS_ERRORS, BLOCK_EXPECTED, CRC_FAILED, REPAIR_HINTS
 from fdstoolkit.core.blocks import Block, BlockKind, declared_blocks, expected_kind
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Side
@@ -386,7 +386,9 @@ def describe(mode: Mode, number: int, current: SideSample, change: Trend) -> str
         parts.append(f"lead-in {current.lead_in} bits")
     error = current.console_error
     if error is not None:
+        hint = REPAIR_HINTS.get(error)
         parts.append(f"console error {error:02X}, {BIOS_ERRORS[error]}")
+        parts.extend([hint] if hint else [])
     return f"{', '.join(parts)}: {verdict(mode, current)}, {change.value}"
 
 

@@ -214,6 +214,8 @@ Compares repeated dumps of one physical disk block by block. Reports stability, 
 
 With `--captures`, the same question is asked one layer down. Dumps can only disagree once a block has already failed its checksum; saved captures show the pulses that move between reads while every block still reads clean. Each weak block is listed with how many of its pulses differ, how many were invalid, and how many reads lost it altogether, the blocks some read never found first.
 
+Every `--captures` option, here and in `grade`, `consensus` and `calibrate`, also takes captures made by other tools: a directory or zip of FDSStick `.raw` timing files, one byte per pulse as loopy's software saves them, or of QDC RAW files, one count per 400 ns with the escapes the QDC manual describes. Each file holds one side, named by a `-A` or `-B` before the extension, and several files of one side are reads in name order. Pulse lengths are sorted into classes on each file's own measured clock, so both formats go through the same analysis as the stick's captures. A packed capture is read high bits first, the order the stick sends; one that only decodes low bits first, as [NintendulatorNRS](https://github.com/FurblandChannel/Furbtendulator) reads loopy's saved `.raw03` files, is read that way and named `FDS019`.
+
 ```bash
 fdstoolkit reads --captures captures/
 ```
@@ -720,8 +722,8 @@ fdstoolkit calibrate speed --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28310 bits, console error 27, block failed CRC: reads fast, first read
-  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28296 bits, console error 27, block failed CRC: reads fast, the same as the last read
+  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28310 bits, console error 27, block failed CRC, which one repairer puts down to the spindle, motor and other adjustments: reads fast, first read
+  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28296 bits, console error 27, block failed CRC, which one repairer puts down to the spindle, motor and other adjustments: reads fast, the same as the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid, lead-in 28303 bits: reads clean, better than the last read
 reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table; the last 3 reads: 2 reads fast, 1 reads clean
 ```
@@ -748,15 +750,15 @@ fdstoolkit calibrate head --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, lead-in 27920 bits, console error 22, block 1 expected: the start of the side is not read, first read
-  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, lead-in 28105 bits, console error 22, block 1 expected: the start of the side is not read, better than the last read
+  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, lead-in 27920 bits, console error 22, block 1 expected, which one repairer puts down to data not reaching the adapter in order, or at all: the start of the side is not read, first read
+  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, lead-in 28105 bits, console error 22, block 1 expected, which one repairer puts down to data not reaching the adapter in order, or at all: the start of the side is not read, better than the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid, lead-in 28302 bits: reads clean, better than the last read
 reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another; the last 3 reads: 2 the start of the side is not read, 1 reads clean
 ```
 
 The head tolerance is about 0.05 mm and a full turn of the head screw moves the head about one track, so adjust about 45 degrees at a time and read again, as the FDSStick's author advises. Once it reads clean, repeat with two more factory disks: a head can be set to suit one disk and miss another. Neither mode can say which way to turn, only whether the last turn helped.
 
-Each failing read also names the error a console would stop on for it, from the console's own table: `22` to `25` when block 1 to 4 is not found, `27` when a block is found and fails its checksum. These are the numbers the repair guides talk about, so a line reads the same way the television would. It is the stick's read translated, not a console's: a console reads with its own drive electronics, and could stop one block earlier or later. Errors 01 and 02 never appear here: the [BIOS table](https://www.nesdev.org/wiki/FDS_BIOS) raises 01 when the drive says no disk is set and 02 when it reports a power supply failure, and the stick reports neither signal.
+Each failing read also names the error a console would stop on for it, from the console's own table: `22` to `25` when block 1 to 4 is not found, `27` when a block is found and fails its checksum. These are the numbers the repair guides talk about, so a line reads the same way the television would. It is the stick's read translated, not a console's: a console reads with its own drive electronics, and could stop one block earlier or later. Errors 22, 23, 24 and 27 also carry the cause one repairer gives for them in a [famicomworld thread](https://www.famicomworld.com/forum/index.php?topic=7142.0), worded as that repairer's experience rather than a specification; errors the thread marks as uncertain carry none. Errors 01 and 02 never appear here: the [BIOS table](https://www.nesdev.org/wiki/FDS_BIOS) raises 01 when the drive says no disk is set and 02 when it reports a power supply failure, and the stick reports neither signal.
 
 When most of the last read's failing pulses fit no class at all, rather than leaning short or long, the headline adds that this points at electrical noise on the read line. If the USB link reported no skipped packets, it names the fix the FDSStick's author [gives for read errors](https://www.fdsstick.com/101-2/): a series resistor of about 10k on the READ DATA pin.
 
@@ -950,6 +952,8 @@ What each conversion costs:
 A file header's size is a claim, and some copy protections make it false: a header declaring one byte in front of a data block that really holds 48 KiB. Where checksums exist, in a pulse capture or a `.qd`, the data block is read to the point where its own checksum matches and the next block or the gap begins, and `FDS016` names the difference. A `.fds` has no checksums to find that point, so it keeps the bytes but not the boundary, and every command that writes a `.fds`, on the command line or the page, names such a block and points at `.qd`. A header that declares more than its data block holds is found the same way in a `.qd` and named `FDS012`. One case stays ambiguous by nature: a block whose checksum ends in a zero byte, followed by a gap of zeros, reads equally well as a block one byte shorter with a different valid checksum, and the shorter reading is the one taken, since a zero final byte happens once in 256 blocks.
 
 A pulse capture also measures the gap in front of every block after the first. The RAM adapter ignores roughly the first 488 bits after a block ends, per the technical reference above, so a block whose gap is shorter can be missed by a console even when the stick reads it; `FDS017` names such a block and the gap it had. `dump` prints these pulse findings, a lost sync mark (`FDS015`) and a block cut short (`FDS004`) among them, and `grade --captures` counts them. A finding counts against the disk only when every read of that side shows it; one that shows in some reads is put down to those reads. Undecodable pulses after the last declared block are reported as information, `FDS018`, never as a fault: the FDSStick's author notes that nearly every disk carries them.
+
+A block of type 5 after the last file is test data. The [nesdev disk format page](https://www.nesdev.org/wiki/FDS_disk_format) describes it as a repeating `6D B6 DB` that fills the side, written by the FMC Disk Card Checker and seen in fragments on retail disks; some Magic Card disks use the same type for trainer data. It is named `FDS020`, as information, with whether the pattern matched, rather than as an unexpected block.
 
 ## Exit codes and scripting
 

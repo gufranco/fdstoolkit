@@ -15,6 +15,7 @@ from fdstoolkit.codecs.raw import (
     pack_raw03,
     unpack_raw03,
 )
+from fdstoolkit.core.bios import REPAIR_HINTS
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.monitor import (
@@ -360,6 +361,26 @@ def test_a_block_that_is_found_but_wrong_is_console_error_27() -> None:
     found = sample(nudged(stream(side), shorter=True), side)
 
     assert found.console_error == 0x27
+
+
+def test_a_console_error_a_repairer_has_explained_carries_the_hint() -> None:
+    side = reference_side()
+    found = sample(stream(side, keep=slice(2, None)), side)
+
+    line = describe(Mode.HEAD, 1, found, Trend.FIRST)
+
+    assert f"console error 22, block 1 expected, {REPAIR_HINTS[0x22]}:" in line
+
+
+def test_a_console_error_without_a_hint_is_named_alone() -> None:
+    side = reference_side()
+    payloads = [block.payload for block in side.blocks]
+    found = sample(encode_block_stream(payloads[:3] + payloads[4:]), side)
+
+    line = describe(Mode.HEAD, 1, found, Trend.FIRST)
+
+    assert found.console_error == 0x25
+    assert "console error 25, block 4 expected:" in line
 
 
 def test_a_clean_read_has_no_console_error() -> None:

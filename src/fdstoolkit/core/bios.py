@@ -42,6 +42,12 @@ BIOS_ERRORS: Final[Mapping[int, str]] = {
     0x35: "FMC Disk Card Checker block 5 verification failed",
     0x40: "LoadFiles could not load all requested files",
 }
+REPAIR_HINTS: Final[Mapping[int, str]] = {
+    0x22: "which one repairer puts down to data not reaching the adapter in order, or at all",
+    0x23: "which one repairer puts down to the spindle and motor adjustment",
+    0x24: "which one repairer has only ever seen on damaged media",
+    0x27: "which one repairer puts down to the spindle, motor and other adjustments",
+}
 
 
 class BootVerdict(StrEnum):

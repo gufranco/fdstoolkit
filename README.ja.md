@@ -208,6 +208,8 @@ fdstoolkit reads --captures <bundle> [--json]
 
 `--captures` を付けると、同じ問いを 1 層下で問います。吸い出しどうしが食い違うのは、ブロックがすでにチェックサムで失敗したあとだけです。保存したキャプチャなら、すべてのブロックがまだ正しく読めているうちに、読み取りごとに揺れるパルスが見えます。弱いブロックごとに、揺れたパルスの数、無効なパルスの数、そのブロックをまったく見つけられなかった読み取りの数を示し、見つけられなかった読み取りのあるブロックを先に並べます。
 
+ここでも `grade`、`consensus`、`calibrate` でも、`--captures` はほかのツールが作ったキャプチャも受け付けます。loopy のソフトウェアが保存する 1 パルス 1 バイトの FDSStick `.raw` タイミングファイル、または QDC マニュアルが定めるエスケープを持つ 400 ns 単位の QDC RAW ファイルを、ディレクトリか zip にまとめて渡します。1 ファイルが 1 面で、拡張子の前の `-A` か `-B` が面を示し、同じ面の複数のファイルは名前順に読み取りとして扱います。パルスの長さはファイルごとに測ったクロックでクラスに分けるので、どちらの形式もスティック自身のキャプチャと同じ解析を通ります。パックされたキャプチャは、スティックが送る順である上位ビット優先で読みます。下位ビット優先でしか解読できないもの、つまり [NintendulatorNRS](https://github.com/FurblandChannel/Furbtendulator) が loopy の保存した `.raw03` を読む順のものは、その順で読み、`FDS019` として示します。
+
 ```bash
 fdstoolkit reads --captures captures/
 ```
@@ -709,8 +711,8 @@ fdstoolkit calibrate speed --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28310 bits, console error 27, block failed CRC: reads fast, first read
-  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28296 bits, console error 27, block failed CRC: reads fast, the same as the last read
+  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28310 bits, console error 27, block failed CRC, which one repairer puts down to the spindle, motor and other adjustments: reads fast, first read
+  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28296 bits, console error 27, block failed CRC, which one repairer puts down to the spindle, motor and other adjustments: reads fast, the same as the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid, lead-in 28303 bits: reads clean, better than the last read
 reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table; the last 3 reads: 2 reads fast, 1 reads clean
 ```
@@ -737,15 +739,15 @@ fdstoolkit calibrate head --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, lead-in 27920 bits, console error 22, block 1 expected: the start of the side is not read, first read
-  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, lead-in 28105 bits, console error 22, block 1 expected: the start of the side is not read, better than the last read
+  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, lead-in 27920 bits, console error 22, block 1 expected, which one repairer puts down to data not reaching the adapter in order, or at all: the start of the side is not read, first read
+  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, lead-in 28105 bits, console error 22, block 1 expected, which one repairer puts down to data not reaching the adapter in order, or at all: the start of the side is not read, better than the last read
   read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid, lead-in 28302 bits: reads clean, better than the last read
 reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another; the last 3 reads: 2 the start of the side is not read, 1 reads clean
 ```
 
 ヘッドの許容誤差はおよそ 0.05 mm で、ヘッドのねじを 1 回転させるとヘッドはおよそ 1 トラック動きます。そのため FDSStick の作者の助言どおり、およそ 45 度ずつ調整して読み直します。正しく読めたら、さらに 2 枚の工場出荷のディスクで繰り返します。ヘッドは 1 枚のディスクに合っても別のディスクには合わないことがあるからです。どちらのモードも、どちらへ回すべきかは示せず、直前の調整がよくなったかどうかだけを示します。
 
-失敗した読み取りには、本体ならどのエラーで止まるかも、本体自身のエラー表から示します。ブロック 1 から 4 が見つからなければ `22` から `25`、ブロックが見つかってもチェックサムが合わなければ `27` です。修理ガイドが話題にするのはこの番号なので、1 行がテレビに表示されるのと同じ形で読めます。これはスティックの読み取りを置き換えたもので、本体の読み取りそのものではありません。本体は自分のドライブ回路で読むので、1 ブロック早く、あるいは遅く止まることがあります。エラー 01 と 02 がここに現れることはありません。[BIOS の表](https://www.nesdev.org/wiki/FDS_BIOS)では、01 はドライブがディスク未挿入を示したとき、02 は電源異常を示したときに出ますが、スティックはどちらの信号も伝えないからです。
+失敗した読み取りには、本体ならどのエラーで止まるかも、本体自身のエラー表から示します。ブロック 1 から 4 が見つからなければ `22` から `25`、ブロックが見つかってもチェックサムが合わなければ `27` です。修理ガイドが話題にするのはこの番号なので、1 行がテレビに表示されるのと同じ形で読めます。これはスティックの読み取りを置き換えたもので、本体の読み取りそのものではありません。本体は自分のドライブ回路で読むので、1 ブロック早く、あるいは遅く止まることがあります。エラー 22、23、24、27 には、[famicomworld のスレッド](https://www.famicomworld.com/forum/index.php?topic=7142.0)である修理者が挙げている原因も添えます。仕様ではなくその修理者の経験として書いてあり、スレッドが不確かとしているエラーには添えません。エラー 01 と 02 がここに現れることはありません。[BIOS の表](https://www.nesdev.org/wiki/FDS_BIOS)では、01 はドライブがディスク未挿入を示したとき、02 は電源異常を示したときに出ますが、スティックはどちらの信号も伝えないからです。
 
 最後の読み取りで失敗したパルスの大半が、短い側にも長い側にも偏らず、どのクラスにも当てはまらない場合、見出しは読み取り線の電気的なノイズを疑うよう付け加えます。USB 接続がパケットの取りこぼしを報告していなければ、FDSStick の作者が[読み取りエラーの対策として挙げている](https://www.fdsstick.com/101-2/)方法も示します。READ DATA ピンに 10k 程度の抵抗を直列に入れる方法です。
 
@@ -939,6 +941,8 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 ファイルヘッダのサイズは申告にすぎず、コピープロテクトの中にはこれを偽るものがあります。実際には 48 KiB あるファイル本体の前に、1 バイトと申告するヘッダを置く例です。パルスキャプチャや `.qd` のようにチェックサムがある場合は、ブロック自身のチェックサムが一致し、その直後に次のブロックかギャップが始まる位置までファイル本体を読み、`FDS016` でその差を示します。`.fds` にはその位置を見つけるチェックサムがないため、バイト列は保たれても境界は保たれません。コマンドラインでもページでも、`.fds` を書き出すコマンドはそのようなブロックを明示し、`.qd` を勧めます。ファイル本体より大きなサイズを申告するヘッダも、`.qd` では同じ方法で見つけ、`FDS012` として示します。1 つだけ本質的に曖昧な場合があります。チェックサムの最後のバイトが 0 で、その後に 0 のギャップが続くブロックは、別の正しいチェックサムを持つ 1 バイト短いブロックとしても同じように読めます。最後のバイトが 0 になるのは 256 ブロックに 1 つなので、短いほうの読みを採ります。
 
 パルスキャプチャでは、2 つ目以降の各ブロックの前にあるギャップの長さも測ります。上の技術資料によれば、RAM アダプタはブロックが終わった直後のおよそ 488 ビットを無視します。そのためギャップがそれより短いブロックは、スティックでは読めても実機では読み落とされることがあり、`FDS017` がそのブロックとギャップの長さを示します。`dump` はこうしたパルス段階の所見を表示し、そこには同期マークの喪失 (`FDS015`) や途中で切れたブロック (`FDS004`) も含まれます。`grade --captures` はそれらを評価に数えます。ある所見がディスクの問題として数えられるのは、その面のすべての読み取りに現れた場合だけです。一部の読み取りにしか現れない所見は、その読み取りの問題とみなします。最後に申告されたブロックより後ろの解読できないパルスは、異常ではなく情報 `FDS018` として報告します。FDSStick の作者によれば、ほぼすべてのディスクにそれがあるからです。
+
+最後のファイルの後にあるタイプ 5 のブロックはテストデータです。[nesdev のディスク形式のページ](https://www.nesdev.org/wiki/FDS_disk_format)によれば、面を埋める `6D B6 DB` の繰り返しで、FMC Disk Card Checker が書き込み、市販ディスクにも断片が見られます。Magic Card の一部のディスクは同じタイプをトレーナーデータに使います。予期しないブロックとしてではなく情報 `FDS020` として示し、パターンが一致したかも添えます。
 
 ## 終了コードとスクリプト化
 
