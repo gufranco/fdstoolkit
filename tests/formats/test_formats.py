@@ -306,3 +306,73 @@ def test_a_ups_record_that_runs_to_the_end_of_the_body_stops_there() -> None:
     patch += zlib.crc32(bytes(patch)).to_bytes(4, "little")
 
     assert apply_ups(bytes(patch), source) == bytes([0x02, 0x02])
+
+
+HUGE = 2**32
+
+
+def bps(source: bytes, target_size: int, actions: bytes) -> bytes:
+    patch = bytearray(b"BPS1")
+    patch += write_varint(len(source)) + write_varint(target_size) + write_varint(0) + actions
+    patch += zlib.crc32(source).to_bytes(4, "little")
+    patch += bytes(4)
+    patch += zlib.crc32(bytes(patch)).to_bytes(4, "little")
+    return bytes(patch)
+
+
+def test_a_bps_target_copy_past_the_target_is_refused_before_it_runs() -> None:
+    source = bytes([0xAA])
+    actions = (
+        write_varint(((1 - 1) << 2) | 1)
+        + bytes([0x01])
+        + write_varint(((HUGE - 1) << 2) | 3)
+        + write_varint(0)
+    )
+
+    with pytest.raises(PatchError, match="past the 16 bytes"):
+        apply_bps(bps(source, 16, actions), source)
+
+
+def test_a_bps_target_copy_from_where_nothing_was_written_is_refused() -> None:
+    source = bytes([0xAA])
+    actions = write_varint(((1 - 1) << 2) | 1) + bytes([0x01]) + write_varint(((1 - 1) << 2) | 3)
+    actions += write_varint(8 << 1)
+
+    with pytest.raises(PatchError, match="copies from"):
+        apply_bps(bps(source, 4, actions), source)
+
+
+def test_a_patch_asking_for_a_target_larger_than_any_image_is_refused() -> None:
+    source = bytes([0xAA])
+
+    with pytest.raises(PatchError, match="larger than any disk image"):
+        apply_bps(bps(source, HUGE, b""), source)
+
+
+def test_an_ips_run_length_record_cut_short_is_a_patch_error() -> None:
+    patch = b"PATCH" + (0).to_bytes(3, "big") + (0).to_bytes(2, "big") + (4).to_bytes(2, "big")
+
+    with pytest.raises(PatchError, match="ends inside a record"):
+        apply_ips(patch, bytes(8))
+
+
+def test_an_ips_record_whose_data_is_cut_short_is_a_patch_error() -> None:
+    patch = b"PATCH" + (0).to_bytes(3, "big") + (8).to_bytes(2, "big") + b"\x01\x02"
+
+    with pytest.raises(PatchError, match="ends inside a record"):
+        apply_ips(patch, bytes(8))
+
+
+def test_a_bps_source_read_past_the_source_is_refused() -> None:
+    source = bytes([0xAA])
+
+    with pytest.raises(PatchError, match="reads 4 bytes at byte 0 of a source 1 bytes long"):
+        apply_bps(bps(source, 4, write_varint(((4 - 1) << 2) | 0)), source)
+
+
+def test_a_bps_source_copy_from_before_the_source_is_refused() -> None:
+    source = bytes([0xAA, 0xBB])
+    actions = write_varint(((1 - 1) << 2) | 2) + write_varint((3 << 1) | 1)
+
+    with pytest.raises(PatchError, match="at byte -3"):
+        apply_bps(bps(source, 1, actions), source)

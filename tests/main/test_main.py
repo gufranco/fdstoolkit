@@ -629,6 +629,18 @@ def test_patch_applies_an_ips(single_side: Path, tmp_path: Path) -> None:
     )
 
 
+def test_patch_refuses_an_ips_cut_short_with_a_message(single_side: Path, tmp_path: Path) -> None:
+    patch = tmp_path / "short.ips"
+    patch.write_bytes(b"PATCH" + (0).to_bytes(3, "big") + (0).to_bytes(2, "big") + b"\x00")
+    out = tmp_path / "patched.fds"
+
+    result = runner.invoke(app, ["patch", str(single_side), "--patch", str(patch), "-o", str(out)])
+
+    assert result.exit_code == 1
+    assert "the patch ends inside a record at byte 10" in result.stdout
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
 def test_patch_reports_a_missing_patch_file(single_side: Path, tmp_path: Path) -> None:
     result = runner.invoke(
         app,

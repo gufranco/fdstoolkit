@@ -18,6 +18,7 @@ ACTION_MASK: Final = 0b11
 SOURCE_READ: Final = 0
 TARGET_READ: Final = 1
 SOURCE_COPY: Final = 2
+MAX_TARGET_BYTES: Final = 16 * 1024 * 1024
 
 
 class PatchFormat(StrEnum):
@@ -71,6 +72,22 @@ def read_varint(data: bytes, position: int) -> tuple[int, int]:
     raise PatchError(message)
 
 
+def _cut_short(patch: bytes, end: int, cursor: int) -> None:
+    if end > len(patch):
+        message = f"the patch ends inside a record at byte {cursor}"
+        raise PatchError(message)
+
+
+def _target_size(value: int) -> int:
+    if value > MAX_TARGET_BYTES:
+        message = (
+            f"the patch declares a {value}-byte target, larger than any disk image; "
+            f"the limit is {MAX_TARGET_BYTES} bytes"
+        )
+        raise PatchError(message)
+    return value
+
+
 def _grow(out: bytearray, size: int) -> None:
     if len(out) < size:
         out.extend(bytes(size - len(out)))
@@ -93,9 +110,11 @@ def apply_ips(patch: bytes, source: bytes) -> bytes:
         length = int.from_bytes(patch[cursor : cursor + LENGTH_SIZE], "big")
         cursor += LENGTH_SIZE
         if length:
+            _cut_short(patch, cursor + length, cursor)
             chunk = patch[cursor : cursor + length]
             cursor += length
         else:
+            _cut_short(patch, cursor + LENGTH_SIZE + 1, cursor)
             count = int.from_bytes(patch[cursor : cursor + LENGTH_SIZE], "big")
             cursor += LENGTH_SIZE
             chunk = bytes([patch[cursor]]) * count
@@ -127,7 +146,8 @@ def apply_ups(patch: bytes, source: bytes) -> bytes:
 
     cursor = len(UPS_MAGIC)
     _, cursor = read_varint(patch, cursor)
-    target_size, cursor = read_varint(patch, cursor)
+    declared, cursor = read_varint(patch, cursor)
+    target_size = _target_size(declared)
 
     out = bytearray(source[:target_size])
     _grow(out, target_size)
@@ -155,6 +175,26 @@ def _bps_relative(patch: bytes, cursor: int, offset: int) -> tuple[int, int]:
     return offset + (-delta if data & 1 else delta), cursor
 
 
+def _room(out: bytearray, length: int, target_size: int) -> None:
+    if len(out) + length > target_size:
+        message = f"the patch writes past the {target_size} bytes its target holds"
+        raise PatchError(message)
+
+
+def _in_source(source: bytes, offset: int, length: int) -> None:
+    if offset < 0 or offset + length > len(source):
+        message = (
+            f"the patch reads {length} bytes at byte {offset} of a source {len(source)} bytes long"
+        )
+        raise PatchError(message)
+
+
+def _written(out: bytearray, offset: int) -> None:
+    if not 0 <= offset < len(out):
+        message = f"the patch copies from byte {offset} of a target {len(out)} bytes long"
+        raise PatchError(message)
+
+
 def apply_bps(patch: bytes, source: bytes) -> bytes:
     if not patch.startswith(BPS_MAGIC):
         message = "not a BPS patch"
@@ -165,7 +205,8 @@ def apply_bps(patch: bytes, source: bytes) -> bytes:
 
     cursor = len(BPS_MAGIC)
     _, cursor = read_varint(patch, cursor)
-    target_size, cursor = read_varint(patch, cursor)
+    declared, cursor = read_varint(patch, cursor)
+    target_size = _target_size(declared)
     metadata_size, cursor = read_varint(patch, cursor)
     cursor += metadata_size
 
@@ -177,19 +218,23 @@ def apply_bps(patch: bytes, source: bytes) -> bytes:
         data, cursor = read_varint(patch, cursor)
         action = data & ACTION_MASK
         length = (data >> 2) + 1
+        _room(out, length, target_size)
 
         if action == SOURCE_READ:
             start = len(out)
+            _in_source(source, start, length)
             out += source[start : start + length]
         elif action == TARGET_READ:
             out += patch[cursor : cursor + length]
             cursor += length
         elif action == SOURCE_COPY:
             source_offset, cursor = _bps_relative(patch, cursor, source_offset)
+            _in_source(source, source_offset, length)
             out += source[source_offset : source_offset + length]
             source_offset += length
         else:
             target_offset, cursor = _bps_relative(patch, cursor, target_offset)
+            _written(out, target_offset)
             for _ in range(length):
                 out.append(out[target_offset])
                 target_offset += 1
