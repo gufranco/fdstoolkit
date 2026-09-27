@@ -11,7 +11,7 @@ CLI_ONLY = {"web", "doctor"}
 
 @pytest.fixture(name="client")
 def client_fixture() -> TestClient:
-    return TestClient(create_app())
+    return TestClient(create_app(), base_url="http://127.0.0.1")
 
 
 def cli_commands() -> set[str]:

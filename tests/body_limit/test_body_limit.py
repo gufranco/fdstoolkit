@@ -23,7 +23,7 @@ OK = 200
 
 @pytest.fixture(name="client")
 def client_fixture() -> TestClient:
-    return TestClient(create_app())
+    return TestClient(create_app(), base_url="http://127.0.0.1")
 
 
 def chunks(count: int) -> Iterator[bytes]:

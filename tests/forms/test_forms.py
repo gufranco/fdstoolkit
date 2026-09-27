@@ -12,7 +12,7 @@ GET_ONLY = {"status"}
 
 @pytest.fixture(name="client")
 def client_fixture() -> TestClient:
-    return TestClient(create_app())
+    return TestClient(create_app(), base_url="http://127.0.0.1")
 
 
 def test_every_command_with_a_route_has_a_form() -> None:

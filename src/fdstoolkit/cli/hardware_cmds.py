@@ -408,7 +408,7 @@ def _report_finish(report: SurfaceReport) -> None:
         typer.echo(f"  {report.finish_problem}")
 
 
-def web_server() -> tuple[Callable[..., None], Callable[[], object]]:
+def web_server() -> tuple[Callable[..., None], Callable[..., object]]:
     import uvicorn  # noqa: PLC0415
 
     from fdstoolkit.ui.app import create_app  # noqa: PLC0415
@@ -416,7 +416,7 @@ def web_server() -> tuple[Callable[..., None], Callable[[], object]]:
     return uvicorn.run, create_app
 
 
-def _require_web() -> tuple[Callable[..., None], Callable[[], object]]:
+def _require_web() -> tuple[Callable[..., None], Callable[..., object]]:
     try:
         return web_server()
     except ImportError as error:
@@ -441,7 +441,7 @@ def _start_web(*, host: str, port: int, open_browser: bool) -> None:
         typer.echo(PUBLISHED_HINT)
     if open_browser:
         webbrowser.open(address)
-    run(build(), host=host, port=port)
+    run(build(allowed_hosts=frozenset({host})), host=host, port=port)
 
 
 def web(

@@ -48,7 +48,7 @@ def app_fixture() -> FastAPI:
 
 @pytest.fixture(name="client")
 def client_fixture(app: FastAPI) -> TestClient:
-    return TestClient(app)
+    return TestClient(app, base_url="http://127.0.0.1")
 
 
 def serve(monkeypatch: pytest.MonkeyPatch, drive: SimulatedDrive) -> SimulatedDrive:

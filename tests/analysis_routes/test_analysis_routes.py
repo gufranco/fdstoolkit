@@ -17,7 +17,7 @@ ONE = base64.b64encode(ONE_SIDE).decode("ascii")
 
 @pytest.fixture(name="client")
 def client_fixture() -> TestClient:
-    return TestClient(create_app())
+    return TestClient(create_app(), base_url="http://127.0.0.1")
 
 
 def test_splice_needs_a_donor(client: TestClient) -> None:

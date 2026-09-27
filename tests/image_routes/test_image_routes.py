@@ -22,7 +22,7 @@ RENAMED = base64.b64encode(RENAMED_IMAGE).decode("ascii")
 
 @pytest.fixture(name="client")
 def client_fixture() -> TestClient:
-    return TestClient(create_app())
+    return TestClient(create_app(), base_url="http://127.0.0.1")
 
 
 def test_diff_reports_no_difference_between_one_image_and_itself(

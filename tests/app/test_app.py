@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import inspect
+import re
 from unittest.mock import patch
 
 import pytest
@@ -30,7 +31,7 @@ ENCODED = base64.b64encode(IMAGE).decode("ascii")
 
 @pytest.fixture(name="client")
 def client_fixture() -> TestClient:
-    return TestClient(create_app())
+    return TestClient(create_app(), base_url="http://127.0.0.1")
 
 
 def test_the_page_is_served(client: TestClient) -> None:
@@ -202,10 +203,6 @@ def test_a_damaged_image_is_reported_rather_than_refused(client: TestClient) -> 
     assert answer.json()["diagnostics"]
 
 
-def test_the_api_documentation_is_served(client: TestClient) -> None:
-    assert client.get("/docs").status_code == OK
-
-
 def test_convert_rewrites_an_fds_without_a_header(client: TestClient) -> None:
     body = client.post("/api/convert", json={"data": ENCODED, "to_qd": False}).json()
 
@@ -296,7 +293,9 @@ def test_status_reports_only_the_device_checks(client: TestClient) -> None:
     assert isinstance(body["healthy"], bool)
 
 
-def test_an_unexpected_failure_answers_json_that_names_it() -> None:
+def test_an_unexpected_failure_answers_a_reference_the_terminal_log_carries(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     app = create_app()
 
     def broken() -> None:
@@ -304,7 +303,15 @@ def test_an_unexpected_failure_answers_json_that_names_it() -> None:
         raise RuntimeError(message)
 
     app.add_api_route("/api/broken", broken, methods=["GET"])
-    answer = TestClient(app, raise_server_exceptions=False).get("/api/broken")
+    answer = TestClient(app, raise_server_exceptions=False, base_url="http://127.0.0.1").get(
+        "/api/broken"
+    )
 
+    detail = answer.json()["detail"]
+    reference = re.search(r"reference ([0-9a-f]{12})\.", detail)
     assert answer.status_code == 500
-    assert "RuntimeError: the parser met a byte it did not expect" in answer.json()["detail"]
+    assert "the parser met a byte" not in detail
+    assert reference is not None
+    assert any(
+        reference.group(1) in record.getMessage() and record.exc_info for record in caplog.records
+    )

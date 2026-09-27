@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import secrets
 from collections.abc import Awaitable, Callable
 from hashlib import sha256
 from importlib import resources
@@ -34,6 +35,7 @@ from fdstoolkit.ui import analysis_routes, hardware_routes, image_routes
 from fdstoolkit.ui.body_limit import BodyLimit
 from fdstoolkit.ui.forms import FAMILY_ORDER, forms
 from fdstoolkit.ui.jobs import JobBoard
+from fdstoolkit.ui.request_guard import request_guard
 from fdstoolkit.ui.schemas import (
     BlankSpec,
     Catalogue,
@@ -84,6 +86,14 @@ def asset_stamp() -> str:
 ASSET_STAMP: Final = asset_stamp()
 ASSET_ROOT: Final = f"/assets/{ASSET_STAMP}"
 A_YEAR: Final = 31536000
+NONCE_BYTES: Final = 16
+FAULT_REFERENCE_BYTES: Final = 6
+PAGE_SCRIPT: Final = '<script type="module">'
+PAGE_POLICY: Final = (
+    "default-src 'self'; script-src 'nonce-{nonce}' 'strict-dynamic'; style-src 'self'; "
+    "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+    "form-action 'self'; frame-ancestors 'none'"
+)
 SIDE_SIZE: Final = fds.SIDE_SIZE
 MIN_READS: Final = 2
 CALIBRATION_NAME: Final = "calibration.fds"
@@ -128,9 +138,18 @@ def _profile(name: str) -> MaskProfile:
 
 
 def index() -> HTMLResponse:
+    nonce = secrets.token_urlsafe(NONCE_BYTES)
     markup = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    stamped = markup.replace("/static/", f"{ASSET_ROOT}/")
-    return HTMLResponse(stamped, headers={"cache-control": "no-store"})
+    stamped = markup.replace("/static/", f"{ASSET_ROOT}/").replace(
+        PAGE_SCRIPT, f'<script type="module" nonce="{nonce}">'
+    )
+    return HTMLResponse(
+        stamped,
+        headers={
+            "cache-control": "no-store",
+            "content-security-policy": PAGE_POLICY.format(nonce=nonce),
+        },
+    )
 
 
 def catalogue() -> Catalogue:
@@ -347,24 +366,34 @@ async def _label_asset_lifetime(
 
 
 async def _report_fault(request: Request, error: Exception) -> JSONResponse:
-    logger.error("%s %s failed", request.method, request.url.path, exc_info=error)
+    reference = secrets.token_hex(FAULT_REFERENCE_BYTES)
+    logger.error(
+        "%s %s failed, reference %s", request.method, request.url.path, reference, exc_info=error
+    )
     return JSONResponse(
         status_code=SERVER_FAULT,
         content={
             "detail": (
-                f"the server failed on this request: {type(error).__name__}: {error}. "
-                "The full traceback is in the terminal that started fdstoolkit web"
+                f"the server failed on this request, reference {reference}. The full "
+                "traceback is in the terminal that started fdstoolkit web, under that reference"
             )
         },
     )
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title="Famicom Disk System Toolkit", version=VERSION, docs_url="/docs")
+def create_app(*, allowed_hosts: frozenset[str] = frozenset()) -> FastAPI:
+    app = FastAPI(
+        title="Famicom Disk System Toolkit",
+        version=VERSION,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
     app.add_exception_handler(Exception, _report_fault)
     app.state.jobs = JobBoard()
     app.middleware("http")(_label_asset_lifetime)
     app.add_middleware(BodyLimit, limit=MAX_BODY_BYTES)
+    app.middleware("http")(request_guard(allowed_hosts))
     _register_core(app)
     _register_image(app)
     _register_analysis(app)

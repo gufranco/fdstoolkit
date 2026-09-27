@@ -16,6 +16,7 @@ about what a malformed input can make the code do.
 | Malformed input | A crafted disk image, patch or DAT that makes the tool write outside its output folder, consume unbounded memory, or execute anything |
 | Identification | An image that verifies against a DAT entry it is not, or a BIOS that identifies as a revision it is not |
 | Hardware | Anything that makes the write path touch a disk without the confirmation and the backup it promises |
+| Local page | A website, or anything else that is not the page itself, getting `fdstoolkit web` to act: starting a job, reading a kept backup, or running script in the page |
 | Leakage | Any path where the tool would distribute, fetch, or point at a disk image or a BIOS |
 
 The last two rows are security properties here rather than legal footnotes. A
@@ -25,11 +26,22 @@ project's whole design is that it identifies files it must never carry.
 ## What is not
 
 The tool reads files you already hold and writes files you asked for. It makes no
-network request at all. A report that amounts to "this program can write a file"
+outgoing network request at all. A report that amounts to "this program can write a file"
 is describing what it is for.
 
 Emulator behaviour, drive behaviour and the correctness of third-party patches
 are outside what this project can control.
+
+## The local page
+
+`fdstoolkit web` listens on 127.0.0.1 unless told otherwise, and answers only
+requests that name a loopback host or the address it was bound to, so a website
+that points its own name at this machine is refused. A request that changes
+anything is refused when the browser marks it cross-site or it carries another
+origin. Every answer tells the browser not to sniff types or frame the page, and
+the page runs only the script it was served with, under a nonce that changes on
+every load. Binding another address publishes the page to that network with no
+password, and the command says so when it starts.
 
 ## Where this is distributed
 

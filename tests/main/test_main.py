@@ -1593,13 +1593,15 @@ def test_doctor_fails_on_an_unhealthy_installation(monkeypatch: pytest.MonkeyPat
 
 def test_web_starts_the_application(monkeypatch: pytest.MonkeyPatch) -> None:
     started: list[tuple[str, int]] = []
+    answered: list[frozenset[str]] = []
 
     def fake_server() -> tuple[object, object]:
         def run(built: object, *, host: str, port: int) -> None:
             del built
             started.append((host, port))
 
-        def build() -> object:
+        def build(*, allowed_hosts: frozenset[str]) -> object:
+            answered.append(allowed_hosts)
             return object()
 
         return run, build
@@ -1610,6 +1612,7 @@ def test_web_starts_the_application(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0
     assert started == [("127.0.0.1", 9123)]
+    assert answered == [frozenset({"127.0.0.1"})]
 
 
 def test_web_says_which_extra_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1835,7 +1838,7 @@ def test_web_opens_a_browser_unless_told_not_to(monkeypatch: pytest.MonkeyPatch)
         def run(built: object, *, host: str, port: int) -> None:
             del built, host, port
 
-        def build() -> object:
+        def build(**_: object) -> object:
             return object()
 
         return run, build
@@ -1853,11 +1856,14 @@ def test_web_opens_a_browser_unless_told_not_to(monkeypatch: pytest.MonkeyPatch)
     assert opened == ["http://127.0.0.1:9124"]
 
 
-def _stub_web() -> tuple[Callable[..., None], Callable[[], object]]:
+def _stub_web() -> tuple[Callable[..., None], Callable[..., object]]:
     def run(*_: object, **__: object) -> None:
         return None
 
-    return run, object
+    def build(**_: object) -> object:
+        return object()
+
+    return run, build
 
 
 def test_a_loopback_bind_says_nothing_leaves_this_machine(monkeypatch: pytest.MonkeyPatch) -> None:
