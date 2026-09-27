@@ -468,3 +468,14 @@ def test_a_capture_in_the_device_order_keeps_it() -> None:
 
 def test_a_capture_neither_order_decodes_keeps_the_device_order() -> None:
     assert pack_order(bytes([0x1B]) * 4096) is PackOrder.HIGH_FIRST
+
+
+def test_a_test_data_block_in_a_capture_is_named_as_information() -> None:
+    values = calibration_values() + bytes([GAP_VALUE]) * GAP_BITS
+    values += encode_era_b(bytes([SYNC_MARK, 0x05]) + bytes([0x6D, 0xB6, 0xDB]) * 20)
+
+    _, findings = decode_raw03(values)
+
+    named = [finding for finding in findings if finding.code == "FDS020"]
+    assert [finding.severity for finding in named] == [Severity.INFO]
+    assert "FDS015" not in [finding.code for finding in findings]

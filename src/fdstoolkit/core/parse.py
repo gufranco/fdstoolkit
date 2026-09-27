@@ -7,6 +7,8 @@ from fdstoolkit.core.blocks import (
     DISK_INFO_SIZE,
     FILE_AMOUNT_SIZE,
     FILE_HEADER_SIZE,
+    TEST_BLOCK_CODE,
+    TEST_PATTERN,
     Block,
     BlockKind,
     CrcStatus,
@@ -24,6 +26,7 @@ NEXT_KIND: Final[dict[BlockKind, BlockKind]] = {
     BlockKind.FILE_DATA: BlockKind.FILE_HEADER,
 }
 RESCAN_SIDES: Final = 2
+PATTERN_REPEATS: Final = 4
 
 
 @dataclass(slots=True)
@@ -128,7 +131,7 @@ def _walk(data: bytes, *, has_crc: bool, side_index: int) -> _Walk:
         offset = walk.position
         code = data[offset]
         if code != int(walk.expected):
-            if walk.blocks and code != 0:
+            if walk.blocks and code not in (0, TEST_BLOCK_CODE):
                 walk.findings.append(
                     _diagnostic(
                         "FDS005",
@@ -234,14 +237,24 @@ def parse_side(
         )
 
     if side.has_data_after_last_block:
-        findings.append(
-            _diagnostic(
-                "FDS007",
-                Severity.WARNING,
-                side_index,
-                walk.position,
-                {"bytes": len(side.tail.strip(b"\0"))},
-            )
-        )
+        findings.append(_trailing(side, walk.position, side_index))
 
     return side, tuple(findings)
+
+
+def _test_pattern(data: bytes) -> bool:
+    sample = data[: len(TEST_PATTERN) * PATTERN_REPEATS]
+    return bool(sample) and sample == (TEST_PATTERN * PATTERN_REPEATS)[: len(sample)]
+
+
+def _trailing(side: Side, position: int, side_index: int) -> Diagnostic:
+    if side.tail[:1] == bytes([TEST_BLOCK_CODE]):
+        detail: dict[str, object] = {"pattern": _test_pattern(side.tail[1:])}
+        return _diagnostic("FDS020", Severity.INFO, side_index, position, detail)
+    return _diagnostic(
+        "FDS007",
+        Severity.WARNING,
+        side_index,
+        position,
+        {"bytes": len(side.tail.strip(b"\0"))},
+    )

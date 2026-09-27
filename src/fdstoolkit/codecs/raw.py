@@ -8,6 +8,7 @@ from fdstoolkit.core.blocks import (
     DISK_INFO_SIZE,
     FILE_AMOUNT_SIZE,
     FILE_HEADER_SIZE,
+    TEST_BLOCK_CODE,
     Block,
     BlockKind,
     FileHeader,
@@ -447,8 +448,10 @@ def _past_declared(blocks: Sequence[Block]) -> bool:
     return bool(amounts) and len(blocks) >= declared_blocks(amounts[0].payload)
 
 
-def _lost_region(gap: int, blocks: Sequence[Block]) -> Diagnostic:
+def _lost_region(gap: int, blocks: Sequence[Block], data: bytes) -> Diagnostic:
     detail: dict[str, object] = {"offset": gap, "block": len(blocks)}
+    if data[:2] == bytes([SYNC_MARK, TEST_BLOCK_CODE]):
+        return _diagnostic("FDS020", Severity.INFO, detail)
     if _past_declared(blocks):
         return _diagnostic("FDS018", Severity.INFO, detail)
     return _diagnostic("FDS015", Severity.WARNING, detail)
@@ -468,7 +471,7 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
         findings.extend(_short_gap(gap, cursor, block=len(blocks)))
         data, cursor, needed = _decode_region(values, gap, pending)
         if not data or data[0] != SYNC_MARK or needed is None:
-            findings.append(_lost_region(gap, blocks))
+            findings.append(_lost_region(gap, blocks, data))
             continue
         body = data[1:]
         length = needed - 1 - CRC_SIZE

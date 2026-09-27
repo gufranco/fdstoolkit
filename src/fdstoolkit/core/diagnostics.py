@@ -26,6 +26,7 @@ CODES: Final[Mapping[str, str]] = {
     "FDS017": "gap before this block is shorter than the bits the RAM adapter ignores",
     "FDS018": "undecodable pulses after the last declared block, which most disks carry",
     "FDS019": "the capture was packed low bits first, the opposite of the documented order",
+    "FDS020": "a type 5 test data block follows the last file, as the Disk Card Checker writes",
 }
 
 

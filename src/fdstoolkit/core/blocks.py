@@ -18,6 +18,8 @@ FILE_KIND_OFFSET: Final = 0x0F
 
 HEAD_BLOCKS: Final = 2
 BLOCKS_PER_FILE: Final = 2
+TEST_BLOCK_CODE: Final = 0x05
+TEST_PATTERN: Final = bytes([0x6D, 0xB6, 0xDB])
 
 
 def declared_blocks(file_amount: bytes) -> int:

@@ -4,6 +4,7 @@ import pytest
 
 from fdstoolkit.codecs.fds import HEADER_SIZE, SIDE_SIZE, build_header, decode, encode, has_header
 from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.diagnostics import Severity
 from fdstoolkit.core.disk import Disk, Side
 
 
@@ -185,3 +186,32 @@ def test_a_data_block_that_matches_its_header_raises_nothing() -> None:
     _, findings = encode(side_with_data(declared=100, actual=100), headered=False)
 
     assert findings == ()
+
+
+def with_trailing(extra: bytes) -> bytes:
+    body = side_bytes().rstrip(b"\0") + extra
+    return body.ljust(SIDE_SIZE, b"\0")
+
+
+def test_a_test_data_block_after_the_last_file_is_named_as_information() -> None:
+    _, findings = decode(with_trailing(bytes([0x05]) + bytes([0x6D, 0xB6, 0xDB]) * 40))
+
+    named = [finding for finding in findings if finding.code == "FDS020"]
+    assert [(finding.severity, finding.detail["pattern"]) for finding in named] == [
+        (Severity.INFO, True)
+    ]
+    assert {"FDS005", "FDS007"}.isdisjoint(finding.code for finding in findings)
+
+
+def test_a_type_5_block_without_the_test_pattern_is_named_without_it() -> None:
+    _, findings = decode(with_trailing(bytes([0x05, 0x12, 0x34, 0x56, 0x78])))
+
+    named = [finding for finding in findings if finding.code == "FDS020"]
+    assert [finding.detail["pattern"] for finding in named] == [False]
+
+
+def test_other_data_after_the_last_block_is_still_a_warning() -> None:
+    _, findings = decode(with_trailing(bytes([0x07, 0x01, 0x02])))
+
+    assert "FDS007" in [finding.code for finding in findings]
+    assert "FDS020" not in [finding.code for finding in findings]
