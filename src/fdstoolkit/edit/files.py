@@ -119,6 +119,9 @@ def _with_amount(blocks: list[Block], count: int) -> list[Block]:
 def insert_file(disk: Disk, *, side: int, spec: FileSpec) -> Disk:
     target = _side_of(disk, side)
     number = len(_pairs(target))
+    if number >= MAX_FILE_AMOUNT:
+        message = f"a side holds at most {MAX_FILE_AMOUNT} files, and this one has {number}"
+        raise ValueError(message)
     header = _header_block(spec, number)
     data = Block(kind=BlockKind.FILE_DATA, payload=bytes([BlockKind.FILE_DATA]) + spec.data)
 

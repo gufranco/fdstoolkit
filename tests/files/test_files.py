@@ -30,7 +30,7 @@ def disk_with(files: int = 1, *, declared: int | None = None) -> Disk:
         )
         raw[position : position + 16] = header
         position += 16
-        raw[position : position + 5] = bytes([0x04]) + bytes([0xA0 + index]) * 4
+        raw[position : position + 5] = bytes([0x04]) + bytes([(0xA0 + index) & 0xFF]) * 4
         position += 5
     disk, _ = decode(bytes(raw))
     return disk
@@ -105,6 +105,13 @@ def test_inserting_a_file_that_does_not_fit_is_refused() -> None:
 
     with pytest.raises(ValueError, match="does not fit"):
         insert_file(disk_with(files=1), side=0, spec=spec)
+
+
+def test_inserting_past_255_files_is_refused_whatever_the_declared_count() -> None:
+    spec = FileSpec(name="MORE", address=0x6000, kind=FileKind.PROGRAM, data=bytes(4))
+
+    with pytest.raises(ValueError, match="at most 255 files"):
+        insert_file(disk_with(files=255, declared=0), side=0, spec=spec)
 
 
 def test_a_name_longer_than_eight_characters_is_refused() -> None:
