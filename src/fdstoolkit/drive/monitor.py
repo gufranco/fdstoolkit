@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Final, Protocol
 
@@ -15,6 +15,7 @@ from fdstoolkit.codecs.raw import (
     block_starts,
     decode_raw03,
     encode_era_b,
+    lead_in_bits,
     unpack_raw03,
 )
 from fdstoolkit.core.bios import BIOS_ERRORS, BLOCK_EXPECTED, CRC_FAILED
@@ -163,6 +164,7 @@ class SideSample:
     referenced: bool
     found: tuple[bool, ...] = ()
     kinds: tuple[BlockKind, ...] = ()
+    lead_in: int | None = None
 
     @property
     def console_error(self) -> int | None:
@@ -294,6 +296,16 @@ def measure(
     reference: Side | None,
     learned: Mapping[Key, bytes],
 ) -> SideSample:
+    measured = _measured(values, decoded, reference, learned)
+    return replace(measured, lead_in=lead_in_bits(values) if decoded else None)
+
+
+def _measured(
+    values: bytes,
+    decoded: Sequence[Block],
+    reference: Side | None,
+    learned: Mapping[Key, bytes],
+) -> SideSample:
     invalid = _invalid(values)
     if reference is None:
         short, long, compared = _against_learned(values, decoded, learned)
@@ -370,6 +382,8 @@ def describe(mode: Mode, number: int, current: SideSample, change: Trend) -> str
     if current.referenced:
         parts.append(f"{current.short} pulses short, {current.long} long")
     parts.append(f"{current.invalid} invalid")
+    if current.lead_in is not None:
+        parts.append(f"lead-in {current.lead_in} bits")
     error = current.console_error
     if error is not None:
         parts.append(f"console error {error:02X}, {BIOS_ERRORS[error]}")
@@ -402,6 +416,7 @@ class Calibration:
                 "short": sample.short,
                 "long": sample.long,
                 "invalid": sample.invalid,
+                "lead_in": sample.lead_in,
                 "verdict": verdict(self.mode, sample),
             }
             for sample in self.samples

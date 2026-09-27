@@ -297,6 +297,13 @@ def _gap_end(values: bytes, start: int) -> int | None:
     return None
 
 
+def lead_in_bits(values: bytes) -> int | None:
+    sync = _gap_end(values, 0)
+    if sync is None:
+        return None
+    return sync - len(values[:sync].rstrip(bytes([GAP_VALUE])))
+
+
 def _decode_region(values: bytes, start: int, pending: int) -> tuple[bytes, int, int | None]:
     bits: list[int] = []
     previous = 1

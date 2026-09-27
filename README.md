@@ -720,9 +720,9 @@ fdstoolkit calibrate speed --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, first read
-  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, the same as the last read
-  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
+  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28310 bits, console error 27, block failed CRC: reads fast, first read
+  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28296 bits, console error 27, block failed CRC: reads fast, the same as the last read
+  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid, lead-in 28303 bits: reads clean, better than the last read
 reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table; the last 3 reads: 2 reads fast, 1 reads clean
 ```
 
@@ -748,9 +748,9 @@ fdstoolkit calibrate head --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, first read
-  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, better than the last read
-  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
+  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, lead-in 27920 bits, console error 22, block 1 expected: the start of the side is not read, first read
+  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, lead-in 28105 bits, console error 22, block 1 expected: the start of the side is not read, better than the last read
+  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid, lead-in 28302 bits: reads clean, better than the last read
 reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another; the last 3 reads: 2 the start of the side is not read, 1 reads clean
 ```
 
@@ -777,6 +777,8 @@ The guides also publish the positions the parts should end up in. They come from
 | Speed | 400 RPM at the disk table shaft in one guide; 820 at the spindle and 1170 at the motor in another | Both TinkerDifferent guides above |
 
 The two speed figures differ by about a factor of two, and neither guide says why or ties its figure to the bit rate the RAM adapter checks. Treat them as a starting point for a strobe, not a target this command can confirm.
+
+Every read that finds a block also names its lead-in: the run of gap before the first block, in bits. The FDSStick's author notes that this pre-gap moves with the drive's calibration, and that one disk read twice by one drive never gives two identical raw captures, so a lead-in that shifts between reads while every block reads clean is the drive, not the disk. Compare dumps by their blocks, as `reads` and `consensus` do, never by hashing the captures.
 
 `--timing-mode` reads with the mode `probe` found, so every read also prints how long each pulse class ran, how widely it spread, and the bit rate those lengths give: `timing: short 62.1±1.2, medium 93.2±1.3, long 124.0±1.2 counts, spread 1.4%, smaller is better; bit rate 96.7 kHz, +0.3% from 96.4 kHz at an assumed 6 MHz capture clock, inside the ±10% the RAM adapter accepts`. A narrower spread means cleaner pulses, which is what the head adjustment is after; the FDSStick's author uses the same kind of spread to set the head. The bit rate is a live speed meter: turn the motor pot between reads and watch it move toward 96.4 kHz, the rate the RAM adapter expects within ±10% per [Brad Taylor's FDS technical reference](https://www.nesdev.org/FDS%20technical%20reference.txt). The 6 MHz clock is the one nesdev's forum gives for the FDSStick's flux images; no firmware documents the clock of a timing mode, so if the probe finds one on another clock the rate is off by the same ratio and the spread is still right. Without the option, every calibration starts with a warning that timing is off, and a timing mode that returns pulse classes on some read says so for that read and judges it from classes.
 

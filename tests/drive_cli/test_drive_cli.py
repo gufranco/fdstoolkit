@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
+from fdstoolkit.codecs.raw import LEAD_IN_BITS
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.monitor import NOT_THIS_DRIVE
@@ -65,7 +66,10 @@ def test_a_drive_that_reads_the_reference_clean_passes(
 
     assert result.exit_code == 0, result.output
     assert NOT_THIS_DRIVE in result.output
-    first = "  read 1: 8 of 8 blocks, 0 pulses short, 0 long, 0 invalid: reads clean"
+    first = (
+        f"  read 1: 8 of 8 blocks, 0 pulses short, 0 long, 0 invalid, lead-in {LEAD_IN_BITS} bits: "
+        "reads clean"
+    )
     assert first in result.output
     assert "  read 2:" in result.output
     assert "the same as the last read" in result.output

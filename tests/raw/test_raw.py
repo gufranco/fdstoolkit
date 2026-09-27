@@ -28,6 +28,7 @@ from fdstoolkit.codecs.raw import (
     encode_block_stream,
     encode_era_b,
     encode_raw03,
+    lead_in_bits,
     pack_raw03,
     quantise,
     unpack_raw03,
@@ -413,3 +414,13 @@ def test_a_short_gap_names_the_block_it_precedes() -> None:
 
     short = [finding for finding in findings if finding.code == "FDS017"]
     assert short[0].detail["block"] == 1
+
+
+def test_a_stream_without_a_sync_mark_has_no_lead_in() -> None:
+    assert lead_in_bits(bytes([1, 2, 1, 2] * 100)) is None
+
+
+def test_the_lead_in_counts_the_gap_right_before_the_first_sync() -> None:
+    stream = bytes([2, 1]) + bytes([GAP_VALUE]) * MIN_GAP_VALUES + bytes([1, 2])
+
+    assert lead_in_bits(stream) == MIN_GAP_VALUES

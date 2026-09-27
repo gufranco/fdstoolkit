@@ -8,6 +8,7 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import (
+    LEAD_IN_BITS,
     block_starts,
     decode_raw03,
     encode_block_stream,
@@ -549,3 +550,27 @@ def test_a_few_invalid_pulses_carry_no_noise_hint() -> None:
     )
 
     assert NOISY_READ not in result.headline
+
+
+def test_a_read_measures_its_lead_in_in_bits() -> None:
+    side = reference_side()
+
+    found = sample(stream(side), side)
+
+    assert found.lead_in == LEAD_IN_BITS
+
+
+def test_a_read_line_names_the_lead_in() -> None:
+    side = reference_side()
+    found = sample(stream(side), side)
+
+    line = describe(Mode.SPEED, 1, found, Trend.FIRST)
+
+    assert f"0 invalid, lead-in {LEAD_IN_BITS} bits: " in line
+
+
+def test_a_read_with_no_block_has_no_lead_in() -> None:
+    found = sample(pack_raw03(bytes([1, 2]) * 200), reference_side())
+
+    assert found.lead_in is None
+    assert "lead-in" not in describe(Mode.SPEED, 1, found, Trend.FIRST)

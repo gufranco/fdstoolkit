@@ -709,9 +709,9 @@ fdstoolkit calibrate speed --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, first read
-  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, console error 27, block failed CRC: reads fast, the same as the last read
-  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
+  read 1: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28310 bits, console error 27, block failed CRC: reads fast, first read
+  read 2: 2 of 10 blocks, 116 pulses short, 0 long, 0 invalid, lead-in 28296 bits, console error 27, block failed CRC: reads fast, the same as the last read
+  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid, lead-in 28303 bits: reads clean, better than the last read
 reads clean: inside the tolerance the stick can see. It cannot see the last percent, so finish with a console speed test or a strobe at the disk table; the last 3 reads: 2 reads fast, 1 reads clean
 ```
 
@@ -737,9 +737,9 @@ fdstoolkit calibrate head --reference smb.fds --passes 3
 
 ```
 judge the drive only with a disk it did not write: a factory disk, or one written by a drive you trust. A drive out of adjustment reads back its own writes, so those prove nothing
-  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, first read
-  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, console error 22, block 1 expected: the start of the side is not read, better than the last read
-  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid: reads clean, better than the last read
+  read 1: 6 of 10 blocks, blocks 0 to 3 not read, 0 pulses short, 0 long, 0 invalid, lead-in 27920 bits, console error 22, block 1 expected: the start of the side is not read, first read
+  read 2: 8 of 10 blocks, blocks 0 to 1 not read, 0 pulses short, 0 long, 0 invalid, lead-in 28105 bits, console error 22, block 1 expected: the start of the side is not read, better than the last read
+  read 3: 10 of 10 blocks, 0 pulses short, 0 long, 0 invalid, lead-in 28302 bits: reads clean, better than the last read
 reads clean: the whole side reads. Repeat with two more factory disks, since a head can be set to suit one disk and miss another; the last 3 reads: 2 the start of the side is not read, 1 reads clean
 ```
 
@@ -768,6 +768,8 @@ fdstoolkit calibrate head --reference smb.fds --bracket --passes 60
 2 つの速度の値はおよそ 2 倍異なり、どちらのガイドもその理由を示さず、値を RAM アダプタが確かめるビットレートにも結び付けていません。ストロボで合わせる際の出発点として扱い、このコマンドで確かめられる目標値とはみなさないでください。
 
 最後の読み取りが正しく読めた場合に終了コード 0 を返します。
+
+ブロックが見つかった読み取りでは、リードイン、つまり最初のブロックの前にあるギャップの長さもビット単位で示します。FDSStick の作者によれば、このプリギャップはドライブの調整によって変わり、同じドライブで同じディスクを 2 回読んでも生のキャプチャが一致することはありません。そのため、すべてのブロックがきれいに読めているのにリードインだけが読み取りごとに変わるなら、それはディスクではなくドライブによるものです。吸い出しの比較は、`reads` や `consensus` のようにブロック単位で行い、キャプチャのハッシュでは比べないでください。
 
 `--timing-mode` は `probe` が見つけたモードで読むため、各読み取りでパルスのクラスごとの長さとばらつき、そこから求めたビットレートも `timing: short 62.1±1.2, medium 93.2±1.3, long 124.0±1.2 counts, spread 1.4%, smaller is better; bit rate 96.7 kHz, +0.3% from 96.4 kHz at an assumed 6 MHz capture clock, inside the ±10% the RAM adapter accepts` のように表示します。ばらつきが小さいほどパルスがきれいで、ヘッド調整が目指すのはそこです。FDSStick の作者も同じ種類のばらつきでヘッドを合わせています。ビットレートはそのまま速度計として使えます。読み取りの合間にモーターの半固定抵抗を回し、96.4 kHz に近づくのを見てください。[Brad Taylor の FDS 技術資料](https://www.nesdev.org/FDS%20technical%20reference.txt)によれば、RAM アダプタはこの速度を ±10% の範囲で受け付けます。6 MHz というクロックは、nesdev のフォーラムが FDSStick のフラックスイメージについて示している値です。タイミングモードのクロックを記したファームウェア資料はないため、probe が別のクロックのモードを見つけた場合、ビットレートは同じ比率でずれますが、ばらつきは正しいままです。このオプションがなければ、調整の最初にタイミングが無効だという警告を表示します。あるモードがどこかの読み取りでパルスクラスを返した場合は、その読み取りでそう伝え、クラスから判定します。
 
