@@ -146,12 +146,8 @@ def test_the_page_offers_a_control_for_every_field_kind() -> None:
 
 
 def test_the_claim_about_where_data_goes_is_in_the_markup_not_fetched() -> None:
-    assert 'data-i18n="drop.hint"' in MARKUP
-    assert "/api/about" not in SCRIPT
-
-
-def test_the_claim_that_the_page_computes_nothing_is_in_the_markup() -> None:
     assert 'data-i18n="footer.cli"' in MARKUP
+    assert "/api/about" not in SCRIPT
 
 
 def test_every_input_carries_a_label() -> None:

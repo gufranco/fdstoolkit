@@ -681,17 +681,6 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
-.notes {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px 24px;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  padding: 16px 0 0;
-  text-align: center;
-}
-
 footer {
   border-top: 1px solid var(--line);
   margin-top: 24px;
