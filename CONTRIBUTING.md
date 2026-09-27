@@ -23,6 +23,19 @@ overwrite side A, so set it only with a scratch disk in the drive:
 FDSTOOLKIT_HARDWARE=1 uv run pytest tests/hardware_live -m hardware --no-cov
 ```
 
+## Hooks
+
+The repository carries its own git hooks. Turn them on once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`pre-commit` runs the formatter, the linter, the type checker and prettier;
+`commit-msg` checks the subject against the conventional commit format the
+release reads, 50 characters at most, lowercase after the type, no full stop.
+CI runs the same subject check on every pushed or proposed commit.
+
 ## The gates
 
 | Gate | Command |
