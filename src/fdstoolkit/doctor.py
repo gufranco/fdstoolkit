@@ -15,7 +15,9 @@ from fdstoolkit.build.blank import (
     blank_image,
 )
 from fdstoolkit.codecs import fds
+from fdstoolkit.hardware.device_lock import acquire_drive_lock
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
+from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.version import VERSION
 
 MIN_PYTHON: Final = (3, 12)
@@ -30,6 +32,7 @@ UDEV_HINT: Final = (
 BCD_MAJOR_SHIFT: Final = 8
 BCD_MASK: Final = 0xFF
 SELF_TEST_SIDES: Final = 1
+IN_USE: Final = "in use by a running fdstoolkit job, so it was not opened to check it"
 
 
 class CheckStatus(StrEnum):
@@ -99,10 +102,16 @@ def _access_check(hid: Enumerator, entry: dict[str, Any]) -> Check:
     if not isinstance(path, bytes):
         return Check("fdsstick access", CheckStatus.WARNING, "the device reported no open path")
     try:
+        lock = acquire_drive_lock()
+    except HardwareFaultError:
+        return Check("fdsstick access", CheckStatus.OK, IN_USE)
+    try:
         handle = hid.device()
         handle.open_path(path)
     except OSError as error:
         return Check("fdsstick access", CheckStatus.FAILED, f"{error}. {UDEV_HINT}")
+    finally:
+        lock.release()
     handle.close()
     return Check("fdsstick access", CheckStatus.OK, "the device opens for reading and writing")
 

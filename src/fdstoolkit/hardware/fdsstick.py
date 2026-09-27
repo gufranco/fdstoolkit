@@ -12,6 +12,7 @@ from fdstoolkit.codecs.raw import (
 )
 from fdstoolkit.drive.captures import Capture
 from fdstoolkit.drive.pulse import PulseFinding, findings_of
+from fdstoolkit.hardware.device_lock import DriveLock, acquire_drive_lock
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, Watchdog
 
@@ -76,8 +77,15 @@ class FdsStick:
     reports_write_protection: Final = False
     selects_sides: Final = False
 
-    def __init__(self, transport: HidTransport, *, ceiling: float = UNMEASURED_CEILING_S) -> None:
+    def __init__(
+        self,
+        transport: HidTransport,
+        *,
+        ceiling: float = UNMEASURED_CEILING_S,
+        lock: DriveLock | None = None,
+    ) -> None:
         self._transport = transport
+        self._lock = lock
         self._watchdog = Watchdog(on_stall=self.close, ceiling=ceiling)
         self._captures: list[Capture] = []
         self._resyncs: list[tuple[int, int]] = []
@@ -97,6 +105,12 @@ class FdsStick:
 
     def close(self) -> None:
         self._transport.close()
+        if self._lock is not None:
+            self._lock.release()
+
+    @property
+    def closed_lock(self) -> bool:
+        return self._lock is None or self._lock.released
 
     def status(self) -> DriveStatus:
         return DriveStatus(
@@ -248,14 +262,16 @@ def open_fdsstick() -> FdsStick:
         )
         raise HardwareFaultError(message, kind=FaultKind.LINK) from error
 
+    lock = acquire_drive_lock()
     device = hid.device()
     try:
         device.open(VENDOR_ID, PRODUCT_ID)
     except OSError as error:
+        lock.release()
         message = (
             f"no FDSStick answered at {VENDOR_ID:#06x}:{PRODUCT_ID:#06x}. "
             "Check the USB cable and that no other program holds the device"
         )
         raise HardwareFaultError(message, kind=FaultKind.LINK) from error
 
-    return FdsStick(HidApiTransport(device))
+    return FdsStick(HidApiTransport(device), lock=lock)

@@ -232,8 +232,51 @@ def test_opening_returns_a_usable_device(monkeypatch: pytest.MonkeyPatch) -> Non
 
     stick = open_fdsstick()
 
+    stick.close()
     assert isinstance(stick, FdsStick)
     assert device.opened == (VENDOR_ID, PRODUCT_ID)
+
+
+def test_a_second_open_is_refused_while_the_first_holds_the_drive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeModule:
+        def device(self) -> FakeHidDevice:
+            return FakeHidDevice()
+
+    monkeypatch.setattr("fdstoolkit.hardware.fdsstick._load_hid", FakeModule)
+    first = open_fdsstick()
+
+    with pytest.raises(HardwareFaultError, match="another fdstoolkit"):
+        open_fdsstick()
+
+    first.close()
+
+
+def test_an_open_that_fails_leaves_the_drive_free(monkeypatch: pytest.MonkeyPatch) -> None:
+    class RefusingDevice(FakeHidDevice):
+        def open(self, vendor_id: int, product_id: int) -> None:
+            del vendor_id, product_id
+            message = "no such device"
+            raise OSError(message)
+
+    class Refusing:
+        def device(self) -> FakeHidDevice:
+            return RefusingDevice()
+
+    class Working:
+        def device(self) -> FakeHidDevice:
+            return FakeHidDevice()
+
+    monkeypatch.setattr("fdstoolkit.hardware.fdsstick._load_hid", Refusing)
+    with pytest.raises(HardwareFaultError, match="no FDSStick answered"):
+        open_fdsstick()
+    monkeypatch.setattr("fdstoolkit.hardware.fdsstick._load_hid", Working)
+
+    stick = open_fdsstick()
+
+    stick.close()
+    assert stick.closed_lock
 
 
 def test_writing_a_side_encodes_the_blocks_it_is_given() -> None:

@@ -6,6 +6,7 @@ import pytest
 
 from fdstoolkit import doctor as doctor_module
 from fdstoolkit.doctor import CheckStatus, DoctorReport, diagnose, firmware_text, load_hid
+from fdstoolkit.hardware.device_lock import acquire_drive_lock
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
 
 
@@ -176,6 +177,30 @@ def test_a_device_that_opens_is_reported_as_usable() -> None:
 
     assert status_of(report, "fdsstick access") is CheckStatus.OK
     assert hid.handle.closed
+
+
+class CountingHandle(FakeHandle):
+    def __init__(self) -> None:
+        super().__init__(None)
+        self.opened = 0
+
+    def open_path(self, path: bytes) -> None:
+        del path
+        self.opened += 1
+
+
+def test_a_drive_another_job_holds_is_not_opened_to_check_it() -> None:
+    hid = FakeHid([stick()])
+    handle = CountingHandle()
+    hid.handle = handle
+    held = acquire_drive_lock()
+
+    report = diagnose(load_hid=lambda: hid)
+
+    held.release()
+    assert handle.opened == 0
+    assert status_of(report, "fdsstick access") is CheckStatus.OK
+    assert "in use" in detail_of(report, "fdsstick access")
 
 
 def test_a_device_present_but_unopenable_fails_and_names_the_udev_rule() -> None:
