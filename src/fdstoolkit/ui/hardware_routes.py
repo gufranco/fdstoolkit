@@ -98,18 +98,20 @@ def _board(request: Request) -> JobBoard:
 
 
 def _view(job: Job) -> JobView:
-    return JobView(
-        id=job.id,
-        command=job.command,
-        writes=job.writes,
-        stoppable=job.stoppable,
-        stopping=job.stopping,
-        state=str(job.state),
-        steps=list(job.steps),
-        prompt=job.prompt,
-        result=job.result,
-        error=job.error,
-        kept=job.kept,
+    return JobView.model_validate(
+        {
+            "id": job.id,
+            "command": job.command,
+            "writes": job.writes,
+            "stoppable": job.stoppable,
+            "stopping": job.stopping,
+            "state": str(job.state),
+            "steps": list(job.steps),
+            "prompt": job.prompt,
+            "result": job.result,
+            "error": job.error,
+            "kept": job.kept,
+        }
     )
 
 

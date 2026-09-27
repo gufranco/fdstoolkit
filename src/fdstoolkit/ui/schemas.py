@@ -214,10 +214,21 @@ class ReadsResult(BaseModel):
         )
 
 
+class CalibrationRow(BaseModel):
+    read: int
+    expected: int
+    missing: list[int]
+    short: int
+    long: int
+    invalid: int
+    lead_in: int | None
+    verdict: str
+
+
 class CalibrationResult(BaseModel):
     headline: str
     mode: str
-    rows: list[dict[str, Any]]
+    rows: list[CalibrationRow]
     ok: bool
     spread: dict[str, int]
     timing: list[dict[str, object]]
@@ -227,7 +238,7 @@ class CalibrationResult(BaseModel):
         return cls(
             headline=result.headline,
             mode=str(result.mode),
-            rows=result.rows(),
+            rows=[CalibrationRow.model_validate(row) for row in result.rows()],
             ok=result.clean,
             spread=result.spread,
             timing=[timing.as_dict() for timing in timings],
@@ -443,6 +454,11 @@ class ReportedFile(BaseModel):
     ok: bool = True
 
 
+class DumpedResult(FileResult):
+    grade: str
+    captures: FileResult | None = None
+
+
 class JobView(BaseModel):
     id: str
     command: str
@@ -452,9 +468,15 @@ class JobView(BaseModel):
     state: str
     steps: list[str] = Field(default_factory=list)
     prompt: str = ""
-    result: dict[str, Any] | None = None
+    result: JobResult | None = None
     error: str = ""
-    kept: dict[str, Any] | None = None
+    kept: FileResult | None = None
+
+
+JobResult = Annotated[
+    DumpedResult | CalibrationResult | ReportedFile | RowsResult,
+    Field(union_mode="left_to_right"),
+]
 
 
 class CurrentJob(BaseModel):
@@ -467,8 +489,3 @@ class AnswerSpec(BaseModel):
 
 class FilesResult(BaseModel):
     files: list[FileResult] = Field(default_factory=_no_files)
-
-
-class DumpedResult(FileResult):
-    grade: str
-    captures: FileResult | None = None

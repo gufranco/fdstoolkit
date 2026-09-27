@@ -11,12 +11,19 @@ from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.quality.reads import compare_reads
 from fdstoolkit.ui.schemas import (
+    CalibrationResult,
+    CalibrationRow,
     DiagnosticView,
     DigestView,
     DiskView,
+    DumpedResult,
+    FileResult,
     GradeResult,
+    JobView,
     ProfileView,
     ReadsResult,
+    ReportedFile,
+    RowsResult,
 )
 
 IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
@@ -91,3 +98,66 @@ def test_a_reads_view_carries_the_decay_direction() -> None:
     assert view.passes == 2
     assert view.stability == pytest.approx(1.0)
     assert view.decay
+
+
+def test_a_job_result_is_read_back_as_the_model_that_made_it() -> None:
+    dumped = DumpedResult(name="dump.fds", data="AA==", size=1, grade="clean")
+    reported = ReportedFile(headline="written", file=FileResult(name="b.fds", data="AA==", size=1))
+    rows = RowsResult(headline="probe", rows=[{"mode": "0x02"}])
+
+    views = [
+        JobView.model_validate(
+            {
+                "id": "j",
+                "command": "c",
+                "writes": False,
+                "state": "done",
+                "result": made.model_dump(),
+            }
+        )
+        for made in (dumped, reported, rows)
+    ]
+
+    assert [type(view.result) for view in views] == [DumpedResult, ReportedFile, RowsResult]
+
+
+def test_a_kept_file_is_typed() -> None:
+    kept = FileResult(name="backup.fds", data="AA==", size=1)
+
+    view = JobView.model_validate(
+        {
+            "id": "j",
+            "command": "write",
+            "writes": True,
+            "state": "running",
+            "kept": kept.model_dump(),
+        }
+    )
+
+    assert view.kept == kept
+
+
+def test_calibration_rows_are_typed() -> None:
+    row = CalibrationRow(
+        read=8,
+        expected=8,
+        missing=[],
+        short=0,
+        long=0,
+        invalid=0,
+        lead_in=28300,
+        verdict="reads clean",
+    )
+
+    result = CalibrationResult.model_validate(
+        {
+            "headline": "h",
+            "mode": "speed",
+            "rows": [row.model_dump()],
+            "ok": True,
+            "spread": {},
+            "timing": [],
+        }
+    )
+
+    assert result.rows == [row]
