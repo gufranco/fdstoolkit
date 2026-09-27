@@ -271,7 +271,7 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   font-weight: 600;
 }
 
-.quiet { color: var(--muted); }
+.quiet, .output-language { color: var(--muted); }
 
 .fields input[type="file"],
 .fields input[type="number"],

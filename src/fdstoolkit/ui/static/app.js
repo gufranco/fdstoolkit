@@ -699,11 +699,12 @@ function turnPrompt(job, answer) {
   no.addEventListener('click', () => reply(false));
   const actions = element('div', { className: 'dialog-actions' });
   actions.append(no, yes);
-  box.append(element('p', { className: 'prompt', textContent: job.prompt }), actions);
+  box.append(element('p', { className: 'prompt', lang: COMMAND_LANGUAGE, textContent: job.prompt }), actions);
   return box;
 }
 
 const JOB_BANNER = { running: 'busy', waiting: 'warn', failed: 'bad', done: 'good' };
+const COMMAND_LANGUAGE = 'en';
 
 function stopControl(job, stop) {
   if (job.stopping) {
@@ -725,7 +726,8 @@ export function jobView(job, answer, stop) {
   if (job.writes && job.state !== 'failed') {
     box.append(element('p', { className: 'quiet', textContent: t('job.keep') }));
   }
-  const steps = element('ol', { className: 'steps' });
+  box.append(element('p', { className: 'output-language', textContent: t('job.output') }));
+  const steps = element('ol', { className: 'steps', lang: COMMAND_LANGUAGE });
   steps.setAttribute('aria-live', 'polite');
   steps.append(...job.steps.map((step) => element('li', { textContent: step })));
   box.append(steps);
@@ -736,7 +738,7 @@ export function jobView(job, answer, stop) {
     box.append(stopControl(job, stop));
   }
   if (job.state === 'failed') {
-    box.append(element('p', { className: 'reason', textContent: job.error }));
+    box.append(element('p', { className: 'reason', lang: COMMAND_LANGUAGE, textContent: job.error }));
   }
   if (job.state === 'failed' && isDownload(job.kept)) {
     box.append(download(job.kept));

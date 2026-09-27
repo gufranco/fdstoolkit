@@ -34,6 +34,28 @@ describe("jobView", () => {
     expect(view.querySelector(".steps").getAttribute("aria-live")).toBe("polite");
   });
 
+  it("marks the command's own output as English for screen readers", () => {
+    const view = jobView(
+      { ...running, state: "failed", error: "the device stopped answering" },
+      () => {}
+    );
+
+    expect(view.querySelector(".steps").lang).toBe("en");
+    expect(view.querySelector(".reason").lang).toBe("en");
+  });
+
+  it("says the command output is shown as the command line prints it", () => {
+    const view = jobView(running, () => {});
+
+    expect(view.querySelector(".output-language")).not.toBeNull();
+  });
+
+  it("marks a turn prompt as English", () => {
+    const view = jobView({ ...running, state: "waiting", prompt: "turn the disk over" }, () => {});
+
+    expect(view.querySelector(".prompt").lang).toBe("en");
+  });
+
   it("warns that closing the page leaves a side half written", () => {
     const view = jobView(running, () => {});
 
