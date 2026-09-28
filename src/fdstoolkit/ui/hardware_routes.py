@@ -134,7 +134,7 @@ def _start(
 
     try:
         return _launch(request, command, writes=writes, run=run, stoppable=stoppable)
-    except HTTPException:
+    except BaseException:
         drive.close()
         raise
 

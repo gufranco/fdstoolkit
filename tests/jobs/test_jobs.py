@@ -331,3 +331,19 @@ def test_shutting_down_waits_for_a_job_that_ends_in_time() -> None:
     left = board.shutdown(SETTLE)
 
     assert left is None
+
+
+def refuse_to_start(self: threading.Thread) -> None:
+    del self
+    message = "can't start new thread"
+    raise RuntimeError(message)
+
+
+def test_a_job_whose_thread_cannot_start_frees_the_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    board = JobBoard()
+    monkeypatch.setattr(threading.Thread, "start", refuse_to_start)
+
+    with pytest.raises(RuntimeError, match="can't start new thread"):
+        board.start("dump", writes=False, work=answering(1))
+
+    assert board.current() is None

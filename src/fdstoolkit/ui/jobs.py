@@ -99,9 +99,15 @@ class JobBoard:
                 raise JobBusyError(message)
             job = Job(id=uuid.uuid4().hex, command=command, writes=writes, stoppable=stoppable)
             self._jobs = self._trimmed() | {job.id: job}
-        threading.Thread(
+        worker = threading.Thread(
             target=self._run, args=(job.id, work), name=f"fdstoolkit-{command}", daemon=True
-        ).start()
+        )
+        try:
+            worker.start()
+        except RuntimeError as error:
+            logger.exception("%s job %s could not start", command, job.id)
+            self._end(job.id, state=JobState.FAILED, error=f"the job could not start: {error}")
+            raise
         return job
 
     def get(self, job_id: str) -> Job | None:

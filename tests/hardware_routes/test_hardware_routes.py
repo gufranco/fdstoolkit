@@ -401,6 +401,26 @@ def test_the_running_job_is_reported_as_current(
     assert client.get("/api/jobs/current").json() == {"job": None}
 
 
+def test_a_job_whose_thread_cannot_start_closes_the_drive(
+    app: FastAPI, attached: SimulatedDrive, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_start = threading.Thread.start
+
+    def refuse_job_threads(self: threading.Thread) -> None:
+        if self.name.startswith("fdstoolkit-"):
+            message = "can't start new thread"
+            raise RuntimeError(message)
+        real_start(self)
+
+    monkeypatch.setattr(threading.Thread, "start", refuse_job_threads)
+    client = TestClient(app, raise_server_exceptions=False, base_url="http://127.0.0.1")
+
+    answer = client.post("/api/jobs/dump", json={"sides": 1})
+
+    assert answer.status_code == 500
+    assert attached.closed
+
+
 class Nothing(BaseModel):
     pass
 
