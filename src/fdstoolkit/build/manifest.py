@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any, Final, cast
 
 from fdstoolkit.build.blank import GAME_NAME_LENGTH, disk_info_block
+from fdstoolkit.build.fdspacker import FdsPackerManifest
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, SHOWA_EPOCH, VERIFICATION_STRING
+from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, SHOWA_EPOCH, VERIFICATION_STRING, to_bcd
 from fdstoolkit.edit.files import FileSpec, insert_file
 
 DATE_PATTERN: Final = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
@@ -25,6 +26,10 @@ KINDS: Final[dict[str, FileKind]] = {
     "character": FileKind.CHARACTER,
     "nametable": FileKind.NAMETABLE,
 }
+
+
+class ManifestShapeError(ValueError):
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,10 +144,6 @@ def load_manifest(path: Path) -> DiskManifest:
     return DiskManifest.from_dict(payload, root=path.parent)
 
 
-def _to_bcd(value: int) -> int:
-    return ((value // 10) << 4) | (value % 10)
-
-
 def _stamp(payload: bytearray, name: str, value: bytes) -> None:
     field = FIELDS_BY_NAME[name]
     payload[field.offset : field.offset + field.length] = value
@@ -165,7 +166,7 @@ def _info_for(manifest: DiskManifest, side: ManifestSide) -> bytes:
         _stamp(
             payload,
             "manufacturing_date",
-            bytes([_to_bcd(year - SHOWA_EPOCH), _to_bcd(month), _to_bcd(day)]),
+            bytes([to_bcd(year - SHOWA_EPOCH), to_bcd(month), to_bcd(day)]),
         )
     return bytes(payload)
 
@@ -197,3 +198,15 @@ def build_from_manifest(manifest: DiskManifest) -> bytes:
 
     data, _ = encode(Disk(sides=tuple(sides)), headered=False)
     return data
+
+
+def build_manifest_file(path: Path) -> bytes:
+    payload: object = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        message = f"a manifest is a JSON object, and {path.name} holds {type(payload).__name__}"
+        raise ManifestShapeError(message)
+    if FdsPackerManifest.recognises(cast("dict[str, object]", payload)):
+        return FdsPackerManifest.parse(cast("dict[str, object]", payload), root=path.parent).build()
+    return build_from_manifest(
+        DiskManifest.from_dict(cast("dict[str, Any]", payload), root=path.parent)
+    )

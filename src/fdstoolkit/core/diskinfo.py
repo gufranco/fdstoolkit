@@ -99,6 +99,10 @@ PROFILES: Final[dict[str, MaskProfile]] = {
 }
 
 
+def to_bcd(value: int) -> int:
+    return ((value // 10) << 4) | (value % 10)
+
+
 def bcd_to_int(value: int) -> int | None:
     high = value >> 4
     low = value & 0x0F

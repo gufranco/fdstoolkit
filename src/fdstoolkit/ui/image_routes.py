@@ -7,7 +7,7 @@ from typing import Final
 
 from fastapi import HTTPException
 
-from fdstoolkit.build.manifest import build_from_manifest, load_manifest
+from fdstoolkit.build.manifest import build_manifest_file
 from fdstoolkit.build.targets import export_for
 from fdstoolkit.core.bios import predict_boot
 from fdstoolkit.core.blocks import FileKind
@@ -175,7 +175,7 @@ def build(spec: BuildSpec) -> FileResult:
         path = Path(directory) / "manifest.json"
         path.write_bytes(bytes_of(spec.manifest))
         try:
-            data = build_from_manifest(load_manifest(path))
+            data = build_manifest_file(path)
         except (ValueError, KeyError, OSError) as error:
             raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
     return named_file("built.fds", data)

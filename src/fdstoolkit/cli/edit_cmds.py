@@ -5,7 +5,7 @@ from typing import Annotated
 
 import typer
 
-from fdstoolkit.build.manifest import build_from_manifest, load_manifest
+from fdstoolkit.build.manifest import build_manifest_file
 from fdstoolkit.cli.common import (
     KIND_FOR_CHOICE,
     Container,
@@ -206,7 +206,7 @@ def build(
     guard_output(output, force=force)
 
     try:
-        data = build_from_manifest(load_manifest(manifest))
+        data = build_manifest_file(manifest)
     except ValueError as error:
         raise fail(str(error)) from error
 

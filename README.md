@@ -444,6 +444,14 @@ fdstoolkit build <manifest> -o <out> [--force]
 
 A disk built from a JSON manifest naming the disk fields and the files to place.
 
+`build` also reads FDSPacker's `diskinfo.json`, which DupliFDS and other FDSKey projects use, and tells the two schemas apart by their keys. It builds what FDSPacker builds:
+
+- Every disk information byte comes from its field, and an unknown field left out takes FDSPacker's default.
+- `file_amount` is written as given, so a side can declare fewer files than it carries and hide the rest. Left out, it is 0, as in FDSPacker.
+- Numbers are `$1F`, `0x1F` or `31`. `disk_side`, `disk_type`, `country_code`, `disk_type_other` and `file_kind` also take FDSPacker's names in any case.
+- `licensee_code` takes hex only, since FDSPacker's company names come from a table fdstoolkit does not carry.
+- A manifest that mixes keys from both schemas is refused.
+
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/build-dark.png">
 <img alt="The build command on the local web page" src="assets/screenshots/build-light.png">
