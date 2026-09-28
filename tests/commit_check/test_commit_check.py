@@ -95,3 +95,21 @@ def test_an_unknown_argument_is_refused(tmp_path: Path) -> None:
 
     assert result.returncode == 2
     assert "usage" in result.stderr
+
+
+def test_a_range_git_cannot_read_fails_instead_of_passing(tmp_path: Path) -> None:
+    run_git(tmp_path, "init", "-q")
+    run_git(tmp_path, "config", "user.email", "check@example.invalid")
+    run_git(tmp_path, "config", "user.name", "check")
+    run_git(tmp_path, "commit", "-q", "--allow-empty", "-m", "chore: start")
+
+    result = subprocess.run(
+        [BASH, str(SCRIPT), "--range", f"{'d' * 40}..HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2
+    assert "cannot read the commit range" in result.stderr

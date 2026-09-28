@@ -41,10 +41,15 @@ check_subject() {
 }
 
 check_range() {
-  local failed=0 subject
+  local failed=0 subject subjects
+  if ! subjects=$(git log --no-merges --format=%s "$1"); then
+    printf 'cannot read the commit range %s\n' "$1" >&2
+    return 2
+  fi
   while IFS= read -r subject; do
+    [[ -n ${subject} ]] || continue
     check_subject "${subject}" || failed=1
-  done < <(git log --no-merges --format=%s "$1")
+  done <<<"${subjects}"
   return "${failed}"
 }
 
