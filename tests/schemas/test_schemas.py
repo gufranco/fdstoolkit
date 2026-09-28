@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, get_args
+
 import pytest
 
 from fdstoolkit.build.blank import blank_image
@@ -19,12 +21,16 @@ from fdstoolkit.ui.schemas import (
     DumpedResult,
     FileResult,
     GradeResult,
+    JobResult,
     JobView,
     ProfileView,
     ReadsResult,
     ReportedFile,
     RowsResult,
 )
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
 
@@ -161,3 +167,45 @@ def test_calibration_rows_are_typed() -> None:
     )
 
     assert result.rows == [row]
+
+
+def job_result_samples() -> dict[type[BaseModel], BaseModel]:
+    file = FileResult(name="b.fds", data="AA==", size=1)
+    row = CalibrationRow(
+        read=8, expected=8, missing=[], short=0, long=0, invalid=0, lead_in=None, verdict="clean"
+    )
+    return {
+        DumpedResult: DumpedResult(name="dump.fds", data="AA==", size=1, grade="clean"),
+        CalibrationResult: CalibrationResult(
+            headline="h", mode="speed", rows=[row], ok=True, spread={}, timing=[]
+        ),
+        ReportedFile: ReportedFile(headline="written", file=file),
+        RowsResult: RowsResult(headline="probe", rows=[{"mode": "0x02"}]),
+    }
+
+
+def test_every_job_result_model_has_a_sample() -> None:
+    members = set(get_args(get_args(JobResult)[0]))
+
+    assert members == set(job_result_samples())
+
+
+def test_every_job_result_model_reads_back_as_itself() -> None:
+    samples = job_result_samples()
+
+    read_back = {
+        model: type(
+            JobView.model_validate(
+                {
+                    "id": "j",
+                    "command": "c",
+                    "writes": False,
+                    "state": "done",
+                    "result": sample.model_dump(),
+                }
+            ).result
+        )
+        for model, sample in samples.items()
+    }
+
+    assert read_back == {model: model for model in samples}
