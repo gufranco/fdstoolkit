@@ -36,3 +36,15 @@ def test_releasing_twice_is_harmless(tmp_path: Path) -> None:
     held.release()
 
     assert held.released
+
+
+def test_a_lock_file_this_user_cannot_open_is_a_hardware_fault(tmp_path: Path) -> None:
+    path = tmp_path / "drive.lock"
+    path.write_bytes(b"")
+    path.chmod(0)
+
+    with pytest.raises(HardwareFaultError, match="cannot open the drive lock") as refused:
+        acquire_drive_lock(path)
+
+    path.chmod(0o600)
+    assert str(path) in str(refused.value)

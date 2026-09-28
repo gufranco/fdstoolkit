@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -210,6 +211,19 @@ def test_a_drive_another_job_holds_is_not_opened_to_check_it() -> None:
     assert handle.opened == 0
     assert status_of(report, "fdsstick access") is CheckStatus.OK
     assert "in use" in detail_of(report, "fdsstick access")
+
+
+def test_a_drive_lock_this_user_cannot_open_fails_the_access_check(tmp_path: Path) -> None:
+    locked = tmp_path / "drive.lock"
+    locked.write_bytes(b"")
+    locked.chmod(0)
+    hid = FakeHid([stick()])
+
+    report = diagnose(load_hid=lambda: hid, lock_path=locked)
+
+    locked.chmod(0o600)
+    assert status_of(report, "fdsstick access") is CheckStatus.FAILED
+    assert "cannot open the drive lock" in detail_of(report, "fdsstick access")
 
 
 def test_a_device_present_but_unopenable_fails_and_names_the_udev_rule() -> None:

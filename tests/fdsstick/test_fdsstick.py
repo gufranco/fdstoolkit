@@ -358,3 +358,26 @@ def test_a_side_that_reads_in_time_sets_the_limit_for_the_next() -> None:
 
     assert stick.watchdog.measured is not None
     assert stick.watchdog.limit < UNMEASURED_CEILING_S
+
+
+def test_an_unexpected_failure_while_opening_leaves_the_drive_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Broken:
+        def device(self) -> FakeHidDevice:
+            message = "the hid backend failed"
+            raise RuntimeError(message)
+
+    class Working:
+        def device(self) -> FakeHidDevice:
+            return FakeHidDevice()
+
+    monkeypatch.setattr("fdstoolkit.hardware.fdsstick._load_hid", Broken)
+    with pytest.raises(RuntimeError, match="the hid backend failed"):
+        open_fdsstick()
+    monkeypatch.setattr("fdstoolkit.hardware.fdsstick._load_hid", Working)
+
+    stick = open_fdsstick()
+
+    stick.close()
+    assert stick.closed_lock

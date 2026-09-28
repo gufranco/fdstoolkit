@@ -252,6 +252,19 @@ def _load_hid() -> HidModule:
     return cast("HidModule", importlib.import_module("hid"))
 
 
+def _opened(hid: HidModule) -> HidDevice:
+    device = hid.device()
+    try:
+        device.open(VENDOR_ID, PRODUCT_ID)
+    except OSError as error:
+        message = (
+            f"no FDSStick answered at {VENDOR_ID:#06x}:{PRODUCT_ID:#06x}. "
+            "Check the USB cable and that no other program holds the device"
+        )
+        raise HardwareFaultError(message, kind=FaultKind.LINK) from error
+    return device
+
+
 def open_fdsstick() -> FdsStick:
     try:
         hid = _load_hid()
@@ -263,15 +276,8 @@ def open_fdsstick() -> FdsStick:
         raise HardwareFaultError(message, kind=FaultKind.LINK) from error
 
     lock = acquire_drive_lock()
-    device = hid.device()
     try:
-        device.open(VENDOR_ID, PRODUCT_ID)
-    except OSError as error:
+        return FdsStick(HidApiTransport(_opened(hid)), lock=lock)
+    except BaseException:
         lock.release()
-        message = (
-            f"no FDSStick answered at {VENDOR_ID:#06x}:{PRODUCT_ID:#06x}. "
-            "Check the USB cable and that no other program holds the device"
-        )
-        raise HardwareFaultError(message, kind=FaultKind.LINK) from error
-
-    return FdsStick(HidApiTransport(device), lock=lock)
+        raise

@@ -7,6 +7,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Final, Protocol, cast
 
 from fdstoolkit.build.blank import (
@@ -17,7 +18,7 @@ from fdstoolkit.build.blank import (
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.hardware.device_lock import acquire_drive_lock
+from fdstoolkit.hardware.device_lock import LOCK_PATH, DriveBusyError, acquire_drive_lock
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.version import VERSION
@@ -99,14 +100,16 @@ def _describe(entry: dict[str, Any]) -> str:
     return name
 
 
-def _access_check(hid: Enumerator, entry: dict[str, Any]) -> Check:
+def _access_check(hid: Enumerator, entry: dict[str, Any], lock_path: Path) -> Check:
     path = entry.get("path")
     if not isinstance(path, bytes):
         return Check("fdsstick access", CheckStatus.WARNING, "the device reported no open path")
     try:
-        lock = acquire_drive_lock()
-    except HardwareFaultError:
+        lock = acquire_drive_lock(lock_path)
+    except DriveBusyError:
         return Check("fdsstick access", CheckStatus.OK, IN_USE)
+    except HardwareFaultError as error:
+        return Check("fdsstick access", CheckStatus.FAILED, str(error))
     try:
         handle = hid.device()
         handle.open_path(path)
@@ -126,7 +129,9 @@ def _python_check(version: tuple[int, int, int]) -> Check:
     return Check("python", CheckStatus.OK, text)
 
 
-def hardware_checks(loader: Callable[[], Enumerator] = load_hid) -> tuple[Check, ...]:
+def hardware_checks(
+    loader: Callable[[], Enumerator] = load_hid, lock_path: Path = LOCK_PATH
+) -> tuple[Check, ...]:
     try:
         hid = loader()
     except ImportError:
@@ -156,7 +161,7 @@ def hardware_checks(loader: Callable[[], Enumerator] = load_hid) -> tuple[Check,
         CheckStatus.OK,
         f"{len(found)} device(s) connected, {_describe(first)}",
     )
-    return support, present, _access_check(hid, first)
+    return support, present, _access_check(hid, first, lock_path)
 
 
 def codec_check(
@@ -210,6 +215,7 @@ def diagnose(
     *,
     load_hid: Callable[[], Enumerator] = load_hid,
     python: tuple[int, int, int] | None = None,
+    lock_path: Path = LOCK_PATH,
 ) -> DoctorReport:
     interpreter = python if python is not None else sys.version_info[:3]
     return DoctorReport(
@@ -217,7 +223,7 @@ def diagnose(
             Check("fdstoolkit", CheckStatus.OK, VERSION),
             _python_check(interpreter),
             Check("platform", CheckStatus.OK, f"{platform.system()} {platform.machine()}"),
-            *hardware_checks(load_hid),
+            *hardware_checks(load_hid, lock_path),
             codec_check(),
             _identity_check(),
         )
