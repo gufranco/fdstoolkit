@@ -5,12 +5,14 @@ from typing import Annotated
 
 import typer
 
+from fdstoolkit.build.fdspacker_export import MANIFEST_NAME, FdsPackerExport
 from fdstoolkit.build.manifest import build_manifest_file
 from fdstoolkit.cli.common import (
     KIND_FOR_CHOICE,
     Container,
     Family,
     KindChoice,
+    ManifestChoice,
     container_of,
     decode_image,
     fail,
@@ -18,6 +20,7 @@ from fdstoolkit.cli.common import (
     read_image,
 )
 from fdstoolkit.codecs import fds, qd
+from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
 from fdstoolkit.edit.files import FileSpec, extract_files, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
@@ -29,21 +32,47 @@ def extract(
     image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
     directory: Annotated[Path, typer.Option("-d", "--directory", help="where to write the files")],
     *,
+    manifest: Annotated[
+        ManifestChoice | None,
+        typer.Option("--manifest", help="also write a manifest that rebuilds the disk"),
+    ] = None,
     force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
 ) -> None:
     """Write every file on the disk to a directory."""
     disk, _, _, _ = decode_image(image)
+    if manifest is ManifestChoice.FDSPACKER:
+        _extract_fdspacker(disk, directory, force=force)
+        return
     directory.mkdir(parents=True, exist_ok=True)
 
     for entry in extract_files(disk):
         stem = entry.name.strip() or f"file{entry.position}"
         target = directory / f"side{entry.side}-{entry.position:02d}-{stem}.bin"
-        if target.exists() and not force:
-            message = f"{target} exists, pass --force to overwrite"
-            raise fail(message)
+        _refuse_overwrite(target, force=force)
         target.write_bytes(entry.data)
         marker = " (hidden)" if entry.hidden else ""
         typer.echo(f"{target.name}  {entry.size} bytes{marker}")
+
+
+def _refuse_overwrite(target: Path, *, force: bool) -> None:
+    if target.exists() and not force:
+        message = f"{target} exists, pass --force to overwrite"
+        raise fail(message)
+
+
+def _extract_fdspacker(disk: Disk, directory: Path, *, force: bool) -> None:
+    try:
+        export = FdsPackerExport.of(disk)
+    except ValueError as error:
+        raise fail(str(error)) from error
+    written = [*export.files, (MANIFEST_NAME, export.text().encode("utf-8"))]
+    for relative, _ in written:
+        _refuse_overwrite(directory / relative, force=force)
+    for relative, data in written:
+        target = directory / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        typer.echo(f"{relative}  {len(data)} bytes")
 
 
 def insert_command(

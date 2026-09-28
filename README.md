@@ -300,10 +300,12 @@ Adds a file and raises the declared count. `--address` defaults to `6000`.
 #### `extract`
 
 ```bash
-fdstoolkit extract <image> -d <dir> [--force]
+fdstoolkit extract <image> -d <dir> [--manifest fdspacker] [--force]
 ```
 
 Every file to disk, including files past the declared count.
+
+With `--manifest fdspacker` it also writes `diskinfo.json`, a manifest in the schema of ClusterM's [FDSPacker](https://github.com/ClusterM/FDSPacker). That directory rebuilds the same bytes with `build` or with FDSPacker, hidden files and unknown bytes included. A disk the schema cannot hold is refused with the field that does not fit: a verification string other than `*NINTENDO-HVC*`, a date or rewrite count that is not a number, or bytes after the last block. A disk `build` or `blank` made is one of them, since its unwritten rewrite fields hold `$FF`.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/extract-dark.png">

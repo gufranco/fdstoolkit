@@ -294,10 +294,12 @@ fdstoolkit insert <image> --file <f> --name <n> -o <out> [--address <hex>] [--ki
 #### `extract`
 
 ```bash
-fdstoolkit extract <image> -d <dir> [--force]
+fdstoolkit extract <image> -d <dir> [--manifest fdspacker] [--force]
 ```
 
 宣言数を超えた位置にあるファイルも含め、すべてのファイルを書き出します。
+
+`--manifest fdspacker` を付けると、ClusterM の [FDSPacker](https://github.com/ClusterM/FDSPacker) の形式によるマニフェスト `diskinfo.json` も書き出します。そのディレクトリからは、`build` でも FDSPacker でも、隠しファイルと未知のバイトを含めて同じバイト列が作り直せます。この形式で表せないディスクは、収まらない項目を示して拒否します。対象は、`*NINTENDO-HVC*` 以外の認証文字列、数値として読めない日付や書き換え回数、最後のブロックの後に続くバイトです。`build` や `blank` で作ったディスクもこれに当たります。書き換えの項目が未記入の `$FF` のままだからです。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/extract-dark.png">

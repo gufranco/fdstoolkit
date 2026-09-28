@@ -250,6 +250,10 @@ class ImageSpec(BaseModel):
     name: str = "disk.fds"
 
 
+class ExtractSpec(ImageSpec):
+    fdspacker: bool = False
+
+
 class HashSpec(ImageSpec):
     profile: str = "content"
     canonical_image: bool = False

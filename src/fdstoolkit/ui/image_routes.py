@@ -7,6 +7,7 @@ from typing import Final
 
 from fastapi import HTTPException
 
+from fdstoolkit.build.fdspacker_export import MANIFEST_NAME, FdsPackerExport
 from fdstoolkit.build.manifest import build_manifest_file
 from fdstoolkit.build.targets import export_for
 from fdstoolkit.core.bios import predict_boot
@@ -28,6 +29,7 @@ from fdstoolkit.ui.schemas import (
     DiffSpec,
     EditSpec,
     ExportSpec,
+    ExtractSpec,
     FileResult,
     FilesResult,
     ImageSpec,
@@ -99,10 +101,18 @@ def provenance(spec: ImageSpec) -> RowsResult:
     return RowsResult(rows=rows_of(provenance_of(_disk(spec)).sides))
 
 
-def extract(spec: ImageSpec) -> FilesResult:
-    return FilesResult(
-        files=[named_file(entry.name, entry.data) for entry in extract_files(_disk(spec))]
-    )
+def extract(spec: ExtractSpec) -> FilesResult:
+    disk = _disk(spec)
+    if not spec.fdspacker:
+        return FilesResult(
+            files=[named_file(entry.name, entry.data) for entry in extract_files(disk)]
+        )
+    try:
+        export = FdsPackerExport.of(disk)
+    except ValueError as error:
+        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
+    manifest = named_file(MANIFEST_NAME, export.text().encode("utf-8"))
+    return FilesResult(files=[manifest, *(named_file(path, data) for path, data in export.files)])
 
 
 def insert(spec: InsertSpec) -> FileResult:

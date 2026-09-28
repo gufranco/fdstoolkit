@@ -38,6 +38,10 @@ class KindChoice(StrEnum):
     NAMETABLE = "nametable"
 
 
+class ManifestChoice(StrEnum):
+    FDSPACKER = "fdspacker"
+
+
 class TargetChoice(StrEnum):
     NT_MINI = "nt-mini"
     MISTER = "mister"

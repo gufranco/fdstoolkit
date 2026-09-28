@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import base64
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.fdspacker import FdsPackerManifest
 from fdstoolkit.ui.app import create_app
 
 OK = 200
@@ -118,6 +120,28 @@ def test_extract_writes_every_file(client: TestClient) -> None:
     body = client.post("/api/extract", json={"data": ENCODED}).json()
 
     assert isinstance(body["files"], list)
+
+
+def test_extract_can_add_an_fdspacker_manifest(client: TestClient, tmp_path: Path) -> None:
+    (tmp_path / "main.prg").write_bytes(bytes([0xEA]) * 32)
+    side = {
+        "game_name": "SMB",
+        "file_amount": 1,
+        "files": [{"file_name": "MAIN", "data": "main.prg"}],
+    }
+    image = FdsPackerManifest.parse({"sides": [side]}, root=tmp_path).build()
+    encoded = base64.b64encode(image).decode("ascii")
+
+    body = client.post("/api/extract", json={"data": encoded, "fdspacker": True}).json()
+
+    assert [entry["name"] for entry in body["files"]] == ["diskinfo.json", "side0-00-MAIN.prg"]
+
+
+def test_extract_says_why_a_disk_has_no_fdspacker_manifest(client: TestClient) -> None:
+    answer = client.post("/api/extract", json={"data": ENCODED, "fdspacker": True})
+
+    assert answer.status_code == BAD_REQUEST
+    assert "rewritten_date" in answer.json()["detail"]
 
 
 def test_insert_adds_a_file(client: TestClient) -> None:
