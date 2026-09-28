@@ -934,6 +934,15 @@ Three passes give the bundle three reads of every side, which is what the weak-b
 
 One disk cannot answer this. Read several and compare where they failed: a place that fails on every disk is the drive, failures confined to one disk are that disk, and a drive that stops answering is neither. In the last case the correct response is to stop, not to try another disk in it.
 
+### Checking a DupliFDS copy
+
+[DupliFDS](https://github.com/ClusterM/duplifds) copies a disk on the console itself and never reads back what it wrote, so a copy is unverified until it is compared with its source.
+
+1. Dump the source disk: `fdstoolkit dump -o source.fds`.
+2. Get the copy as an image. A copy on an FDSKey card is already a `.fds` file on the card. A copy on a disk needs `fdstoolkit dump -o copy.fds`.
+3. Compare them: `fdstoolkit diff source.fds copy.fds --explain`. Identical means the copy holds every block. A copy DupliFDS did not finish is reported as one that stopped early, naming how many of the source's files it holds, because DupliFDS writes a file amount that counts only the files copied so far.
+4. Grade the copy: `fdstoolkit grade copy.fds --read copy2.fds`, with a second dump of the copy, says whether the new disk reads reliably, which a clean `diff` alone does not.
+
 ## Formats
 
 A side is a sequence of blocks:
