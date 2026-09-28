@@ -11,6 +11,7 @@ from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.drive.vote import keyed
 
 MIN_DUMPS: Final = 2
+FILE_AMOUNT_INDEX: Final = 1
 
 
 class BlockVerdict(StrEnum):
@@ -182,6 +183,30 @@ def build_consensus(disks: Sequence[Disk]) -> ConsensusResult:
     )
 
 
+def _is_prefix(short: Side, long: Side) -> bool:
+    pairs = zip(short.blocks, long.blocks[: len(short.blocks)], strict=True)
+    return all(
+        one.payload == other.payload
+        for index, (one, other) in enumerate(pairs)
+        if index != FILE_AMOUNT_INDEX
+    )
+
+
+def _stopped_copy(side_index: int, first: Side, second: Side) -> str | None:
+    shorter, longer, which = (
+        (second, first, "second")
+        if len(second.blocks) < len(first.blocks)
+        else (first, second, "first")
+    )
+    if len(shorter.blocks) <= FILE_AMOUNT_INDEX or not _is_prefix(shorter, longer):
+        return None
+    return (
+        f"side {side_index}: the {which} image holds the first {shorter.file_count} of "
+        f"{longer.file_count} files of the {'first' if which == 'second' else 'second'}, "
+        "block for block, so it is a copy that stopped early rather than a different disk"
+    )
+
+
 def compare_images(first: Disk, second: Disk) -> ComparisonReport:
     if first.side_count != second.side_count:
         return ComparisonReport(
@@ -196,7 +221,8 @@ def compare_images(first: Disk, second: Disk) -> ComparisonReport:
             return ComparisonReport(
                 identical=False,
                 differing_blocks=(),
-                summary=(
+                summary=_stopped_copy(side_index, left, right)
+                or (
                     f"block count differs on side {side_index}: "
                     f"{len(left.blocks)} against {len(right.blocks)}"
                 ),

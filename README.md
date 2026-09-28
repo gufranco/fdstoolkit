@@ -249,7 +249,7 @@ bits gained   0
 fdstoolkit diff <a> <b> [--explain] [--json]
 ```
 
-Which blocks differ. `--explain` names the disk-info fields and the files instead of block indices.
+Which blocks differ. `--explain` names the disk-info fields and the files instead of block indices. When one side holds the other's first files block for block, differing only in the declared file count, `diff` says it is a copy that stopped early and how many files it reached, since an interrupted copy, such as one DupliFDS leaves when it is stopped between passes, declares only the files it holds and otherwise looks complete.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/diff-dark.png">

@@ -209,3 +209,39 @@ def test_a_block_whose_copies_fail_their_checksum_is_not_named_rewritten() -> No
     result = build_consensus([wrong, right])
 
     assert result.findings == ((0, 3, "the dumps disagree"),)
+
+
+def copy_of_first_files(disk: Disk, files: int) -> Disk:
+    side = disk.sides[0]
+    kept = list(side.blocks[: 2 + 2 * files])
+    kept[1] = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([BlockKind.FILE_AMOUNT, files]))
+    return Disk(sides=(Side(blocks=tuple(kept), tail=b"", capacity=side.capacity),))
+
+
+def test_a_copy_that_stopped_early_is_named_as_one() -> None:
+    source = with_files(5)
+
+    report = compare_images(source, copy_of_first_files(source, 3))
+
+    assert not report.identical
+    assert report.summary == (
+        "side 0: the second image holds the first 3 of 5 files of the first, block for block, "
+        "so it is a copy that stopped early rather than a different disk"
+    )
+
+
+def test_a_copy_that_stopped_early_is_named_whichever_image_comes_first() -> None:
+    source = with_files(4)
+
+    report = compare_images(copy_of_first_files(source, 1), source)
+
+    assert report.summary.startswith("side 0: the first image holds the first 1 of 4 files")
+
+
+def test_a_shorter_side_whose_files_differ_is_not_a_stopped_copy() -> None:
+    source = with_files(3)
+    other = copy_of_first_files(with_block(source, 3, bytes([BlockKind.FILE_DATA, 9]), 0), 2)
+
+    report = compare_images(source, other)
+
+    assert report.summary == "block count differs on side 0: 8 against 6"

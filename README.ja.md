@@ -243,7 +243,7 @@ bits gained   0
 fdstoolkit diff <a> <b> [--explain] [--json]
 ```
 
-どのブロックが異なるか。`--explain` はブロック番号ではなくディスク情報のフィールド名とファイル名で示します。
+どのブロックが異なるか。`--explain` はブロック番号ではなくディスク情報のフィールド名とファイル名で示します。一方の面が他方の先頭のファイルをブロック単位でそのまま持ち、申告されたファイル数だけが異なる場合、`diff` はそれを途中で止まったコピーとして示し、何個のファイルまで写したかを伝えます。DupliFDS をパスの合間に止めた場合のように、中断されたコピーは持っているファイルだけを申告するため、それだけでは完全に見えるからです。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/diff-dark.png">
