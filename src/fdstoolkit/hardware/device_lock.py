@@ -21,19 +21,20 @@ class DriveBusyError(HardwareFaultError):
     pass
 
 
-def _try_lock(descriptor: int) -> bool:
+def _lock_exclusively(descriptor: int) -> None:
     if sys.platform == "win32":  # pragma: no cover
         import msvcrt  # noqa: PLC0415
 
-        try:
-            msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
-        except OSError:
-            return False
-        return True
-    import fcntl  # noqa: PLC0415
+        msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+    else:  # pragma: no cover
+        import fcntl  # noqa: PLC0415
 
-    try:
         fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _try_lock(descriptor: int) -> bool:
+    try:
+        _lock_exclusively(descriptor)
     except OSError:
         return False
     return True
