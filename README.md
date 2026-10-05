@@ -404,7 +404,7 @@ fdstoolkit export <image> --target <t> -d <dir> [--force]
 
 The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`, `fdskey`. Each writes a headerless `.fds`.
 
-`fdskey` also checks what [FDSKey](https://github.com/ClusterM/fdskey) loads. It refuses a side without `*NINTENDO-HVC*`, or one whose declared files do not fit the emulator's 66560 bytes per side with gaps and checksums. It names what FDSKey drops: hidden files past that budget, and anything after the last file or after a block out of order.
+`fdskey` also checks what [FDSKey](https://github.com/ClusterM/fdskey) loads. It refuses what FDSKey refuses: a side without `*NINTENDO-HVC*` or without a file amount block, and a side whose declared files run past the emulator's 66560 bytes per side, gaps and checksums included, before the last declared block. It names what FDSKey loads without and drops silently: a last declared file or hidden files past that budget, every block from one out of order onwards, and anything after the last file.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">

@@ -64,12 +64,31 @@ def test_an_unformatted_side_is_refused() -> None:
 
 
 def test_declared_files_beyond_the_budget_are_refused() -> None:
-    disk = with_files(formatted(), [30000, 33000])
+    disk = with_files(formatted(), [30000, 33000, 16])
 
     check = fdskey_check(disk)
 
     assert len(check.refusals) == 1
-    assert check.refusals[0].startswith("side 0: FDSKey cannot hold the 2 declared files")
+    assert check.refusals[0].startswith("side 0: FDSKey cannot hold the 3 declared files")
+
+
+def test_only_the_last_declared_block_past_the_budget_is_dropped_not_refused() -> None:
+    disk = with_files(formatted(), [30000, 33000])
+
+    check = fdskey_check(disk)
+
+    assert check.refusals == ()
+    assert check.drops == ("side 0: FDSKey has no room for file 1, F1, and drops it",)
+
+
+def test_a_side_without_a_file_amount_block_is_refused() -> None:
+    disk = formatted()
+    side = disk.sides[0]
+    bare = Side(blocks=side.blocks[:1], tail=b"", capacity=side.capacity)
+
+    check = fdskey_check(replaced_side(disk, bare))
+
+    assert check.refusals == ("side 0: FDSKey refuses a side without a file amount block",)
 
 
 def test_a_hidden_file_beyond_the_budget_is_named_as_dropped() -> None:
@@ -99,8 +118,9 @@ def test_a_block_out_of_order_ends_what_fdskey_loads() -> None:
 
     check = fdskey_check(replaced_side(disk, swapped))
 
-    assert check.refusals == (
-        "side 0: FDSKey cannot hold the 2 declared files: block 3 is out of order",
+    assert check.refusals == ()
+    assert check.drops == (
+        "side 0: block 3 is out of order, so FDSKey drops it and every block after it",
     )
 
 

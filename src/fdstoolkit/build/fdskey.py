@@ -5,6 +5,7 @@ from typing import Final
 
 from fdstoolkit.codecs.raw import BITS_PER_BYTE, GAP_BITS, LEAD_IN_BITS
 from fdstoolkit.core.blocks import (
+    BLOCKS_PER_FILE,
     HEAD_BLOCKS,
     Block,
     BlockKind,
@@ -68,12 +69,17 @@ def _declared(side: Side) -> int:
 
 def _refusal(number: int, side: Side, loaded: _Loaded) -> str:
     files = side.declared_file_count or 0
-    reason = (
-        f"block {loaded.count} is out of order"
-        if loaded.out_of_order
-        else f"the side needs {loaded.needed} bytes with its gaps against {SIDE_BUDGET}"
+    return (
+        f"side {number}: FDSKey cannot hold the {files} declared files: the side needs "
+        f"{loaded.needed} bytes with its gaps against {SIDE_BUDGET}"
     )
-    return f"side {number}: FDSKey cannot hold the {files} declared files: {reason}"
+
+
+def _dropped_file(number: int, side: Side, index: int) -> str:
+    position = (index - HEAD_BLOCKS) // BLOCKS_PER_FILE
+    which = "hidden file" if position >= (side.declared_file_count or 0) else "file"
+    name = FileHeader.parse(side.blocks[index].payload).name
+    return f"side {number}: FDSKey has no room for {which} {position}, {name}, and drops it"
 
 
 def _drops(number: int, side: Side, loaded: _Loaded) -> tuple[str, ...]:
@@ -83,15 +89,10 @@ def _drops(number: int, side: Side, loaded: _Loaded) -> tuple[str, ...]:
             "and every block after it"
         )
         return (message,)
-    headers = [
-        (index, FileHeader.parse(block.payload))
+    return tuple(
+        _dropped_file(number, side, index)
         for index, block in enumerate(side.blocks)
         if block.kind is BlockKind.FILE_HEADER and index + 1 >= loaded.count
-    ]
-    return tuple(
-        f"side {number}: FDSKey has no room for hidden file "
-        f"{(index - HEAD_BLOCKS) // 2}, {header.name}, and drops it"
-        for index, header in headers
     )
 
 
@@ -109,8 +110,12 @@ def _side_check(number: int, side: Side) -> FdsKeyCheck:
             f"side {number}: FDSKey refuses a side whose disk information lacks *NINTENDO-HVC*"
         )
         return FdsKeyCheck(refusals=(refusal,), drops=())
+    if len(side.blocks) < HEAD_BLOCKS or side.blocks[1].kind is not BlockKind.FILE_AMOUNT:
+        refusal = f"side {number}: FDSKey refuses a side without a file amount block"
+        return FdsKeyCheck(refusals=(refusal,), drops=())
     loaded = _loaded(side)
-    if loaded.count < _declared(side):
+    cut_by_budget = not loaded.out_of_order and loaded.count < len(side.blocks)
+    if cut_by_budget and loaded.count + 1 < _declared(side):
         return FdsKeyCheck(refusals=(_refusal(number, side, loaded),), drops=())
     dropped = _drops(number, side, loaded) if loaded.count < len(side.blocks) else ()
     return FdsKeyCheck(refusals=(), drops=(*dropped, *_tail(number, side)))
