@@ -53,8 +53,9 @@ a factor of two and carry no tolerance.
   Unknown does not block a write; a state the drive reports as bad does. The
   safety of a write comes from the backup, the confirmation and the readback
   comparison, not from a status the stick cannot give.
-- Every game uses at most one disk, with one or two sides. No game spans a
-  second disk.
+- A disk physically has two sides, so an image of more than two is refused,
+  even though the file format, FDSKey's blank-disk menu and FDSPacker's own
+  fixtures allow more. The refusal states that physical reason.
 - Disk images are `.fds` and `.qd`, and nothing else. `raw03` captures and
   IPS, UPS and BPS patches are read because neither is a disk image.
 - A drive that reaches one face at a time cannot select a side. Reading more
