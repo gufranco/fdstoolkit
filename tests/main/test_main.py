@@ -373,7 +373,7 @@ def test_dump_refuses_an_output_it_cannot_encode_before_reading(
     result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.bin")])
 
     assert result.exit_code == 1
-    assert "expected a .fds or .qd file" in result.stdout
+    assert "expected a .fds, .qd or .srm file" in result.stdout
     assert drive.read_count == 0
 
 
@@ -1504,6 +1504,48 @@ def test_export_refuses_a_disk_fdskey_will_not_load(tmp_path: Path) -> None:
     assert result.exit_code == 1
     assert "FDSKey refuses a side whose disk information lacks" in result.stdout
     assert not card.exists()
+
+
+def test_an_everdrive_save_is_read_as_a_headerless_image(tmp_path: Path) -> None:
+    source = tmp_path / "bram.srm"
+    source.write_bytes(_game_with_a_file(tmp_path).read_bytes())
+
+    result = runner.invoke(app, ["info", str(source)])
+
+    assert result.exit_code == 0
+    assert "bram.srm: fds container, 2 side(s)" in result.stdout
+
+
+def test_a_cartridge_save_named_srm_is_refused_with_the_reason(tmp_path: Path) -> None:
+    source = tmp_path / "Zelda.srm"
+    source.write_bytes(bytes(8192))
+
+    result = runner.invoke(app, ["info", str(source)])
+
+    assert result.exit_code == 1
+    assert "Zelda.srm is not a Famicom Disk System save" in result.stdout
+    assert "8192 bytes" in result.stdout
+
+
+def test_a_disk_converts_to_an_everdrive_save(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path)
+    output = tmp_path / "bram.srm"
+
+    result = runner.invoke(app, ["convert", str(source), "-o", str(output)])
+
+    assert result.exit_code == 0
+    assert output.read_bytes() == source.read_bytes()
+
+
+def test_an_everdrive_save_never_takes_a_header(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path)
+
+    result = runner.invoke(
+        app, ["convert", str(source), "-o", str(tmp_path / "bram.srm"), "--header"]
+    )
+
+    assert result.exit_code == 1
+    assert "an .srm save is headerless" in result.stdout
 
 
 def test_a_sharp_mz_disk_is_refused_by_name(tmp_path: Path) -> None:

@@ -52,7 +52,7 @@ CHOICES: Final[dict[str, tuple[str, ...]]] = {
 }
 
 
-IMAGE_SUFFIXES: Final = ".fds,.qd"
+IMAGE_SUFFIXES: Final = ".fds,.qd,.srm"
 
 ACCEPTS: Final[dict[str, str]] = {
     "data": IMAGE_SUFFIXES,

@@ -950,6 +950,7 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 | `.fds` ヘッダなし | 65500 | なし | No-Intro がハッシュを取る対象 |
 | `.fds` fwNES ヘッダ付き | 16 + 面ごとに 65500 | なし | ヘッダが面数を保持します |
 | `.qd` | 65536 | あり | バーチャルコンソールの吸い出しと Quick Disk のダンプ |
+| `bram.srm` | 65500 | なし | EverDrive N8、または EverDrive 方式で保存する設定の FDSKey が `EDN8/gamedata/<ゲームのファイル名>/` に置くセーブ。ディスク全体をヘッダなしの `.fds` として持ちます。それ以外の `.srm` はサイズを示して拒否します |
 | パック済みパルスクラス、`raw03` | 可変 | あり | 1 パルスにつき 2 ビット、FDSStick が量子化済み |
 
 各変換で失われるもの。

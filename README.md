@@ -961,6 +961,7 @@ A side is a sequence of blocks:
 | `.fds` headerless | 65500 | No | What No-Intro hashes |
 | `.fds` with fwNES header | 16 + 65500 per side | No | Header carries the side count |
 | `.qd` | 65536 | Yes | Virtual Console rips and Quick Disk dumps |
+| `bram.srm` | 65500 | No | The save an EverDrive N8, or an FDSKey set to save like EverDrive, keeps in `EDN8/gamedata/<game file>/`: the whole disk as a headerless `.fds`. Any other `.srm` is refused with its size |
 | Packed pulse classes, `raw03` | variable | Yes | Two bits per pulse, already quantised by the FDSStick |
 
 What each conversion costs:

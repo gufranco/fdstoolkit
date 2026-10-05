@@ -16,6 +16,7 @@ from fdstoolkit.cli.common import (
     decode_image,
     fail,
     guard_output,
+    is_save_file,
 )
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.core.diagnostics import Severity, worst_severity
@@ -40,6 +41,9 @@ def convert(
     disk, _, _, _ = decode_image(image)
     target = container_of(output)
     guard_output(output, force=force)
+    if header and is_save_file(output):
+        message = "an .srm save is headerless, so --header cannot apply to it"
+        raise fail(message)
 
     if target is Container.FDS:
         data, findings = fds.encode(disk, headered=header)

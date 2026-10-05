@@ -9,7 +9,7 @@ import typer
 
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
-from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.blocks import BlockKind, FileKind
 from fdstoolkit.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.drive.captures import Bundle, BundleError
@@ -17,6 +17,7 @@ from fdstoolkit.drive.imported import bundle_from_path
 
 FDS_SUFFIX: Final = ".fds"
 QD_SUFFIX: Final = ".qd"
+SRM_SUFFIX: Final = ".srm"
 
 
 class Family(StrEnum):
@@ -69,7 +70,26 @@ def container_of(path: Path) -> Container:
         return Container.FDS
     if suffix == QD_SUFFIX:
         return Container.QD
-    message = f"unknown format for {path.name}, expected a {FDS_SUFFIX} or {QD_SUFFIX} file"
+    if suffix == SRM_SUFFIX:
+        return Container.FDS
+    message = (
+        f"unknown format for {path.name}, expected a {FDS_SUFFIX}, {QD_SUFFIX} or {SRM_SUFFIX} file"
+    )
+    raise fail(message)
+
+
+def is_save_file(path: Path) -> bool:
+    return path.suffix.lower() == SRM_SUFFIX
+
+
+def _check_save_file(path: Path, data: bytes) -> None:
+    if len(data) % fds.SIDE_SIZE == 0 and data[:1] == bytes([BlockKind.DISK_INFO]):
+        return
+    message = (
+        f"{path.name} is not a Famicom Disk System save: an EverDrive or FDSKey save is the "
+        f"whole disk as a headerless image, a multiple of {fds.SIDE_SIZE} bytes that starts "
+        f"with the disk information, and this file holds {len(data)} bytes"
+    )
     raise fail(message)
 
 
@@ -77,7 +97,10 @@ def read_image(path: Path) -> tuple[bytes, Container]:
     if not path.is_file():
         message = f"file not found: {path}"
         raise fail(message)
-    return path.read_bytes(), container_of(path)
+    data, container = path.read_bytes(), container_of(path)
+    if is_save_file(path):
+        _check_save_file(path, data)
+    return data, container
 
 
 def decode_image(path: Path) -> tuple[Disk, tuple[Diagnostic, ...], bytes, Container]:
