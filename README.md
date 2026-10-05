@@ -100,7 +100,7 @@ Digests print as `fdstoolkit:v1:<profile>/v1:<sha256>`. Under `release`, 142 of 
 
 **A saved capture is the disk as the drive saw it.** `dump --raw <dir>` writes every read of every side as `side{S}.read{NN}.raw03`, plus a `manifest.json` naming each file with its side, read number, size and SHA-256, the image it belongs to, and when it was kept. The web page hands the same bundle back as one zip. Every command that takes `--captures` reads either form and refuses a file whose digest no longer matches, so a bundle can be kept for years and read again without the disk. Most read errors are one pulse in the wrong class; a read that gained or lost a pulse is realigned to the others first. Either way, three reads that each went wrong in a different place can be voted back into the pulses the disk holds.
 
-**A game is one disk.** Every game uses a single disk, with one or two sides, and no game spans a second disk. An image holding more than two sides bundles several disks together, and every command refuses it.
+**A disk has two sides.** A disk physically has two sides, so an image holding more than two cannot be written to one, even though the file format allows it. Every command refuses such an image.
 
 ## Command reference
 

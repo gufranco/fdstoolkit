@@ -81,9 +81,9 @@ class Disk:
     def __post_init__(self) -> None:
         if len(self.sides) > SIDES_PER_DISK:
             message = (
-                f"this image holds {len(self.sides)} sides, but a disk has at most "
-                f"{SIDES_PER_DISK} and no game uses more than one disk, so the file "
-                "bundles several disks together. fdstoolkit reads one disk per image"
+                f"this image holds {len(self.sides)} sides, but a disk physically has "
+                f"{SIDES_PER_DISK}, so no disk can carry it, even though the file format "
+                "allows more. fdstoolkit reads one disk per image"
             )
             raise TooManySidesError(message)
         if self.header_side_count is not None and self.header_side_count != len(self.sides):

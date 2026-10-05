@@ -100,9 +100,14 @@ def test_a_disk_reports_its_side_count() -> None:
     assert disk.side_count == 2
 
 
-def test_a_disk_of_more_than_two_sides_is_refused_as_a_bundle() -> None:
-    with pytest.raises(TooManySidesError, match="holds 3 sides"):
+def test_a_disk_of_more_than_two_sides_is_refused_for_the_physical_reason() -> None:
+    with pytest.raises(TooManySidesError) as refused:
         Disk(sides=(formatted_side(), formatted_side(), formatted_side()))
+
+    assert str(refused.value) == (
+        "this image holds 3 sides, but a disk physically has 2, so no disk can carry it, "
+        "even though the file format allows more. fdstoolkit reads one disk per image"
+    )
 
 
 def test_a_disk_rejects_a_header_count_that_contradicts_its_sides() -> None:
