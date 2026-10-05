@@ -945,6 +945,15 @@ One disk cannot answer this. Read several and compare where they failed: a place
 3. Compare them: `fdstoolkit diff source.fds copy.fds --explain`. Identical means the copy holds every block. A copy DupliFDS did not finish is reported as one that stopped early, naming how many of the source's files it holds, because DupliFDS writes a file amount that counts only the files copied so far.
 4. Grade the copy: `fdstoolkit grade copy.fds --read copy2.fds`, with a second dump of the copy, says whether the new disk reads reliably, which a clean `diff` alone does not.
 
+### Reading an image FDSKey saved
+
+When a game saves on an [FDSKey](https://github.com/ClusterM/fdskey), the card rewrites the image, and two of its rules show up in what fdstoolkit reports.
+
+- A block written where the next one no longer lines up drops every block after it. Hidden files can vanish this way, and `info` shows fewer files than the original had.
+- The save writes the new blocks over the old side without clearing what follows. A side that shrank keeps stale bytes after its last block, which `verify` reports as `FDS007`, non-zero bytes after the last block.
+
+Compare the save with the image before it, `fdstoolkit diff before.fds after.fds --explain`, to see which files the game changed and whether anything else moved.
+
 ## Formats
 
 A side is a sequence of blocks:
