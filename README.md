@@ -451,7 +451,7 @@ A disk built from a JSON manifest naming the disk fields and the files to place.
 - Every disk information byte comes from its field, and an unknown field left out takes FDSPacker's default.
 - `file_amount` is written as given, so a side can declare fewer files than it carries and hide the rest. Left out, it is 0, as in FDSPacker.
 - Numbers are `$1F`, `0x1F` or `31`. `disk_side`, `disk_type`, `country_code`, `disk_type_other` and `file_kind` also take FDSPacker's names in any case.
-- `licensee_code` takes hex only, since FDSPacker's company names come from a table fdstoolkit does not carry.
+- `licensee_code` takes the code or one of the 142 company names FDSPacker writes, such as `Nintendo` or `Konami`, in any case. A name FDSPacker does not know is refused.
 - A manifest that mixes keys from both schemas is refused.
 
 <picture>

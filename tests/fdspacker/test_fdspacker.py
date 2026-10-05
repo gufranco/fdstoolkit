@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -168,11 +169,36 @@ def test_enum_names_are_read_without_regard_to_case(tmp_path: Path) -> None:
     assert extract_files(disk)[0].kind is FileKind.NAMETABLE
 
 
-def test_a_licensee_given_by_name_is_refused_with_the_name(tmp_path: Path) -> None:
-    side = packer_side(tmp_path, licensee_code="Nintendo")
+@pytest.mark.parametrize(("name", "code"), [("Nintendo", 0x01), ("konami", 0xA4), ("CAPCOM", 0x08)])
+def test_a_licensee_given_by_fdspacker_name_is_its_code(
+    tmp_path: Path, name: str, code: int
+) -> None:
+    side = packer_side(tmp_path, licensee_code=name)
 
-    with pytest.raises(ValueError, match=r"licensee_code 'Nintendo'"):
+    info = info_of(build(tmp_path, side))
+
+    assert info[0x0F] == code
+
+
+def test_a_licensee_name_fdspacker_does_not_know_is_refused_with_a_hex_hint(
+    tmp_path: Path,
+) -> None:
+    side = packer_side(tmp_path, licensee_code="Acme Software")
+
+    with pytest.raises(ValueError, match=r"licensee_code 'Acme Software'.*such as \$01"):
         build(tmp_path, side)
+
+
+def test_the_licensee_table_holds_fdspacker_codes_once_each() -> None:
+    table = json.loads(
+        resources.files("fdstoolkit.data").joinpath("licensees.json").read_text(encoding="utf-8")
+    )
+
+    codes = list(table["licensees"])
+
+    assert len(codes) == 142
+    assert len(set(table["licensees"].values())) == 142
+    assert table["licensees"]["0x01"] == "Nintendo"
 
 
 def test_an_unknown_enum_name_is_refused_with_the_known_names(tmp_path: Path) -> None:

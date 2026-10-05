@@ -445,7 +445,7 @@ fdstoolkit build <manifest> -o <out> [--force]
 - ディスク情報の各バイトは対応する項目から取ります。省略した未知の項目には FDSPacker の既定値が入ります。
 - `file_amount` は指定どおりに書くので、実際より少ないファイル数を宣言して残りを隠せます。省略すると FDSPacker と同じく 0 です。
 - 数値は `$1F`、`0x1F`、`31` のいずれかで書きます。`disk_side`、`disk_type`、`country_code`、`disk_type_other`、`file_kind` は、FDSPacker の名前でも大文字小文字を問わず受け付けます。
-- `licensee_code` は 16 進数のみです。FDSPacker の会社名は、fdstoolkit が持たない表に基づくからです。
+- `licensee_code` はコードのほか、FDSPacker が書き出す 142 社の会社名も、大文字小文字を問わず受け付けます。たとえば `Nintendo` や `Konami` です。FDSPacker が知らない名前は拒否します。
 - 両方の形式のキーが混ざったマニフェストは拒否します。
 
 <picture>

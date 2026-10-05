@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
+from functools import cache
+from importlib import resources
 from pathlib import Path
+from types import MappingProxyType
 from typing import Final, cast
 
 from fdstoolkit.codecs.fds import SIDE_SIZE, encode
@@ -31,7 +35,8 @@ DISK_TYPES_OTHER: Final[Mapping[str, int]] = {
     "BlueDisk": 0xFF,
 }
 FILE_KINDS: Final[Mapping[str, int]] = {"Program": 0, "Character": 1, "NameTable": 2}
-NO_NAMES: Final[Mapping[str, int]] = {}
+LICENSEES_FILE: Final = "licensees.json"
+LISTED_NAMES_LIMIT: Final = 8
 
 FIRST_UNKNOWNS: Final[tuple[tuple[str, int], ...]] = (
     ("unknown02", 0xFF),
@@ -84,6 +89,13 @@ TOOLKIT_TOP_KEYS: Final = frozenset(
 )
 TOOLKIT_SIDE_KEYS: Final = frozenset({"side"})
 TOOLKIT_FILE_KEYS: Final = frozenset({"name", "address", "kind", "path"})
+
+
+@cache
+def licensees() -> Mapping[str, int]:
+    text = resources.files("fdstoolkit.data").joinpath(LICENSEES_FILE).read_text(encoding="utf-8")
+    table: dict[str, str] = json.loads(text)["licensees"]
+    return MappingProxyType({name: int(code, 16) for code, name in table.items()})
 
 
 class FdsPackerError(ValueError):
@@ -142,10 +154,10 @@ def _named(value: object, *, field: str, where: _Where, names: Mapping[str, int]
         return by_lower[text.lower()]
     if text[:1].isdigit() or text.lower().startswith(HEX_PREFIXES):
         return _number(text, field=field, where=where)
-    if not names:
+    if len(names) > LISTED_NAMES_LIMIT:
         message = (
-            f"{where}: {field} {text!r} is not a number; write the code in hex, "
-            "such as $01, since names from FDSPacker's company table are not read here"
+            f"{where}: {field} {text!r} is neither a number nor a name FDSPacker knows; "
+            "write the code in hex, such as $01"
         )
         raise FdsPackerError(message)
     known = ", ".join(names)
@@ -290,7 +302,7 @@ def _identity(entry: Mapping[str, object], *, where: _Where) -> bytes:
     return (
         bytes([BlockKind.DISK_INFO])
         + VERIFICATION_STRING
-        + _enum(entry, "licensee_code", NO_NAMES, where=where)
+        + _enum(entry, "licensee_code", licensees(), where=where)
         + _game_name(entry, where=where)
         + bytes([_game_type(entry.get("game_type", DEFAULT_GAME_TYPE), where=where)])
         + _byte(entry, "game_version", 0, where=where)
