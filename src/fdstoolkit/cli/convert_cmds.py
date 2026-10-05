@@ -7,7 +7,7 @@ import typer
 
 from fdstoolkit.build.blank import DEFAULT_GAME_NAME, blank_image
 from fdstoolkit.build.calibration import DECIDES_ITSELF, calibration_image
-from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
+from fdstoolkit.build.targets import TARGETS, export_for, export_warnings
 from fdstoolkit.cli.common import (
     Container,
     Family,
@@ -120,11 +120,13 @@ def export(
     except FileExistsError as error:
         message = f"{error}, pass --force to overwrite"
         raise fail(message) from error
+    except ValueError as error:
+        raise fail(str(error)) from error
 
     typer.echo(TARGETS[target.value].description)
     for path in written:
         typer.echo(f"wrote {path}")
-    for warning in swap_warnings(image.stem, target=target.value):
+    for warning in export_warnings(disk, title=image.stem, target=target.value):
         typer.echo(f"  {warning}")
 
 

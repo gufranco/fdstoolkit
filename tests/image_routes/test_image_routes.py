@@ -235,6 +235,25 @@ def test_export_writes_the_layout_a_target_expects(client: TestClient) -> None:
     assert body["files"]
 
 
+def test_export_notes_carry_the_swap_exceptions(client: TestClient) -> None:
+    body = client.post(
+        "/api/export", json={"data": ONE, "name": "Doremikko (Japan).fds", "target": "nt-mini"}
+    ).json()
+
+    assert "automatic side swap" in body["files"][0]["notes"][0]
+
+
+def test_export_says_why_fdskey_refuses_a_disk(client: TestClient) -> None:
+    unverified = bytearray(ONE_SIDE)
+    unverified[1:15] = bytes(14)
+    encoded = base64.b64encode(bytes(unverified)).decode("ascii")
+
+    answer = client.post("/api/export", json={"data": encoded, "target": "fdskey"})
+
+    assert answer.status_code == BAD_REQUEST
+    assert "NINTENDO-HVC" in answer.json()["detail"]
+
+
 def test_an_unknown_export_target_is_refused(client: TestClient) -> None:
     answer = client.post("/api/export", json={"data": ONE, "target": "nonsense"})
 

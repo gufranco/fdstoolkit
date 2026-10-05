@@ -1,16 +1,25 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import Any, Final
 
+from fdstoolkit.build.fdskey import FdsKeyCheck, fdskey_check
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.core.disk import Disk
 
 SWAP_EXCEPTIONS: Final = "swap_exceptions.json"
+
+
+class ExportRefusedError(ValueError):
+    pass
+
+
+def _no_check(_disk: Disk) -> FdsKeyCheck:
+    return FdsKeyCheck(refusals=(), drops=())
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +27,7 @@ class Target:
     name: str
     description: str
     source: str
+    check: Callable[[Disk], FdsKeyCheck] = _no_check
 
 
 TARGETS: Final[Mapping[str, Target]] = {
@@ -48,6 +58,15 @@ TARGETS: Final[Mapping[str, Target]] = {
         description="FCEUX: a headerless .fds file",
         source="https://github.com/TASEmulators/fceux/blob/master/src/fds.cpp",
     ),
+    "fdskey": Target(
+        name="fdskey",
+        description=(
+            "FDSKey: a headerless .fds file, with *NINTENDO-HVC* on every side "
+            "and each side within the emulator's 66560-byte budget"
+        ),
+        source="https://github.com/ClusterM/fdskey/blob/master/FdsKey/Core/Src/fdsemu.c",
+        check=fdskey_check,
+    ),
 }
 
 
@@ -77,7 +96,9 @@ def export_for(
     stem: str,
     force: bool = False,
 ) -> tuple[Path, ...]:
-    _target(target)
+    refusals = _target(target).check(disk).refusals
+    if refusals:
+        raise ExportRefusedError("; ".join(refusals))
     data, _ = encode(disk, headered=False)
     return (_write(directory / f"{stem}.fds", data, force=force),)
 
@@ -99,3 +120,7 @@ def swap_warnings(title: str, *, target: str) -> tuple[str, ...]:
         for name in titles
         if name.lower() in lowered
     )
+
+
+def export_warnings(disk: Disk, *, title: str, target: str) -> tuple[str, ...]:
+    return (*swap_warnings(title, target=target), *_target(target).check(disk).drops)

@@ -400,7 +400,9 @@ Between `.fds` and `.qd`. `--crc-mode` decides what goes in the CRC fields when 
 fdstoolkit export <image> --target <t> -d <dir> [--force]
 ```
 
-The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`. Each writes a headerless `.fds`.
+The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`, `fdskey`. Each writes a headerless `.fds`.
+
+`fdskey` also checks what [FDSKey](https://github.com/ClusterM/fdskey) loads. It refuses a side without `*NINTENDO-HVC*`, or one whose declared files do not fit the emulator's 66560 bytes per side with gaps and checksums. It names what FDSKey drops: hidden files past that budget, and anything after the last file or after a block out of order.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">

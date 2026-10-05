@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 
 from fdstoolkit.build.blank import blank_image
-from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
+from fdstoolkit.build.targets import TARGETS, export_for, export_warnings, swap_warnings
 from fdstoolkit.cli.common import TargetChoice
 from fdstoolkit.codecs.fds import SIDE_SIZE, decode
-from fdstoolkit.core.blocks import FileKind
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.blocks import Block, BlockKind, FileKind
+from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.edit.files import FileSpec, insert_file
 
 
@@ -77,3 +77,48 @@ def test_a_target_without_a_list_has_no_warning() -> None:
 
 def test_the_command_line_offers_exactly_the_targets_the_exporter_knows() -> None:
     assert [choice.value for choice in TargetChoice] == list(TARGETS)
+
+
+def bypassed(disk: Disk) -> Disk:
+    first = disk.sides[0]
+    info = bytearray(first.blocks[0].payload)
+    info[1:15] = bytes(14)
+    blocks = (Block(kind=BlockKind.DISK_INFO, payload=bytes(info)), *first.blocks[1:])
+    return Disk(sides=(Side(blocks=blocks, tail=b"", capacity=first.capacity), *disk.sides[1:]))
+
+
+def test_fdskey_gets_a_headerless_image(tmp_path: Path) -> None:
+    written = export_for(game(), target="fdskey", directory=tmp_path, stem="Game")
+
+    assert [path.name for path in written] == ["Game.fds"]
+    assert len(written[0].read_bytes()) == 2 * SIDE_SIZE
+
+
+def test_fdskey_refuses_a_disk_it_will_not_load(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match=r"side 0: FDSKey refuses a side whose disk information"):
+        export_for(bypassed(game()), target="fdskey", directory=tmp_path, stem="Game")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_other_targets_do_not_apply_the_fdskey_check(tmp_path: Path) -> None:
+    written = export_for(bypassed(game()), target="mister", directory=tmp_path, stem="Game")
+
+    assert [path.name for path in written] == ["Game.fds"]
+
+
+def test_export_warnings_name_what_fdskey_drops() -> None:
+    disk = game(sides=1)
+    first = disk.sides[0]
+    tailed = Disk(sides=(Side(blocks=first.blocks, tail=b"\x01\x02", capacity=first.capacity),))
+
+    warnings = export_warnings(tailed, title="Game", target="fdskey")
+
+    assert warnings == ("side 0: FDSKey stops at the last file and drops the 2 bytes after it",)
+
+
+def test_export_warnings_carry_the_swap_exceptions() -> None:
+    warnings = export_warnings(game(), title="Doremikko (Japan)", target="nt-mini")
+
+    assert len(warnings) == 1
+    assert "Doremikko" in warnings[0]

@@ -394,7 +394,9 @@ fdstoolkit convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|
 fdstoolkit export <image> --target <t> -d <dir> [--force]
 ```
 
-機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`。いずれもヘッダなしの `.fds` を書き出します。
+機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`、`fdskey`。いずれもヘッダなしの `.fds` を書き出します。
+
+`fdskey` では、[FDSKey](https://github.com/ClusterM/fdskey) が読み込める内容も確かめます。`*NINTENDO-HVC*` のない面や、宣言されたファイルがギャップとチェックサムを含めて 1 面あたり 66560 バイトに収まらない面は拒否します。FDSKey が捨てるもの、つまりこの容量を超えた隠しファイルや、最後のファイルの後、または順序の乱れたブロックより後の内容は、その名前を示します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">

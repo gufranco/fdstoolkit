@@ -1492,6 +1492,20 @@ def test_export_refuses_to_overwrite(tmp_path: Path) -> None:
     assert "pass --force" in result.stdout
 
 
+def test_export_refuses_a_disk_fdskey_will_not_load(tmp_path: Path) -> None:
+    source = _game_with_a_file(tmp_path)
+    content = bytearray(source.read_bytes())
+    content[1:15] = bytes(14)
+    source.write_bytes(bytes(content))
+    card = tmp_path / "card"
+
+    result = runner.invoke(app, ["export", str(source), "--target", "fdskey", "-d", str(card)])
+
+    assert result.exit_code == 1
+    assert "FDSKey refuses a side whose disk information lacks" in result.stdout
+    assert not card.exists()
+
+
 def test_a_sharp_mz_disk_is_refused_by_name(tmp_path: Path) -> None:
     source = tmp_path / "mz.qd"
     source.write_bytes(b"-QD format-" + b"\xff" * 5 + bytes(81920))
