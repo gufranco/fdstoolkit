@@ -15,7 +15,7 @@ concurrency:
 jobs:
   commits:
     name: Commit subjects
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -34,7 +34,7 @@ jobs:
 
   lint:
     name: Lint and format
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -74,11 +74,11 @@ jobs:
         run: shellcheck scripts/*.sh
 
       - name: Format the JSON and YAML
-        run: npx --yes prettier@3.9.6 --check "**/*.{json,yml,yaml}"
+        run: pnpm run format:check
 
   browser:
     name: The page in a browser
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -111,10 +111,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        os: [ubuntu-26.04, macos-26, windows-2025]
         python: ["3.12", "3.13", "3.14"]
         include:
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-26.04-arm
             python: "3.14"
     steps:
       - uses: actions/checkout@v7
@@ -132,7 +132,7 @@ jobs:
 
   determinism:
     name: Determinism under a different environment
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -152,7 +152,7 @@ jobs:
 
   distribution:
     name: What a clone actually carries
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -202,7 +202,7 @@ jobs:
 
   formula:
     name: Homebrew formula
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
 
