@@ -4,7 +4,7 @@
 
 <strong>Read a Famicom Disk System disk, judge what came back, reconstruct what Nintendo wrote, and write it again.</strong>
 
-English &nbsp;|&nbsp; [日本語](README.ja.md)
+English | [日本語](README.ja.md)
 
 [![ci](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -12,11 +12,11 @@ English &nbsp;|&nbsp; [日本語](README.ja.md)
 [![python](https://img.shields.io/badge/python-3.14-blue)](pyproject.toml)
 
 <p align="center">
-  <a href="#install">Install</a> &nbsp;|&nbsp;
-  <a href="#concepts-you-need-first">Concepts</a> &nbsp;|&nbsp;
-  <a href="#command-reference">Commands</a> &nbsp;|&nbsp;
-  <a href="#web-interface">Web interface</a> &nbsp;|&nbsp;
-  <a href="#procedures">Procedures</a> &nbsp;|&nbsp;
+  <a href="#install">Install</a> |
+  <a href="#concepts-you-need-first">Concepts</a> |
+  <a href="#command-reference">Commands</a> |
+  <a href="#web-interface">Web interface</a> |
+  <a href="#procedures">Procedures</a> |
   <a href="#formats">Formats</a>
 </p>
 
