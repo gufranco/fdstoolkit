@@ -41,6 +41,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          cache-suffix: lint
 
       - name: Install
         run: uv sync --all-extras --dev
@@ -85,6 +86,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          cache-suffix: browser
 
       - name: Install
         run: uv sync --all-extras --dev
@@ -139,6 +141,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          cache-suffix: determinism
 
       - name: Install
         run: uv sync --all-extras --dev
@@ -159,6 +162,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          cache-suffix: distribution
 
       - name: Build the wheel and the source distribution
         run: uv build
