@@ -4,6 +4,8 @@
 
 <strong>Read a Famicom Disk System disk, judge what came back, reconstruct what Nintendo wrote, and write it again.</strong>
 
+English &nbsp;|&nbsp; [日本語](README.ja.md)
+
 [![ci](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#contributing)
@@ -17,8 +19,6 @@
   <a href="#procedures">Procedures</a> &nbsp;|&nbsp;
   <a href="#formats">Formats</a>
 </p>
-
-**English** | [日本語](README.ja.md)
 
 </div>
 

@@ -4,6 +4,8 @@
 
 <strong>ディスクカードを読み取り、読み取れたものを評価し、任天堂が書いた内容を復元し、そしてもう一度書き込む。</strong>
 
+[English](README.md) &nbsp;|&nbsp; 日本語
+
 [![ci](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](#貢献)
@@ -17,8 +19,6 @@
   <a href="#手順">手順</a> &nbsp;|&nbsp;
   <a href="#フォーマット">フォーマット</a>
 </p>
-
-[English](README.md) | **日本語**
 
 </div>
 
