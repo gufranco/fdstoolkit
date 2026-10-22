@@ -49,11 +49,10 @@ This is an instrument, not an application. It assumes you know what a disk infor
 ## Install
 
 ```bash
-brew tap gufranco/fdstoolkit https://github.com/gufranco/fdstoolkit
-brew install gufranco/fdstoolkit/fdstoolkit
+brew install gufranco/tap/fdstoolkit
 ```
 
-`brew install --HEAD gufranco/fdstoolkit/fdstoolkit` tracks `main`.
+The formula lives in [gufranco/homebrew-tap](https://github.com/gufranco/homebrew-tap), a shared formula-only tap. `brew install --HEAD gufranco/tap/fdstoolkit` tracks `main`.
 
 Homebrew is the supported install path, and the formula carries everything: the
 hidapi library the drive needs and the web interface. Nothing else has to be

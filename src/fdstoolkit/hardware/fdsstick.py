@@ -271,7 +271,7 @@ def open_fdsstick() -> FdsStick:
     except ImportError as error:
         message = (
             "hidapi is not installed, so an FDSStick cannot be opened. "
-            "Homebrew installs it with the toolkit: brew reinstall gufranco/fdstoolkit/fdstoolkit"
+            "Homebrew installs it with the toolkit: brew reinstall gufranco/tap/fdstoolkit"
         )
         raise HardwareFaultError(message, kind=FaultKind.LINK) from error
 

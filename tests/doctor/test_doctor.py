@@ -76,10 +76,15 @@ def test_the_version_and_the_interpreter_are_reported() -> None:
 
 
 def test_a_missing_hardware_extra_is_reported_with_the_fix() -> None:
-    report = diagnose(load_hid=missing_hid)
+    # Arrange
+    load_hid = missing_hid
 
+    # Act
+    report = diagnose(load_hid=load_hid)
+
+    # Assert
     assert status_of(report, "hardware support") is CheckStatus.MISSING
-    assert "brew reinstall gufranco/fdstoolkit/fdstoolkit" in detail_of(report, "hardware support")
+    assert "brew reinstall gufranco/tap/fdstoolkit" in detail_of(report, "hardware support")
 
 
 def test_no_connected_fdsstick_is_a_warning_not_a_failure() -> None:

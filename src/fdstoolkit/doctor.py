@@ -25,7 +25,7 @@ from fdstoolkit.version import VERSION
 
 MIN_PYTHON: Final = (3, 12)
 HARDWARE_HINT: Final = (
-    "Homebrew installs it with the toolkit: brew reinstall gufranco/fdstoolkit/fdstoolkit"
+    "Homebrew installs it with the toolkit: brew reinstall gufranco/tap/fdstoolkit"
 )
 UDEV_HINT: Final = (
     "the device is present but cannot be opened, which on Linux means a missing udev rule: "

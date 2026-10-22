@@ -49,11 +49,10 @@
 ## インストール
 
 ```bash
-brew tap gufranco/fdstoolkit https://github.com/gufranco/fdstoolkit
-brew install gufranco/fdstoolkit/fdstoolkit
+brew install gufranco/tap/fdstoolkit
 ```
 
-`brew install --HEAD gufranco/fdstoolkit/fdstoolkit` は `main` ブランチを追跡します。
+formula は共有の formula 専用タップ [gufranco/homebrew-tap](https://github.com/gufranco/homebrew-tap) にあります。`brew install --HEAD gufranco/tap/fdstoolkit` は `main` ブランチを追跡します。
 
 Homebrew がサポート対象のインストール経路であり、フォーミュラはすべてを含みます。ドライブが必要とする hidapi ライブラリも、ウェブインターフェースもです。追加で入れるものはなく、新規インストール直後に `doctor` がそれを検証します。
 

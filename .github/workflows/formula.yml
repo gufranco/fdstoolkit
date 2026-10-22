@@ -11,33 +11,26 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  bump:
-    name: Point the formula at the new release
-    runs-on: ubuntu-26.04
+  dispatch:
+    name: ask the tap to bump the formula
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        id: app-token
         with:
-          ref: main
+          app-id: ${{ secrets.TAP_APP_ID }}
+          private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
+          owner: gufranco
+          repositories: homebrew-tap
 
-      - name: Rewrite the formula for ${{ inputs.tag || github.event.release.tag_name }}
+      - name: Dispatch the tap's formula-bump workflow
         env:
-          TAG: ${{ inputs.tag || github.event.release.tag_name }}
-        run: bash scripts/update-formula.sh "${TAG}"
-
-      - name: Commit when the formula changed
-        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ inputs.tag || github.event.release.tag_name }}
         run: |
-          set -eu
-          if git diff --quiet Formula/fdstoolkit.rb; then
-            echo "the formula already points at this release"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/fdstoolkit.rb
-          git commit -m "chore(formula): point at ${TAG} [skip ci]"
-          git push origin main
+          jq -nc --arg tag "${TAG}" \
+            '{event_type: "formula-bump", client_payload: {name: "fdstoolkit", tag: $tag}}' \
+            | gh api --method POST repos/gufranco/homebrew-tap/dispatches --input -

@@ -194,14 +194,20 @@ def test_the_transport_closes_the_device() -> None:
 
 
 def test_opening_without_hidapi_says_how_to_reinstall(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
     def refuse() -> object:
         message = "no module named hid"
         raise ImportError(message)
 
     monkeypatch.setattr(fdsstick_module, "_load_hid", refuse)
 
-    with pytest.raises(HardwareFaultError, match="brew reinstall gufranco/fdstoolkit/fdstoolkit"):
+    # Act
+    def call() -> None:
         open_fdsstick()
+
+    # Assert
+    with pytest.raises(HardwareFaultError, match="brew reinstall gufranco/tap/fdstoolkit"):
+        call()
 
 
 def test_opening_reports_a_device_that_does_not_answer(monkeypatch: pytest.MonkeyPatch) -> None:
