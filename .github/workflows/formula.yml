@@ -18,7 +18,7 @@ jobs:
     name: ask the tap to bump the formula
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:
           app-id: ${{ secrets.TAP_APP_ID }}
