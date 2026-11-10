@@ -37,11 +37,25 @@ WRITE_FILL: Final = bytes([WRITE_GAP_BYTE])
 
 LEGACY_REPORTS: Final = (0x11, 0x12, 0x13, 0x14)
 
-OLDER_FIRMWARE_HINT: Final = (
-    "the device answered but sent no disk data. Firmware from 2015 numbers these "
-    f"reports {LEGACY_REPORTS} and takes no mode byte, which this driver does not "
-    "speak. Check the firmware version doctor reports"
+REPLUG: Final = (
+    "Unplug the stick and plug it back in: one has been seen to stop sending until it was "
+    "replugged, while doctor still found it"
 )
+NO_DISK_DATA: Final = (
+    "the device answered but sent no disk data. Check that a disk is seated and the drive "
+    f"has power. {REPLUG}. If neither helps, firmware from 2015 numbers these reports "
+    f"{LEGACY_REPORTS} and takes no mode byte, which this driver does not speak"
+)
+
+
+class CutShortError(HardwareFaultError):
+    def __init__(self, sent: bytes) -> None:
+        message = (
+            f"the stick stopped answering after {len(sent)} byte(s) of this side, and what "
+            f"it sent is kept with the captures. {REPLUG}"
+        )
+        super().__init__(message, kind=FaultKind.LINK)
+        self.sent = sent
 
 
 def link_note(resyncs: Sequence[tuple[int, int]]) -> str:
@@ -52,6 +66,12 @@ def link_note(resyncs: Sequence[tuple[int, int]]) -> str:
         "block failing near one may be the link rather than the disk. Read it again before "
         "blaming the disk"
     )
+
+
+def _as_classes(sent: bytes) -> tuple[bytes, bytes | None]:
+    if classify(sent) in COUNTS:
+        return pack_raw03(classes_of(sent)), sent
+    return sent, None
 
 
 def _after(sequence: int) -> int:
@@ -93,6 +113,7 @@ class FdsStick:
         self._captures: list[Capture] = []
         self._resyncs: list[tuple[int, int]] = []
         self._pulse: list[PulseFinding] = []
+        self._last_counts: bytes | None = None
 
     @property
     def captures(self) -> tuple[Capture, ...]:
@@ -101,6 +122,10 @@ class FdsStick:
     @property
     def resyncs(self) -> tuple[tuple[int, int], ...]:
         return tuple(self._resyncs)
+
+    @property
+    def last_counts(self) -> bytes | None:
+        return self._last_counts
 
     @property
     def pulse_findings(self) -> tuple[PulseFinding, ...]:
@@ -137,9 +162,9 @@ class FdsStick:
     def _read_classes(self, what: str, mode: int) -> tuple[bytes, bytes | None]:
         with self._watchdog.side(what):
             sent = self._watchdog.call(lambda: self._read_raw(mode))
-        if mode == MODE_READ and classify(sent) in COUNTS:
-            return pack_raw03(classes_of(sent)), sent
-        return sent, None
+        packed, counts = _as_classes(sent) if mode == MODE_READ else (sent, None)
+        self._last_counts = counts
+        return packed, counts
 
     def _read_raw(self, mode: int) -> bytes:
         self._transport.send_feature(bytes([ReportId.DISK_START, mode]))
@@ -148,7 +173,10 @@ class FdsStick:
         opening = True
 
         while len(out) < RAW_SIDE_LIMIT:
-            packet = self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
+            try:
+                packet = self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
+            except OSError as error:
+                raise CutShortError(bytes(out)) from error
             if len(packet) < HEADER_BYTES:
                 message = "the device stopped answering during the read"
                 raise HardwareFaultError(message, kind=FaultKind.LINK)
@@ -157,7 +185,7 @@ class FdsStick:
             payload = packet[HEADER_BYTES : HEADER_BYTES + CHUNK_PAYLOAD]
             if not payload:
                 if not out:
-                    raise HardwareFaultError(OLDER_FIRMWARE_HINT, kind=FaultKind.MEDIA)
+                    raise HardwareFaultError(NO_DISK_DATA, kind=FaultKind.MEDIA)
                 break
 
             if opening and sequence != FIRST_SEQUENCE:
@@ -195,9 +223,13 @@ class FdsStick:
                 break
 
     def read_side(self, side: int) -> Iterator[BlockRead]:
-        packed, counts = self._read_classes(f"reading side {side}", MODE_READ)
-        read = sum(1 for capture in self._captures if capture.side == side) + 1
-        self._captures.append(Capture(side=side, read=read, data=packed, counts=counts))
+        try:
+            packed, counts = self._read_classes(f"reading side {side}", MODE_READ)
+        except CutShortError as error:
+            if error.sent:
+                self._keep(side, *_as_classes(error.sent))
+            raise
+        read = self._keep(side, packed, counts)
         decoded, found = decode_packed(packed)
         self._pulse.extend(findings_of(side, read, found))
         for index, block in enumerate(decoded.blocks):
@@ -208,6 +240,11 @@ class FdsStick:
                 attempts=1,
                 stored_crc=block.stored_crc,
             )
+
+    def _keep(self, side: int, packed: bytes, counts: bytes | None) -> int:
+        read = sum(1 for capture in self._captures if capture.side == side) + 1
+        self._captures.append(Capture(side=side, read=read, data=packed, counts=counts))
+        return read
 
     def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
         self.write_raw_side(encode_write_stream(blocks), what=f"writing side {side}")

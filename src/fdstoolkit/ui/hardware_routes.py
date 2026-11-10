@@ -18,7 +18,6 @@ from fdstoolkit.drive.recovery import recover
 from fdstoolkit.drive.timing import (
     PROBE_WARNING,
     REPLAY_HAS_NO_TIMING,
-    TIMING_OFF,
     TimingReader,
     probe,
 )
@@ -369,11 +368,7 @@ def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
 
     def work(drive: FdsStick, controls: Controls) -> CalibrationResult:
         controls.step(NOT_THIS_DRIVE)
-        reader: RawReader = drive
-        if spec.timing_mode is None:
-            controls.step(TIMING_OFF)
-        else:
-            reader = TimingReader(drive, mode=spec.timing_mode, note=controls.step)
+        reader = TimingReader(drive, mode=spec.timing_mode, note=controls.step)
         return _calibrated(
             reader,
             controls,

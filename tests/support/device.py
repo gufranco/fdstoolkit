@@ -34,6 +34,7 @@ class FakeFdsStick:
     side: bytes = b""
     stale_first: int | None = None
     drop_after: int | None = None
+    fails_after: int | None = None
     pads_last_chunk: bool = False
     accepts_writes: int | None = None
     short_reply: bool = False
@@ -93,6 +94,9 @@ class FakeFdsStick:
             raise DeviceRefusedError(message)
         if self.short_reply:
             return [report_id]
+        if self.fails_after is not None and self.served >= self.fails_after:
+            message = "read error"
+            raise DeviceRefusedError(message)
         return list(self._chunk())
 
     def _sequence(self) -> int:

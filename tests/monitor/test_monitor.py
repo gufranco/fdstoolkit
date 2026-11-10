@@ -9,6 +9,7 @@ from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import (
     LEAD_IN_BITS,
+    block_regions,
     block_starts,
     decode_raw03,
     encode_block_stream,
@@ -18,6 +19,7 @@ from fdstoolkit.codecs.raw import (
 from fdstoolkit.core.bios import REPAIR_HINTS
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Side
+from fdstoolkit.drive.align import good_block
 from fdstoolkit.drive.monitor import (
     MAX_READS,
     NOISY_PULSES,
@@ -215,10 +217,40 @@ def test_without_a_reference_an_unreadable_file_amount_leaves_the_count_to_the_r
     assert found.speed is SpeedReading.CLEAN
 
 
-def test_invalid_pulses_outside_the_gaps_are_counted() -> None:
+def test_an_invalid_pulse_between_blocks_is_not_held_against_the_read() -> None:
     side = reference_side()
     values = bytearray(unpack_raw03(stream(side)))
-    start = block_starts(bytes(values))[1]
+    _, end = block_regions(bytes(values))[0]
+    values[end + SKIP_SYNC] = 3
+
+    found = sample(pack_raw03(bytes(values)), side)
+
+    assert found.invalid == 0
+    assert found.speed is SpeedReading.CLEAN
+
+
+def closed_by_a_longer_pulse(values: bytes) -> bytes:
+    for _, end in block_regions(values):
+        changed = values[: end - 1] + bytes([2]) + values[end:]
+        if values[end - 1] == 1 and all(map(good_block, decode_raw03(changed)[0].blocks)):
+            return changed
+    raise AssertionError
+
+
+def test_the_pulse_that_closes_a_block_is_not_held_against_the_drive() -> None:
+    side = reference_side()
+    values = closed_by_a_longer_pulse(unpack_raw03(stream(side)))
+
+    found = sample(pack_raw03(values), side)
+
+    assert (found.short, found.long) == (0, 0)
+    assert found.speed is SpeedReading.CLEAN
+
+
+def test_invalid_pulses_inside_a_block_are_counted() -> None:
+    side = reference_side()
+    values = bytearray(unpack_raw03(stream(side)))
+    start = block_starts(bytes(values))[0]
     values[start + SKIP_SYNC] = 3
 
     found = sample(pack_raw03(bytes(values)), side)

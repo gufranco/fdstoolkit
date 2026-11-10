@@ -8,6 +8,7 @@ from typing import Final
 from fdstoolkit.codecs.raw import decode_packed
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.drive.captures import Capture
+from fdstoolkit.drive.timing import measure_timing
 
 PULSE_CODES: Final = frozenset({"FDS004", "FDS015", "FDS016", "FDS017", "FDS019"})
 
@@ -74,6 +75,14 @@ def pulse_lines(findings: Sequence[PulseFinding], captures: Sequence[Capture]) -
     return (
         *(f"{finding.render()}{_where(finding)}" for finding in kept),
         *((note,) if passing else ()),
+        *timing_lines(captures),
+    )
+
+
+def timing_lines(captures: Sequence[Capture]) -> tuple[str, ...]:
+    latest = {capture.side: capture.counts for capture in captures if capture.counts is not None}
+    return tuple(
+        f"side {side}: {measure_timing(counts).render()}" for side, counts in sorted(latest.items())
     )
 
 

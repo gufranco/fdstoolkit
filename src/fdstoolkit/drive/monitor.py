@@ -8,10 +8,9 @@ from typing import Final, Protocol
 
 from fdstoolkit.build.calibration import matching_side
 from fdstoolkit.codecs.raw import (
-    GAP_VALUE,
     MAX_CLASS,
-    MIN_GAP_VALUES,
     SYNC_MARK,
+    block_regions,
     block_starts,
     decode_raw03,
     encode_era_b,
@@ -223,17 +222,12 @@ def _framed(payload: bytes) -> bytes:
     return bytes([SYNC_MARK]) + payload + encode_crc(block_crc(payload))
 
 
+def _expected(payload: bytes) -> bytes:
+    return encode_era_b(_framed(payload))[:-1]
+
+
 def _invalid(values: bytes) -> int:
-    count = 0
-    run = 0
-    for value in values:
-        if value == GAP_VALUE:
-            run += 1
-            continue
-        if value == MAX_CLASS and run < MIN_GAP_VALUES:
-            count += 1
-        run = 0
-    return count
+    return sum(values[start:end].count(MAX_CLASS) for start, end in block_regions(values))
 
 
 def _leaning(actual: bytes, expected: bytes) -> tuple[int, int, int]:
@@ -265,7 +259,7 @@ def _against_learned(
         payload = learned.get(key)
         if payload is None:
             continue
-        expected = encode_era_b(_framed(payload))
+        expected = _expected(payload)
         more_short, more_long, more = _leaning(values[start : start + len(expected)], expected)
         short += more_short
         long += more_long
@@ -329,7 +323,7 @@ def _measured(
     for wanted, (_, region) in zip(reference.blocks, placed, strict=True):
         if region is None:
             continue
-        expected = encode_era_b(_framed(wanted.payload))
+        expected = _expected(wanted.payload)
         start = starts[region]
         more_short, more_long, more = _leaning(values[start : start + len(expected)], expected)
         short += more_short

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from capture_fixture import loopy_raw
+
 from fdstoolkit.codecs.raw import (
     GAP_VALUE,
     block_regions,
@@ -10,6 +12,7 @@ from fdstoolkit.codecs.raw import (
 from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
 from fdstoolkit.drive.captures import Capture
 from fdstoolkit.drive.pulse import captured_findings, findings_of, pulse_lines, settled
+from fdstoolkit.drive.timing import classes_of
 
 SHORT_GAP = 475
 PAYLOADS = (bytes([0x01]) + bytes(55), bytes([0x02, 0x00]))
@@ -101,3 +104,13 @@ def test_a_capture_packed_low_bits_first_names_its_order() -> None:
     lines = pulse_lines(captured_findings(captures), captures)
 
     assert lines == (f"side 0: [FDS019] {CODES['FDS019']}",)
+
+
+def test_a_side_kept_as_pulse_counts_reports_its_timing() -> None:
+    counts = loopy_raw()
+    kept = Capture(side=0, read=1, data=pack_raw03(classes_of(counts)), counts=counts)
+
+    lines = pulse_lines((), [kept])
+
+    assert [line.partition(": ")[0] for line in lines] == ["side 0"]
+    assert "bit rate" in lines[0]

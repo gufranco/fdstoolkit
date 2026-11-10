@@ -22,13 +22,11 @@ from fdstoolkit.drive.monitor import (
 from fdstoolkit.drive.timing import (
     PROBE_WARNING,
     REPLAY_HAS_NO_TIMING,
-    TIMING_OFF,
     Probe,
     Timing,
     TimingReader,
     probe,
 )
-from fdstoolkit.hardware.fdsstick import FdsStick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.report import as_json
 
@@ -76,14 +74,6 @@ def calibration_json(result: Calibration, timings: Sequence[Timing] = ()) -> dic
         "reads": result.rows(),
         "timing": [timing.as_dict() for timing in timings],
     }
-
-
-def _timed(drive: FdsStick, timing_mode: int | None) -> tuple[RawReader, TimingReader | None]:
-    if timing_mode is None:
-        typer.echo(TIMING_OFF, err=True)
-        return drive, None
-    timed = TimingReader(drive, mode=timing_mode, note=step)
-    return timed, timed
 
 
 def calibrate_command(
@@ -146,9 +136,9 @@ def calibrate_command(
     else:
         typer.echo(NOT_THIS_DRIVE, err=True)
         drive = open_drive()
-        reader, timed = _timed(drive, timing_mode)
+        timed = TimingReader(drive, mode=timing_mode, note=step)
         try:
-            result = _live(reader, mode=mode, passes=passes, wanted=wanted, bracket=bracket)
+            result = _live(timed, mode=mode, passes=passes, wanted=wanted, bracket=bracket)
         finally:
             drive.close()
 

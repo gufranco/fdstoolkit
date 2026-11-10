@@ -8,7 +8,7 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import encode_block_stream, encode_raw03, pack_raw03
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.drive.timing import classes_of
+from fdstoolkit.drive.timing import TimingReader, classes_of
 from fdstoolkit.hardware.fdsstick import (
     CHUNK_PAYLOAD,
     LEGACY_REPORTS,
@@ -92,6 +92,45 @@ def test_a_side_sent_as_pulse_counts_is_kept_as_the_counts_the_stick_sent() -> N
     assert [(capture.name, capture.counts) for capture in stick.captures] == [
         ("side0.read01.raw", counts)
     ]
+
+
+def test_a_stick_that_sends_counts_has_each_read_timed_without_a_mode() -> None:
+    notes: list[str] = []
+    stick = stick_over(FakeFdsStick(side=loopy_raw()))
+    reader = TimingReader(stick, mode=None, note=notes.append)
+
+    reader.read_raw_side(what="calibration read 1")
+
+    assert [note.partition(":")[0] for note in notes] == ["timing"]
+    assert len(reader.timings) == 1
+
+
+def test_a_stick_that_stops_answering_mid_side_says_to_replug_it() -> None:
+    device = FakeFdsStick(side=raw_side(), fails_after=3)
+
+    with pytest.raises(HardwareFaultError, match="plug it back in") as caught:
+        stick_over(device).read_raw_side()
+
+    assert caught.value.kind is FaultKind.LINK
+
+
+def test_what_a_stick_sent_before_it_stopped_is_kept_as_a_capture() -> None:
+    side = raw_side()
+    stick = stick_over(FakeFdsStick(side=side, fails_after=3))
+
+    with pytest.raises(HardwareFaultError):
+        list(stick.read_side(0))
+
+    assert [capture.data for capture in stick.captures] == [side[: 3 * CHUNK_PAYLOAD]]
+
+
+def test_a_stick_that_stops_before_it_sends_anything_keeps_no_capture() -> None:
+    stick = stick_over(FakeFdsStick(side=raw_side(), fails_after=0))
+
+    with pytest.raises(HardwareFaultError):
+        list(stick.read_side(0))
+
+    assert stick.captures == ()
 
 
 def test_a_stale_first_reply_is_dropped_rather_than_stored() -> None:

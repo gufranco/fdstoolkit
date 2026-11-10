@@ -5,7 +5,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from statistics import fmean, pstdev
-from typing import Final, Protocol
+from typing import Final, Protocol, runtime_checkable
 
 from fdstoolkit.codecs.raw import (
     NOMINAL_SHORT,
@@ -63,6 +63,12 @@ class Nature(StrEnum):
 
 class ModeReader(Protocol):
     def read_raw_side(self, *, what: str, mode: int) -> bytes: ...
+
+
+@runtime_checkable
+class CountsSource(Protocol):
+    @property
+    def last_counts(self) -> bytes | None: ...
 
 
 def _short_nominal(counts: bytes) -> int | None:
@@ -262,11 +268,29 @@ def _no_timings() -> list[Timing]:
 @dataclass(slots=True)
 class TimingReader:
     reader: ModeReader
-    mode: int
+    mode: int | None
     note: Callable[[str], None]
     timings: list[Timing] = field(default_factory=_no_timings)
+    warned: bool = False
+
+    def _heard(self, counts: bytes) -> None:
+        timing = measure_timing(counts)
+        self.timings.append(timing)
+        self.note(timing.render())
+
+    def _as_sent(self, what: str) -> bytes:
+        packed = self.reader.read_raw_side(what=what, mode=NORMAL_MODE)
+        counts = self.reader.last_counts if isinstance(self.reader, CountsSource) else None
+        if counts is not None:
+            self._heard(counts)
+        elif not self.warned:
+            self.warned = True
+            self.note(TIMING_OFF)
+        return packed
 
     def read_raw_side(self, *, what: str) -> bytes:
+        if self.mode is None:
+            return self._as_sent(what)
         data = self.reader.read_raw_side(what=what, mode=self.mode)
         nature = classify(data)
         if nature not in {Nature.TIMING, Nature.UNDECODED}:
@@ -275,7 +299,5 @@ class TimingReader:
                 "judged from classes and shows no timing"
             )
             return data
-        timing = measure_timing(data)
-        self.timings.append(timing)
-        self.note(timing.render())
+        self._heard(data)
         return pack_raw03(classes_of(data))

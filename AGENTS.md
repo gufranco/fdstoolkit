@@ -110,6 +110,18 @@ a factor of two and carry no tolerance.
   the counts as the capture and hands classes to everything else.
 - A read runs as one supervised call, not one per packet. Counts arrive at about
   310 packets a second, and a thread started for every packet lost one of them.
+- `scripts/fdsstick_firmware.py` is the one place that sends the SPI flash reports
+  and `0xF1`. It follows the update thread both of loopy's programs carry, reads the
+  image back before applying it, and keeps no firmware image in this repository: it
+  takes one out of the user's own copy of the program. The driver's rule stands.
+  On the one stick it met, the identify query, the reads and `0xF1` ran; the erase
+  and the page program did not, because the image was already there.
+- A stick on firmware 2.80 stopped sending after a run of reads until it was
+  unplugged, while `doctor` still found it. An empty or failing read says so.
+- Calibration compares every pulse of a block but the last. The closing pulse runs
+  into whatever follows the checksum, which the block's bytes do not decide, and
+  invalid pulses are counted inside blocks only: the splices between them and the
+  noise past the last one are the disk's edges, not a noisy read line.
 - Nothing in the write path has run against a device. Every driver test drives
   a recording stand-in, so it can prove which bytes we send and cannot prove the
   device accepts them.

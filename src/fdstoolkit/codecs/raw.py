@@ -337,7 +337,8 @@ def _gap_end(values: bytes, start: int) -> int | None:
 
 
 def lead_in_bits(values: bytes) -> int | None:
-    sync = _gap_end(values, 0)
+    regions = block_regions(values)
+    sync = regions[0][0] + SYNC_LEAD_VALUES if regions else _gap_end(values, 0)
     if sync is None:
         return None
     return sync - len(values[:sync].rstrip(bytes([GAP_VALUE])))
@@ -462,6 +463,11 @@ def _lost_region(gap: int, blocks: Sequence[Block], data: bytes) -> Diagnostic:
     return _diagnostic("FDS015", Severity.WARNING, detail)
 
 
+def _past_the_lead_in(findings: list[Diagnostic], blocks: Sequence[Block], block: Block) -> None:
+    if not blocks and block.kind is BlockKind.DISK_INFO:
+        findings[:] = [finding for finding in findings if finding.code != "FDS015"]
+
+
 def _before_gap(values: bytes, start: int, end: int) -> int:
     while end > start and values[end - 1] == GAP_VALUE:
         end -= 1
@@ -510,6 +516,7 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
                     ),
                 )
         block = Block(kind=BlockKind(payload[0]), payload=payload, stored_crc=stored)
+        _past_the_lead_in(findings, blocks, block)
         blocks.append(block)
         regions.append((start, cursor))
         if stored != block_crc(payload):

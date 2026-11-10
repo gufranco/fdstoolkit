@@ -139,6 +139,37 @@ def test_a_block_opens_with_one_start_pulse_after_the_gap() -> None:
     assert values[: SYNC_LEAD_VALUES + 1] == bytes([GAP_VALUE]) * SYNC_LEAD_VALUES + bytes([1])
 
 
+def strays_ahead_of(values: bytes) -> bytes:
+    return bytes([1, 2, 0, 3] * 150) + bytes([GAP_VALUE]) * MIN_GAP_VALUES + bytes([2, 1]) + values
+
+
+def test_stray_pulses_ahead_of_the_lead_in_are_not_reported() -> None:
+    values = unpack_raw03(encode_raw03(sample_disk(), side=0))
+
+    side, findings = decode_raw03(strays_ahead_of(values))
+
+    assert len(side.blocks) == len(sample_disk().sides[0].blocks)
+    assert [finding.code for finding in findings] == []
+
+
+def test_the_lead_in_is_measured_at_the_first_block_past_any_strays() -> None:
+    values = unpack_raw03(encode_raw03(sample_disk(), side=0))
+
+    assert lead_in_bits(strays_ahead_of(values)) == LEAD_IN_BITS
+
+
+def test_a_lost_first_block_is_still_reported() -> None:
+    amount = bytes([0x80, 0x02, 0x00])
+    values = encoded(bytes([0x80, 0x09, 0x00, 0x00])) + encoded(
+        amount + encode_crc(block_crc(amount[1:]))
+    )
+
+    side, findings = decode_raw03(values)
+
+    assert len(side.blocks) == 1
+    assert "FDS015" in [finding.code for finding in findings]
+
+
 def test_a_stream_opens_with_a_lead_in_of_gap_values() -> None:
     values = unpack_raw03(encode_raw03(sample_disk(), side=0))
 
