@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from fdstoolkit.codecs.raw import block_regions, decode_raw03, unpack_detected
+from fdstoolkit.codecs.raw import GAP_VALUE, block_regions, decode_raw03, unpack_detected
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.align import good_block
@@ -146,6 +146,7 @@ def aligned_majority(windows: Sequence[bytes], reference: int) -> bytes:
 
 def _splice(working: Read, slot: int, window: bytes) -> Read:
     start, end = working.regions[slot]
+    end = start + len(working.values[start:end].rstrip(bytes([GAP_VALUE])))
     return parse_read(working.values[:start] + window + working.values[end:])
 
 

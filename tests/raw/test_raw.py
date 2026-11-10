@@ -19,6 +19,7 @@ from fdstoolkit.codecs.raw import (
     NOMINAL_SHORT,
     SHORT_LIMIT,
     SHORTEST_GAP_BITS,
+    SYNC_LEAD_VALUES,
     SYNC_MARK,
     PackOrder,
     RawEncoding,
@@ -130,6 +131,12 @@ def test_a_histogram_counts_each_class() -> None:
     assert histogram[0] == 3
     assert histogram[1] == 1
     assert histogram[3] == 1
+
+
+def test_a_block_opens_with_one_start_pulse_after_the_gap() -> None:
+    values = encode_era_b(bytes([SYNC_MARK, 0x01]))
+
+    assert values[: SYNC_LEAD_VALUES + 1] == bytes([GAP_VALUE]) * SYNC_LEAD_VALUES + bytes([1])
 
 
 def test_a_stream_opens_with_a_lead_in_of_gap_values() -> None:
@@ -255,6 +262,38 @@ def file_payloads(*, declared: int, actual: bytes) -> list[bytes]:
     return [info, bytes([0x02, 1]), header, bytes([0x04]) + actual]
 
 
+def test_an_oversized_block_holding_a_run_that_looks_like_a_gap_is_read_whole() -> None:
+    actual = bytes(range(1, 200)) + bytes(80) + bytes(range(1, 200))
+    payloads = file_payloads(declared=1, actual=actual)
+
+    side, findings = decode_raw03(unpack_raw03(encode_block_stream(payloads)))
+
+    assert side.blocks[3].payload == payloads[3]
+    assert "FDS016" in [finding.code for finding in findings]
+
+
+def test_an_oversized_last_block_is_read_past_the_splice_that_follows_it() -> None:
+    payloads = file_payloads(declared=1, actual=bytes(range(1, 200)))
+    splice = bytes([1, 2] * 12) + bytes(600)
+
+    side, _ = decode_raw03(unpack_raw03(encode_block_stream(payloads)) + splice)
+
+    assert side.blocks[3].payload == payloads[3]
+    assert side.blocks[3].stored_crc == side.blocks[3].computed_crc
+
+
+def test_a_block_behind_one_that_ran_into_its_gap_is_still_read() -> None:
+    actual = bytes(range(256)) * 3
+    payloads = [*file_payloads(declared=len(actual), actual=actual), bytes([0x02, 1])]
+    values = unpack_raw03(encode_block_stream(payloads))
+    start, _ = block_regions(values)[3]
+
+    side, _ = decode_raw03(values[: start + 40] + values[start + 640 :])
+
+    assert [block.stored_crc == block.computed_crc for block in side.blocks][3:] == [False, True]
+    assert side.blocks[4].payload == payloads[4]
+
+
 def test_a_data_block_longer_than_its_header_declares_is_read_whole() -> None:
     actual = bytes(range(256)) * 3
     payloads = file_payloads(declared=1, actual=actual)
@@ -310,7 +349,8 @@ def test_blocks_behind_the_shortest_gap_the_format_allows_are_read() -> None:
 
 def zero_runs_before_blocks(values: bytes) -> list[int]:
     runs: list[int] = []
-    for start, _ in block_regions(values):
+    for region, _ in block_regions(values):
+        start = region + SYNC_LEAD_VALUES
         run = 0
         while start - run - 1 >= 0 and values[start - run - 1] == GAP_VALUE:
             run += 1
@@ -369,7 +409,7 @@ def two_blocks_with_gap(bits: int) -> bytes:
     second = bytes([0x80, 0x02, 0x00])
     return (
         encoded(first + encode_crc(block_crc(first[1:])))
-        + bytes([GAP_VALUE]) * bits
+        + bytes([GAP_VALUE]) * (bits - SYNC_LEAD_VALUES)
         + encode_era_b(second + encode_crc(block_crc(second[1:])))
     )
 

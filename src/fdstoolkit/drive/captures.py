@@ -11,15 +11,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final, Protocol, cast, runtime_checkable
 
+from fdstoolkit.codecs.raw import pack_raw03
 from fdstoolkit.core.disk import SIDES_PER_DISK
+from fdstoolkit.drive.timing import classes_of
 from fdstoolkit.version import VERSION
 
 MANIFEST: Final = "manifest.json"
 FORMAT: Final = "fdstoolkit-captures"
 FORMAT_VERSION: Final = 1
-MAX_CAPTURE_BYTES: Final = 256 * 1024
+MAX_CAPTURE_BYTES: Final = 768 * 1024
 MAX_MANIFEST_BYTES: Final = 1024 * 1024
 FIELDS: Final = ("file", "side", "read", "sha256")
+CLASSES: Final = "packed pulse classes"
+COUNTS: Final = "pulse counts"
 
 
 class BundleError(ValueError):
@@ -31,10 +35,20 @@ class Capture:
     side: int
     read: int
     data: bytes
+    counts: bytes | None = None
 
     @property
     def name(self) -> str:
-        return f"side{self.side}.read{self.read:02d}.raw03"
+        kind = "raw03" if self.counts is None else "raw"
+        return f"side{self.side}.read{self.read:02d}.{kind}"
+
+    @property
+    def kept(self) -> bytes:
+        return self.data if self.counts is None else self.counts
+
+    @property
+    def encoding(self) -> str:
+        return CLASSES if self.counts is None else COUNTS
 
 
 @runtime_checkable
@@ -79,13 +93,14 @@ def bundle_files(captures: Sequence[Capture], *, image: str, created: str) -> di
                 "file": capture.name,
                 "side": capture.side,
                 "read": capture.read,
-                "size": len(capture.data),
-                "sha256": _digest(capture.data),
+                "size": len(capture.kept),
+                "sha256": _digest(capture.kept),
+                "encoding": capture.encoding,
             }
             for capture in captures
         ],
     }
-    files = {capture.name: capture.data for capture in captures}
+    files = {capture.name: capture.kept for capture in captures}
     return {MANIFEST: json.dumps(manifest, indent=2).encode("utf-8"), **files}
 
 
@@ -148,6 +163,8 @@ def _capture(entry: dict[str, object], fetch: Mapping[str, bytes | None]) -> Cap
     if _digest(data) != digest:
         message = f"{name} does not match its digest, so it changed after it was kept"
         raise BundleError(message)
+    if entry.get("encoding") == COUNTS:
+        return Capture(side=side, read=read, data=pack_raw03(classes_of(data)), counts=data)
     return Capture(side=side, read=read, data=data)
 
 

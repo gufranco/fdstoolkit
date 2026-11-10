@@ -87,9 +87,34 @@ a factor of two and carry no tolerance.
 - The sequence counter wraps with an add, so `0xFF` is followed by `0x00`. Mapping
   it back to `1` aborts every side, because 255 chunks carry 64,770 bytes and a
   gapped side is about 66,560.
-- Nothing in the hardware path has run against a device. Every driver test drives
+- The read path has run against one unit, an FDSStick reporting firmware 3.12, on
+  both sides of one disk. That run settled three things. A block opens with one
+  medium pulse after a gap of short ones: the start bit, with the seven gap bits
+  before it making up the `0x80` a block is framed with. A read that fails a
+  checksum runs on into the gap behind it, so the search for the next block
+  starts again where that gap begins. And a read after the first opens with a
+  leftover reply from the read before, which is dropped and no longer counted as
+  a skipped packet. Whether the reply after it is the first of the new read is
+  not established.
+- The decoder has also read seven 8-bit timing captures loopy's software saved in
+  2018, four of them protected sides whose headers declare 8 bytes in front of
+  32,768. Two things came from those. A long data block holds runs that look
+  like a gap, so the search for its real end tries each later gap in turn. And
+  the gap behind a block carries a few bytes of splice where the write head
+  switched off, five of them on one rewritten disk, so a boundary counts when
+  all but eight bytes behind it are gap.
+- What a read returns depends on the firmware, not on a mode byte. Both of loopy's
+  programs start a read with `10 00`; firmware 3.12 answers with packed classes
+  and firmware 2.80, the one `FDSStick_readRaw` carries, answers with one count
+  per pulse, four times the bytes. The driver tells them apart by content, keeps
+  the counts as the capture and hands classes to everything else.
+- A read runs as one supervised call, not one per packet. Counts arrive at about
+  310 packets a second, and a thread started for every packet lost one of them.
+- Nothing in the write path has run against a device. Every driver test drives
   a recording stand-in, so it can prove which bytes we send and cannot prove the
   device accepts them.
+- The tests never load the real `hid` module, even when it is installed.
+  Enumerating a real stick from inside the suite ends the interpreter on macOS.
 
 ## The gates
 

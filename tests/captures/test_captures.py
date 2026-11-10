@@ -9,7 +9,9 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from capture_fixture import loopy_raw
 
+from fdstoolkit.codecs.raw import pack_raw03
 from fdstoolkit.drive.captures import (
     MANIFEST,
     MAX_CAPTURE_BYTES,
@@ -22,6 +24,7 @@ from fdstoolkit.drive.captures import (
     read_zip,
     write_bundle,
 )
+from fdstoolkit.drive.timing import classes_of
 
 CREATED = "2026-09-25T12:00:00Z"
 CAPTURES = (
@@ -42,6 +45,19 @@ def test_a_bundle_written_to_a_directory_reads_back_the_same(tmp_path: Path) -> 
     assert bundle.created == CREATED
     assert bundle.of_side(0) == (b"\x01\x02\x03", b"\x01\x02\x04")
     assert bundle.sides == (0, 1)
+
+
+def test_a_capture_of_pulse_counts_is_kept_as_counts_and_reads_back_with_its_classes(
+    tmp_path: Path,
+) -> None:
+    counts = loopy_raw()
+    capture = Capture(side=0, read=1, data=pack_raw03(classes_of(counts)), counts=counts)
+    write_bundle(tmp_path, (capture,), image="game.fds", created=CREATED)
+
+    bundle = load_bundle(tmp_path)
+
+    assert (tmp_path / "side0.read01.raw").read_bytes() == counts
+    assert bundle.captures == (capture,)
 
 
 def test_the_manifest_names_every_capture_with_its_digest(tmp_path: Path) -> None:

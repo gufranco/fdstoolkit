@@ -28,7 +28,7 @@ COUNT_SCALE = 1.5
 COUNT_JITTER = 3
 BYTE_MAX = 255
 CRC_DAMAGE = 0xFFFF
-SHORT_GAP = 482
+SHORT_GAP = 475
 
 
 @dataclass(frozen=True, slots=True)

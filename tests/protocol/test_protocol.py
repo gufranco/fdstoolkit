@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import pytest
+from capture_fixture import loopy_raw
 from device import FakeFdsStick
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
-from fdstoolkit.codecs.raw import encode_block_stream, encode_raw03
+from fdstoolkit.codecs.raw import encode_block_stream, encode_raw03, pack_raw03
 from fdstoolkit.core.disk import Disk
+from fdstoolkit.drive.timing import classes_of
 from fdstoolkit.hardware.fdsstick import (
     CHUNK_PAYLOAD,
     LEGACY_REPORTS,
@@ -32,7 +34,7 @@ PACKETS_PAST_THE_WRAP = 300
 
 
 def raw_side(packets: int = PACKETS_PAST_THE_WRAP) -> bytes:
-    return bytes(range(256)) * (packets * CHUNK_PAYLOAD // 256 + 1)
+    return (bytes(range(1, 250)) + bytes(7)) * (packets * CHUNK_PAYLOAD // 256 + 1)
 
 
 def stick_over(device: FakeFdsStick) -> FdsStick:
@@ -73,6 +75,25 @@ def test_a_read_that_wraps_reports_no_lost_data() -> None:
     assert stick.resyncs == ()
 
 
+def test_a_side_sent_as_pulse_counts_comes_back_as_its_classes() -> None:
+    counts = loopy_raw()
+    device = FakeFdsStick(side=counts)
+
+    assert stick_over(device).read_raw_side() == pack_raw03(classes_of(counts))
+
+
+def test_a_side_sent_as_pulse_counts_is_kept_as_the_counts_the_stick_sent() -> None:
+    counts = loopy_raw()
+    stick = stick_over(FakeFdsStick(side=counts))
+
+    blocks = list(stick.read_side(0))
+
+    assert all(block.crc_ok for block in blocks)
+    assert [(capture.name, capture.counts) for capture in stick.captures] == [
+        ("side0.read01.raw", counts)
+    ]
+
+
 def test_a_stale_first_reply_is_dropped_rather_than_stored() -> None:
     side = raw_side()[: 4 * CHUNK_PAYLOAD]
     device = FakeFdsStick(side=side, stale_first=0x7A)
@@ -80,13 +101,13 @@ def test_a_stale_first_reply_is_dropped_rather_than_stored() -> None:
     assert stick_over(device).read_raw_side() == side
 
 
-def test_a_stale_first_reply_resyncs_the_counter_once() -> None:
+def test_a_stale_first_reply_is_not_counted_as_lost_disk_data() -> None:
     device = FakeFdsStick(side=raw_side()[: 4 * CHUNK_PAYLOAD], stale_first=0x7A)
 
     stick = stick_over(device)
     stick.read_raw_side()
 
-    assert stick.resyncs == ((0x7B, 1),)
+    assert stick.resyncs == ()
 
 
 def test_a_dropped_packet_does_not_abandon_the_dump() -> None:

@@ -20,6 +20,7 @@ FILES = 2
 DAMAGED = 3
 SKIP_SYNC = 40
 TRAILING_GAP = 4000
+LOST_PULSES = 600
 
 
 def reference_side() -> Side:
@@ -178,3 +179,19 @@ def test_positions_alone_cannot_vote_past_a_slip() -> None:
     )
     assert positional[: len(clean)] != clean
     assert aligned[: len(clean)] == clean
+
+
+def missing_pulses(side: Side, block: int) -> bytes:
+    values = unpack_raw03(encode_block_stream([b.payload for b in side.blocks]))
+    start, _ = block_regions(values)[block]
+    return pack_raw03(values[: start + SKIP_SYNC] + values[start + SKIP_SYNC + LOST_PULSES :])
+
+
+def test_a_clean_read_repairs_a_block_whose_failed_read_ran_into_the_gap() -> None:
+    side = reference_side()
+    clean = pack_raw03(unpack_raw03(encode_block_stream([b.payload for b in side.blocks])))
+
+    result = vote_side([missing_pulses(side, DAMAGED), clean])
+
+    assert result.unresolved == ()
+    assert [block.payload for block in result.side.blocks] == [b.payload for b in side.blocks]

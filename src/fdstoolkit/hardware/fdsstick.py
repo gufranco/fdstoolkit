@@ -9,9 +9,11 @@ from fdstoolkit.codecs.raw import (
     WRITE_GAP_BYTE,
     decode_packed,
     encode_write_stream,
+    pack_raw03,
 )
 from fdstoolkit.drive.captures import Capture
 from fdstoolkit.drive.pulse import PulseFinding, findings_of
+from fdstoolkit.drive.timing import Nature, classes_of, classify
 from fdstoolkit.hardware.device_lock import DriveLock, acquire_drive_lock
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, Watchdog
@@ -23,7 +25,8 @@ PRODUCT_STRING: Final = "FDSStick"
 CHUNK_PAYLOAD: Final = 0xFE
 WRITE_PAYLOAD: Final = 0xFF
 WRITE_REPORT_LENGTH: Final = 0x100
-RAW_SIDE_LIMIT: Final = 0x23F02
+RAW_SIDE_LIMIT: Final = 0x8FF02
+COUNTS: Final = frozenset({Nature.TIMING, Nature.UNDECODED})
 HEADER_BYTES: Final = 2
 SEQUENCE_MASK: Final = 0xFF
 FIRST_SEQUENCE: Final = 1
@@ -128,23 +131,24 @@ class FdsStick:
         start = bytes([ReportId.DISK_START, mode])
         self._watchdog.call(lambda: self._transport.send_feature(start))
 
-    def _chunk(self) -> bytes:
-        return self._watchdog.call(
-            lambda: self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
-        )
-
     def read_raw_side(self, *, what: str = "reading a side", mode: int = MODE_READ) -> bytes:
+        return self._read_classes(what, mode)[0]
+
+    def _read_classes(self, what: str, mode: int) -> tuple[bytes, bytes | None]:
         with self._watchdog.side(what):
-            return self._read_raw(mode)
+            sent = self._watchdog.call(lambda: self._read_raw(mode))
+        if mode == MODE_READ and classify(sent) in COUNTS:
+            return pack_raw03(classes_of(sent)), sent
+        return sent, None
 
     def _read_raw(self, mode: int) -> bytes:
-        self._start(mode)
+        self._transport.send_feature(bytes([ReportId.DISK_START, mode]))
         out = bytearray()
-        expected = FIRST_SEQUENCE
+        expected: int | None = None
         opening = True
 
         while len(out) < RAW_SIDE_LIMIT:
-            packet = self._chunk()
+            packet = self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
             if len(packet) < HEADER_BYTES:
                 message = "the device stopped answering during the read"
                 raise HardwareFaultError(message, kind=FaultKind.LINK)
@@ -157,12 +161,11 @@ class FdsStick:
                 break
 
             if opening and sequence != FIRST_SEQUENCE:
-                expected = _after(sequence)
                 opening = False
                 continue
             opening = False
 
-            if sequence != expected:
+            if expected is not None and sequence != expected:
                 self._resyncs.append((expected, sequence))
             expected = _after(sequence)
 
@@ -192,9 +195,9 @@ class FdsStick:
                 break
 
     def read_side(self, side: int) -> Iterator[BlockRead]:
-        packed = self.read_raw_side(what=f"reading side {side}")
+        packed, counts = self._read_classes(f"reading side {side}", MODE_READ)
         read = sum(1 for capture in self._captures if capture.side == side) + 1
-        self._captures.append(Capture(side=side, read=read, data=packed))
+        self._captures.append(Capture(side=side, read=read, data=packed, counts=counts))
         decoded, found = decode_packed(packed)
         self._pulse.extend(findings_of(side, read, found))
         for index, block in enumerate(decoded.blocks):

@@ -23,7 +23,7 @@ TRAILING_GAP: Final = 4000
 SKIP_SYNC: Final = 40
 CREATED: Final = "2026-09-25T12:00:00Z"
 IMAGE: Final = "game.fds"
-SHORT_GAP: Final = 482
+SHORT_GAP: Final = 475
 
 
 def disk_with_a_file() -> Disk:

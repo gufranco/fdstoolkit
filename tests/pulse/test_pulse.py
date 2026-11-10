@@ -11,7 +11,7 @@ from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
 from fdstoolkit.drive.captures import Capture
 from fdstoolkit.drive.pulse import captured_findings, findings_of, pulse_lines, settled
 
-SHORT_GAP = 482
+SHORT_GAP = 475
 PAYLOADS = (bytes([0x01]) + bytes(55), bytes([0x02, 0x00]))
 
 

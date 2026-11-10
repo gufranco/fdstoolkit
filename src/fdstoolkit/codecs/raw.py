@@ -24,6 +24,7 @@ ORDER_PROBE_BYTES: Final = 16384
 MAX_CLASS: Final = 3
 GAP_VALUE: Final = 0
 SYNC_VALUE: Final = 1
+SYNC_LEAD_VALUES: Final = 7
 SHORTEST_GAP_BITS: Final = 480
 MIN_GAP_VALUES: Final = SHORTEST_GAP_BITS
 LEAD_IN_BITS: Final = 28300
@@ -40,6 +41,7 @@ WRITE_ZERO_THEN_ZERO: Final = 2
 WRITE_ZERO_THEN_ONE: Final = 3
 NIBBLE_BITS: Final = 4
 GAP_BYTES: Final = frozenset({0x00, 0xFF})
+SPLICE_BYTES: Final = 8
 BYTE_VALUES: Final = 8
 SYNC_MARK: Final = 0x80
 CAPTURE_CLOCK_HZ: Final = 6_000_000
@@ -172,7 +174,7 @@ def _bits_lsb_first(data: bytes) -> list[int]:
 
 def _encode_bits(bits: list[int]) -> bytes:
     out = bytearray()
-    previous = 1
+    previous = 0
     index = 0
     while index < len(bits):
         bit = bits[index]
@@ -210,11 +212,11 @@ def encode_block_stream(
     encoding: RawEncoding = RawEncoding.ERA_B,
 ) -> bytes:
     encoder = encode_era_a if encoding is RawEncoding.ERA_A else encode_era_b
-    values = bytearray(bytes([GAP_VALUE]) * LEAD_IN_BITS)
+    values = bytearray(bytes([GAP_VALUE]) * (LEAD_IN_BITS - SYNC_LEAD_VALUES))
 
     for index, payload in enumerate(payloads):
         if index:
-            values += bytes([GAP_VALUE]) * GAP_BITS
+            values += bytes([GAP_VALUE]) * (GAP_BITS - SYNC_LEAD_VALUES)
         framed = bytes([SYNC_MARK]) + payload + encode_crc(block_crc(payload))
         values += encoder(framed)
 
@@ -343,7 +345,7 @@ def lead_in_bits(values: bytes) -> int | None:
 
 def _decode_region(values: bytes, start: int, pending: int) -> tuple[bytes, int, int | None]:
     bits: list[int] = []
-    previous = 1
+    previous = 0
     index = start
     needed: int | None = None
 
@@ -402,23 +404,26 @@ def _expected_length(kind: int, pending: int) -> int | None:
 
 
 def _only_gap(rest: bytes) -> bool:
-    return len(set(rest)) <= 1 and set(rest) <= GAP_BYTES
+    return sum(1 for byte in rest if byte not in GAP_BYTES) <= SPLICE_BYTES
 
 
 def _bounded_by_crc(values: bytes, gap: int) -> tuple[bytes, int, int] | None:
     following = _gap_end(values, gap + 1)
-    end = len(values) if following is None else following
-    region, _, _ = _decode_region(values[:end], gap, len(values))
-    body = region[1:]
-
-    def ends_at_gap(size: int) -> bool:
-        return _only_gap(body[size + CRC_SIZE :])
-
-    size = crc_boundary(body, range(1, len(body) - CRC_SIZE + 1), ends_at_gap)
-    if size is None:
-        return None
-    resume = len(values) if following is None else following - MIN_GAP_VALUES
-    return body[:size], decode_crc(body[size : size + CRC_SIZE]), resume
+    while True:
+        end = len(values) if following is None else following
+        region, _, _ = _decode_region(values[:end], gap - SYNC_LEAD_VALUES, len(values))
+        body = region[1:]
+        size = crc_boundary(
+            body,
+            range(1, len(body) - CRC_SIZE + 1),
+            lambda size, body=body: _only_gap(body[size + CRC_SIZE :]),
+        )
+        if size is not None:
+            resume = len(values) if following is None else _before_gap(values, gap, following)
+            return body[:size], decode_crc(body[size : size + CRC_SIZE]), resume
+        if following is None:
+            return None
+        following = _gap_end(values, following + 1)
 
 
 def decode_raw03(values: bytes) -> tuple[Side, tuple[Diagnostic, ...]]:
@@ -457,6 +462,12 @@ def _lost_region(gap: int, blocks: Sequence[Block], data: bytes) -> Diagnostic:
     return _diagnostic("FDS015", Severity.WARNING, detail)
 
 
+def _before_gap(values: bytes, start: int, end: int) -> int:
+    while end > start and values[end - 1] == GAP_VALUE:
+        end -= 1
+    return end
+
+
 def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int, int], ...]]:
     findings: list[Diagnostic] = []
     blocks: list[Block] = []
@@ -469,7 +480,8 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
         if gap is None:
             break
         findings.extend(_short_gap(gap, cursor, block=len(blocks)))
-        data, cursor, needed = _decode_region(values, gap, pending)
+        start = gap - SYNC_LEAD_VALUES
+        data, cursor, needed = _decode_region(values, start, pending)
         if not data or data[0] != SYNC_MARK or needed is None:
             findings.append(_lost_region(gap, blocks, data))
             continue
@@ -498,6 +510,8 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
                     ),
                 )
         block = Block(kind=BlockKind(payload[0]), payload=payload, stored_crc=stored)
+        blocks.append(block)
+        regions.append((start, cursor))
         if stored != block_crc(payload):
             findings.append(
                 _diagnostic(
@@ -506,10 +520,9 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
                     {"stored": stored, "computed": block.computed_crc},
                 ),
             )
+            cursor = _before_gap(values, start, cursor)
         if block.kind is BlockKind.FILE_HEADER:
             pending = FileHeader.parse(payload).size
-        blocks.append(block)
-        regions.append((gap, cursor))
 
     if not blocks:
         findings.append(_diagnostic("FDS014", Severity.ERROR, {"values": len(values)}))

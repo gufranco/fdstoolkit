@@ -212,7 +212,7 @@ def keep_captures(drive: FdsStick, directory: Path, *, image: str) -> None:
         return
     written = write_bundle(directory, captures, image=image, created=created_now())
     typer.echo(
-        f"  kept {len(captures)} capture(s) of packed pulse classes in {directory}, "
+        f"  kept {len(captures)} capture(s) of {captures[0].encoding} in {directory}, "
         f"described by {written[0].name}"
     )
 
