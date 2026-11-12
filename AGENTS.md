@@ -114,6 +114,11 @@ a factor of two and carry no tolerance.
   stick settles, so that read alone is tried twice. A transport error on a read
   or a write becomes a link fault, which every caller reports, and a read that
   fails after its first packet is never retried.
+- Every real read carries 1,000 to 1,500 stray pulses in its first 3,700
+  values while the drive settles, and a burst among them can frame a false
+  block. Decoding starts at the first disk information block that passes its
+  checksum, and the lead-in is the gap before it; a side with no such block is
+  decoded from its first value.
 - The read and write paths have run against one FDSStick on firmware 3.12. Every
   other driver test drives a recording stand-in, which proves which bytes we send
   and not that a device accepts them.

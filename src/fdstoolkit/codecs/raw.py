@@ -341,10 +341,11 @@ def _gap_end(values: bytes, start: int) -> int | None:
 
 
 def lead_in_bits(values: bytes) -> int | None:
-    sync = _gap_end(values, 0)
-    if sync is None:
+    regions = block_regions(values)
+    if not regions:
         return None
-    return sync - len(values[:sync].rstrip(bytes([GAP_VALUE])))
+    start, _ = regions[0]
+    return start - len(values[:start].rstrip(bytes([GAP_VALUE])))
 
 
 def _decode_region(values: bytes, start: int, pending: int) -> tuple[bytes, int, int | None]:
@@ -470,12 +471,27 @@ def _gap_start(values: bytes, sync: int) -> int:
     return start
 
 
-def _clean_block_at(values: bytes, gap: int, pending: int) -> bool:
+def _clean_payload_at(values: bytes, gap: int, pending: int) -> bytes | None:
     data, _, needed = _decode_region(values, gap, pending)
     if not data or data[0] != SYNC_MARK or needed is None or len(data) < needed:
-        return False
+        return None
     body = data[1:needed]
-    return decode_crc(body[-CRC_SIZE:]) == block_crc(body[:-CRC_SIZE])
+    payload = body[:-CRC_SIZE]
+    return payload if decode_crc(body[-CRC_SIZE:]) == block_crc(payload) else None
+
+
+def _clean_block_at(values: bytes, gap: int, pending: int) -> bool:
+    return _clean_payload_at(values, gap, pending) is not None
+
+
+def _side_start(values: bytes) -> int:
+    gap = _gap_end(values, 0)
+    while gap is not None:
+        payload = _clean_payload_at(values, gap, 0)
+        if payload is not None and payload[0] == BlockKind.DISK_INFO:
+            return _gap_start(values, gap)
+        gap = _gap_end(values, gap + 1)
+    return 0
 
 
 def _resume_after_failure(values: bytes, start: int, cursor: int, pending: int) -> int:
@@ -489,7 +505,7 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
     findings: list[Diagnostic] = []
     blocks: list[Block] = []
     regions: list[tuple[int, int]] = []
-    cursor = 0
+    cursor = _side_start(values)
     pending = 0
 
     while cursor < len(values):

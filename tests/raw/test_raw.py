@@ -428,10 +428,37 @@ def test_a_stream_without_a_sync_mark_has_no_lead_in() -> None:
     assert lead_in_bits(bytes([1, 2, 1, 2] * 100)) is None
 
 
-def test_the_lead_in_counts_the_gap_right_before_the_first_sync() -> None:
-    stream = bytes([2, 1]) + bytes([GAP_VALUE]) * MIN_GAP_VALUES + bytes([1, 2])
+def test_the_lead_in_counts_the_gap_right_before_the_first_block() -> None:
+    block = unpack_raw03(
+        encode_block_stream([block.payload for block in sample_disk().sides[0].blocks])
+    )
+    stream = bytes([2, 1]) + block[LEAD_IN_BITS - MIN_GAP_VALUES :]
 
-    assert lead_in_bits(stream) == MIN_GAP_VALUES
+    lead_in = lead_in_bits(stream)
+
+    assert lead_in == MIN_GAP_VALUES
+
+
+def test_a_sync_pulse_in_the_noise_before_the_lead_in_does_not_cut_it_short() -> None:
+    block = unpack_raw03(
+        encode_block_stream([block.payload for block in sample_disk().sides[0].blocks])
+    )
+    noise = bytes([1, 2]) + bytes([GAP_VALUE]) * MIN_GAP_VALUES + bytes([1, 1, 1, 1])
+
+    lead_in = lead_in_bits(noise + block)
+
+    assert lead_in == LEAD_IN_BITS
+
+
+def test_noise_before_the_disk_information_block_is_not_part_of_the_side() -> None:
+    side = sample_disk().sides[0]
+    block = unpack_raw03(encode_block_stream([block.payload for block in side.blocks]))
+    noise = bytes([1, 2]) + bytes([GAP_VALUE]) * MIN_GAP_VALUES + bytes([1, 1, 1, 1])
+
+    decoded, findings = decode_raw03(noise + block)
+
+    assert [found.payload for found in decoded.blocks] == [found.payload for found in side.blocks]
+    assert findings == ()
 
 
 def packed_low_first(values: bytes) -> bytes:
