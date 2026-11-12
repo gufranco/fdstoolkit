@@ -6,7 +6,7 @@ import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image, formatted_side
-from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE, SIDE_PAYLOAD
+from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE, SIDE_PAYLOAD, calibration_disk
 from fdstoolkit.codecs.fds import decode, encode
 from fdstoolkit.codecs.raw import class_histogram, encode_era_b
 from fdstoolkit.core.blocks import BlockKind
@@ -100,6 +100,23 @@ def test_a_healthy_disk_passes_every_pattern() -> None:
     assert report.grade is Grade.CLEAN
     assert len(report.passes) == len(PATTERNS)
     assert report.failed_patterns == ()
+
+
+def test_old_blocks_past_a_short_pattern_are_not_surface_damage() -> None:
+    class LeftoverDrive(SimulatedDrive):
+        def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+            kept = [block.payload for block in self._side(side).blocks[len(blocks) :]]
+            super().write_side(side, [*blocks, *kept])
+
+    drive = LeftoverDrive(calibration_disk(1))
+
+    report = surface_test(
+        drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(fill=False)
+    )
+
+    assert report.stopped is None
+    assert report.failed_patterns == ()
+    assert len(report.passes) == len(PATTERNS)
 
 
 def test_a_disk_that_does_not_take_a_write_stops_at_the_first_pattern() -> None:

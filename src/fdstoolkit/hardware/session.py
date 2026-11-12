@@ -503,6 +503,10 @@ class SideWrite:
     mismatched: tuple[int, ...]
     stale: tuple[int, ...] = ()
 
+    @property
+    def changed(self) -> tuple[int, ...]:
+        return tuple(block for block in self.mismatched if block not in self.stale)
+
 
 def write_side_verified(
     writer: DiskWriter,

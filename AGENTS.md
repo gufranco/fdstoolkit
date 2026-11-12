@@ -120,6 +120,10 @@ a factor of two and carry no tolerance.
   the lead-in has written no block, so the whole session starts again. A
   transport error on a read or a write becomes a link fault, which every caller
   reports, and a read that fails after it kept data is never retried.
+- The stick does not erase past the end of what it writes. A side written over
+  a longer one keeps the old blocks after its own, and `write` fails its
+  verification over them, since another reader would take them for a hidden
+  file. The surface test judges only the blocks it wrote.
 - Every real read carries 1,000 to 1,500 stray pulses in its first 3,700
   values while the drive settles, and a burst among them can frame a false
   block. Decoding starts at the first disk information block that passes its

@@ -373,14 +373,14 @@ def _run_patterns(run: _Run) -> tuple[StopReason | None, str]:
                     result = run.write(side_index, target, keep=keep, turned=keep)
                 except (WriteNotTakenError, HalfWriteError) as refused:
                     return StopReason.REFUSED, str(refused)
-                blocks = tuple((side_index, block) for block in result.mismatched)
+                blocks = tuple((side_index, block) for block in result.changed)
                 short, long, compared = _misreads(run, side_index, target, failed=bool(blocks))
                 run.results.append(
                     PatternPass(
                         pattern=pattern,
-                        verified=not result.mismatched,
+                        verified=not result.changed,
                         mismatched_blocks=blocks,
-                        grade=Grade.FAILED if result.mismatched else result.after.grade,
+                        grade=Grade.FAILED if result.changed else result.after.grade,
                         round=index + 1,
                         side=side_index,
                         short=short,
