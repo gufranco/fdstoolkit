@@ -80,13 +80,22 @@ def test_a_stale_first_reply_is_dropped_rather_than_stored() -> None:
     assert stick_over(device).read_raw_side() == side
 
 
-def test_a_stale_first_reply_resyncs_the_counter_once() -> None:
+def test_a_stale_first_reply_takes_the_first_packet_slot_without_counting_a_skip() -> None:
     device = FakeFdsStick(side=raw_side()[: 4 * CHUNK_PAYLOAD], stale_first=0x7A)
 
     stick = stick_over(device)
     stick.read_raw_side()
 
-    assert stick.resyncs == ((0x7B, 1),)
+    assert stick.resyncs == ()
+
+
+def test_a_packet_lost_after_a_stale_first_reply_is_still_counted() -> None:
+    device = FakeFdsStick(side=raw_side()[: 8 * CHUNK_PAYLOAD], stale_first=0x7A, drop_after=3)
+
+    stick = stick_over(device)
+    stick.read_raw_side()
+
+    assert stick.resyncs == ((5, 6),)
 
 
 def test_a_dropped_packet_does_not_abandon_the_dump() -> None:

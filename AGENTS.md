@@ -84,6 +84,10 @@ a factor of two and carry no tolerance.
   tools tested against a unit in 2026 start with `0x10` plus a mode byte and read
   from `0x11`. The whole map is shifted by one. This driver speaks the later one,
   and a read that comes back empty says so rather than reporting a dead disk.
+- A read often opens with a stale reply carrying the sequence number of an earlier
+  read, and the next packet is then numbered `2`: the stale reply takes the first
+  packet's slot. It is dropped, and the read expects `2` next, so it is not
+  reported as a skipped packet.
 - The sequence counter wraps with an add, so `0xFF` is followed by `0x00`. Mapping
   it back to `1` aborts every side, because 255 chunks carry 64,770 bytes and a
   gapped side is about 66,560.

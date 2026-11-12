@@ -98,8 +98,7 @@ class FakeFdsStick:
     def _sequence(self) -> int:
         if self.stale_first is not None and self.served == 0:
             return self.stale_first
-        offset = 0 if self.stale_first is None else 1
-        counted = self.served + FIRST_SEQUENCE - offset
+        counted = self.served + FIRST_SEQUENCE
         if self.drop_after is not None and self.served > self.drop_after:
             counted += 1
         return counted & SEQUENCE_MASK

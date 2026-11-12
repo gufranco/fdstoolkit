@@ -157,7 +157,7 @@ class FdsStick:
                 break
 
             if opening and sequence != FIRST_SEQUENCE:
-                expected = _after(sequence)
+                expected = _after(FIRST_SEQUENCE)
                 opening = False
                 continue
             opening = False
