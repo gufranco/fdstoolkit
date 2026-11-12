@@ -23,6 +23,7 @@ from fdstoolkit.drive.monitor import (
     MAX_READS,
     NOISY_PULSES,
     NOISY_READ,
+    SPLICE_VALUES,
     Calibration,
     HeadReading,
     Mode,
@@ -216,7 +217,19 @@ def test_without_a_reference_an_unreadable_file_amount_leaves_the_count_to_the_r
     assert found.speed is SpeedReading.CLEAN
 
 
-def test_an_invalid_pulse_inside_a_block_is_counted() -> None:
+def test_invalid_pulses_outside_the_gaps_are_counted() -> None:
+    side = reference_side()
+    values = bytearray(unpack_raw03(stream(side)))
+    start = block_starts(bytes(values))[1]
+    values[start + SKIP_SYNC] = 3
+
+    found = sample(pack_raw03(bytes(values)), side)
+
+    assert found.invalid == 1
+    assert found.speed is not SpeedReading.CLEAN
+
+
+def test_an_invalid_pulse_inside_the_first_block_is_counted() -> None:
     side = reference_side()
     values = bytearray(unpack_raw03(stream(side)))
     start, _ = block_regions(bytes(values))[0]
@@ -237,6 +250,49 @@ def test_a_long_pulse_in_the_splice_after_a_block_is_not_counted() -> None:
     found = sample(pack_raw03(bytes(values)), side)
 
     assert found.invalid == 0
+
+
+def test_an_invalid_pulse_in_a_gap_past_the_splice_is_counted() -> None:
+    side = reference_side()
+    values = bytearray(unpack_raw03(stream(side)))
+    _, end = block_regions(bytes(values))[1]
+    values[end + SPLICE_VALUES] = 3
+
+    found = sample(pack_raw03(bytes(values)), side)
+
+    assert found.invalid == 1
+
+
+def test_an_invalid_pulse_after_the_last_block_is_counted() -> None:
+    side = reference_side()
+    values = unpack_raw03(stream(side))
+    padded = values + bytes(SPLICE_VALUES) + bytes([3])
+
+    found = sample(pack_raw03(padded), side)
+
+    assert found.invalid == 1
+
+
+def test_invalid_pulses_before_the_first_block_are_not_counted() -> None:
+    side = reference_side()
+    values = bytearray(unpack_raw03(stream(side)))
+    start, _ = block_regions(bytes(values))[0]
+    values[start - SPLICE_VALUES] = 3
+
+    found = sample(pack_raw03(bytes(values)), side)
+
+    assert found.invalid == 0
+
+
+def test_a_read_too_noisy_to_frame_any_block_is_noisy() -> None:
+    side = reference_side()
+    noise = bytes([3, 0]) * NOISY_PULSES * SKIP_SYNC
+
+    found = sample(pack_raw03(noise), side)
+
+    assert found.read == 0
+    assert found.invalid == NOISY_PULSES * SKIP_SYNC
+    assert found.noisy is True
 
 
 def test_the_trend_follows_blocks_read_then_errors() -> None:

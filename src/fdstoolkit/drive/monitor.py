@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -30,6 +31,9 @@ DEFAULT_READS: Final = 20
 BIAS_PULSES: Final = 16
 BIAS_SHARE: Final = 0.75
 NOISY_PULSES: Final = 16
+SPLICE_FIRST: Final = 16
+SPLICE_VALUES: Final = 160
+INVALID_PULSE: Final = re.compile(bytes([MAX_CLASS]))
 NOISY_READ: Final = (
     ". Most failing pulses fit no class at all, which points at electrical noise on the read "
     "line more than at speed. If the USB link reported no skipped packets, the FDSStick's "
@@ -217,7 +221,18 @@ class SideSample:
 
 
 def _invalid(values: bytes) -> int:
-    return sum(values[start:end].count(MAX_CLASS) for start, end in block_regions(values))
+    regions = block_regions(values)
+    pulses = tuple(found.start() for found in INVALID_PULSE.finditer(values))
+    if not regions:
+        return len(pulses)
+    first, _ = regions[0]
+    return sum(1 for index in pulses if index >= first and not _in_splice(index, regions))
+
+
+def _in_splice(index: int, regions: Sequence[tuple[int, int]]) -> bool:
+    if any(start <= index < end for start, end in regions):
+        return False
+    return any(end + SPLICE_FIRST <= index < end + SPLICE_VALUES for _, end in regions)
 
 
 def _leaning(actual: bytes, expected: bytes) -> tuple[int, int, int]:

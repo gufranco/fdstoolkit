@@ -102,9 +102,11 @@ a factor of two and carry no tolerance.
   read on through the gap behind it to collect the bits the block declares. After
   a block fails its checksum, decoding resumes at the first gap past the block's
   start where a block that passes its checksum begins.
-- Real reads carry pulses that fit no class before the first block and in the
-  splices between blocks, never inside a block that read clean, so only pulses
-  inside blocks count as read-line noise.
+- Real reads carry pulses that fit no class before the first block, 19 to 525 a
+  read, and in the splice 18 to 79 values after a block ends, never inside a
+  block that read clean. Noise is therefore counted everywhere from the first
+  block on except 16 to 160 values after each block, and a read where no block
+  frames at all counts every such pulse, so the noisiest line still warns.
 - The read and write paths have run against one FDSStick on firmware 3.12. Every
   other driver test drives a recording stand-in, which proves which bytes we send
   and not that a device accepts them.
