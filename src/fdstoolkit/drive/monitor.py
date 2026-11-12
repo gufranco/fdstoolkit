@@ -220,13 +220,14 @@ class SideSample:
         return self.invalid >= NOISY_PULSES and self.invalid > self.short + self.long
 
 
-def _invalid(values: bytes) -> int:
+def _invalid(values: bytes, *, declared: int) -> int:
     regions = block_regions(values)
     pulses = tuple(found.start() for found in INVALID_PULSE.finditer(values))
     if not regions:
         return len(pulses)
     first, _ = regions[0]
-    return sum(1 for index in pulses if index >= first and not _in_splice(index, regions))
+    last = regions[declared - 1][1] if 0 < declared <= len(regions) else len(values)
+    return sum(1 for index in pulses if first <= index < last and not _in_splice(index, regions))
 
 
 def _in_splice(index: int, regions: Sequence[tuple[int, int]]) -> bool:
@@ -305,7 +306,7 @@ def _measured(
     reference: Side | None,
     learned: Mapping[Key, bytes],
 ) -> SideSample:
-    invalid = _invalid(values)
+    invalid = _invalid(values, declared=_declared_blocks(decoded))
     if reference is None:
         short, long, compared = _against_learned(values, decoded, learned)
         unread = max(_declared_blocks(decoded) - len(decoded), 0)

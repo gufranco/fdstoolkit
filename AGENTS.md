@@ -104,9 +104,12 @@ a factor of two and carry no tolerance.
   start where a block that passes its checksum begins.
 - Real reads carry pulses that fit no class before the first block, 19 to 525 a
   read, and in the splice 18 to 79 values after a block ends, never inside a
-  block that read clean. Noise is therefore counted everywhere from the first
-  block on except 16 to 160 values after each block, and a read where no block
-  frames at all counts every such pulse, so the noisiest line still warns.
+  block that read clean; a side read whole also carries a few past its last
+  declared block, at the same places on every read, where older recordings
+  remain. Noise is therefore counted from the first block to the last declared
+  one, except 16 to 160 values after each block. A side missing blocks is
+  counted to the end of the read, and a read where no block frames counts every
+  such pulse, so the noisiest line still warns.
 - hidapi on macOS answers a write the stick did not take with -1 after five
   seconds instead of raising. A refused packet is sent once more and never
   skipped past; refused twice before packet 400 is a link fault, and after it

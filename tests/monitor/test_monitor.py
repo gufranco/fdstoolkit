@@ -263,14 +263,25 @@ def test_an_invalid_pulse_in_a_gap_past_the_splice_is_counted() -> None:
     assert found.invalid == 1
 
 
-def test_an_invalid_pulse_after_the_last_block_is_counted() -> None:
+def test_an_invalid_pulse_past_the_last_declared_block_is_not_counted() -> None:
     side = reference_side()
     values = unpack_raw03(stream(side))
     padded = values + bytes(SPLICE_VALUES) + bytes([3])
 
     found = sample(pack_raw03(padded), side)
 
+    assert found.invalid == 0
+
+
+def test_an_invalid_pulse_after_the_last_block_of_a_side_missing_blocks_is_counted() -> None:
+    side = reference_side()
+    values = unpack_raw03(stream(side, keep=slice(0, -2)))
+    padded = values + bytes(SPLICE_VALUES) + bytes([3])
+
+    found = sample(pack_raw03(padded), side)
+
     assert found.invalid == 1
+    assert found.read == len(side.blocks) - 2
 
 
 def test_invalid_pulses_before_the_first_block_are_not_counted() -> None:
