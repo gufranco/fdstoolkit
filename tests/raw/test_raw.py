@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from fdstoolkit.build.blank import blank_image
@@ -39,6 +41,8 @@ from fdstoolkit.codecs.raw import (
 )
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.diagnostics import Severity
+
+LOST_PACKET_VALUES = 254 * 4
 
 
 def sample_disk(files: int = 1):  # noqa: ANN201
@@ -480,3 +484,28 @@ def test_a_test_data_block_in_a_capture_is_named_as_information() -> None:
     named = [finding for finding in findings if finding.code == "FDS020"]
     assert [finding.severity for finding in named] == [Severity.INFO]
     assert "FDS015" not in [finding.code for finding in findings]
+
+
+def file_pair(number: int, size: int) -> list[bytes]:
+    data = hashlib.shake_256(f"file{number}".encode()).digest(size)
+    header = (
+        bytes([0x03, number, number])
+        + b"FILE    "
+        + (0x6000).to_bytes(2, "little")
+        + size.to_bytes(2, "little")
+        + bytes([0x00])
+    )
+    return [header, bytes([0x04]) + data]
+
+
+def test_a_block_cut_short_by_a_lost_packet_does_not_hide_the_blocks_after_it() -> None:
+    payloads = file_pair(0, 600) + file_pair(1, 300)
+    values = unpack_raw03(encode_block_stream(payloads))
+    start, end = block_regions(values)[1]
+    middle = (start + end) // 2
+    cut = values[:middle] + values[middle + LOST_PACKET_VALUES :]
+
+    side, _ = decode_raw03(cut)
+
+    assert [block.payload for block in side.blocks][2:] == payloads[2:]
+    assert side.blocks[1].stored_crc != side.blocks[1].computed_crc

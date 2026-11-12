@@ -463,6 +463,28 @@ def _lost_region(gap: int, blocks: Sequence[Block], data: bytes) -> Diagnostic:
     return _diagnostic("FDS015", Severity.WARNING, detail)
 
 
+def _gap_start(values: bytes, sync: int) -> int:
+    start = sync
+    while start > 0 and values[start - 1] == GAP_VALUE:
+        start -= 1
+    return start
+
+
+def _clean_block_at(values: bytes, gap: int, pending: int) -> bool:
+    data, _, needed = _decode_region(values, gap, pending)
+    if not data or data[0] != SYNC_MARK or needed is None or len(data) < needed:
+        return False
+    body = data[1:needed]
+    return decode_crc(body[-CRC_SIZE:]) == block_crc(body[:-CRC_SIZE])
+
+
+def _resume_after_failure(values: bytes, start: int, cursor: int, pending: int) -> int:
+    gap = _gap_end(values, start + 1)
+    if gap is None or gap >= cursor or not _clean_block_at(values, gap, pending):
+        return cursor
+    return _gap_start(values, gap)
+
+
 def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int, int], ...]]:
     findings: list[Diagnostic] = []
     blocks: list[Block] = []
@@ -504,6 +526,10 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
                     ),
                 )
         block = Block(kind=BlockKind(payload[0]), payload=payload, stored_crc=stored)
+        if block.kind is BlockKind.FILE_HEADER:
+            pending = FileHeader.parse(payload).size
+        blocks.append(block)
+        regions.append((gap, cursor))
         if stored != block_crc(payload):
             findings.append(
                 _diagnostic(
@@ -512,10 +538,7 @@ def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int,
                     {"stored": stored, "computed": block.computed_crc},
                 ),
             )
-        if block.kind is BlockKind.FILE_HEADER:
-            pending = FileHeader.parse(payload).size
-        blocks.append(block)
-        regions.append((gap, cursor))
+            cursor = _resume_after_failure(values, gap, cursor, pending)
 
     if not blocks:
         findings.append(_diagnostic("FDS014", Severity.ERROR, {"values": len(values)}))

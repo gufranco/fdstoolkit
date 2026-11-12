@@ -94,6 +94,10 @@ a factor of two and carry no tolerance.
 - `tests/fixtures/fdsstick/` holds a real read of the calibration side, written and
   read back by an FDSStick on firmware 3.12. The decoder must recover it exactly,
   the encoder must reproduce its pulses, and calibration must read it clean.
+- A block cut short, by a USB packet lost inside it for one, makes the decoder
+  read on through the gap behind it to collect the bits the block declares. After
+  a block fails its checksum, decoding resumes at the first gap past the block's
+  start where a block that passes its checksum begins.
 - Real reads carry pulses that fit no class before the first block and in the
   splices between blocks, never inside a block that read clean, so only pulses
   inside blocks count as read-line noise.
