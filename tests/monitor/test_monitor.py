@@ -20,6 +20,7 @@ from fdstoolkit.core.bios import REPAIR_HINTS
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.monitor import (
+    FIXED_SPOT,
     MAX_READS,
     NOISY_PULSES,
     NOISY_READ,
@@ -642,6 +643,67 @@ def test_a_read_whose_failures_lean_with_speed_carries_no_noise_hint() -> None:
     )
 
     assert NOISY_READ not in result.headline
+
+
+STRAYS = 20
+STRAY_SPACING = 40
+STRAY_START = 60
+DATA_BLOCK = 3
+
+
+def with_strays(side: Side, *, shift: int, lead: int) -> bytes:
+    values = bytearray(unpack_raw03(stream(side)))
+    start, _ = block_regions(bytes(values))[DATA_BLOCK]
+    for number in range(STRAYS):
+        values[start + STRAY_START + number * STRAY_SPACING + shift] = 3
+    return pack_raw03(bytes(lead) + bytes(values))
+
+
+def test_stray_pulses_at_the_same_places_on_two_reads_name_the_disk() -> None:
+    side = reference_side()
+    reads = (
+        sample(with_strays(side, shift=0, lead=0), side),
+        sample(with_strays(side, shift=0, lead=STRAY_SPACING * 13), side),
+    )
+
+    headline = Calibration(mode=Mode.SPEED, samples=reads).headline
+
+    assert headline.endswith(FIXED_SPOT)
+    assert NOISY_READ not in headline
+
+
+def test_stray_pulses_that_move_between_reads_name_the_read_line() -> None:
+    side = reference_side()
+    reads = (
+        sample(with_strays(side, shift=0, lead=0), side),
+        sample(with_strays(side, shift=STRAY_SPACING // 4, lead=0), side),
+    )
+
+    headline = Calibration(mode=Mode.SPEED, samples=reads).headline
+
+    assert headline.endswith(NOISY_READ)
+
+
+def test_noisy_reads_with_no_recorded_positions_keep_the_read_line_hint() -> None:
+    reads = (
+        noisy_sample(invalid=NOISY_PULSES, leaning=0),
+        noisy_sample(invalid=NOISY_PULSES, leaning=0),
+    )
+
+    headline = Calibration(mode=Mode.SPEED, samples=reads).headline
+
+    assert headline.endswith(NOISY_READ)
+
+
+def test_reads_too_noisy_for_any_block_with_noise_at_the_same_places_name_the_disk() -> None:
+    side = reference_side()
+    noise = pack_raw03(bytes([3, 0]) * NOISY_PULSES * SKIP_SYNC)
+
+    headline = Calibration(
+        mode=Mode.SPEED, samples=(sample(noise, side), sample(noise, side))
+    ).headline
+
+    assert headline.endswith(FIXED_SPOT)
 
 
 def test_a_few_invalid_pulses_carry_no_noise_hint() -> None:

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import re
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from itertools import groupby
+from operator import itemgetter
 from typing import Final, Protocol
 
 from fdstoolkit.build.calibration import matching_side
@@ -34,11 +37,23 @@ NOISY_PULSES: Final = 16
 SPLICE_FIRST: Final = 16
 SPLICE_VALUES: Final = 160
 INVALID_PULSE: Final = re.compile(bytes([MAX_CLASS]))
+MARK_TOLERANCE: Final = 8
+FIXED_SHARE: Final = 0.5
+NO_BLOCK: Final = -1
 NOISY_READ: Final = (
     ". Most failing pulses fit no class at all, which points at electrical noise on the read "
-    "line more than at speed. If the USB link reported no skipped packets, the FDSStick's "
+    "line more than at speed. Noise moves between reads while a damaged or overwritten spot "
+    "on the disk stays put, so a second read tells them apart. If the USB link reported no "
+    "skipped packets, the FDSStick's "
     "author found that a series resistor of about 10k on the READ DATA pin, pin 9 of the "
     "FDSStick pinout, helps with read errors"
+)
+
+FIXED_SPOT: Final = (
+    ". Most failing pulses fit no class at all and sit at the same places on every read, so "
+    "they are on the disk rather than on the read line: a damaged, worn or overwritten spot. "
+    "Write the side again from a good image; if it still fails at the same place, the surface "
+    "is damaged. Judge the drive with another disk meanwhile"
 )
 
 RECOGNISED: Final = (
@@ -166,6 +181,7 @@ class SideSample:
     found: tuple[bool, ...] = ()
     kinds: tuple[BlockKind, ...] = ()
     lead_in: int | None = None
+    marks: tuple[tuple[int, int], ...] = ()
 
     @property
     def console_error(self) -> int | None:
@@ -220,14 +236,23 @@ class SideSample:
         return self.invalid >= NOISY_PULSES and self.invalid > self.short + self.long
 
 
-def _invalid(values: bytes, *, declared: int) -> int:
+def _marks(values: bytes, *, declared: int) -> tuple[tuple[int, int], ...]:
     regions = block_regions(values)
     pulses = tuple(found.start() for found in INVALID_PULSE.finditer(values))
     if not regions:
-        return len(pulses)
-    first, _ = regions[0]
+        return tuple((NO_BLOCK, index) for index in pulses)
+    starts = [start for start, _ in regions]
     last = regions[declared - 1][1] if 0 < declared <= len(regions) else len(values)
-    return sum(1 for index in pulses if first <= index < last and not _in_splice(index, regions))
+    return tuple(
+        _mark(index, starts)
+        for index in pulses
+        if starts[0] <= index < last and not _in_splice(index, regions)
+    )
+
+
+def _mark(index: int, starts: Sequence[int]) -> tuple[int, int]:
+    block = bisect_right(starts, index) - 1
+    return block, index - starts[block]
 
 
 def _in_splice(index: int, regions: Sequence[tuple[int, int]]) -> bool:
@@ -306,7 +331,8 @@ def _measured(
     reference: Side | None,
     learned: Mapping[Key, bytes],
 ) -> SideSample:
-    invalid = _invalid(values, declared=_declared_blocks(decoded))
+    marks = _marks(values, declared=_declared_blocks(decoded))
+    invalid = len(marks)
     if reference is None:
         short, long, compared = _against_learned(values, decoded, learned)
         unread = max(_declared_blocks(decoded) - len(decoded), 0)
@@ -315,6 +341,7 @@ def _measured(
             short=short,
             long=long,
             invalid=invalid,
+            marks=marks,
             compared=compared,
             referenced=compared > 0,
             found=(True,) * len(decoded) + (False,) * unread if unread else (),
@@ -340,6 +367,7 @@ def _measured(
         short=short,
         long=long,
         invalid=invalid,
+        marks=marks,
         compared=compared,
         referenced=True,
         found=tuple(region is not None for _, region in placed),
@@ -436,13 +464,39 @@ class Calibration:
         window = (
             f"; the last {sum(spread.values())} reads: {counted}" if len(self.samples) > 1 else ""
         )
-        noise = NOISY_READ if last.noisy else ""
+        noise = _noise_note(self.samples)
         return f"{verdict(self.mode, last)}: {advice(self.mode, last)}{window}{noise}"
 
     @property
     def spread(self) -> dict[str, int]:
         recent = Counter(verdict(self.mode, sample) for sample in self.samples[-SPREAD_READS:])
         return dict(recent.most_common())
+
+
+def _noise_note(samples: Sequence[SideSample]) -> str:
+    last = samples[-1]
+    if not last.noisy:
+        return ""
+    earlier = next((sample for sample in reversed(samples[:-1]) if sample.noisy), None)
+    if earlier is not None and _fixed_share(earlier.marks, last.marks) >= FIXED_SHARE:
+        return FIXED_SPOT
+    return NOISY_READ
+
+
+def _fixed_share(earlier: Sequence[tuple[int, int]], current: Sequence[tuple[int, int]]) -> float:
+    if not current:
+        return 0.0
+    offsets = {
+        block: tuple(offset for _, offset in group)
+        for block, group in groupby(sorted(earlier), key=itemgetter(0))
+    }
+    recurring = sum(1 for block, offset in current if _near(offsets.get(block, ()), offset))
+    return recurring / len(current)
+
+
+def _near(offsets: Sequence[int], offset: int) -> bool:
+    position = bisect_left(offsets, offset - MARK_TOLERANCE)
+    return position < len(offsets) and offsets[position] <= offset + MARK_TOLERANCE
 
 
 def _clean(mode: Mode, current: SideSample) -> bool:
