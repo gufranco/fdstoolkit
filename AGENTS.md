@@ -110,10 +110,13 @@ a factor of two and carry no tolerance.
 - hidapi on macOS answers a write the stick did not take with -1 after five
   seconds instead of raising. A refused packet is sent once more and never
   skipped past; refused twice before packet 400 is a link fault, and after it
-  the side is full. The first read after a finished write fails once while the
-  stick settles, so that read alone is tried twice. A transport error on a read
-  or a write becomes a link fault, which every caller reports, and a read that
-  fails after its first packet is never retried.
+  the side is full. The first read after a finished write is refused while the
+  drive settles, seen up to 6.6 s after the finish and sometimes after a stale
+  first reply, so that read alone is tried up to eight times, each in its own
+  watchdog window; a refusal takes at least 1.5 s, so eight cover twice the
+  longest settle seen. A transport error on a read or a write becomes a link
+  fault, which every caller reports, and a read that fails after it kept data
+  is never retried.
 - Every real read carries 1,000 to 1,500 stray pulses in its first 3,700
   values while the drive settles, and a burst among them can frame a false
   block. Decoding starts at the first disk information block that passes its

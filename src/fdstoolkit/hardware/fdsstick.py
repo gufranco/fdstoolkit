@@ -31,7 +31,7 @@ MODE_READ: Final = 0x00
 MODE_WRITE: Final = 0x01
 SETTLED_PACKETS: Final = 400
 PACKET_ATTEMPTS: Final = 2
-READS_AFTER_WRITE: Final = 2
+READS_AFTER_WRITE: Final = 8
 WRITE_FILL: Final = bytes([WRITE_GAP_BYTE])
 
 LEGACY_REPORTS: Final = (0x11, 0x12, 0x13, 0x14)
@@ -157,12 +157,15 @@ class FdsStick:
     def read_raw_side(self, *, what: str = "reading a side", mode: int = MODE_READ) -> bytes:
         retries = READS_AFTER_WRITE - 1 if self._written else 0
         self._written = False
+        for _ in range(retries):
+            try:
+                return self._watched_read(what, mode)
+            except NothingReadError:
+                continue
+        return self._watched_read(what, mode)
+
+    def _watched_read(self, what: str, mode: int) -> bytes:
         with self._watchdog.side(what):
-            for _ in range(retries):
-                try:
-                    return self._read_raw(mode)
-                except NothingReadError:
-                    continue
             return self._read_raw(mode)
 
     def _read_raw(self, mode: int) -> bytes:
@@ -172,7 +175,7 @@ class FdsStick:
         opening = True
 
         while len(out) < RAW_SIDE_LIMIT:
-            packet = self._chunk(opening=opening)
+            packet = self._chunk(opening=not out)
             if len(packet) < HEADER_BYTES:
                 message = "the device stopped answering during the read"
                 raise HardwareFaultError(message, kind=FaultKind.LINK)

@@ -14,6 +14,7 @@ from fdstoolkit.hardware.fdsstick import (
     MODE_WRITE,
     PRODUCT_ID,
     RAW_SIDE_LIMIT,
+    READS_AFTER_WRITE,
     SETTLED_PACKETS,
     VENDOR_ID,
     WRITE_PAYLOAD,
@@ -234,8 +235,8 @@ def test_a_read_with_no_write_before_it_is_not_tried_again() -> None:
     assert device.starts == [MODE_READ]
 
 
-def test_a_stick_still_busy_on_the_second_read_after_a_write_fails_the_read() -> None:
-    device = FakeFdsStick(side=raw_side(), busy_reads_after_finish=2)
+def test_a_stick_busy_through_every_read_after_a_write_fails_the_read() -> None:
+    device = FakeFdsStick(side=raw_side(), busy_reads_after_finish=READS_AFTER_WRITE)
     stick = stick_over(device)
     stick.write_raw_side(bytes(WRITE_PAYLOAD))
 
@@ -243,7 +244,7 @@ def test_a_stick_still_busy_on_the_second_read_after_a_write_fails_the_read() ->
         stick.read_raw_side()
 
     assert raised.value.kind is FaultKind.LINK
-    assert device.starts == [MODE_WRITE, MODE_READ, MODE_READ]
+    assert device.starts == [MODE_WRITE] + [MODE_READ] * READS_AFTER_WRITE
 
 
 def test_a_stick_pulled_during_a_write_is_a_link_fault() -> None:
@@ -266,6 +267,30 @@ def test_a_stick_pulled_during_a_read_is_a_link_fault_and_not_read_again() -> No
 
     assert raised.value.kind is FaultKind.LINK
     assert device.starts == [MODE_WRITE, MODE_READ]
+
+
+def test_a_stick_settling_for_several_reads_after_a_write_is_waited_out() -> None:
+    side = raw_side()[: 4 * CHUNK_PAYLOAD]
+    device = FakeFdsStick(side=side, busy_reads_after_finish=READS_AFTER_WRITE - 1)
+    stick = stick_over(device)
+    stick.write_raw_side(bytes(WRITE_PAYLOAD))
+
+    read = stick.read_raw_side()
+
+    assert read == side
+    assert device.starts == [MODE_WRITE] + [MODE_READ] * READS_AFTER_WRITE
+
+
+def test_a_stale_reply_before_a_settling_stick_refuses_is_still_tried_again() -> None:
+    side = raw_side()[: 4 * CHUNK_PAYLOAD]
+    device = FakeFdsStick(side=side, stale_first=0xFF, busy_reads_after_finish=1)
+    stick = stick_over(device)
+    stick.write_raw_side(bytes(WRITE_PAYLOAD))
+
+    read = stick.read_raw_side()
+
+    assert read == side
+    assert device.starts == [MODE_WRITE, MODE_READ, MODE_READ]
 
 
 def test_a_write_sends_nothing_after_its_data() -> None:

@@ -33,7 +33,8 @@ class FakeFdsStick:
     the Rust tool's wrapping_add reads them, and it stops accepting write data once the
     disk has turned, which is the condition that tool treats as a full disk. Like hidapi
     on a real stick, a refused write packet returns -1 rather than raising, and a read
-    started right after a finished write fails until the stick has settled. A stick
+    started right after a finished write fails until the stick has settled, after a
+    stale first reply when one is set. A stick
     pulled from the port raises from then on, on reads and writes alike.
     """
 
@@ -110,6 +111,8 @@ class FakeFdsStick:
         if self.unplugged_at is not None and self.served >= self.unplugged_at:
             raise DeviceRefusedError(UNPLUGGED)
         if self.busy_left:
+            if self.stale_first is not None and self.served == 0:
+                return list(self._chunk())
             self.busy_left -= 1
             message = "read error"
             raise DeviceRefusedError(message)
