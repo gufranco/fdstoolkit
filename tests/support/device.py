@@ -34,7 +34,8 @@ class FakeFdsStick:
     disk has turned, which is the condition that tool treats as a full disk. Like hidapi
     on a real stick, a refused write packet returns -1 rather than raising, and a read
     started right after a finished write fails until the stick has settled, after a
-    stale first reply when one is set. A stick
+    stale first reply when one is set. A write started while the drive is still
+    scanning takes its first packet and refuses the rest, as a real stick does. A stick
     pulled from the port raises from then on, on reads and writes alike.
     """
 
@@ -46,6 +47,7 @@ class FakeFdsStick:
     refused_packets: tuple[int, ...] = ()
     busy_reads_after_finish: int = 0
     unplugged_at: int | None = None
+    unready_sessions: int = 0
     short_reply: bool = False
     echoes: bool = False
 
@@ -59,6 +61,7 @@ class FakeFdsStick:
     finishes: list[bytes] = field(default_factory=list[bytes])
     refusals: list[int] = field(default_factory=list[int])
     busy_left: int = 0
+    write_sessions: int = 0
 
     def open(self, vendor_id: int, product_id: int) -> None:
         self.opened = (vendor_id, product_id)
@@ -81,6 +84,7 @@ class FakeFdsStick:
     def _turn_over_the_write(self, mode: int) -> None:
         if mode == MODE_WRITE:
             self.written = bytearray()
+            self.write_sessions += 1
         elif self.echoes and self.written:
             self.side = encode_block_stream(decode_write_stream(bytes(self.written)))
 
@@ -92,6 +96,8 @@ class FakeFdsStick:
         packet = len(self.written) // WRITE_PAYLOAD
         if self.unplugged_at is not None and packet >= self.unplugged_at:
             raise DeviceRefusedError(UNPLUGGED)
+        if self.write_sessions <= self.unready_sessions and packet >= 1:
+            return -1
         if self.accepts_writes is not None and packet >= self.accepts_writes:
             return -1
         if packet in self.refused_packets and packet not in self.refusals:

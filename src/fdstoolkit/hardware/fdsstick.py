@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import importlib
-from collections.abc import Iterator, Sequence
+import time
+from collections.abc import Callable, Iterator, Sequence
 from enum import IntEnum
 from typing import Final, Protocol, cast, runtime_checkable
 
 from fdstoolkit.codecs.raw import (
     WRITE_GAP_BYTE,
+    WRITE_HEADER,
+    WRITE_LEAD_IN_BYTES,
     decode_packed,
     encode_write_stream,
 )
@@ -32,6 +35,9 @@ MODE_WRITE: Final = 0x01
 SETTLED_PACKETS: Final = 400
 PACKET_ATTEMPTS: Final = 2
 READS_AFTER_WRITE: Final = 8
+WRITE_STARTS: Final = 8
+SETTLE_PAUSE_S: Final = 2.0
+LEAD_IN_PACKETS: Final = (len(WRITE_HEADER) + WRITE_LEAD_IN_BYTES) // WRITE_PAYLOAD
 WRITE_FILL: Final = bytes([WRITE_GAP_BYTE])
 
 LEGACY_REPORTS: Final = (0x11, 0x12, 0x13, 0x14)
@@ -61,6 +67,15 @@ def _link_lost(what: str, error: OSError) -> str:
     return (
         f"the stick failed {what} ({error}). Unplug it, plug it back in and run the command again"
     )
+
+
+class DriveNotReadyError(HardwareFaultError):
+    def __init__(self, packets: int) -> None:
+        message = (
+            f"the device stopped accepting data after {packets} packet(s), inside the "
+            "lead-in, so the drive never became ready to write and no block was written"
+        )
+        super().__init__(message, kind=FaultKind.LINK)
 
 
 class NothingReadError(HardwareFaultError):
@@ -96,8 +111,10 @@ class FdsStick:
         *,
         ceiling: float = UNMEASURED_CEILING_S,
         lock: DriveLock | None = None,
+        pause: Callable[[float], None] = time.sleep,
     ) -> None:
         self._transport = transport
+        self._pause = pause
         self._lock = lock
         self._watchdog = Watchdog(on_stall=self.close, ceiling=ceiling)
         self._captures: list[Capture] = []
@@ -161,7 +178,7 @@ class FdsStick:
             try:
                 return self._watched_read(what, mode)
             except NothingReadError:
-                continue
+                self._pause(SETTLE_PAUSE_S)
         return self._watched_read(what, mode)
 
     def _watched_read(self, what: str, mode: int) -> bytes:
@@ -204,6 +221,16 @@ class FdsStick:
         return bytes(out)
 
     def write_raw_side(self, values: bytes, *, what: str = "writing a side") -> None:
+        for _ in range(WRITE_STARTS - 1):
+            try:
+                self._watched_write(values, what)
+            except DriveNotReadyError:
+                self._pause(SETTLE_PAUSE_S)
+                continue
+            return
+        self._watched_write(values, what)
+
+    def _watched_write(self, values: bytes, what: str) -> None:
         with self._watchdog.side(what, writing=True):
             self._write_raw(values)
             finish = bytes([ReportId.FINISH_WRITE, 0x00])
@@ -217,6 +244,8 @@ class FdsStick:
             packet = bytes([ReportId.DISK_WRITE]) + chunk.ljust(WRITE_PAYLOAD, WRITE_FILL)
             if self._delivered(packet):
                 continue
+            if index < LEAD_IN_PACKETS:
+                raise DriveNotReadyError(index)
             if index < SETTLED_PACKETS:
                 message = f"the device stopped accepting data after {index} packet(s)"
                 raise HardwareFaultError(message, kind=FaultKind.LINK)

@@ -9,15 +9,18 @@ from fdstoolkit.codecs.raw import encode_block_stream, encode_raw03
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.hardware.fdsstick import (
     CHUNK_PAYLOAD,
+    LEAD_IN_PACKETS,
     LEGACY_REPORTS,
     MODE_READ,
     MODE_WRITE,
     PRODUCT_ID,
     RAW_SIDE_LIMIT,
     READS_AFTER_WRITE,
+    SETTLE_PAUSE_S,
     SETTLED_PACKETS,
     VENDOR_ID,
     WRITE_PAYLOAD,
+    WRITE_STARTS,
     FdsStick,
     HidApiTransport,
     ReportId,
@@ -36,8 +39,9 @@ def raw_side(packets: int = PACKETS_PAST_THE_WRAP) -> bytes:
     return bytes(range(256)) * (packets * CHUNK_PAYLOAD // 256 + 1)
 
 
-def stick_over(device: FakeFdsStick) -> FdsStick:
-    return FdsStick(HidApiTransport(device))
+def stick_over(device: FakeFdsStick, pauses: list[float] | None = None) -> FdsStick:
+    taken = pauses if pauses is not None else []
+    return FdsStick(HidApiTransport(device), pause=taken.append)
 
 
 def test_the_device_is_the_one_both_reference_tools_open() -> None:
@@ -186,6 +190,38 @@ def test_a_device_that_stops_early_is_a_link_fault() -> None:
     assert raised.value.kind is FaultKind.LINK
 
 
+def test_a_write_the_drive_was_not_ready_for_is_started_again_after_a_pause() -> None:
+    body = raw_side()[: 30 * WRITE_PAYLOAD]
+    device = FakeFdsStick(unready_sessions=2)
+    pauses: list[float] = []
+
+    stick_over(device, pauses).write_raw_side(body)
+
+    assert bytes(device.written) == body
+    assert device.starts == [MODE_WRITE] * 3
+    assert pauses == [SETTLE_PAUSE_S] * 2
+
+
+def test_a_drive_never_ready_to_write_is_a_link_fault_after_every_start() -> None:
+    device = FakeFdsStick(unready_sessions=WRITE_STARTS)
+
+    with pytest.raises(HardwareFaultError, match="never became ready") as raised:
+        stick_over(device).write_raw_side(bytes(WRITE_PAYLOAD * 30))
+
+    assert raised.value.kind is FaultKind.LINK
+    assert device.starts == [MODE_WRITE] * WRITE_STARTS
+
+
+def test_a_device_that_stops_after_the_lead_in_is_not_started_again() -> None:
+    device = FakeFdsStick(accepts_writes=LEAD_IN_PACKETS)
+
+    with pytest.raises(HardwareFaultError, match="stopped accepting data") as raised:
+        stick_over(device).write_raw_side(bytes(WRITE_PAYLOAD * (LEAD_IN_PACKETS + 5)))
+
+    assert raised.value.kind is FaultKind.LINK
+    assert device.starts == [MODE_WRITE]
+
+
 def test_a_device_that_stops_once_the_disk_has_turned_is_not_a_fault() -> None:
     device = FakeFdsStick(accepts_writes=SETTLED_PACKETS)
 
@@ -213,16 +249,18 @@ def test_a_refused_packet_is_never_skipped_past() -> None:
     assert bytes(device.written) == body
 
 
-def test_a_side_read_right_after_a_write_is_tried_again() -> None:
+def test_a_side_read_right_after_a_write_is_tried_again_after_a_pause() -> None:
     side = raw_side()[: 4 * CHUNK_PAYLOAD]
     device = FakeFdsStick(side=side, busy_reads_after_finish=1)
-    stick = stick_over(device)
+    pauses: list[float] = []
+    stick = stick_over(device, pauses)
     stick.write_raw_side(bytes(WRITE_PAYLOAD))
 
     read = stick.read_raw_side()
 
     assert read == side
     assert device.starts == [MODE_WRITE, MODE_READ, MODE_READ]
+    assert pauses == [SETTLE_PAUSE_S]
 
 
 def test_a_read_with_no_write_before_it_is_not_tried_again() -> None:

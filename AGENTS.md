@@ -112,11 +112,14 @@ a factor of two and carry no tolerance.
   skipped past; refused twice before packet 400 is a link fault, and after it
   the side is full. The first read after a finished write is refused while the
   drive settles, seen up to 6.6 s after the finish and sometimes after a stale
-  first reply, so that read alone is tried up to eight times, each in its own
-  watchdog window; a refusal takes at least 1.5 s, so eight cover twice the
-  longest settle seen. A transport error on a read or a write becomes a link
-  fault, which every caller reports, and a read that fails after it kept data
-  is never retried.
+  first reply. A write started after a read is refused inside its lead-in until
+  the drive has finished its scan: on a short side it failed with a pause of up
+  to 8 s after the read and went through after 12 s. A refusal can take 5 s or
+  return at once, so both are retried on time rather than on attempts: up to
+  eight tries 2 s apart, each in its own watchdog window. A write refused inside
+  the lead-in has written no block, so the whole session starts again. A
+  transport error on a read or a write becomes a link fault, which every caller
+  reports, and a read that fails after it kept data is never retried.
 - Every real read carries 1,000 to 1,500 stray pulses in its first 3,700
   values while the drive settles, and a burst among them can frame a false
   block. Decoding starts at the first disk information block that passes its
