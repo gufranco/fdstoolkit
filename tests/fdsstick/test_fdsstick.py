@@ -39,8 +39,9 @@ class FakeTransport:
             return bytes([report_id]) + bytes(min(length, 8) - 1)
         return queue.popleft()
 
-    def write_output(self, data: bytes) -> None:
+    def write_output(self, data: bytes) -> int:
         self.outputs.append(bytes(data))
+        return len(data)
 
     def close(self) -> None:
         self.closed = True
@@ -62,11 +63,11 @@ class HangingTransport(FakeTransport):
         self.answers -= 1
         return super().get_feature(report_id, length)
 
-    def write_output(self, data: bytes) -> None:
+    def write_output(self, data: bytes) -> int:
         if self.answers <= 0:
             self.gate.wait()
         self.answers -= 1
-        super().write_output(data)
+        return super().write_output(data)
 
     def close(self) -> None:
         super().close()

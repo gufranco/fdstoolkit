@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from device import FakeFdsStick
+from device import UNPLUGGED, FakeFdsStick
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -193,6 +193,81 @@ def test_a_device_that_stops_once_the_disk_has_turned_is_not_a_fault() -> None:
     assert len(device.written) == SETTLED_PACKETS * WRITE_PAYLOAD
 
 
+def test_a_packet_the_device_refuses_once_is_sent_again() -> None:
+    body = raw_side()[: 5 * WRITE_PAYLOAD]
+    device = FakeFdsStick(refused_packets=(2,))
+
+    stick_over(device).write_raw_side(body)
+
+    assert bytes(device.written) == body
+    assert device.refusals == [2]
+
+
+def test_a_refused_packet_is_never_skipped_past() -> None:
+    body = raw_side()[: 3 * WRITE_PAYLOAD]
+    device = FakeFdsStick(refused_packets=(0, 1, 2))
+
+    stick_over(device).write_raw_side(body)
+
+    assert bytes(device.written) == body
+
+
+def test_a_side_read_right_after_a_write_is_tried_again() -> None:
+    side = raw_side()[: 4 * CHUNK_PAYLOAD]
+    device = FakeFdsStick(side=side, busy_reads_after_finish=1)
+    stick = stick_over(device)
+    stick.write_raw_side(bytes(WRITE_PAYLOAD))
+
+    read = stick.read_raw_side()
+
+    assert read == side
+    assert device.starts == [MODE_WRITE, MODE_READ, MODE_READ]
+
+
+def test_a_read_with_no_write_before_it_is_not_tried_again() -> None:
+    device = FakeFdsStick(side=raw_side(), busy_left=1)
+
+    with pytest.raises(HardwareFaultError, match="read error") as raised:
+        stick_over(device).read_raw_side()
+
+    assert raised.value.kind is FaultKind.LINK
+    assert device.starts == [MODE_READ]
+
+
+def test_a_stick_still_busy_on_the_second_read_after_a_write_fails_the_read() -> None:
+    device = FakeFdsStick(side=raw_side(), busy_reads_after_finish=2)
+    stick = stick_over(device)
+    stick.write_raw_side(bytes(WRITE_PAYLOAD))
+
+    with pytest.raises(HardwareFaultError, match="read error") as raised:
+        stick.read_raw_side()
+
+    assert raised.value.kind is FaultKind.LINK
+    assert device.starts == [MODE_WRITE, MODE_READ, MODE_READ]
+
+
+def test_a_stick_pulled_during_a_write_is_a_link_fault() -> None:
+    device = FakeFdsStick(unplugged_at=2)
+
+    with pytest.raises(HardwareFaultError, match=UNPLUGGED) as raised:
+        stick_over(device).write_raw_side(bytes(4 * WRITE_PAYLOAD))
+
+    assert raised.value.kind is FaultKind.LINK
+    assert len(device.written) == 2 * WRITE_PAYLOAD
+
+
+def test_a_stick_pulled_during_a_read_is_a_link_fault_and_not_read_again() -> None:
+    device = FakeFdsStick(side=raw_side(), unplugged_at=3)
+    stick = stick_over(device)
+    stick.write_raw_side(bytes(WRITE_PAYLOAD))
+
+    with pytest.raises(HardwareFaultError, match=UNPLUGGED) as raised:
+        stick.read_raw_side()
+
+    assert raised.value.kind is FaultKind.LINK
+    assert device.starts == [MODE_WRITE, MODE_READ]
+
+
 def test_a_write_sends_nothing_after_its_data() -> None:
     device = FakeFdsStick()
 
@@ -308,6 +383,17 @@ def test_a_write_through_the_driver_reads_back_as_written() -> None:
 
     assert report.verified
     assert device.starts == [MODE_READ, MODE_WRITE, MODE_READ]
+
+
+def test_a_write_reads_back_while_the_stick_settles_after_finishing() -> None:
+    device = FakeFdsStick(
+        side=encode_raw03(formatted("OLD"), side=0), echoes=True, busy_reads_after_finish=1
+    )
+    stick = stick_over(device)
+
+    report = write_verified(stick, stick, formatted("NEW"), confirm=lambda _: True, backup=None)
+
+    assert report.verified
 
 
 def test_a_write_the_device_drops_is_caught_by_the_driver_readback() -> None:

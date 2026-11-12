@@ -107,6 +107,13 @@ a factor of two and carry no tolerance.
   block that read clean. Noise is therefore counted everywhere from the first
   block on except 16 to 160 values after each block, and a read where no block
   frames at all counts every such pulse, so the noisiest line still warns.
+- hidapi on macOS answers a write the stick did not take with -1 after five
+  seconds instead of raising. A refused packet is sent once more and never
+  skipped past; refused twice before packet 400 is a link fault, and after it
+  the side is full. The first read after a finished write fails once while the
+  stick settles, so that read alone is tried twice. A transport error on a read
+  or a write becomes a link fault, which every caller reports, and a read that
+  fails after its first packet is never retried.
 - The read and write paths have run against one FDSStick on firmware 3.12. Every
   other driver test drives a recording stand-in, which proves which bytes we send
   and not that a device accepts them.

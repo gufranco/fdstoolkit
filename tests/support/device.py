@@ -18,6 +18,9 @@ MODE_READ = 0x00
 MODE_WRITE = 0x01
 
 
+UNPLUGGED = "device unplugged"
+
+
 class DeviceRefusedError(OSError):
     pass
 
@@ -28,7 +31,10 @@ class FakeFdsStick:
 
     It serves a raw side in 254-byte chunks numbered with a wrapping counter, the way
     the Rust tool's wrapping_add reads them, and it stops accepting write data once the
-    disk has turned, which is the condition that tool treats as a full disk.
+    disk has turned, which is the condition that tool treats as a full disk. Like hidapi
+    on a real stick, a refused write packet returns -1 rather than raising, and a read
+    started right after a finished write fails until the stick has settled. A stick
+    pulled from the port raises from then on, on reads and writes alike.
     """
 
     side: bytes = b""
@@ -36,6 +42,9 @@ class FakeFdsStick:
     drop_after: int | None = None
     pads_last_chunk: bool = False
     accepts_writes: int | None = None
+    refused_packets: tuple[int, ...] = ()
+    busy_reads_after_finish: int = 0
+    unplugged_at: int | None = None
     short_reply: bool = False
     echoes: bool = False
 
@@ -47,6 +56,8 @@ class FakeFdsStick:
     starts: list[int] = field(default_factory=list[int])
     seen: list[int] = field(default_factory=list[int])
     finishes: list[bytes] = field(default_factory=list[bytes])
+    refusals: list[int] = field(default_factory=list[int])
+    busy_left: int = 0
 
     def open(self, vendor_id: int, product_id: int) -> None:
         self.opened = (vendor_id, product_id)
@@ -58,6 +69,7 @@ class FakeFdsStick:
         self.seen.append(data[0])
         if data[0] == ID_FINISH_WRITE:
             self.finishes.append(bytes(data))
+            self.busy_left = self.busy_reads_after_finish
         if data[0] == ID_DISK_START:
             self.mode = data[1]
             self.starts.append(data[1])
@@ -76,12 +88,14 @@ class FakeFdsStick:
         if data[0] != ID_DISK_WRITE:
             message = f"the device was sent report {data[0]:#04x} on the output endpoint"
             raise DeviceRefusedError(message)
-        if (
-            self.accepts_writes is not None
-            and len(self.written) // WRITE_PAYLOAD >= self.accepts_writes
-        ):
-            message = "the disk has turned and the device is no longer accepting data"
-            raise DeviceRefusedError(message)
+        packet = len(self.written) // WRITE_PAYLOAD
+        if self.unplugged_at is not None and packet >= self.unplugged_at:
+            raise DeviceRefusedError(UNPLUGGED)
+        if self.accepts_writes is not None and packet >= self.accepts_writes:
+            return -1
+        if packet in self.refused_packets and packet not in self.refusals:
+            self.refusals.append(packet)
+            return -1
         self.written += data[1:]
         return len(data)
 
@@ -93,6 +107,12 @@ class FakeFdsStick:
             raise DeviceRefusedError(message)
         if self.short_reply:
             return [report_id]
+        if self.unplugged_at is not None and self.served >= self.unplugged_at:
+            raise DeviceRefusedError(UNPLUGGED)
+        if self.busy_left:
+            self.busy_left -= 1
+            message = "read error"
+            raise DeviceRefusedError(message)
         return list(self._chunk())
 
     def _sequence(self) -> int:

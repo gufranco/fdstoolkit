@@ -30,6 +30,8 @@ FIRST_SEQUENCE: Final = 1
 MODE_READ: Final = 0x00
 MODE_WRITE: Final = 0x01
 SETTLED_PACKETS: Final = 400
+PACKET_ATTEMPTS: Final = 2
+READS_AFTER_WRITE: Final = 2
 WRITE_FILL: Final = bytes([WRITE_GAP_BYTE])
 
 LEGACY_REPORTS: Final = (0x11, 0x12, 0x13, 0x14)
@@ -55,6 +57,17 @@ def _after(sequence: int) -> int:
     return (sequence + 1) & SEQUENCE_MASK
 
 
+def _link_lost(what: str, error: OSError) -> str:
+    return (
+        f"the stick failed {what} ({error}). Unplug it, plug it back in and run the command again"
+    )
+
+
+class NothingReadError(HardwareFaultError):
+    def __init__(self, error: OSError) -> None:
+        super().__init__(_link_lost("to start a read", error), kind=FaultKind.LINK)
+
+
 class ReportId(IntEnum):
     DISK_START = 0x10
     DISK_CHUNK = 0x11
@@ -68,7 +81,7 @@ class HidTransport(Protocol):
 
     def get_feature(self, report_id: int, length: int) -> bytes: ...
 
-    def write_output(self, data: bytes) -> None: ...
+    def write_output(self, data: bytes) -> int: ...
 
     def close(self) -> None: ...
 
@@ -90,6 +103,7 @@ class FdsStick:
         self._captures: list[Capture] = []
         self._resyncs: list[tuple[int, int]] = []
         self._pulse: list[PulseFinding] = []
+        self._written = False
 
     @property
     def captures(self) -> tuple[Capture, ...]:
@@ -128,13 +142,27 @@ class FdsStick:
         start = bytes([ReportId.DISK_START, mode])
         self._watchdog.call(lambda: self._transport.send_feature(start))
 
-    def _chunk(self) -> bytes:
-        return self._watchdog.call(
-            lambda: self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
-        )
+    def _chunk(self, *, opening: bool) -> bytes:
+        try:
+            return self._watchdog.call(
+                lambda: self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
+            )
+        except OSError as error:
+            if opening:
+                raise NothingReadError(error) from error
+            raise HardwareFaultError(
+                _link_lost("during a read", error), kind=FaultKind.LINK
+            ) from error
 
     def read_raw_side(self, *, what: str = "reading a side", mode: int = MODE_READ) -> bytes:
+        retries = READS_AFTER_WRITE - 1 if self._written else 0
+        self._written = False
         with self._watchdog.side(what):
+            for _ in range(retries):
+                try:
+                    return self._read_raw(mode)
+                except NothingReadError:
+                    continue
             return self._read_raw(mode)
 
     def _read_raw(self, mode: int) -> bytes:
@@ -144,7 +172,7 @@ class FdsStick:
         opening = True
 
         while len(out) < RAW_SIDE_LIMIT:
-            packet = self._chunk()
+            packet = self._chunk(opening=opening)
             if len(packet) < HEADER_BYTES:
                 message = "the device stopped answering during the read"
                 raise HardwareFaultError(message, kind=FaultKind.LINK)
@@ -177,19 +205,31 @@ class FdsStick:
             self._write_raw(values)
             finish = bytes([ReportId.FINISH_WRITE, 0x00])
             self._watchdog.call(lambda: self._transport.send_feature(finish))
+            self._written = True
 
     def _write_raw(self, values: bytes) -> None:
         self._start(MODE_WRITE)
         for index, start in enumerate(range(0, len(values), WRITE_PAYLOAD)):
             chunk = values[start : start + WRITE_PAYLOAD]
             packet = bytes([ReportId.DISK_WRITE]) + chunk.ljust(WRITE_PAYLOAD, WRITE_FILL)
+            if self._delivered(packet):
+                continue
+            if index < SETTLED_PACKETS:
+                message = f"the device stopped accepting data after {index} packet(s)"
+                raise HardwareFaultError(message, kind=FaultKind.LINK)
+            break
+
+    def _delivered(self, packet: bytes) -> bool:
+        for _ in range(PACKET_ATTEMPTS):
             try:
-                self._watchdog.call(lambda packet=packet: self._transport.write_output(packet))
+                taken = self._watchdog.call(lambda: self._transport.write_output(packet))
             except OSError as error:
-                if index < SETTLED_PACKETS:
-                    message = f"the device stopped accepting data after {index} packet(s)"
-                    raise HardwareFaultError(message, kind=FaultKind.LINK) from error
-                break
+                raise HardwareFaultError(
+                    _link_lost("during a write", error), kind=FaultKind.LINK
+                ) from error
+            if taken >= 0:
+                return True
+        return False
 
     def read_side(self, side: int) -> Iterator[BlockRead]:
         packed = self.read_raw_side(what=f"reading side {side}")
@@ -236,8 +276,8 @@ class HidApiTransport:
             return answer
         return bytes([report_id]) + answer
 
-    def write_output(self, data: bytes) -> None:
-        self._device.write(data)
+    def write_output(self, data: bytes) -> int:
+        return self._device.write(data)
 
     def close(self) -> None:
         self._device.close()

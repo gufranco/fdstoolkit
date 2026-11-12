@@ -302,8 +302,8 @@ class SilentStick:
         self.released.wait()
         return b""
 
-    def write_output(self, data: bytes) -> None:
-        del data
+    def write_output(self, data: bytes) -> int:
+        return len(data)
 
     def close(self) -> None:
         self.released.set()
