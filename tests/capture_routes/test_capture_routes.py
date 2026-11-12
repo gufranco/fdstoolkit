@@ -214,22 +214,6 @@ def test_calibration_refuses_captures_with_no_read_of_that_side(client: TestClie
     assert "hold no read of side 1" in answer.json()["detail"]
 
 
-def test_replayed_captures_warn_that_a_timing_mode_shows_nothing(
-    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    no_drive(monkeypatch)
-    disk = disk_with_a_file()
-
-    job = run(
-        app,
-        client,
-        "/api/jobs/calibrate",
-        {"mode": "speed", "captures": b64(zipped(disk, (None,))), "timing_mode": 3},
-    )
-
-    assert job["steps"][0].startswith("warning: saved captures hold pulse classes")
-
-
 def test_grade_refuses_uploaded_captures_of_another_disk(client: TestClient) -> None:
     disk = disk_with_a_file()
     other, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name="OTH"))

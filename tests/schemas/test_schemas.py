@@ -26,7 +26,6 @@ from fdstoolkit.ui.schemas import (
     ProfileView,
     ReadsResult,
     ReportedFile,
-    RowsResult,
 )
 
 if TYPE_CHECKING:
@@ -109,7 +108,6 @@ def test_a_reads_view_carries_the_decay_direction() -> None:
 def test_a_job_result_is_read_back_as_the_model_that_made_it() -> None:
     dumped = DumpedResult(name="dump.fds", data="AA==", size=1, grade="clean")
     reported = ReportedFile(headline="written", file=FileResult(name="b.fds", data="AA==", size=1))
-    rows = RowsResult(headline="probe", rows=[{"mode": "0x02"}])
 
     views = [
         JobView.model_validate(
@@ -121,10 +119,10 @@ def test_a_job_result_is_read_back_as_the_model_that_made_it() -> None:
                 "result": made.model_dump(),
             }
         )
-        for made in (dumped, reported, rows)
+        for made in (dumped, reported)
     ]
 
-    assert [type(view.result) for view in views] == [DumpedResult, ReportedFile, RowsResult]
+    assert [type(view.result) for view in views] == [DumpedResult, ReportedFile]
 
 
 def test_a_kept_file_is_typed() -> None:
@@ -180,7 +178,6 @@ def job_result_samples() -> dict[type[BaseModel], BaseModel]:
             headline="h", mode="speed", rows=[row], ok=True, spread={}, timing=[]
         ),
         ReportedFile: ReportedFile(headline="written", file=file),
-        RowsResult: RowsResult(headline="probe", rows=[{"mode": "0x02"}]),
     }
 
 

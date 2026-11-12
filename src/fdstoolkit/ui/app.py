@@ -131,7 +131,6 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "dump": "/api/jobs/dump",
     "write": "/api/jobs/write",
     "surface": "/api/jobs/surface",
-    "probe": "/api/jobs/probe",
 }
 
 
@@ -343,7 +342,6 @@ def _register_hardware(app: FastAPI) -> None:
     app.add_api_route("/api/jobs/write", hardware_routes.write_job, methods=["POST"])
     app.add_api_route("/api/jobs/surface", hardware_routes.surface_job, methods=["POST"])
     app.add_api_route("/api/jobs/calibrate", hardware_routes.calibrate_job, methods=["POST"])
-    app.add_api_route("/api/jobs/probe", hardware_routes.probe_job, methods=["POST"])
     app.add_api_route("/api/jobs/current", hardware_routes.current_job, methods=["GET"])
     app.add_api_route("/api/jobs/{job_id}", hardware_routes.job_status, methods=["GET"])
     app.add_api_route("/api/jobs/{job_id}/answer", hardware_routes.job_answer, methods=["POST"])

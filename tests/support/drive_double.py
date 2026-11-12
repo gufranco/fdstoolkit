@@ -67,10 +67,10 @@ class SimulatedDrive:
         battery_ok: bool = True,
         ready: bool = True,
         plan: FaultPlan | None = None,
-        timing_mode: int | None = None,
+        sends_counts: bool = False,
     ) -> None:
         self._disk = disk
-        self._timing_mode = timing_mode
+        self._sends_counts = sends_counts
         self._write_protected = write_protected
         self._battery_ok = battery_ok
         self._ready = ready
@@ -181,12 +181,10 @@ class SimulatedDrive:
             )
 
     def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
-        del what
+        del what, mode
         self.read_count += 1
         packed = self._capture(self._side(self._raw_side()))
-        if mode and mode == self._timing_mode:
-            return counts_of(packed)
-        return packed
+        return counts_of(packed) if self._sends_counts else packed
 
     def _raw_side(self) -> int:
         return 0

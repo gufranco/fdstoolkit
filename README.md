@@ -684,7 +684,7 @@ Exit status is 0 only when every pattern held and the finish verified.
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--timing-mode N] [--json]
+fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--json]
 fdstoolkit calibrate speed|head --captures <bundle> [--reference <image>] [--side N] [--json]
 ```
 
@@ -796,42 +796,13 @@ The two speed figures differ by about a factor of two, and neither guide says wh
 
 Every read that finds a block also names its lead-in: the run of gap before the first block, in bits. The FDSStick's author notes that this pre-gap moves with the drive's calibration, and that one disk read twice by one drive never gives two identical raw captures, so a lead-in that shifts between reads while every block reads clean is the drive, not the disk. Compare dumps by their blocks, as `reads` and `consensus` do, never by hashing the captures.
 
-`--timing-mode` reads with the mode `probe` found, so every read also prints how long each pulse class ran, how widely it spread, and the bit rate those lengths give: `timing: short 62.1±1.2, medium 93.2±1.3, long 124.0±1.2 counts, spread 1.4%, smaller is better; bit rate 96.7 kHz, +0.3% from 96.4 kHz at an assumed 6 MHz capture clock, inside the ±10% the RAM adapter accepts`. A narrower spread means cleaner pulses, which is what the head adjustment is after; the FDSStick's author uses the same kind of spread to set the head. The bit rate is a live speed meter: turn the motor pot between reads and watch it move toward 96.4 kHz, the rate the RAM adapter expects within ±10% per [Brad Taylor's FDS technical reference](https://www.nesdev.org/FDS%20technical%20reference.txt). The 6 MHz clock is the one nesdev's forum gives for the FDSStick's flux images; no firmware documents the clock of a timing mode, so if the probe finds one on another clock the rate is off by the same ratio and the spread is still right. Without the option, every calibration starts with a warning that timing is off, and a timing mode that returns pulse classes on some read says so for that read and judges it from classes.
+When the stick sends how long each pulse was instead of its class, every read also prints how long each pulse class ran, how widely it spread, and the bit rate those lengths give: `timing: short 62.1±1.2, medium 93.2±1.3, long 124.0±1.2 counts, spread 1.4%, smaller is better; bit rate 96.7 kHz, +0.3% from 96.4 kHz at an assumed 6 MHz capture clock, inside the ±10% the RAM adapter accepts`. A narrower spread means cleaner pulses, which is what the head adjustment is after; the FDSStick's author uses the same kind of spread to set the head. The bit rate is a live speed meter: turn the motor pot between reads and watch it move toward 96.4 kHz, the rate the RAM adapter expects within ±10% per [Brad Taylor's FDS technical reference](https://www.nesdev.org/FDS%20technical%20reference.txt). The 6 MHz clock is the one nesdev's forum gives for the FDSStick's flux images; on another clock the rate is off by the same ratio and the spread is still right. Firmware 3.12 sends pulse classes, so on it no timing line appears, and no firmware that sends pulse lengths has been tried with the toolkit.
 
 Exit status is 0 when the last read was clean.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
 <img alt="The calibrate command on the local web page" src="assets/screenshots/calibrate-light.png">
-</picture>
-
-#### `probe`
-
-```bash
-fdstoolkit probe [--yes] [--json]
-```
-
-Finds whether this FDSStick's firmware can send how long each pulse was, instead of the pulse class it rounded it to. The hardware measures every pulse with a timer: the open firmware from 2015 sends those counts to the computer, and later firmware rounds them to three classes on the device before sending. Whether the firmware in your stick still has a mode that sends the counts is not documented, so the probe asks it.
-
-It starts a read with each unused mode byte, 0x02 to 0x07, and judges the answer: counts spread over the whole byte range, while packed classes are full of zero bytes. A mode only counts as timing when its counts, rounded, decode into blocks whose checksums pass. It stops at the first mode that returns timing.
-
-An undocumented mode could write instead of read, and nothing shows that a disk's write-protect tab stops an FDSStick from writing. So the probe asks for a scratch disk, such as the calibration disk, reads the side normally before it starts, and reads it again after every mode, including a mode that ended in a fault. A block that read clean before and fails or differs after counts as a change. If a mode changed the disk, the probe stops at once and names that mode; if the side cannot be read after a mode, it says the disk may have changed. On firmware 3.12, the only firmware tried, mode 0x02 ended in a read error and damaged a 24 KB file data block of the side.
-
-```
-mode 0x02: pulse classes only
-mode 0x03: pulse timing
-mode 0x03 returns pulse timing: calibrate with timing mode 3, --timing-mode 3 on the command line
-```
-
-When no mode returns timing, the last line is a warning and the exit status is 1:
-
-```
-warning: no mode tried returned pulse timing, so this firmware sends pulse classes only. calibrate keeps working from classes, but cannot show how long each pulse was or how widely the pulses spread
-```
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/probe-dark.png">
-<img alt="The probe command on the local web page" src="assets/screenshots/probe-light.png">
 </picture>
 
 #### `web`
@@ -887,7 +858,6 @@ Saved captures travel the same way. A dump with `keep captures` set offers the b
 | `POST /api/jobs/write` | `write` |
 | `POST /api/jobs/surface` | `surface` |
 | `POST /api/jobs/calibrate` | `calibrate` |
-| `POST /api/jobs/probe` | `probe` |
 | `GET /api/jobs/current` | the disk job still running, if any |
 | `GET /api/jobs/{id}` | one job's state, progress lines, prompt and result |
 | `POST /api/jobs/{id}/answer` | the answer to a job's prompt |
@@ -1006,9 +976,9 @@ fdstoolkit calibrate speed --reference smb.fds --passes 5 --json | jq -r '.headl
 
 **No FDS flux capture exists.** Quick Disk is one continuous spiral with no index hole and no standard stepping, so KryoFlux and Greaseweazle cannot read this medium at all. This toolkit reads only what an FDSStick produces.
 
-**An FDSStick cannot measure the last percent of drive speed from pulse classes.** Current firmware rounds every pulse to one of three lengths on the device and sends classes, not timing, so a small speed error changes no class. `probe` finds out whether your firmware can still send timing. `calibrate speed` finds a drive outside the tolerance; a console test or a strobe finishes the job.
+**An FDSStick cannot measure the last percent of drive speed from pulse classes.** Current firmware rounds every pulse to one of three lengths on the device and sends classes, not timing, so a small speed error changes no class. `calibrate speed` finds a drive outside the tolerance; a console test or a strobe finishes the job.
 
-**Fine head alignment is not measurable from pulse classes.** It needs signal amplitude, or the pulse timing `calibrate --timing-mode` shows when `probe` finds a mode that sends it. `calibrate head` sees only whether blocks read, so it finds a head or hub that is out of position, not one that is merely off-centre.
+**Fine head alignment is not measurable from pulse classes.** It needs signal amplitude or pulse timing, and firmware 3.12 sends neither. `calibrate head` sees only whether blocks read, so it finds a head or hub that is out of position, not one that is merely off-centre.
 
 **Belt and motor faults are not separable** without the pulley ratio, which no trustworthy source states.
 

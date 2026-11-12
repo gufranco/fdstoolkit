@@ -282,7 +282,6 @@ class CalibrateSpec(BaseModel):
     passes: int = Field(DEFAULT_READS, ge=1, le=MAX_READS)
     bracket: bool = False
     captures: str | None = Field(None, description="the capture bundle a dump kept, as a zip")
-    timing_mode: int | None = Field(None, ge=0x02, le=0xFF)
 
 
 class BlankSpec(BaseModel):
@@ -426,10 +425,6 @@ class SurfaceSpec(BaseModel):
     confirm: bool = False
 
 
-class ProbeSpec(BaseModel):
-    confirm: bool = False
-
-
 class TextResult(BaseModel):
     text: str
     ok: bool = True
@@ -478,7 +473,7 @@ class JobView(BaseModel):
 
 
 JobResult = Annotated[
-    DumpedResult | CalibrationResult | ReportedFile | RowsResult,
+    DumpedResult | CalibrationResult | ReportedFile,
     Field(union_mode="left_to_right"),
 ]
 

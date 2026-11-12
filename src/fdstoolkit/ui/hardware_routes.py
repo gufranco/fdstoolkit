@@ -15,13 +15,7 @@ from fdstoolkit.drive.captures import bundle_zip, created_now
 from fdstoolkit.drive.monitor import MAX_READS, NOT_THIS_DRIVE, Mode, RawReader, Replay, calibrate
 from fdstoolkit.drive.pulse import pulse_lines
 from fdstoolkit.drive.recovery import recover
-from fdstoolkit.drive.timing import (
-    PROBE_WARNING,
-    REPLAY_HAS_NO_TIMING,
-    TIMING_OFF,
-    TimingReader,
-    probe,
-)
+from fdstoolkit.drive.timing import TimingReader
 from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
@@ -49,9 +43,7 @@ from fdstoolkit.ui.schemas import (
     DumpedResult,
     DumpSpec,
     JobView,
-    ProbeSpec,
     ReportedFile,
-    RowsResult,
     SurfaceSpec,
     WriteSpec,
 )
@@ -358,8 +350,6 @@ def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
         replay = _replay(spec.captures, spec.side)
 
         def offline(controls: Controls) -> CalibrationResult:
-            if spec.timing_mode is not None:
-                controls.step(REPLAY_HAS_NO_TIMING)
             return _calibrated(
                 replay, controls, mode=mode, reads=len(replay.captures), wanted=wanted
             )
@@ -369,13 +359,8 @@ def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
 
     def work(drive: FdsStick, controls: Controls) -> CalibrationResult:
         controls.step(NOT_THIS_DRIVE)
-        reader: RawReader = drive
-        if spec.timing_mode is None:
-            controls.step(TIMING_OFF)
-        else:
-            reader = TimingReader(drive, mode=spec.timing_mode, note=controls.step)
         return _calibrated(
-            reader,
+            TimingReader(drive, note=controls.step),
             controls,
             mode=mode,
             reads=spec.passes,
@@ -384,29 +369,6 @@ def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
         )
 
     return _start(request, "calibrate", writes=False, work=work, stoppable=True)
-
-
-def probe_job(spec: ProbeSpec, request: Request) -> JobView:
-    if not spec.confirm:
-        refuse(PROBE_WARNING, status=UNPROCESSABLE)
-
-    def work(drive: FdsStick, controls: Controls) -> RowsResult:
-        found = probe(drive, progress=controls.step)
-        prefix = "" if found.timing_mode is not None else "warning: "
-        return RowsResult(
-            headline=f"{prefix}{found.verdict}",
-            rows=[
-                {
-                    "mode": f"{result.mode:#04x}",
-                    "answer": result.nature.value,
-                    "detail": result.detail,
-                }
-                for result in found.results
-            ],
-            ok=found.timing_mode is not None,
-        )
-
-    return _start(request, "probe", writes=True, work=work)
 
 
 def _replay(payload: str, side: int) -> Replay:

@@ -9,27 +9,15 @@ from fdstoolkit.codecs.raw import (
     NOMINAL_LONG,
     NOMINAL_MEDIUM,
     NOMINAL_SHORT,
-    block_regions,
     encode_raw03,
-    pack_raw03,
     unpack_raw03,
 )
-from fdstoolkit.drive.timing import (
-    NO_TIMING,
-    Nature,
-    ProbeResult,
-    TimingReader,
-    classify,
-    measure_timing,
-    probe,
-)
-from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
+from fdstoolkit.drive.timing import Nature, TimingReader, classify, measure_timing
 
 SEED = b"timing"
 CLOCK_SCALE = 1.5
 JITTER = 3
 NOMINALS = (NOMINAL_SHORT, NOMINAL_MEDIUM, NOMINAL_LONG)
-TIMING_MODE = 3
 LEAD_OUT = 4000
 
 
@@ -50,19 +38,13 @@ def counts_of(packed: bytes, *, scale: float = CLOCK_SCALE, jitter: int = JITTER
     )
 
 
-class ModeDrive:
-    def __init__(self, answers: dict[int, bytes], *, fail_on: int | None = None) -> None:
-        self.answers = answers
-        self.fail_on = fail_on
-        self.modes: list[int] = []
+class SideDrive:
+    def __init__(self, answer: bytes) -> None:
+        self.answer = answer
 
-    def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
+    def read_raw_side(self, *, what: str) -> bytes:
         del what
-        self.modes.append(mode)
-        if mode == self.fail_on:
-            message = "the device stopped answering"
-            raise HardwareFaultError(message, kind=FaultKind.LINK)
-        return self.answers.get(mode, self.answers[0])
+        return self.answer
 
 
 def test_counts_from_a_clean_side_are_pulse_timing() -> None:
@@ -109,112 +91,9 @@ def test_the_timing_line_names_every_class_and_the_spread() -> None:
     assert "%, smaller is better; bit rate " in line
 
 
-def test_the_probe_stops_at_the_first_mode_that_returns_timing() -> None:
-    drive = ModeDrive({0: packed_side(), TIMING_MODE: counts_of(packed_side())})
-
-    found = probe(drive, modes=(2, TIMING_MODE, 4))
-
-    assert [result.nature for result in found.results] == [Nature.CLASSES, Nature.TIMING]
-    assert found.timing_mode == TIMING_MODE
-    assert found.changed_by is None
-
-
-def test_a_probe_that_finds_no_timing_says_so() -> None:
-    drive = ModeDrive({0: packed_side()})
-
-    found = probe(drive, modes=(2, 3))
-
-    assert found.timing_mode is None
-    assert found.verdict == NO_TIMING
-
-
-def test_a_mode_that_changes_the_disk_stops_the_probe() -> None:
-    class ErasingDrive(ModeDrive):
-        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
-            data = super().read_raw_side(what=what, mode=mode)
-            if mode == 2:
-                self.answers[0] = bytes(len(self.answers[0]))
-            return data
-
-    drive = ErasingDrive({0: packed_side()})
-
-    found = probe(drive, modes=(2, 3))
-
-    assert found.changed_by == 2
-    assert drive.modes == [0, 2, 0]
-    assert "mode 0x02 changed the disk" in found.verdict
-
-
-def test_a_fault_ends_the_probe_and_is_reported() -> None:
-    drive = ModeDrive({0: packed_side()}, fail_on=3)
-
-    found = probe(drive, modes=(2, 3, 4))
-
-    assert found.results[-1] == ProbeResult(
-        mode=3, nature=Nature.FAULT, detail="the device stopped answering"
-    )
-    assert 4 not in drive.modes
-    assert found.verdict == (
-        "the probe stopped on a fault before it found pulse timing: the device stopped answering"
-    )
-
-
-def test_a_mode_that_breaks_a_block_changed_the_disk() -> None:
-    clean = packed_side()
-    values = bytearray(unpack_raw03(clean))
-    start, end = block_regions(bytes(values))[3]
-    values[(start + end) // 2] ^= 1
-    broken = pack_raw03(bytes(values))
-
-    class BreakingDrive(ModeDrive):
-        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
-            data = super().read_raw_side(what=what, mode=mode)
-            if mode == 2:
-                self.answers[0] = broken
-            return data
-
-    found = probe(BreakingDrive({0: clean}), modes=(2, 3))
-
-    assert found.changed_by == 2
-
-
-def test_a_mode_that_faults_is_still_checked_for_a_changed_disk() -> None:
-    class FaultingEraser(ModeDrive):
-        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
-            if mode == 2:
-                self.answers[0] = bytes(len(self.answers[0]))
-            return super().read_raw_side(what=what, mode=mode)
-
-    drive = FaultingEraser({0: packed_side()}, fail_on=2)
-
-    found = probe(drive, modes=(2, 3))
-
-    assert found.changed_by == 2
-    assert drive.modes == [0, 2, 0]
-    assert found.results[-1].nature is Nature.FAULT
-
-
-def test_a_side_that_cannot_be_read_after_a_mode_is_reported_as_unknown() -> None:
-    class SilentAfterMode(ModeDrive):
-        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
-            if mode == 2:
-                self.fail_on = 0
-            return super().read_raw_side(what=what, mode=mode)
-
-    found = probe(SilentAfterMode({0: packed_side()}), modes=(2, 3))
-
-    assert found.unchecked_by == 2
-    assert found.changed_by is None
-    assert found.verdict.startswith(
-        "the side could not be read after mode 0x02 (the device stopped answering), so "
-        "whether that mode changed the disk is unknown"
-    )
-
-
-def test_a_timing_reader_hands_the_calibration_pulse_classes() -> None:
+def test_a_timing_reader_measures_a_read_that_sends_counts_and_hands_on_classes() -> None:
     lines: list[str] = []
-    drive = ModeDrive({0: packed_side(), TIMING_MODE: counts_of(packed_side())})
-    reader = TimingReader(drive, mode=TIMING_MODE, note=lines.append)
+    reader = TimingReader(SideDrive(counts_of(packed_side())), note=lines.append)
 
     packed = reader.read_raw_side(what="calibration read 1")
 
@@ -223,60 +102,15 @@ def test_a_timing_reader_hands_the_calibration_pulse_classes() -> None:
     assert len(reader.timings) == 1
 
 
-def test_a_timing_reader_falls_back_to_classes_and_warns() -> None:
+def test_a_timing_reader_passes_pulse_classes_on_untouched_and_silent() -> None:
     lines: list[str] = []
-    drive = ModeDrive({0: packed_side()})
-    reader = TimingReader(drive, mode=TIMING_MODE, note=lines.append)
+    reader = TimingReader(SideDrive(packed_side()), note=lines.append)
 
     packed = reader.read_raw_side(what="calibration read 1")
 
     assert packed == packed_side()
-    assert lines == [
-        (
-            "calibration read 1: mode 0x03 returned pulse classes only, so this read is "
-            "judged from classes and shows no timing"
-        )
-    ]
+    assert lines == []
     assert reader.timings == []
-
-
-def test_a_block_that_only_reads_better_afterwards_is_no_change() -> None:
-    clean = packed_side()
-    values = bytearray(unpack_raw03(clean))
-    start, end = block_regions(bytes(values))[3]
-    values[(start + end) // 2] ^= 1
-    flaky = pack_raw03(bytes(values))
-
-    class FlakyDrive(ModeDrive):
-        def __init__(self) -> None:
-            super().__init__({0: clean})
-            self.normal_reads = 0
-
-        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
-            if mode == 0:
-                self.normal_reads += 1
-                self.modes.append(mode)
-                return flaky if self.normal_reads == 1 else clean
-            return super().read_raw_side(what=what, mode=mode)
-
-    found = probe(FlakyDrive(), modes=(2,))
-
-    assert found.changed_by is None
-
-
-def test_a_mode_that_rewrites_a_block_is_named() -> None:
-    other = encode_raw03(calibration_disk(2), side=1)
-
-    class RewritingDrive(ModeDrive):
-        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
-            data = super().read_raw_side(what=what, mode=mode)
-            if mode == 2:
-                self.answers[0] = other
-            return data
-
-    found = probe(RewritingDrive({0: packed_side()}), modes=(2, 3))
-
-    assert found.changed_by == 2
 
 
 def test_the_timing_line_names_the_bit_rate_against_the_adapter_tolerance() -> None:

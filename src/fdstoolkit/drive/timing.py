@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from statistics import fmean, pstdev
@@ -9,17 +9,12 @@ from typing import Final, Protocol
 
 from fdstoolkit.codecs.raw import (
     NOMINAL_SHORT,
-    decode_packed,
     decode_raw03,
     pack_raw03,
     quantise,
 )
 from fdstoolkit.drive.align import good_block
-from fdstoolkit.drive.vote import Key, keyed
-from fdstoolkit.hardware.ports import HardwareFaultError
 
-NORMAL_MODE: Final = 0x00
-PROBE_MODES: Final = (0x02, 0x03, 0x04, 0x05, 0x06, 0x07)
 SMALLEST_COUNT: Final = 16
 ZERO_SHARE: Final = 0.01
 PEAK_WINDOW: Final = 2
@@ -32,41 +27,19 @@ NOMINAL_RATE_KHZ: Final = 96.4
 RATE_TOLERANCE: Final = 0.10
 CELLS_PER_CLASS: Final = (1.0, 1.5, 2.0)
 
-TIMING_OFF: Final = (
-    "warning: timing is off, so every read is judged from pulse classes alone. Run the "
-    "probe once to learn whether this firmware can send pulse timing, then calibrate with "
-    "the timing mode it finds"
-)
-REPLAY_HAS_NO_TIMING: Final = (
-    "warning: saved captures hold pulse classes, so a timing mode shows nothing when replaying them"
-)
-PROBE_WARNING: Final = (
-    "the probe starts reads with modes this firmware does not document, and nothing shows "
-    "that a disk's write-protect tab stops an FDSStick from writing. Put a scratch disk in the "
-    "drive, such as the calibration disk, never one you want to keep. The probe reads the side "
-    "before and after every mode and stops if the disk changed. On firmware 3.12 the first "
-    "mode, 0x02, damaged a block of the side it ran on"
-)
-NO_TIMING: Final = (
-    "no mode tried returned pulse timing, so this firmware sends pulse classes only. "
-    "calibrate keeps working from classes, but cannot show how long each pulse was or "
-    "how widely the pulses spread"
-)
-
 
 class Nature(StrEnum):
     TIMING = "pulse timing"
     UNDECODED = "what looks like pulse timing, though no block decoded from it"
     CLASSES = "pulse classes only"
     NOTHING = "no data"
-    FAULT = "a fault"
 
 
-STOPPING: Final = frozenset({Nature.TIMING, Nature.FAULT})
+COUNTED: Final = frozenset({Nature.TIMING, Nature.UNDECODED})
 
 
-class ModeReader(Protocol):
-    def read_raw_side(self, *, what: str, mode: int) -> bytes: ...
+class SideReader(Protocol):
+    def read_raw_side(self, *, what: str) -> bytes: ...
 
 
 def _short_nominal(counts: bytes) -> int | None:
@@ -173,130 +146,19 @@ def measure_timing(counts: bytes) -> Timing:
     )
 
 
-@dataclass(frozen=True, slots=True)
-class ProbeResult:
-    mode: int
-    nature: Nature
-    detail: str = ""
-
-    def render(self) -> str:
-        detail = f": {self.detail}" if self.detail else ""
-        return f"mode {self.mode:#04x}: {self.nature.value}{detail}"
-
-
-@dataclass(frozen=True, slots=True)
-class Probe:
-    results: tuple[ProbeResult, ...]
-    changed_by: int | None = None
-    unchecked_by: int | None = None
-    unchecked_detail: str = ""
-
-    @property
-    def timing_mode(self) -> int | None:
-        return next(
-            (result.mode for result in self.results if result.nature is Nature.TIMING), None
-        )
-
-    @property
-    def verdict(self) -> str:
-        if self.changed_by is not None:
-            return (
-                f"mode {self.changed_by:#04x} changed the disk, so the probe stopped. The disk no "
-                "longer holds what it held before; never use this mode"
-            )
-        if self.unchecked_by is not None:
-            return (
-                f"the side could not be read after mode {self.unchecked_by:#04x} "
-                f"({self.unchecked_detail}), so whether that mode changed the disk is unknown. "
-                "Dump the side before trusting it: a block that fails or differs from an "
-                "earlier dump means the mode changed it"
-            )
-        found = self.timing_mode
-        if found is not None:
-            return (
-                f"mode {found:#04x} returns pulse timing: calibrate with timing mode {found}, "
-                f"--timing-mode {found} on the command line"
-            )
-        fault = next((result for result in self.results if result.nature is Nature.FAULT), None)
-        if fault is not None:
-            return f"the probe stopped on a fault before it found pulse timing: {fault.detail}"
-        return NO_TIMING
-
-
-def _clean(packed: bytes) -> dict[Key, bytes]:
-    side, _ = decode_packed(packed)
-    return {
-        key: block.payload
-        for key, block in zip(keyed(side.blocks), side.blocks, strict=True)
-        if good_block(block)
-    }
-
-
-def _changed(before: bytes, after: bytes) -> bool:
-    now = _clean(after)
-    return any(now.get(key) != payload for key, payload in _clean(before).items())
-
-
-def _quiet(message: str) -> None:
-    del message
-
-
-def probe(
-    reader: ModeReader,
-    *,
-    modes: Sequence[int] = PROBE_MODES,
-    progress: Callable[[str], None] = _quiet,
-) -> Probe:
-    baseline = reader.read_raw_side(what="probe: the side as it reads normally", mode=NORMAL_MODE)
-    results: tuple[ProbeResult, ...] = ()
-    for mode in modes:
-        result = _tried(reader, mode)
-        results = (*results, result)
-        progress(result.render())
-        after = _read_back(reader)
-        if isinstance(after, HardwareFaultError):
-            return Probe(results=results, unchecked_by=mode, unchecked_detail=str(after))
-        if _changed(baseline, after):
-            return Probe(results=results, changed_by=mode)
-        if result.nature in STOPPING:
-            break
-    return Probe(results=results)
-
-
-def _tried(reader: ModeReader, mode: int) -> ProbeResult:
-    try:
-        data = reader.read_raw_side(what=f"probe: mode {mode:#04x}", mode=mode)
-    except HardwareFaultError as fault:
-        return ProbeResult(mode=mode, nature=Nature.FAULT, detail=str(fault))
-    return ProbeResult(mode=mode, nature=classify(data))
-
-
-def _read_back(reader: ModeReader) -> bytes | HardwareFaultError:
-    try:
-        return reader.read_raw_side(what="probe: checking the disk", mode=NORMAL_MODE)
-    except HardwareFaultError as fault:
-        return fault
-
-
 def _no_timings() -> list[Timing]:
     return []
 
 
 @dataclass(slots=True)
 class TimingReader:
-    reader: ModeReader
-    mode: int
+    reader: SideReader
     note: Callable[[str], None]
     timings: list[Timing] = field(default_factory=_no_timings)
 
     def read_raw_side(self, *, what: str) -> bytes:
-        data = self.reader.read_raw_side(what=what, mode=self.mode)
-        nature = classify(data)
-        if nature not in {Nature.TIMING, Nature.UNDECODED}:
-            self.note(
-                f"{what}: mode {self.mode:#04x} returned {nature.value}, so this read is "
-                "judged from classes and shows no timing"
-            )
+        data = self.reader.read_raw_side(what=what)
+        if classify(data) not in COUNTED:
             return data
         timing = measure_timing(data)
         self.timings.append(timing)

@@ -641,7 +641,7 @@ function hardwareNotice() {
 
 const POLL_MS = 500;
 const POLL_LIMIT = 7200;
-const ERASING = new Set(['write', 'surface', 'probe']);
+const ERASING = new Set(['write', 'surface']);
 
 function pause(ms) {
   return new Promise((resolve) => {

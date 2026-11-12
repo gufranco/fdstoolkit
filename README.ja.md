@@ -673,7 +673,7 @@ grade failed
 #### `calibrate`
 
 ```bash
-fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--timing-mode N] [--json]
+fdstoolkit calibrate speed|head [--reference <image>] [--side N] [--passes N] [--bracket] [--json]
 fdstoolkit calibrate speed|head --captures <bundle> [--reference <image>] [--side N] [--json]
 ```
 
@@ -787,40 +787,11 @@ fdstoolkit calibrate head --reference smb.fds --bracket --passes 60
 
 ブロックが見つかった読み取りでは、リードイン、つまり最初のブロックの前にあるギャップの長さもビット単位で示します。FDSStick の作者によれば、このプリギャップはドライブの調整によって変わり、同じドライブで同じディスクを 2 回読んでも生のキャプチャが一致することはありません。そのため、すべてのブロックがきれいに読めているのにリードインだけが読み取りごとに変わるなら、それはディスクではなくドライブによるものです。吸い出しの比較は、`reads` や `consensus` のようにブロック単位で行い、キャプチャのハッシュでは比べないでください。
 
-`--timing-mode` は `probe` が見つけたモードで読むため、各読み取りでパルスのクラスごとの長さとばらつき、そこから求めたビットレートも `timing: short 62.1±1.2, medium 93.2±1.3, long 124.0±1.2 counts, spread 1.4%, smaller is better; bit rate 96.7 kHz, +0.3% from 96.4 kHz at an assumed 6 MHz capture clock, inside the ±10% the RAM adapter accepts` のように表示します。ばらつきが小さいほどパルスがきれいで、ヘッド調整が目指すのはそこです。FDSStick の作者も同じ種類のばらつきでヘッドを合わせています。ビットレートはそのまま速度計として使えます。読み取りの合間にモーターの半固定抵抗を回し、96.4 kHz に近づくのを見てください。[Brad Taylor の FDS 技術資料](https://www.nesdev.org/FDS%20technical%20reference.txt)によれば、RAM アダプタはこの速度を ±10% の範囲で受け付けます。6 MHz というクロックは、nesdev のフォーラムが FDSStick のフラックスイメージについて示している値です。タイミングモードのクロックを記したファームウェア資料はないため、probe が別のクロックのモードを見つけた場合、ビットレートは同じ比率でずれますが、ばらつきは正しいままです。このオプションがなければ、調整の最初にタイミングが無効だという警告を表示します。あるモードがどこかの読み取りでパルスクラスを返した場合は、その読み取りでそう伝え、クラスから判定します。
+スティックがパルスのクラスではなく各パルスの長さを送ってくる場合、各読み取りでパルスのクラスごとの長さとばらつき、そこから求めたビットレートも `timing: short 62.1±1.2, medium 93.2±1.3, long 124.0±1.2 counts, spread 1.4%, smaller is better; bit rate 96.7 kHz, +0.3% from 96.4 kHz at an assumed 6 MHz capture clock, inside the ±10% the RAM adapter accepts` のように表示します。ばらつきが小さいほどパルスがきれいで、ヘッド調整が目指すのはそこです。FDSStick の作者も同じ種類のばらつきでヘッドを合わせています。ビットレートはそのまま速度計として使えます。読み取りの合間にモーターの半固定抵抗を回し、96.4 kHz に近づくのを見てください。[Brad Taylor の FDS 技術資料](https://www.nesdev.org/FDS%20technical%20reference.txt)によれば、RAM アダプタはこの速度を ±10% の範囲で受け付けます。6 MHz というクロックは、nesdev のフォーラムが FDSStick のフラックスイメージについて示している値です。クロックが異なればビットレートは同じ比率でずれますが、ばらつきは正しいままです。ファームウェア 3.12 はパルスクラスを送るため、この行は表示されません。パルスの長さを送るファームウェアは、まだツールキットで試していません。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/calibrate-dark.png">
 <img alt="ローカル Web ページの calibrate コマンド" src="assets/screenshots/calibrate-light.png">
-</picture>
-
-#### `probe`
-
-```bash
-fdstoolkit probe [--yes] [--json]
-```
-
-この FDSStick のファームウェアが、丸めたパルスクラスではなく、各パルスの長さそのものを送れるかを調べます。ハードウェアはすべてのパルスをタイマーで測っています。2015 年の公開ファームウェアはその値をコンピュータへ送り、後のファームウェアは送る前に機器の中で 3 つのクラスへ丸めます。お手持ちの機器のファームウェアに値を送るモードが残っているかは文書化されていないため、probe が機器に直接尋ねます。
-
-未使用のモードバイト 0x02 から 0x07 のそれぞれで読み取りを始め、返ってきたものを判定します。値はバイトの全範囲に散らばり、パックしたクラスは 0 のバイトだらけになります。値を丸めてチェックサムの一致するブロックが復号できたときだけ、そのモードをタイミングとみなします。タイミングを返す最初のモードで止まります。
-
-文書化されていないモードは、読み取りではなく書き込みを行うかもしれません。また、ディスクの書き込み禁止タブが FDSStick からの書き込みを止めると示すものはありません。そのため probe は作業用のディスク、たとえばキャリブレーション用ディスクを求め、始める前に面を通常どおり読み、モードごとに、障害で終わったモードも含めてもう一度読みます。前に正しく読めたブロックが後で失敗するか内容が違えば、変化とみなします。あるモードでディスクが変わった場合は、ただちに止まってそのモードを示します。モードの後に面を読めない場合は、ディスクが変わったかもしれないと伝えます。試した唯一のファームウェアである 3.12 では、モード 0x02 が読み取りエラーで終わり、面にある 24 KB のファイルデータブロックを壊しました。
-
-```
-mode 0x02: pulse classes only
-mode 0x03: pulse timing
-mode 0x03 returns pulse timing: calibrate with timing mode 3, --timing-mode 3 on the command line
-```
-
-タイミングを返すモードがなかった場合、最後の行は警告となり、終了コードは 1 です。
-
-```
-warning: no mode tried returned pulse timing, so this firmware sends pulse classes only. calibrate keeps working from classes, but cannot show how long each pulse was or how widely the pulses spread
-```
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/probe-dark.png">
-<img alt="ローカル Web ページの probe コマンド" src="assets/screenshots/probe-light.png">
 </picture>
 
 #### `web`
@@ -876,7 +847,6 @@ fdstoolkit web
 | `POST /api/jobs/write` | `write` |
 | `POST /api/jobs/surface` | `surface` |
 | `POST /api/jobs/calibrate` | `calibrate` |
-| `POST /api/jobs/probe` | `probe` |
 | `GET /api/jobs/current` | 実行中のディスク操作があれば、その操作 |
 | `GET /api/jobs/{id}` | 1 つの操作の状態、進行状況の行、問いかけ、結果 |
 | `POST /api/jobs/{id}/answer` | 操作の問いかけへの回答 |
@@ -995,9 +965,9 @@ fdstoolkit calibrate speed --reference smb.fds --passes 5 --json | jq -r '.headl
 
 **ディスクシステムのフラックスキャプチャは存在しません。** Quick Disk はインデックス穴も標準的なステッピングも持たない 1 本の連続した渦巻きであり、KryoFlux や Greaseweazle はこの媒体を読むことができません。本ツールが読み込むのは FDSStick が生成するものだけです。
 
-**パルスクラスからはドライブ速度の最後の 1 パーセントを測定できません。** 現在のファームウェアは機器の中で各パルスを 3 種類の長さのいずれかへ丸め、時間情報ではなくクラスを送ってくるので、小さな速度のずれではクラスが変わりません。お手持ちのファームウェアがまだタイミングを送れるかは `probe` で確かめられます。`calibrate speed` は許容範囲の外にあるドライブを見つけ、仕上げは実機側のテストかストロボで行います。
+**パルスクラスからはドライブ速度の最後の 1 パーセントを測定できません。** 現在のファームウェアは機器の中で各パルスを 3 種類の長さのいずれかへ丸め、時間情報ではなくクラスを送ってくるので、小さな速度のずれではクラスが変わりません。`calibrate speed` は許容範囲の外にあるドライブを見つけ、仕上げは実機側のテストかストロボで行います。
 
-**ヘッドの精密な位置合わせはパルスクラスからは測定できません。** 信号振幅か、`probe` が見つけたモードで `calibrate --timing-mode` が示すパルスのタイミングが必要です。`calibrate head` はブロックが読めたかどうかしか見ないので、位置が大きくずれたヘッドやハブは見つけられても、わずかに中心を外れただけのものは見つけられません。
+**ヘッドの精密な位置合わせはパルスクラスからは測定できません。** 信号振幅かパルスのタイミングが必要ですが、ファームウェア 3.12 はどちらも送りません。`calibrate head` はブロックが読めたかどうかしか見ないので、位置が大きくずれたヘッドやハブは見つけられても、わずかに中心を外れただけのものは見つけられません。
 
 **ベルトの不良とモーターの不良は切り分けられません。** プーリー比が必要ですが、信頼できる出典がその値を示していません。
 

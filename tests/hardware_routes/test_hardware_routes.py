@@ -473,8 +473,7 @@ def test_a_calibration_against_its_reference_reads_clean(app: FastAPI, client: T
     assert job["state"] == "done"
     assert job["stoppable"]
     assert job["steps"][0].startswith("judge the drive only with a disk it did not write")
-    assert job["steps"][1].startswith("warning: timing is off")
-    assert job["steps"][2].startswith("read 1: 2 of 2 blocks")
+    assert job["steps"][1].startswith("read 1: 2 of 2 blocks")
     assert job["result"]["ok"] is True
     assert job["result"]["mode"] == "speed"
     assert len(job["result"]["rows"]) == 2
@@ -558,39 +557,12 @@ def test_a_bracketed_calibration_waits_for_each_step(app: FastAPI, client: TestC
     assert len(client.get(f"/api/jobs/{job_id}").json()["result"]["rows"]) == 2
 
 
-def test_a_probe_job_needs_the_scratch_disk_warning_accepted(client: TestClient) -> None:
-    answer = client.post("/api/jobs/probe", json={})
-
-    assert answer.status_code == UNPROCESSABLE
-    assert "Put a scratch disk in the drive" in answer.json()["detail"]
-
-
-def test_a_probe_job_names_the_mode_that_returns_timing(
+def test_a_calibration_job_on_a_stick_that_sends_counts_shows_the_timing(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), timing_mode=3))
+    serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), sends_counts=True))
 
-    job = run(app, client, "/api/jobs/probe", {"confirm": True})
-
-    assert job["result"]["ok"] is True
-    assert job["result"]["rows"][-1] == {"mode": "0x03", "answer": "pulse timing", "detail": ""}
-    assert "calibrate with timing mode 3" in job["result"]["headline"]
-
-
-@pytest.mark.usefixtures("attached")
-def test_a_probe_job_that_finds_no_timing_warns(app: FastAPI, client: TestClient) -> None:
-    job = run(app, client, "/api/jobs/probe", {"confirm": True})
-
-    assert job["result"]["ok"] is False
-    assert job["result"]["headline"].startswith("warning: no mode tried returned pulse timing")
-
-
-def test_a_calibration_job_with_a_timing_mode_shows_the_timing(
-    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), timing_mode=3))
-
-    job = run(app, client, "/api/jobs/calibrate", {"mode": "speed", "passes": 1, "timing_mode": 3})
+    job = run(app, client, "/api/jobs/calibrate", {"mode": "speed", "passes": 1})
 
     assert any(step.startswith("timing: short") for step in job["steps"])
     assert job["result"]["ok"] is True
