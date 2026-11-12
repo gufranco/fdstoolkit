@@ -22,6 +22,7 @@ from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, Hardwar
 
 DAMAGE_OFFSET = 40
 DAMAGE_STRIDE = 7
+IDENTITY_PULSES = 16
 TRAILING_GAP = 4000
 NOMINAL_COUNTS = (NOMINAL_SHORT, NOMINAL_MEDIUM, NOMINAL_LONG, NOMINAL_LONG * 2)
 COUNT_SCALE = 1.5
@@ -114,8 +115,9 @@ class SimulatedDrive:
         for index in self._plan.bad_crc_blocks:
             if index < len(regions):
                 start, end = regions[index]
-                span = max(end - start - 1, 1)
-                spot = start + 1 + (DAMAGE_OFFSET + DAMAGE_STRIDE * read) % span
+                body = start + IDENTITY_PULSES
+                span = max(end - body - 1, 1)
+                spot = body + (DAMAGE_OFFSET + DAMAGE_STRIDE * read) % span
                 values[spot] = 1 if values[spot] == 0 else 0
         return pack_raw03(bytes(values) + bytes(TRAILING_GAP))
 

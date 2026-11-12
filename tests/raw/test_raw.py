@@ -13,6 +13,7 @@ from fdstoolkit.codecs.raw import (
     GAP_BITS,
     GAP_VALUE,
     LEAD_IN_BITS,
+    MARK_GAP_BITS,
     MIN_GAP_VALUES,
     NOMINAL_LONG,
     NOMINAL_MEDIUM,
@@ -369,7 +370,7 @@ def two_blocks_with_gap(bits: int) -> bytes:
     second = bytes([0x80, 0x02, 0x00])
     return (
         encoded(first + encode_crc(block_crc(first[1:])))
-        + bytes([GAP_VALUE]) * bits
+        + bytes([GAP_VALUE]) * (bits - MARK_GAP_BITS)
         + encode_era_b(second + encode_crc(block_crc(second[1:])))
     )
 

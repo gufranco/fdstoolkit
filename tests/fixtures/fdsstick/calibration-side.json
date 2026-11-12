@@ -1,0 +1,9 @@
+{
+  "capture": "calibration-side.raw03",
+  "capture_sha256": "27f7a87ae3c8d2222cfc90a55635ea1fa43c25bb5b08f4b20fcef010c9f49578",
+  "content": "side 0 of the toolkit's own calibration disk, calibration_disk(1)",
+  "image_sha256": "d1acdf17690f99ad05a5fb6f9c5e04f4c974322c34ee84402e5accedaf0cc741",
+  "written_by": "the toolkit write stream, encode_write_stream, sent to an FDSStick on firmware 3.12",
+  "read_by": "fdstoolkit dump --raw, FDSStick firmware 3.12, the same drive",
+  "encoding": "packed pulse classes, high bits first"
+}

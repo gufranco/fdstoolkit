@@ -42,6 +42,7 @@ NIBBLE_BITS: Final = 4
 GAP_BYTES: Final = frozenset({0x00, 0xFF})
 BYTE_VALUES: Final = 8
 SYNC_MARK: Final = 0x80
+MARK_GAP_BITS: Final = SYNC_MARK.bit_length() - 1
 CAPTURE_CLOCK_HZ: Final = 6_000_000
 KEY_ONE_ONE: Final = 0x11
 KEY_ZERO_ZERO: Final = 0x00
@@ -172,7 +173,7 @@ def _bits_lsb_first(data: bytes) -> list[int]:
 
 def _encode_bits(bits: list[int]) -> bytes:
     out = bytearray()
-    previous = 1
+    previous = 0
     index = 0
     while index < len(bits):
         bit = bits[index]
@@ -196,6 +197,11 @@ def encode_era_b(data: bytes) -> bytes:
     return _encode_bits(_bits_lsb_first(data))
 
 
+def block_pulses(payload: bytes) -> bytes:
+    framed = bytes([SYNC_MARK]) + payload + encode_crc(block_crc(payload))
+    return encode_era_b(framed)[MARK_GAP_BITS:]
+
+
 def encode_era_a(data: bytes) -> bytes:
     out = bytearray()
     for byte in data:
@@ -210,11 +216,11 @@ def encode_block_stream(
     encoding: RawEncoding = RawEncoding.ERA_B,
 ) -> bytes:
     encoder = encode_era_a if encoding is RawEncoding.ERA_A else encode_era_b
-    values = bytearray(bytes([GAP_VALUE]) * LEAD_IN_BITS)
+    values = bytearray(bytes([GAP_VALUE]) * (LEAD_IN_BITS - MARK_GAP_BITS))
 
     for index, payload in enumerate(payloads):
         if index:
-            values += bytes([GAP_VALUE]) * GAP_BITS
+            values += bytes([GAP_VALUE]) * (GAP_BITS - MARK_GAP_BITS)
         framed = bytes([SYNC_MARK]) + payload + encode_crc(block_crc(payload))
         values += encoder(framed)
 
@@ -342,8 +348,8 @@ def lead_in_bits(values: bytes) -> int | None:
 
 
 def _decode_region(values: bytes, start: int, pending: int) -> tuple[bytes, int, int | None]:
-    bits: list[int] = []
-    previous = 1
+    bits: list[int] = [0] * MARK_GAP_BITS
+    previous = 0
     index = start
     needed: int | None = None
 

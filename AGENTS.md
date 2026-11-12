@@ -87,9 +87,19 @@ a factor of two and carry no tolerance.
 - The sequence counter wraps with an add, so `0xFF` is followed by `0x00`. Mapping
   it back to `1` aborts every side, because 255 chunks carry 64,770 bytes and a
   gapped side is about 66,560.
-- Nothing in the hardware path has run against a device. Every driver test drives
-  a recording stand-in, so it can prove which bytes we send and cannot prove the
-  device accepts them.
+- A block opens with the mark `0x80`, written low bit first: seven zero bits that
+  end the gap, then the one that is the first pulse after it. Decoding starts at
+  that pulse with the seven zeros already taken, and the encoder writes each gap
+  and its mark as one stream.
+- `tests/fixtures/fdsstick/` holds a real read of the calibration side, written and
+  read back by an FDSStick on firmware 3.12. The decoder must recover it exactly,
+  the encoder must reproduce its pulses, and calibration must read it clean.
+- Real reads carry pulses that fit no class before the first block and in the
+  splices between blocks, never inside a block that read clean, so only pulses
+  inside blocks count as read-line noise.
+- The read and write paths have run against one FDSStick on firmware 3.12. Every
+  other driver test drives a recording stand-in, which proves which bytes we send
+  and not that a device accepts them.
 
 ## The gates
 

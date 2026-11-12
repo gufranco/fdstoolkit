@@ -9,6 +9,7 @@ from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import (
     LEAD_IN_BITS,
+    block_regions,
     block_starts,
     decode_raw03,
     encode_block_stream,
@@ -215,16 +216,27 @@ def test_without_a_reference_an_unreadable_file_amount_leaves_the_count_to_the_r
     assert found.speed is SpeedReading.CLEAN
 
 
-def test_invalid_pulses_outside_the_gaps_are_counted() -> None:
+def test_an_invalid_pulse_inside_a_block_is_counted() -> None:
     side = reference_side()
     values = bytearray(unpack_raw03(stream(side)))
-    start = block_starts(bytes(values))[1]
+    start, _ = block_regions(bytes(values))[0]
     values[start + SKIP_SYNC] = 3
 
     found = sample(pack_raw03(bytes(values)), side)
 
     assert found.invalid == 1
     assert found.speed is not SpeedReading.CLEAN
+
+
+def test_a_long_pulse_in_the_splice_after_a_block_is_not_counted() -> None:
+    side = reference_side()
+    values = bytearray(unpack_raw03(stream(side)))
+    _, end = block_regions(bytes(values))[1]
+    values[end + SKIP_SYNC] = 3
+
+    found = sample(pack_raw03(bytes(values)), side)
+
+    assert found.invalid == 0
 
 
 def test_the_trend_follows_blocks_read_then_errors() -> None:
