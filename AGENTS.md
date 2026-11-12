@@ -119,6 +119,10 @@ a factor of two and carry no tolerance.
   block. Decoding starts at the first disk information block that passes its
   checksum, and the lead-in is the gap before it; a side with no such block is
   decoded from its first value.
+- On firmware 3.12 a read started with mode 0x02 ended in a read error and
+  damaged a 24 KB file data block of the side. The probe therefore reads the
+  side back after every mode, a fault included, and counts a block that read
+  clean before and fails after as a change.
 - The read and write paths have run against one FDSStick on firmware 3.12. Every
   other driver test drives a recording stand-in, which proves which bytes we send
   and not that a device accepts them.

@@ -190,6 +190,7 @@ def probe_json(found: Probe) -> dict[str, object]:
     return {
         "timing_mode": found.timing_mode,
         "changed_by": found.changed_by,
+        "unchecked_by": found.unchecked_by,
         "verdict": found.verdict,
         "modes": [
             {"mode": result.mode, "answer": result.nature.value, "detail": result.detail}

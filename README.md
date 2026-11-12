@@ -815,7 +815,7 @@ Finds whether this FDSStick's firmware can send how long each pulse was, instead
 
 It starts a read with each unused mode byte, 0x02 to 0x07, and judges the answer: counts spread over the whole byte range, while packed classes are full of zero bytes. A mode only counts as timing when its counts, rounded, decode into blocks whose checksums pass. It stops at the first mode that returns timing.
 
-An undocumented mode could write instead of read, and nothing shows that a disk's write-protect tab stops an FDSStick from writing. So the probe asks for a scratch disk, such as the calibration disk, reads the side normally before it starts, and reads it again after every mode. If a mode changed the disk, the probe stops at once and names that mode.
+An undocumented mode could write instead of read, and nothing shows that a disk's write-protect tab stops an FDSStick from writing. So the probe asks for a scratch disk, such as the calibration disk, reads the side normally before it starts, and reads it again after every mode, including a mode that ended in a fault. A block that read clean before and fails or differs after counts as a change. If a mode changed the disk, the probe stops at once and names that mode; if the side cannot be read after a mode, it says the disk may have changed. On firmware 3.12, the only firmware tried, mode 0x02 ended in a read error and damaged a 24 KB file data block of the side.
 
 ```
 mode 0x02: pulse classes only

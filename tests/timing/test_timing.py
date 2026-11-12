@@ -159,6 +159,58 @@ def test_a_fault_ends_the_probe_and_is_reported() -> None:
     )
 
 
+def test_a_mode_that_breaks_a_block_changed_the_disk() -> None:
+    clean = packed_side()
+    values = bytearray(unpack_raw03(clean))
+    start, end = block_regions(bytes(values))[3]
+    values[(start + end) // 2] ^= 1
+    broken = pack_raw03(bytes(values))
+
+    class BreakingDrive(ModeDrive):
+        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
+            data = super().read_raw_side(what=what, mode=mode)
+            if mode == 2:
+                self.answers[0] = broken
+            return data
+
+    found = probe(BreakingDrive({0: clean}), modes=(2, 3))
+
+    assert found.changed_by == 2
+
+
+def test_a_mode_that_faults_is_still_checked_for_a_changed_disk() -> None:
+    class FaultingEraser(ModeDrive):
+        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
+            if mode == 2:
+                self.answers[0] = bytes(len(self.answers[0]))
+            return super().read_raw_side(what=what, mode=mode)
+
+    drive = FaultingEraser({0: packed_side()}, fail_on=2)
+
+    found = probe(drive, modes=(2, 3))
+
+    assert found.changed_by == 2
+    assert drive.modes == [0, 2, 0]
+    assert found.results[-1].nature is Nature.FAULT
+
+
+def test_a_side_that_cannot_be_read_after_a_mode_is_reported_as_unknown() -> None:
+    class SilentAfterMode(ModeDrive):
+        def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
+            if mode == 2:
+                self.fail_on = 0
+            return super().read_raw_side(what=what, mode=mode)
+
+    found = probe(SilentAfterMode({0: packed_side()}), modes=(2, 3))
+
+    assert found.unchecked_by == 2
+    assert found.changed_by is None
+    assert found.verdict.startswith(
+        "the side could not be read after mode 0x02 (the device stopped answering), so "
+        "whether that mode changed the disk is unknown"
+    )
+
+
 def test_a_timing_reader_hands_the_calibration_pulse_classes() -> None:
     lines: list[str] = []
     drive = ModeDrive({0: packed_side(), TIMING_MODE: counts_of(packed_side())})

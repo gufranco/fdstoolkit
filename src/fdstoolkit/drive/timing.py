@@ -44,7 +44,8 @@ PROBE_WARNING: Final = (
     "the probe starts reads with modes this firmware does not document, and nothing shows "
     "that a disk's write-protect tab stops an FDSStick from writing. Put a scratch disk in the "
     "drive, such as the calibration disk, never one you want to keep. The probe reads the side "
-    "before and after every mode and stops if the disk changed"
+    "before and after every mode and stops if the disk changed. On firmware 3.12 the first "
+    "mode, 0x02, damaged a block of the side it ran on"
 )
 NO_TIMING: Final = (
     "no mode tried returned pulse timing, so this firmware sends pulse classes only. "
@@ -59,6 +60,9 @@ class Nature(StrEnum):
     CLASSES = "pulse classes only"
     NOTHING = "no data"
     FAULT = "a fault"
+
+
+STOPPING: Final = frozenset({Nature.TIMING, Nature.FAULT})
 
 
 class ModeReader(Protocol):
@@ -184,6 +188,8 @@ class ProbeResult:
 class Probe:
     results: tuple[ProbeResult, ...]
     changed_by: int | None = None
+    unchecked_by: int | None = None
+    unchecked_detail: str = ""
 
     @property
     def timing_mode(self) -> int | None:
@@ -197,6 +203,13 @@ class Probe:
             return (
                 f"mode {self.changed_by:#04x} changed the disk, so the probe stopped. The disk no "
                 "longer holds what it held before; never use this mode"
+            )
+        if self.unchecked_by is not None:
+            return (
+                f"the side could not be read after mode {self.unchecked_by:#04x} "
+                f"({self.unchecked_detail}), so whether that mode changed the disk is unknown. "
+                "Dump the side before trusting it: a block that fails or differs from an "
+                "earlier dump means the mode changed it"
             )
         found = self.timing_mode
         if found is not None:
@@ -220,10 +233,8 @@ def _clean(packed: bytes) -> dict[Key, bytes]:
 
 
 def _changed(before: bytes, after: bytes) -> bool:
-    was = _clean(before)
     now = _clean(after)
-    rewritten = any(was[key] != payload for key, payload in now.items() if key in was)
-    return rewritten or (bool(was) and not now)
+    return any(now.get(key) != payload for key, payload in _clean(before).items())
 
 
 def _quiet(message: str) -> None:
@@ -237,22 +248,34 @@ def probe(
     progress: Callable[[str], None] = _quiet,
 ) -> Probe:
     baseline = reader.read_raw_side(what="probe: the side as it reads normally", mode=NORMAL_MODE)
-    results: list[ProbeResult] = []
+    results: tuple[ProbeResult, ...] = ()
     for mode in modes:
-        try:
-            data = reader.read_raw_side(what=f"probe: mode {mode:#04x}", mode=mode)
-            after = reader.read_raw_side(what="probe: checking the disk", mode=NORMAL_MODE)
-        except HardwareFaultError as fault:
-            results.append(ProbeResult(mode=mode, nature=Nature.FAULT, detail=str(fault)))
-            progress(results[-1].render())
-            break
-        results.append(ProbeResult(mode=mode, nature=classify(data)))
-        progress(results[-1].render())
+        result = _tried(reader, mode)
+        results = (*results, result)
+        progress(result.render())
+        after = _read_back(reader)
+        if isinstance(after, HardwareFaultError):
+            return Probe(results=results, unchecked_by=mode, unchecked_detail=str(after))
         if _changed(baseline, after):
-            return Probe(results=tuple(results), changed_by=mode)
-        if results[-1].nature is Nature.TIMING:
+            return Probe(results=results, changed_by=mode)
+        if result.nature in STOPPING:
             break
-    return Probe(results=tuple(results))
+    return Probe(results=results)
+
+
+def _tried(reader: ModeReader, mode: int) -> ProbeResult:
+    try:
+        data = reader.read_raw_side(what=f"probe: mode {mode:#04x}", mode=mode)
+    except HardwareFaultError as fault:
+        return ProbeResult(mode=mode, nature=Nature.FAULT, detail=str(fault))
+    return ProbeResult(mode=mode, nature=classify(data))
+
+
+def _read_back(reader: ModeReader) -> bytes | HardwareFaultError:
+    try:
+        return reader.read_raw_side(what="probe: checking the disk", mode=NORMAL_MODE)
+    except HardwareFaultError as fault:
+        return fault
 
 
 def _no_timings() -> list[Timing]:
