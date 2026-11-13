@@ -69,15 +69,20 @@ jobs:
         run: |
           python - <<'CHECK'
           import json
+          import re
           import sys
           import tomllib
           from pathlib import Path
 
+          def normal(name):
+              return re.sub(r"[-_.]+", "-", name).lower()
+
           locked = tomllib.loads(Path("uv.lock").read_text())
-          declared = {package["name"].lower() for package in locked["package"]}
+          declared = {normal(package["name"]) for package in locked["package"]}
           seeded = {"pip", "setuptools"}
           held = json.loads(Path("sbom.json").read_text())
-          named = sorted(one["name"].lower() for one in held.get("components", ()))
+          components = held.get("components", ())
+          named = sorted(normal(one["name"]) for one in components)
           extra = [one for one in named if one not in declared | seeded]
           print(f"components: {', '.join(named) or 'none'}")
           if extra:
