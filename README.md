@@ -150,10 +150,12 @@ CRC32, MD5, SHA-1 and SHA-256 of the whole image and of each side, plus the cano
 #### `provenance`
 
 ```bash
-fdstoolkit provenance <image> [--json]
+fdstoolkit provenance <image> [--captures <path>] [--json]
 ```
 
 Factory, kiosk rewrite, or unknown, per side, with the dates, serial and rewrite count behind the verdict. A factory disk carries serial `ffff` and rewrite count `00`.
+
+Those fields travel with the data, so a factory image written back to a disk still carries them. `--captures` takes what `dump --raw` kept and judges how each side was physically written. On both sides of a factory disk measured, every block ends in a few stray pulses and the gaps between blocks vary by 18 to 73 bits. Every side the FDSStick wrote, in every layout this toolkit has used, ends every block clean and keeps its gaps within 1 bit. A side whose captures show the second pattern reads as rewritten whatever its fields say, and the report notes when the data came from a factory disk. A side that shows neither pattern clearly, or too few clean blocks, is left to its fields. Captures of another disk are refused.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/provenance-dark.png">
@@ -535,7 +537,7 @@ The stream sent to the FDSStick follows the one captured write of the official F
 
 The first block's position is the one figure that cannot be pinned to a value. It moves by up to 1,480 bits between two reads of the same factory side, and its average moved by about 1,100 bits between three writes of the same image, so the writer aims at the middle of the factory range. The gaps and the end pattern do not move.
 
-Two things still tell a rewritten side from a factory one. On a factory side the lead-in follows a stretch that reads as noise, while the FDSStick starts writing gap as soon as the drive is ready. A duplicator's gaps also wander by a few dozen bits where this writer's do not. The data, the checksums and the disk information fields are the image's own, so `provenance` reads a rewrite of a factory image as factory. It has written and read back whole sides through one FDSStick on firmware 3.12. On other firmware, write the calibration disk to a scratch disk before trusting a write with anything else.
+Three things still tell a rewritten side from a factory one. On a factory side the lead-in follows a stretch that reads as noise, while the FDSStick starts writing gap as soon as the drive is ready. Every factory block ends in a few stray pulses, where a written block ends clean. A duplicator's gaps also wander by a few dozen bits where this writer's do not. The data, the checksums and the disk information fields are the image's own, so `provenance` reads a rewrite of a factory image as factory from the image alone, and as rewritten when given the captures of a dump. It has written and read back whole sides through one FDSStick on firmware 3.12. On other firmware, write the calibration disk to a scratch disk before trusting a write with anything else.
 
 Two ways a drive refuses a write are named from the readback. A disk that reads back exactly as before did not take the write at all: check the controller, FD3206P rather than FD7201P. A side whose write-protect tab is broken off may be refused too, though whether the drive enforces the tab for an FDSStick is not documented. Some drives also carry a lockout circuit that blocks the write gate, with no error, when it rises before the drive reports ready or stays up past about a second, per a [nesdev forum thread](https://forums.nesdev.org/viewtopic.php?t=26678) citing the Backup Utilisation Guide. A disk that took every block but its disk information block is a drive whose power board was never modified for writing, since only an FMD-POWER-01, or a later board modified for it, rewrites the Nintendo header. `surface` stops on either with the same reason.
 

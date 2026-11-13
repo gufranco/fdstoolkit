@@ -189,21 +189,54 @@ function side(key, value) {
   return node;
 }
 
-function change(row) {
-  const item = element('li', { className: 'change' });
-  const rest = Object.entries(row)
-    .filter(([key]) => key !== 'left' && key !== 'right')
-    .filter(([, value]) => value !== false);
-  const marks = rest.filter(([, value]) => !isProse(value));
-  const prose = rest.filter(([, value]) => isProse(value));
+function proseOf(value) {
+  if (Array.isArray(value)) {
+    return value.some(isProse) ? value.map(scalar) : [];
+  }
+  return isProse(value) ? [scalar(value)] : [];
+}
+
+function hasProse(row) {
+  return Object.values(row).some((value) => proseOf(value).length > 0);
+}
+
+function fill(item, entries) {
+  const marks = entries.filter(([, value]) => proseOf(value).length === 0);
   if (marks.length) {
     const head = element('p', { className: 'change-marks' });
     head.append(...marks.map(([key, value]) => chip(key, value)));
     item.append(head);
   }
-  prose.forEach(([, value]) => {
-    item.append(element('p', { className: 'change-note', textContent: scalar(value) }));
-  });
+  entries
+    .flatMap(([, value]) => proseOf(value))
+    .forEach((text) => {
+      item.append(element('p', { className: 'change-note', textContent: text }));
+    });
+}
+
+function record(row) {
+  const item = element('li', { className: 'change' });
+  fill(
+    item,
+    Object.entries(row).filter(([, value]) => !(Array.isArray(value) && value.length === 0)),
+  );
+  return item;
+}
+
+function records(rows) {
+  const list = element('ul', { className: 'changes' });
+  list.append(...rows.map(record));
+  return list;
+}
+
+function change(row) {
+  const item = element('li', { className: 'change' });
+  fill(
+    item,
+    Object.entries(row)
+      .filter(([key]) => key !== 'left' && key !== 'right')
+      .filter(([, value]) => value !== false),
+  );
   const values = element('p', { className: 'change-values' });
   values.append(side('left', row.left), side('right', row.right));
   item.append(values);
@@ -229,6 +262,10 @@ function pairs(value) {
   return list;
 }
 
+function rowsOf(rows) {
+  return rows.some(hasProse) ? records(rows) : table(rows);
+}
+
 export function describe(value) {
   if (isScalar(value)) {
     return element('dd', { textContent: scalar(value) });
@@ -245,7 +282,7 @@ export function describe(value) {
     }
     if (value.every(isRecord)) {
       holder.classList.add('wide');
-      holder.append(isChange(value) ? changes(value) : table(value));
+      holder.append(isChange(value) ? changes(value) : rowsOf(value));
       return holder;
     }
   }

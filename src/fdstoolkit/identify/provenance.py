@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.core.diskinfo import DiskInfo
+from fdstoolkit.identify.layout import Layout, LayoutReading
 
 PROVENANCE_START: Final = 0x1F
 PROVENANCE_END: Final = 0x38
@@ -16,6 +18,9 @@ KIOSK_SERVICE_ENDED: Final = (2003, 9, 30)
 UNWRITTEN_SERIAL: Final = 0xFFFF
 UNWRITTEN_DATE: Final = b"\xff\xff\xff"
 BLANK_DATE: Final = bytes(3)
+COPIED_FROM_FACTORY: Final = (
+    "its data fields still say factory, so the data was copied from a factory disk"
+)
 DISK_COLOURS: Final[dict[int, str]] = {
     0x00: "yellow",
     0xFF: "blue",
@@ -41,6 +46,7 @@ class SideProvenance:
     disk_version: int | None
     signature: str | None
     notes: tuple[str, ...]
+    layout: LayoutReading | None = None
 
     @property
     def disk_colour(self) -> str | None:
@@ -54,6 +60,7 @@ class SideProvenance:
             "disk_type": self.disk_type,
             "disk_version": self.disk_version,
             "index": self.index,
+            "layout": str(self.layout.layout) if self.layout else None,
             "manufacturing_date": list(self.manufacturing_date)
             if self.manufacturing_date
             else None,
@@ -128,41 +135,64 @@ def _notes_for(info: DiskInfo, origin: Origin) -> tuple[str, ...]:
     return tuple(notes)
 
 
-def provenance_of(disk: Disk) -> ProvenanceReport:
-    sides: list[SideProvenance] = []
-    for index, side in enumerate(disk.sides):
-        info = side.disk_info
-        if info is None:
-            sides.append(
-                SideProvenance(
-                    index=index,
-                    origin=Origin.UNKNOWN,
-                    manufacturing_date=None,
-                    rewritten_date=None,
-                    writer_serial=None,
-                    rewrite_count=None,
-                    disk_type=None,
-                    disk_version=None,
-                    signature=None,
-                    notes=("the side carries no disk information block",),
-                )
-            )
-            continue
+def _layout_notes(fields: Origin, layout: LayoutReading | None) -> tuple[str, ...]:
+    if layout is None:
+        return ()
+    if fields is Origin.FACTORY and layout.layout is Layout.STREAMED:
+        return (layout.note(), COPIED_FROM_FACTORY)
+    return (layout.note(),)
 
-        origin = _origin_of(info)
-        sides.append(
-            SideProvenance(
-                index=index,
-                origin=origin,
-                manufacturing_date=info.manufacturing_date,
-                rewritten_date=info.rewritten_date,
-                writer_serial=info.writer_serial,
-                rewrite_count=info.rewrite_count,
-                disk_type=info.disk_type,
-                disk_version=info.disk_version,
-                signature=signature_in(info),
-                notes=_notes_for(info, origin),
-            )
+
+def _origin_with(fields: Origin, layout: LayoutReading | None) -> Origin:
+    streamed = layout is not None and layout.layout is Layout.STREAMED
+    return Origin.REWRITTEN if fields is Origin.FACTORY and streamed else fields
+
+
+def _without_info(index: int, layout: LayoutReading | None) -> SideProvenance:
+    return SideProvenance(
+        index=index,
+        origin=Origin.UNKNOWN,
+        manufacturing_date=None,
+        rewritten_date=None,
+        writer_serial=None,
+        rewrite_count=None,
+        disk_type=None,
+        disk_version=None,
+        signature=None,
+        notes=(
+            "the side carries no disk information block",
+            *_layout_notes(Origin.UNKNOWN, layout),
+        ),
+        layout=layout,
+    )
+
+
+def _side_provenance(index: int, info: DiskInfo, layout: LayoutReading | None) -> SideProvenance:
+    fields = _origin_of(info)
+    return SideProvenance(
+        index=index,
+        origin=_origin_with(fields, layout),
+        manufacturing_date=info.manufacturing_date,
+        rewritten_date=info.rewritten_date,
+        writer_serial=info.writer_serial,
+        rewrite_count=info.rewrite_count,
+        disk_type=info.disk_type,
+        disk_version=info.disk_version,
+        signature=signature_in(info),
+        notes=(*_notes_for(info, fields), *_layout_notes(fields, layout)),
+        layout=layout,
+    )
+
+
+def provenance_of(
+    disk: Disk, *, layouts: Mapping[int, LayoutReading] | None = None
+) -> ProvenanceReport:
+    measured = layouts or {}
+    return ProvenanceReport(
+        sides=tuple(
+            _without_info(index, measured.get(index))
+            if side.disk_info is None
+            else _side_provenance(index, side.disk_info, measured.get(index))
+            for index, side in enumerate(disk.sides)
         )
-
-    return ProvenanceReport(sides=tuple(sides))
+    )

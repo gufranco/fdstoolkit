@@ -198,6 +198,44 @@ describe('describe', () => {
   });
 });
 
+const SIDE = {
+  index: 0,
+  origin: 'rewritten',
+  notes: ['the captures show a side written in one stream', 'its data fields still say factory'],
+  signature: null,
+};
+
+describe('records that carry prose', () => {
+  it('renders a card per record rather than a table', () => {
+    const node = describeValue([SIDE, { ...SIDE, index: 1 }]);
+
+    expect(node.querySelector('table')).toBeNull();
+    expect(node.querySelectorAll('.change')).toHaveLength(2);
+  });
+
+  it('gives every sentence of a list its own line', () => {
+    const node = describeValue([SIDE]);
+
+    expect([...node.querySelectorAll('.change-note')].map((n) => n.textContent)).toEqual(SIDE.notes);
+  });
+
+  it('keeps the short values as chips', () => {
+    const node = describeValue([SIDE]);
+
+    expect([...node.querySelectorAll('.chip-key')].map((n) => n.textContent)).toEqual([
+      'index',
+      'origin',
+      'signature',
+    ]);
+  });
+
+  it('leaves out a list with nothing in it', () => {
+    const node = describeValue([{ ...SIDE, notes: [], note: 'one long sentence here' }]);
+
+    expect(node.textContent).not.toContain('notes');
+  });
+});
+
 
 const CHANGE = {
   side: 0,

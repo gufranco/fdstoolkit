@@ -8,7 +8,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.build.fdspacker import FdsPackerManifest
+from fdstoolkit.codecs.fds import encode
+from fdstoolkit.drive.captures import Capture, bundle_zip
 from fdstoolkit.ui.app import create_app
 
 OK = 200
@@ -96,6 +99,32 @@ def test_provenance_reports_a_verdict_per_side(client: TestClient) -> None:
     body = client.post("/api/provenance", json={"data": ENCODED}).json()
 
     assert len(body["rows"]) == 2
+
+
+def written_side() -> tuple[str, str]:
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "fdsstick"
+    capture = Capture(side=0, read=1, data=(fixture / "calibration-side.raw03").read_bytes())
+    image = encode(calibration_disk(1), headered=False)[0]
+    bundle = bundle_zip([capture], image="calibration.fds", created="2026-11-13T00:00:00Z")
+    return base64.b64encode(image).decode("ascii"), base64.b64encode(bundle).decode("ascii")
+
+
+def test_provenance_with_captures_names_a_side_the_fdsstick_wrote(client: TestClient) -> None:
+    image, captures = written_side()
+
+    body = client.post("/api/provenance", json={"data": image, "captures": captures}).json()
+
+    assert body["rows"][0]["origin"] == "rewritten"
+    assert body["rows"][0]["layout"] == "streamed"
+
+
+def test_provenance_refuses_captures_of_another_disk(client: TestClient) -> None:
+    _, captures = written_side()
+
+    answer = client.post("/api/provenance", json={"data": ONE, "captures": captures})
+
+    assert answer.status_code == UNPROCESSABLE
+    assert "another disk" in answer.json()["detail"]
 
 
 def test_save_find_compares_dumps_of_one_release(client: TestClient) -> None:

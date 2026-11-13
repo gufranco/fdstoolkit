@@ -14,7 +14,7 @@ from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
-from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
+from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE, calibration_disk
 from fdstoolkit.cli import common, hardware_cmds
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds, qd
@@ -24,7 +24,7 @@ from fdstoolkit.codecs.raw import encode_raw03
 from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus, FileKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.doctor import Check, CheckStatus
-from fdstoolkit.drive.captures import Capture, load_bundle
+from fdstoolkit.drive.captures import Capture, load_bundle, write_bundle
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware import session
 from fdstoolkit.hardware.fdsstick import FdsStick, HidApiTransport
@@ -2091,3 +2091,42 @@ def test_dump_recovers_a_failed_block_from_the_reads_it_kept(
 
     assert "side 0 block 1: recovered by a pulse vote across 3 reads" in result.stdout
     assert "grade marginal" in result.stdout
+
+
+def written_side_captures(tmp_path: Path) -> tuple[Path, Path]:
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "fdsstick"
+    image = tmp_path / "calibration.fds"
+    image.write_bytes(fds.encode(calibration_disk(1), headered=False)[0])
+    captures = tmp_path / "caps"
+    capture = Capture(side=0, read=1, data=(fixture / "calibration-side.raw03").read_bytes())
+    write_bundle(captures, [capture], image=image.name, created="2026-11-13T00:00:00Z")
+    return image, captures
+
+
+def test_provenance_with_captures_names_a_side_the_fdsstick_wrote(tmp_path: Path) -> None:
+    image, captures = written_side_captures(tmp_path)
+
+    result = runner.invoke(app, ["provenance", str(image), "--captures", str(captures)])
+
+    assert result.exit_code == 0
+    assert "side 0: rewritten" in result.stdout
+    assert "written in one stream" in result.stdout
+
+
+def test_provenance_with_captures_reports_the_layout_as_json(tmp_path: Path) -> None:
+    image, captures = written_side_captures(tmp_path)
+
+    result = runner.invoke(app, ["provenance", str(image), "--captures", str(captures), "--json"])
+
+    assert json.loads(result.stdout)["sides"][0]["layout"] == "streamed"
+
+
+def test_provenance_refuses_captures_of_another_disk(tmp_path: Path) -> None:
+    _, captures = written_side_captures(tmp_path)
+    other = tmp_path / "other.fds"
+    other.write_bytes(blank_image(sides=1, headered=False, formatted=True))
+
+    result = runner.invoke(app, ["provenance", str(other), "--captures", str(captures)])
+
+    assert result.exit_code == 1
+    assert "another disk" in result.stdout

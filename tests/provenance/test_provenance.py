@@ -3,7 +3,12 @@ from __future__ import annotations
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.disk import Disk
+from fdstoolkit.identify.layout import LayoutReading
 from fdstoolkit.identify.provenance import Origin, provenance_of
+
+STREAMED = LayoutReading(reads=2, endings=40, quiet_endings=40, gap_spread=0)
+DUPLICATED = LayoutReading(reads=2, endings=40, quiet_endings=0, gap_spread=73)
+UNSETTLED = LayoutReading(reads=1, endings=20, quiet_endings=10, gap_spread=0)
 
 
 def disk_with_info(**overrides: bytes) -> Disk:
@@ -172,3 +177,75 @@ def test_a_date_that_is_neither_blank_nor_unwritten_is_still_reported() -> None:
     report = provenance_of(disk_with_info(x2C=bytes([0xAB, 0xCD, 0xEF])))
 
     assert any("rewritten date is not valid BCD" in note for note in report.sides[0].notes)
+
+
+def test_factory_fields_on_a_streamed_side_read_as_rewritten() -> None:
+    disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
+
+    report = provenance_of(disk, layouts={0: STREAMED})
+
+    side = report.sides[0]
+    assert side.origin is Origin.REWRITTEN
+    assert any(
+        note.startswith("the captures show a side written in one stream") for note in side.notes
+    )
+    assert any("data fields still say factory" in note for note in side.notes)
+
+
+def test_factory_fields_on_a_duplicated_side_stay_factory() -> None:
+    disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
+
+    report = provenance_of(disk, layouts={0: DUPLICATED})
+
+    side = report.sides[0]
+    assert side.origin is Origin.FACTORY
+    assert any(note.startswith("the captures show a duplicator's layout") for note in side.notes)
+
+
+def test_an_unsettled_layout_leaves_the_fields_to_decide() -> None:
+    disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
+
+    report = provenance_of(disk, layouts={0: UNSETTLED})
+
+    assert report.sides[0].origin is Origin.FACTORY
+
+
+def test_a_kiosk_rewrite_on_a_streamed_side_adds_only_the_layout() -> None:
+    disk = disk_with_info(
+        x1F=bytes([0x61, 0x02, 0x15]),
+        x2C=bytes([0x63, 0x08, 0x01]),
+        x31=bytes([0x34, 0x12]),
+        x34=bytes([0x03]),
+    )
+
+    report = provenance_of(disk, layouts={0: STREAMED})
+
+    side = report.sides[0]
+    assert side.origin is Origin.REWRITTEN
+    assert not any("data fields still say factory" in note for note in side.notes)
+    assert any(note.startswith("the captures show") for note in side.notes)
+
+
+def test_a_side_without_disk_information_still_reports_its_layout() -> None:
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=False))
+
+    report = provenance_of(disk, layouts={0: STREAMED})
+
+    assert report.sides[0].origin is Origin.UNKNOWN
+    assert any(note.startswith("the captures show") for note in report.sides[0].notes)
+
+
+def test_the_layout_renders_with_the_side() -> None:
+    disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
+
+    shown = provenance_of(disk, layouts={0: STREAMED}).sides[0].as_dict()
+
+    assert shown["layout"] == "streamed"
+
+
+def test_a_side_read_without_captures_has_no_layout() -> None:
+    disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
+
+    shown = provenance_of(disk).sides[0].as_dict()
+
+    assert shown["layout"] is None

@@ -263,6 +263,10 @@ class VerifySpec(ImageSpec):
     strict: bool = False
 
 
+class ProvenanceSpec(ImageSpec):
+    captures: str | None = Field(None, description="the capture bundle a dump kept, as a zip")
+
+
 class GradeSpec(ImageSpec):
     reads: list[str] = Field(default_factory=list)
     captures: str | None = Field(None, description="the capture bundle a dump kept, as a zip")

@@ -19,6 +19,7 @@ from fdstoolkit.edit.files import FileSpec, extract_files, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 from fdstoolkit.edit.recipes import load_recipes
 from fdstoolkit.edit.saves import SaveRecipe, find_save_candidates, normalise_saves
+from fdstoolkit.identify.layout import LayoutReading, layouts_for
 from fdstoolkit.identify.provenance import provenance_of
 from fdstoolkit.patch.apply import apply_patch
 from fdstoolkit.quality.consensus import compare_images
@@ -35,6 +36,7 @@ from fdstoolkit.ui.schemas import (
     ImageSpec,
     InsertSpec,
     PatchSpec,
+    ProvenanceSpec,
     RebuildSpec,
     RowsResult,
     SaveSpec,
@@ -42,6 +44,7 @@ from fdstoolkit.ui.schemas import (
 from fdstoolkit.ui.shared import (
     BAD_REQUEST,
     UNPROCESSABLE,
+    bundle_of,
     bytes_of,
     decode_payload,
     encoded_file,
@@ -97,8 +100,19 @@ def boot(spec: ImageSpec) -> RowsResult:
     return RowsResult(rows=rows_of(predict_boot(_disk(spec)).sides))
 
 
-def provenance(spec: ImageSpec) -> RowsResult:
-    return RowsResult(rows=rows_of(provenance_of(_disk(spec)).sides))
+def _layouts(disk: Disk, captures: str | None) -> dict[int, LayoutReading] | None:
+    if captures is None:
+        return None
+    try:
+        return layouts_for(disk, bundle_of(captures))
+    except ValueError as error:
+        refuse(str(error), status=UNPROCESSABLE)
+
+
+def provenance(spec: ProvenanceSpec) -> RowsResult:
+    disk = _disk(spec)
+    report = provenance_of(disk, layouts=_layouts(disk, spec.captures))
+    return RowsResult(rows=[side.as_dict() for side in report.sides])
 
 
 def extract(spec: ExtractSpec) -> FilesResult:

@@ -12,6 +12,7 @@ from fdstoolkit.cli.common import (
     exit_code,
     fail,
     guard_output,
+    load_captures,
     side_summary,
 )
 from fdstoolkit.codecs import fds, qd
@@ -21,6 +22,7 @@ from fdstoolkit.core.diagnostics import worst_severity
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.doctor import CheckStatus, diagnose
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
+from fdstoolkit.identify.layout import LayoutReading, layouts_for
 from fdstoolkit.identify.provenance import provenance_of
 from fdstoolkit.report import as_json, diagnostics_as_data
 
@@ -167,14 +169,29 @@ def hash_command(
         typer.echo(f"wrote {output} ({len(canonical.data)} bytes)")
 
 
+def _layouts(disk: Disk, captures: Path | None) -> dict[int, LayoutReading] | None:
+    if captures is None:
+        return None
+    try:
+        return layouts_for(disk, load_captures(captures))
+    except ValueError as error:
+        raise fail(str(error)) from error
+
+
 def provenance(
     image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
     *,
+    captures: Annotated[
+        Path | None,
+        typer.Option(
+            "--captures", help="also judge how each side was written, from what a dump --raw kept"
+        ),
+    ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
     """Report where each side came from: factory, kiosk rewrite, or unknown."""
     disk, _, _, _ = decode_image(image)
-    report = provenance_of(disk)
+    report = provenance_of(disk, layouts=_layouts(disk, captures))
 
     if json_output:
         typer.echo(
