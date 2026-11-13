@@ -44,9 +44,13 @@ CI runs the same subject check on every pushed or proposed commit.
 | Lint | `uv run ruff check .` |
 | Types | `uv run pyright` |
 | Tests | `uv run pytest --cov` |
+| Page tests | `pnpm test:coverage` |
+| Browser | `pnpm e2e` |
+| JSON and YAML format | `pnpm format:check` |
+| YAML lint | `uv run yamllint --strict .` |
 
-Coverage is gated at 100%, statements and branches. A line that genuinely cannot
-run carries a coverage directive naming why; everything else gets a test. The
+Coverage is gated at 100%, statements and branches, with no exclusions. A line
+no test can reach is deleted or redesigned until a test reaches it. The
 reason for 100% rather than a high number: this toolkit writes to physical media
 and tells you whether a dump is trustworthy, and a branch nobody exercised is a
 branch whose first run happens against somebody's only copy of a disk.

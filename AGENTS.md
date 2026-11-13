@@ -192,6 +192,8 @@ uv run pyright
 uv run pytest
 pnpm test:coverage
 pnpm e2e
+pnpm format:check
+uv run yamllint --strict .
 ```
 
 Coverage is measured on every `pytest` run, not on request, and the floor is

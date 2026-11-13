@@ -27,12 +27,16 @@ jobs:
     outputs:
       tag: ${{ steps.released.outputs.tag }}
     steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       - uses: actions/setup-node@v7
         with:
@@ -43,12 +47,16 @@ jobs:
         with:
           python-version-file: .python-version
 
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+
       - name: Install release tooling
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Record the tag that already existed
         id: before
-        run: echo "tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)" >>"$GITHUB_OUTPUT"
+        run: |
+          tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          echo "tag=${tag}" >>"$GITHUB_OUTPUT"
         shell: bash
 
       - name: Release
@@ -58,10 +66,9 @@ jobs:
 
       - name: Describe what ships
         run: |
-          python -m venv .sbom
-          .sbom/bin/pip install --quiet --disable-pip-version-check .
-          python -m pip install --disable-pip-version-check cyclonedx-bom==6.0.0
-          python -m cyclonedx_py environment .sbom \
+          uv venv --quiet .sbom
+          uv pip install --quiet --python .sbom .
+          uvx --from cyclonedx-bom==6.0.0 cyclonedx-py environment .sbom \
             --output-format json --outfile sbom.json
         shell: bash
 
@@ -118,9 +125,7 @@ jobs:
         shell: bash
 
       - name: Sign it
-        run: |
-          python -m pip install --disable-pip-version-check sigstore==4.5.0
-          python -m sigstore sign sbom.json --bundle sbom.json.sigstore.json
+        run: uvx sigstore==4.5.0 sign sbom.json --bundle sbom.json.sigstore.json
         shell: bash
 
       - name: Resolve the released tag
@@ -131,10 +136,12 @@ jobs:
           tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
           if [ -z "${tag}" ]; then
             echo "tag=" >>"$GITHUB_OUTPUT"
-            echo "::notice title=No release::No version tag is reachable, so there is nothing to attach."
+            reason="No version tag is reachable, so there is nothing to attach."
+            echo "::notice title=No release::${reason}"
           elif [ "${tag}" = "${BEFORE}" ]; then
             echo "tag=" >>"$GITHUB_OUTPUT"
-            echo "::notice title=No release::${tag} was already published, so its assets stay as they are."
+            reason="${tag} was already published, so its assets stay as they are."
+            echo "::notice title=No release::${reason}"
           else
             echo "tag=${tag}" >>"$GITHUB_OUTPUT"
             echo "released tag: ${tag}"

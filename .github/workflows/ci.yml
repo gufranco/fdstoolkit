@@ -17,18 +17,23 @@ jobs:
     name: Commit subjects
     runs-on: ubuntu-26.04
     steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Every new commit follows the convention the release reads
         env:
-          PR_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PUSH_RANGE: ${{ github.event.before }}..${{ github.sha }}
           EVENT: ${{ github.event_name }}
         run: |
           range=${PUSH_RANGE}
-          if [[ ${EVENT} == pull_request ]]; then range=${PR_RANGE}; fi
+          if [[ ${EVENT} == pull_request ]]; then range=${PR_BASE}..${PR_HEAD}; fi
           if [[ ${range} == 0000000000000000000000000000000000000000..* ]]; then exit 0; fi
           bash scripts/check-commits.sh --range "${range}"
 
@@ -36,9 +41,13 @@ jobs:
     name: Lint and format
     runs-on: ubuntu-26.04
     steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
           cache-suffix: lint
@@ -55,7 +64,7 @@ jobs:
       - name: Types
         run: uv run pyright
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       - uses: actions/setup-node@v7
         with:
@@ -69,10 +78,13 @@ jobs:
         run: pnpm test:coverage
 
       - name: Lint the workflows
-        uses: raven-actions/actionlint@v2
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
 
       - name: Lint the shell scripts
         run: shellcheck scripts/*.sh
+
+      - name: Lint the YAML
+        run: uv run yamllint --strict .
 
       - name: Format the JSON and YAML
         run: pnpm run format:check
@@ -81,9 +93,13 @@ jobs:
     name: The page in a browser
     runs-on: ubuntu-26.04
     steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
           cache-suffix: browser
@@ -91,7 +107,7 @@ jobs:
       - name: Install
         run: uv sync --all-extras --dev
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       - uses: actions/setup-node@v7
         with:
@@ -119,9 +135,14 @@ jobs:
           - os: ubuntu-26.04-arm
             python: "3.14"
     steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        if: runner.os == 'Linux'
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
           cache-suffix: python-${{ matrix.python }}
@@ -136,9 +157,13 @@ jobs:
     name: Determinism under a different environment
     runs-on: ubuntu-26.04
     steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
           cache-suffix: determinism
@@ -157,9 +182,13 @@ jobs:
     name: What a clone actually carries
     runs-on: ubuntu-26.04
     steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
           cache-suffix: distribution
@@ -197,8 +226,8 @@ jobs:
           git archive --format=tar.gz --prefix=fdstoolkit/ -o /tmp/source.tar.gz HEAD
           mkdir -p /tmp/from-git
           tar -xzf /tmp/source.tar.gz -C /tmp/from-git
-          python -m venv /tmp/from-git/.venv
-          /tmp/from-git/.venv/bin/pip install --quiet /tmp/from-git/fdstoolkit
+          uv venv --quiet /tmp/from-git/.venv
+          uv pip install --quiet --python /tmp/from-git/.venv /tmp/from-git/fdstoolkit
           /tmp/from-git/.venv/bin/fdstoolkit --version
           /tmp/from-git/.venv/bin/fdstoolkit doctor
           /tmp/from-git/.venv/bin/fdstoolkit blank -o /tmp/blank.fds --sides 1 --formatted

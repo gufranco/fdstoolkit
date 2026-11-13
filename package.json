@@ -5,8 +5,8 @@
   "description": "Release tooling only. The package itself is Python and is installed from a release tarball or through Homebrew.",
   "license": "MIT",
   "scripts": {
-    "format": "prettier --write \"**/*.{json,yml,yaml}\"",
-    "format:check": "prettier --check \"**/*.{json,yml,yaml}\"",
+    "format": "git ls-files -z '*.json' '*.yml' '*.yaml' | xargs -0 prettier --write",
+    "format:check": "git ls-files -z '*.json' '*.yml' '*.yaml' | xargs -0 prettier --check",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test"

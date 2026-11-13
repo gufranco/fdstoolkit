@@ -16,8 +16,12 @@ permissions:
 jobs:
   dispatch:
     name: ask the tap to bump the formula
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: app-token
         with:

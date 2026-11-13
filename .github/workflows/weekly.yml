@@ -21,6 +21,10 @@ jobs:
       matrix:
         python: ["3.12", "3.14"]
     steps:
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
@@ -28,9 +32,11 @@ jobs:
           python-version: ${{ matrix.python }}
           allow-prereleases: true
 
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+
       - name: Install the package and the newest tools
         run: |
-          python -m pip install --disable-pip-version-check --upgrade \
+          uv pip install --system --upgrade \
             '.[hardware,ui]' ruff pyright pytest pytest-cov hypothesis httpx2
 
       - name: Formatting, as the newest formatter sees it

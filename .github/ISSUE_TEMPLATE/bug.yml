@@ -13,7 +13,8 @@ body:
     id: what
     attributes:
       label: What happened
-      description: The command you ran and what it printed. Paste the output rather than describing it.
+      description: >-
+        The command you ran and what it printed. Paste the output rather than describing it.
       render: shell
     validations:
       required: true

@@ -1,5 +1,6 @@
 name: A result from real hardware
-description: You ran something from this project against an actual drive, an FDSStick or a Famicom Dumper.
+description: >-
+  You ran something from this project against an actual drive through an FDSStick.
 labels: [hardware]
 body:
   - type: markdown
@@ -41,4 +42,6 @@ body:
     id: disk
     attributes:
       label: Which disk, and what `fdstoolkit info` says about it
-      description: Never attach the image. The report from `fdstoolkit info` and `fdstoolkit hash` identifies it.
+      description: >-
+        Never attach the image. The report from `fdstoolkit info` and `fdstoolkit hash`
+        identifies it.
