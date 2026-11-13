@@ -529,9 +529,11 @@ The stream sent to the FDSStick follows the one captured write of the official F
 
 | Part of the side | Factory side, as read | Official tool's lengths, as read | This writer, as read |
 |---|---|---|---|
-| First block, counted from where the drive turns ready | 16,490 to 17,970 bits | 25,416 to 27,572 bits | 16,736 to 18,312 bits |
+| First block, counted from where the drive turns ready | 16,490 to 17,970 bits | 25,416 to 27,572 bits | 16,587 to 18,312 bits over three writes |
 | Gap between two blocks | 982 to 1,055 bits, most near 1,005 | 902 bits | 1,006 bits |
 | After the last block | a 976-bit gap, then the bits 0, 1, 1 repeated to the end of the track | gap | a 975-bit gap, then the same pattern |
+
+The first block's position is the one figure that cannot be pinned to a value. It moves by up to 1,480 bits between two reads of the same factory side, and its average moved by about 1,100 bits between three writes of the same image, so the writer aims at the middle of the factory range. The gaps and the end pattern do not move.
 
 Two things still tell a rewritten side from a factory one. On a factory side the lead-in follows a stretch that reads as noise, while the FDSStick starts writing gap as soon as the drive is ready. A duplicator's gaps also wander by a few dozen bits where this writer's do not. The data, the checksums and the disk information fields are the image's own, so `provenance` reads a rewrite of a factory image as factory. It has written and read back whole sides through one FDSStick on firmware 3.12. On other firmware, write the calibration disk to a scratch disk before trusting a write with anything else.
 
