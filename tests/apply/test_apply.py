@@ -39,20 +39,29 @@ def headered() -> bytes:
 
 
 def test_an_ips_patch_applies_to_a_headerless_image() -> None:
-    outcome = apply_patch(ips_setting(0x10, b"ZEL"), headerless())
+    # Arrange
+    patch = ips_setting(0x10, b"ZEL")
+    image = headerless()
 
+    # Act
+    outcome = apply_patch(patch, image)
+
+    # Assert
     assert outcome.format is PatchFormat.IPS
     assert outcome.data[0x10:0x13] == b"ZEL"
     assert outcome.applied_to == "image"
 
 
 def test_a_bps_patch_made_for_the_headerless_image_still_applies_to_a_headered_one() -> None:
+    # Arrange
     target = bytearray(headerless())
     target[0x10:0x13] = b"ZEL"
     patch = bps_replacing(headerless(), bytes(target))
 
+    # Act
     outcome = apply_patch(patch, headered())
 
+    # Assert
     assert outcome.applied_to == "headerless image"
     assert outcome.header_restored
     assert has_header(outcome.data)
@@ -60,47 +69,77 @@ def test_a_bps_patch_made_for_the_headerless_image_still_applies_to_a_headered_o
 
 
 def test_a_bps_patch_made_for_the_headered_image_applies_directly() -> None:
+    # Arrange
     target = bytearray(headered())
     target[HEADER_SIZE + 0x10 : HEADER_SIZE + 0x13] = b"ZEL"
     patch = bps_replacing(headered(), bytes(target))
 
+    # Act
     outcome = apply_patch(patch, headered())
 
+    # Assert
     assert outcome.applied_to == "image"
     assert not outcome.header_restored
 
 
 def test_a_patch_that_matches_neither_form_is_reported() -> None:
+    # Arrange
     patch = bps_replacing(bytes([0x01, 0x02]), bytes([0x03, 0x04]))
 
-    with pytest.raises(PatchError, match="source does not match"):
+    # Act
+    with pytest.raises(PatchError, match="source does not match") as raised:
         apply_patch(patch, headered())
+
+    # Assert
+    assert raised.type is PatchError
 
 
 def test_an_unknown_patch_format_is_reported() -> None:
-    with pytest.raises(PatchError, match="unknown patch format"):
-        apply_patch(b"nonsense", headerless())
+    # Arrange
+    patch = b"nonsense"
+    image = headerless()
+
+    # Act
+    with pytest.raises(PatchError, match="unknown patch format") as raised:
+        apply_patch(patch, image)
+
+    # Assert
+    assert raised.type is PatchError
 
 
 def test_an_ips_patch_that_breaks_the_image_is_reported() -> None:
+    # Arrange
     patch = ips_setting(0x01, b"XX")
 
-    with pytest.raises(PatchError, match="no longer parses"):
+    # Act
+    with pytest.raises(PatchError, match="no longer parses") as raised:
         apply_patch(patch, headerless())
+
+    # Assert
+    assert raised.type is PatchError
 
 
 def test_an_ips_patch_aimed_at_the_headerless_image_is_retried_without_the_header() -> None:
+    # Arrange
     patch = ips_setting(0x11, b"ZEL")
 
+    # Act
     outcome = apply_patch(patch, headered())
 
+    # Assert
     assert outcome.applied_to == "headerless image"
     assert outcome.data[HEADER_SIZE + 0x11 : HEADER_SIZE + 0x14] == b"ZEL"
 
 
 def test_the_outcome_names_the_patch_format() -> None:
-    outcome = apply_patch(ips_setting(0x10, b"ZEL"), headerless())
+    # Arrange
+    patch = ips_setting(0x10, b"ZEL")
+    image = headerless()
 
+    # Act
+    outcome = apply_patch(patch, image)
+
+    # Assert
     assert isinstance(outcome, PatchOutcome)
     assert str(outcome.format) == "ips"
 
@@ -135,24 +174,33 @@ def ups_replacing(source: bytes, target: bytes) -> bytes:
 
 
 def test_a_ups_patch_for_the_headerless_image_is_retried_without_the_header() -> None:
+    # Arrange
     target = bytearray(headerless())
     target[0x11:0x14] = b"ZEL"
     patch = ups_replacing(headerless(), bytes(target))
 
+    # Act
     outcome = apply_patch(patch, headered())
 
+    # Assert
     assert outcome.applied_to == "headerless image"
     assert outcome.format is PatchFormat.UPS
 
 
 def test_a_headerless_image_reports_the_original_failure() -> None:
+    # Arrange
     patch = bps_replacing(bytes([0x01, 0x02]), bytes([0x03, 0x04]))
 
-    with pytest.raises(PatchError, match="source does not match"):
+    # Act
+    with pytest.raises(PatchError, match="source does not match") as raised:
         apply_patch(patch, headerless())
+
+    # Assert
+    assert raised.type is PatchError
 
 
 def test_a_headered_image_whose_both_forms_break_is_reported() -> None:
+    # Arrange
     patch = (
         b"PATCH"
         + (0x05).to_bytes(3, "big")
@@ -164,5 +212,9 @@ def test_a_headered_image_whose_both_forms_break_is_reported() -> None:
         + b"EOF"
     )
 
-    with pytest.raises(PatchError, match="no longer parses"):
+    # Act
+    with pytest.raises(PatchError, match="no longer parses") as raised:
         apply_patch(patch, headered())
+
+    # Assert
+    assert raised.type is PatchError

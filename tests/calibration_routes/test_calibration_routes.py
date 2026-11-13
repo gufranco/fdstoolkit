@@ -48,15 +48,26 @@ def run(app: FastAPI, client: TestClient, payload: dict[str, object]) -> dict[st
 
 
 def test_blank_offers_the_calibration_image(client: TestClient) -> None:
+    # Arrange
+    expected = "calibration.fds"
+
+    # Act
     body = client.post("/api/blank", json={"calibration": True}).json()
 
-    assert body["name"] == "calibration.fds"
+    # Assert
+    assert body["name"] == expected
     assert base64.b64decode(body["data"]) == calibration_image(headered=False)
 
 
 def test_blank_refuses_settings_the_calibration_image_decides(client: TestClient) -> None:
-    answer = client.post("/api/blank", json={"calibration": True, "game_name": "ABC"})
+    # Arrange
+    route = "/api/blank"
+    payload = {"calibration": True, "game_name": "ABC"}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert "decides its own sides" in answer.json()["detail"]
 
@@ -65,9 +76,13 @@ def test_blank_refuses_settings_the_calibration_image_decides(client: TestClient
 def test_the_calibration_disk_is_not_written_without_the_trusted_drive_confirmation(
     client: TestClient,
 ) -> None:
+    # Arrange
     answer = client.post("/api/jobs/write", json={"calibration": True, "confirm": True})
 
+    # Act
     detail = answer.json()["detail"]
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert "trusted drive confirmation" in detail
     assert all(line in detail for line in TRUSTED_DRIVE)
@@ -76,8 +91,13 @@ def test_the_calibration_disk_is_not_written_without_the_trusted_drive_confirmat
 def test_a_confirmed_calibration_write_lists_the_checklist_and_writes_the_disk(
     app: FastAPI, client: TestClient, drive: SimulatedDrive
 ) -> None:
-    job = run(app, client, {"calibration": True, "trusted_drive": True, "confirm": True})
+    # Arrange
+    payload: dict[str, object] = {"calibration": True, "trusted_drive": True, "confirm": True}
 
+    # Act
+    job = run(app, client, payload)
+
+    # Assert
     assert job["state"] == "done", job
     assert job["steps"][: len(TRUSTED_DRIVE)] == list(TRUSTED_DRIVE)
     assert job["result"]["ok"]
@@ -103,7 +123,12 @@ def test_a_confirmed_calibration_write_lists_the_checklist_and_writes_the_disk(
 def test_write_takes_an_image_or_the_calibration_disk(
     client: TestClient, payload: dict[str, object], reason: str
 ) -> None:
-    answer = client.post("/api/jobs/write", json=payload)
+    # Arrange
+    route = "/api/jobs/write"
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert reason in answer.json()["detail"]

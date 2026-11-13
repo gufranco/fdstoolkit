@@ -15,172 +15,413 @@ import {
 
 describe("named", () => {
   it("keeps the chosen name when it already carries the wanted suffix", () => {
-    expect(named("demo.fds", "disk.fds")).toBe("demo.fds");
+    // Arrange
+    const expected = "demo.fds";
+
+    // Act
+    const result = named("demo.fds", "disk.fds");
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("swaps a suffix the command does not produce", () => {
-    expect(named("recipe.json", "disk.fds")).toBe("recipe.fds");
+    // Arrange
+    const expected = "recipe.fds";
+
+    // Act
+    const result = named("recipe.json", "disk.fds");
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("adds the suffix when the chosen name carries none", () => {
-    expect(named("dump", "disk.fds")).toBe("dump.fds");
+    // Arrange
+    const expected = "dump.fds";
+
+    // Act
+    const result = named("dump", "disk.fds");
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("falls back to the schema default when nothing was chosen", () => {
-    expect(named("", "disk.fds")).toBe("disk.fds");
+    // Arrange
+    const expected = "disk.fds";
+
+    // Act
+    const result = named("", "disk.fds");
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("keeps the chosen name when the default carries no suffix", () => {
-    expect(named("demo.fds", "")).toBe("demo.fds");
+    // Arrange
+    const expected = "demo.fds";
+
+    // Act
+    const result = named("demo.fds", "");
+
+    // Assert
+    expect(result).toBe(expected);
   });
 });
 
 describe("bytes", () => {
   it("reports small sizes in bytes", () => {
-    expect(bytes(512)).toBe("512 B");
+    // Arrange
+    const expected = "512 B";
+
+    // Act
+    const result = bytes(512);
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("reports a two-side image in kibibytes", () => {
-    expect(bytes(131000)).toBe("127.9 KiB");
+    // Arrange
+    const expected = "127.9 KiB";
+
+    // Act
+    const result = bytes(131000);
+
+    // Assert
+    expect(result).toBe(expected);
   });
 });
 
 describe("scalar", () => {
   it("names an absent value rather than printing null", () => {
-    expect(scalar(null)).toBe("none");
+    // Arrange
+    const expected = "none";
+
+    // Act
+    const result = scalar(null);
+
+    // Assert
+    expect(result).toBe(expected);
     expect(scalar(undefined)).toBe("none");
   });
 
   it("spells booleans out", () => {
-    expect(scalar(true)).toBe("yes");
+    // Arrange
+    const expected = "yes";
+
+    // Act
+    const result = scalar(true);
+
+    // Assert
+    expect(result).toBe(expected);
     expect(scalar(false)).toBe("no");
   });
 
   it("passes numbers and text through", () => {
-    expect(scalar(0)).toBe("0");
+    // Arrange
+    const expected = "0";
+
+    // Act
+    const result = scalar(0);
+
+    // Assert
+    expect(result).toBe(expected);
     expect(scalar("clean")).toBe("clean");
   });
 });
 
 describe("words", () => {
   it("turns a field name into something readable", () => {
-    expect(words("bad_blocks")).toBe("bad blocks");
+    // Arrange
+    const expected = "bad blocks";
+
+    // Act
+    const result = words("bad_blocks");
+
+    // Assert
+    expect(result).toBe(expected);
   });
 });
 
 describe("isDownload", () => {
   it("accepts an entry carrying bytes, a size and a name", () => {
-    expect(isDownload({ data: "AA==", size: 1, name: "a.fds" })).toBe(true);
+    // Arrange
+    const expected = true;
+
+    // Act
+    const result = isDownload({ data: "AA==", size: 1, name: "a.fds" });
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("refuses a list of disk files, which carry no bytes", () => {
-    expect(isDownload({ name: "GAME", size: 4096 })).toBe(false);
+    // Arrange
+    const expected = false;
+
+    // Act
+    const result = isDownload({ name: "GAME", size: 4096 });
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("refuses nothing at all", () => {
-    expect(isDownload(null)).toBe(false);
+    // Arrange
+    const expected = false;
+
+    // Act
+    const result = isDownload(null);
+
+    // Assert
+    expect(result).toBe(expected);
   });
 });
 
 describe("explain", () => {
   it("passes a plain message through", () => {
-    expect(explain("that image is not a disk")).toBe("that image is not a disk");
+    // Arrange
+    const expected = "that image is not a disk";
+
+    // Act
+    const result = explain("that image is not a disk");
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("names the field a validation error came from", () => {
+    // Arrange
+    const expected = "bad blocks: Input should be greater than 0";
+
+    // Act
     const detail = [{ loc: ["body", "bad_blocks"], msg: "Input should be greater than 0" }];
 
-    expect(explain(detail)).toBe("bad blocks: Input should be greater than 0");
+    // Assert
+    expect(explain(detail)).toBe(expected);
   });
 
   it("joins several validation errors", () => {
+    // Arrange
+    const expected = "sides: too big. passes: too small";
+
+    // Act
     const detail = [
       { loc: ["body", "sides"], msg: "too big" },
       { loc: ["body", "passes"], msg: "too small" }
     ];
 
-    expect(explain(detail)).toBe("sides: too big. passes: too small");
+    // Assert
+    expect(explain(detail)).toBe(expected);
   });
 
   it("keeps a message that names no field", () => {
-    expect(explain([{ msg: "unreadable" }])).toBe("unreadable");
+    // Arrange
+    const expected = "unreadable";
+
+    // Act
+    const result = explain([{ msg: "unreadable" }]);
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("falls back to the raw object when the shape is unknown", () => {
-    expect(explain({ odd: true })).toBe('{"odd":true}');
+    // Arrange
+    const expected = '{"odd":true}';
+
+    // Act
+    const result = explain({ odd: true });
+
+    // Assert
+    expect(result).toBe(expected);
   });
 });
 
 describe("describeLimits", () => {
   it("states a range when both ends are known", () => {
-    expect(describeLimits({ minimum: 1, maximum: 8 })).toBe("Between 1 and 8.");
+    // Arrange
+    const expected = "Between 1 and 8.";
+
+    // Act
+    const result = describeLimits({ minimum: 1, maximum: 8 });
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("states a floor alone", () => {
-    expect(describeLimits({ minimum: 0, maximum: null })).toBe("0 or more.");
+    // Arrange
+    const expected = "0 or more.";
+
+    // Act
+    const result = describeLimits({ minimum: 0, maximum: null });
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("states a ceiling alone", () => {
-    expect(describeLimits({ minimum: null, maximum: 65535 })).toBe("65535 or less.");
+    // Arrange
+    const expected = "65535 or less.";
+
+    // Act
+    const result = describeLimits({ minimum: null, maximum: 65535 });
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("states an exact length when both lengths agree", () => {
-    expect(describeLimits({ min_length: 3, max_length: 3 })).toBe("Exactly 3 characters.");
+    // Arrange
+    const expected = "Exactly 3 characters.";
+
+    // Act
+    const result = describeLimits({ min_length: 3, max_length: 3 });
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("states a maximum length", () => {
-    expect(describeLimits({ max_length: 8 })).toBe("Up to 8 characters.");
+    // Arrange
+    const expected = "Up to 8 characters.";
+
+    // Act
+    const result = describeLimits({ max_length: 8 });
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("says nothing when the field is unbounded", () => {
-    expect(describeLimits({})).toBe("");
+    // Arrange
+    const expected = "";
+
+    // Act
+    const result = describeLimits({});
+
+    // Assert
+    expect(result).toBe(expected);
   });
 });
 
 describe("typed", () => {
   it("sends a choice on a whole-number field as a number", () => {
-    expect(typed("choice", "2", true)).toBe(2);
+    // Arrange
+    const expected = 2;
+
+    // Act
+    const result = typed("choice", "2", true);
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("keeps a choice on a text field as text", () => {
-    expect(typed("choice", "release", false)).toBe("release");
+    // Arrange
+    const expected = "release";
+
+    // Act
+    const result = typed("choice", "release", false);
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("sends a number field as a number", () => {
-    expect(typed("number", "3", false)).toBe(3);
+    // Arrange
+    const expected = 3;
+
+    // Act
+    const result = typed("number", "3", false);
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("keeps a text field as text", () => {
-    expect(typed("text", "12", false)).toBe("12");
+    // Arrange
+    const expected = "12";
+
+    // Act
+    const result = typed("text", "12", false);
+
+    // Assert
+    expect(result).toBe(expected);
   });
 
   it("leaves an empty value out of the request", () => {
-    expect(typed("choice", "", true)).toBeUndefined();
+    // Arrange
+    const value = "";
+
+    // Act
+    const result = typed("choice", value, true);
+
+    // Assert
+    expect(result).toBeUndefined();
   });
 });
 
 describe("orderFamilies", () => {
   it("keeps the order the catalogue declares", () => {
-    expect(
+    // Arrange
+    const expected = ["inspect", "check", "hardware"];
+
+    // Act
+    const result = 
       orderFamilies(["hardware", "check", "inspect"], ["inspect", "check", "hardware"])
-    ).toEqual(["inspect", "check", "hardware"]);
+    ;
+
+    // Assert
+    expect(result).toEqual(expected);
   });
 
   it("puts a family the catalogue does not name last", () => {
-    expect(orderFamilies(["other", "inspect"], ["inspect"])).toEqual(["inspect", "other"]);
+    // Arrange
+    const expected = ["inspect", "other"];
+
+    // Act
+    const result = orderFamilies(["other", "inspect"], ["inspect"]);
+
+    // Assert
+    expect(result).toEqual(expected);
   });
 
   it("falls back to alphabetical order with no declared order", () => {
-    expect(orderFamilies(["repair", "check"], [])).toEqual(["check", "repair"]);
+    // Arrange
+    const expected = ["check", "repair"];
+
+    // Act
+    const result = orderFamilies(["repair", "check"], []);
+
+    // Assert
+    expect(result).toEqual(expected);
   });
 });
 
 describe("helpFor", () => {
   it("prefers the help a command gives its own field", () => {
-    expect(helpFor("dump", { name: "passes" })).toContain("read each side");
+    // Arrange
+    const expected = "read each side";
+
+    // Act
+    const result = helpFor("dump", { name: "passes" });
+
+    // Assert
+    expect(result).toContain(expected);
   });
 
   it("falls back to the help the field shares", () => {
-    expect(helpFor("surface", { name: "passes" })).toContain("run all four patterns");
+    // Arrange
+    const expected = "run all four patterns";
+
+    // Act
+    const result = helpFor("surface", { name: "passes" });
+
+    // Assert
+    expect(result).toContain(expected);
   });
 });

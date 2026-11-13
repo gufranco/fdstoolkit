@@ -206,9 +206,11 @@ erase dialog is modal and starts on a visible Cancel, and nothing overflows.
 The first run needs `pnpm exec playwright install chromium`. A change to the
 page is not done until this suite passes.
 
-Tests carry no comments and no section labels. Three blocks separated by one
-blank line each, one call to the thing under test, and a name that states the
-behaviour.
+Every test has three blocks, each opened by its bare marker, `# Arrange`,
+`# Act` and `# Assert`, or `// Arrange`, `// Act` and `// Assert` in the page
+and browser tests, and separated by one blank line each. The markers are the
+only comments a test carries. The Act block makes one call to the thing under
+test, and the name states the behaviour.
 
 ## Where things live
 

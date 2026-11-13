@@ -43,18 +43,25 @@ def with_invalid_pulse(side: Side, block: int) -> bytes:
 
 
 def test_reads_that_agree_everywhere_show_no_weak_block() -> None:
+    # Arrange
     side = reference_side()
+
+    # Act
     clean = pack_raw03(bytes(clean_values(side)))
 
+    # Assert
     assert weak_blocks([clean, clean, clean]) == ()
 
 
 def test_an_invalid_pulse_in_one_read_marks_its_block_weak() -> None:
+    # Arrange
     side = reference_side()
     clean = pack_raw03(bytes(clean_values(side)))
 
+    # Act
     found = weak_blocks([clean, with_invalid_pulse(side, DATA_BLOCK), clean])
 
+    # Assert
     assert [entry.block for entry in found] == [DATA_BLOCK]
     assert found[0].invalid == 1
     assert found[0].unstable == 1
@@ -63,6 +70,7 @@ def test_an_invalid_pulse_in_one_read_marks_its_block_weak() -> None:
 
 
 def test_a_block_some_reads_could_not_find_is_listed_first() -> None:
+    # Arrange
     side = reference_side()
     once = with_invalid_pulse(side, 1)
     values = bytearray(unpack_raw03(with_invalid_pulse(side, DATA_BLOCK)))
@@ -70,8 +78,10 @@ def test_a_block_some_reads_could_not_find_is_listed_first() -> None:
     values[start + 50] = INVALID
     twice = pack_raw03(bytes(values))
 
+    # Act
     found = weak_blocks([once, twice])
 
+    # Assert
     assert [entry.block for entry in found] == [DATA_BLOCK, 1]
     assert found[0].missing == 1
     assert "missing from 1 read(s)" in found[0].render()
@@ -79,11 +89,19 @@ def test_a_block_some_reads_could_not_find_is_listed_first() -> None:
 
 
 def test_no_read_means_no_weak_block() -> None:
-    assert weak_blocks([]) == ()
+    # Arrange
+    captures: list[bytes] = []
+
+    # Act
+    result = weak_blocks(captures)
+
+    # Assert
+    assert result == ()
     assert weak_blocks([pack_raw03(bytes(4000))]) == ()
 
 
 def test_a_bundle_is_mapped_side_by_side() -> None:
+    # Arrange
     side = reference_side()
     clean = pack_raw03(bytes(clean_values(side)))
     bundle = Bundle(
@@ -97,12 +115,15 @@ def test_a_bundle_is_mapped_side_by_side() -> None:
         created="2026-09-25T12:00:00Z",
     )
 
+    # Act
     found = bundle_weak_blocks(bundle)
 
+    # Assert
     assert [(side_index, entry.block) for side_index, entry in found] == [(0, DATA_BLOCK)]
 
 
 def test_a_read_that_runs_past_its_block_counts_only_the_pulse_that_moved() -> None:
+    # Arrange
     side = reference_side()
     clean = clean_values(side)
     broken = bytearray(clean)
@@ -111,8 +132,10 @@ def test_a_read_that_runs_past_its_block_counts_only_the_pulse_that_moved() -> N
     gap = bytes(4000)
     reads = [pack_raw03(bytes(values) + gap) for values in (clean, broken, clean)]
 
+    # Act
     found = weak_blocks(reads)
 
+    # Assert
     assert [(entry.block, entry.unstable) for entry in found] == [(DATA_BLOCK, 1)]
 
 
@@ -125,11 +148,14 @@ def with_extra_pulse(side: Side, block: int) -> bytes:
 
 
 def test_one_extra_pulse_counts_once_rather_than_shifting_the_block() -> None:
+    # Arrange
     side = reference_side()
     clean = pack_raw03(bytes(clean_values(side)))
 
+    # Act
     found = weak_blocks([clean, with_extra_pulse(side, DATA_BLOCK), clean])
 
+    # Assert
     assert found[0].block == DATA_BLOCK
     assert found[0].reads == 3
     assert found[0].unstable <= 2
@@ -144,11 +170,14 @@ def repacked_low_first(packed: bytes) -> bytes:
 
 
 def test_reads_packed_low_bits_first_map_the_same_weak_blocks() -> None:
+    # Arrange
     side = reference_side()
     clean = pack_raw03(bytes(clean_values(side)))
     reads = [clean, with_invalid_pulse(side, DATA_BLOCK), clean]
 
+    # Act
     found = weak_blocks([repacked_low_first(read) for read in reads])
 
+    # Assert
     assert found == weak_blocks(reads)
     assert [entry.block for entry in found] == [DATA_BLOCK]

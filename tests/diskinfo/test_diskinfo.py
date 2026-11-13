@@ -41,21 +41,36 @@ def build_payload(**overrides: bytes) -> bytes:
 
 
 def test_disk_info_parses_the_verification_string() -> None:
-    info = DiskInfo.parse(build_payload())
+    # Arrange
+    payload = build_payload()
 
+    # Act
+    info = DiskInfo.parse(payload)
+
+    # Assert
     assert info.verification == b"*NINTENDO-HVC*"
     assert info.is_verified
 
 
 def test_disk_info_reports_an_unverified_disk() -> None:
-    info = DiskInfo.parse(build_payload(verification=b"*NOT-NINTENDO*"))
+    # Arrange
+    payload = build_payload(verification=b"*NOT-NINTENDO*")
 
+    # Act
+    info = DiskInfo.parse(payload)
+
+    # Assert
     assert not info.is_verified
 
 
 def test_disk_info_parses_identity_fields() -> None:
-    info = DiskInfo.parse(build_payload())
+    # Arrange
+    payload = build_payload()
 
+    # Act
+    info = DiskInfo.parse(payload)
+
+    # Assert
     assert info.licensee == 0x01
     assert info.game_name == "SMB"
     assert info.game_type == 0x20
@@ -66,8 +81,13 @@ def test_disk_info_parses_identity_fields() -> None:
 
 
 def test_disk_info_parses_provenance_fields() -> None:
-    info = DiskInfo.parse(build_payload())
+    # Arrange
+    payload = build_payload()
 
+    # Act
+    info = DiskInfo.parse(payload)
+
+    # Assert
     assert info.manufacturing_date == (1986, 2, 15)
     assert info.rewritten_date == (1988, 8, 1)
     assert info.writer_serial == 0x1234
@@ -78,83 +98,145 @@ def test_disk_info_parses_provenance_fields() -> None:
 
 
 def test_a_date_with_invalid_bcd_digits_is_reported_as_none() -> None:
-    info = DiskInfo.parse(build_payload(manufacturing_date=bytes([0xAB, 0x02, 0x15])))
+    # Arrange
+    payload = build_payload(manufacturing_date=bytes([0xAB, 0x02, 0x15]))
 
+    # Act
+    info = DiskInfo.parse(payload)
+
+    # Assert
     assert info.manufacturing_date is None
 
 
 def test_bcd_conversion_rejects_a_non_decimal_nibble() -> None:
-    assert bcd_to_int(0x1A) is None
+    # Arrange
+    value = 0x1A
+
+    # Act
+    result = bcd_to_int(value)
+
+    # Assert
+    assert result is None
     assert bcd_to_int(0x29) == 29
 
 
 def test_disk_info_rejects_a_short_payload() -> None:
-    with pytest.raises(ValueError, match="56 bytes"):
-        DiskInfo.parse(bytes(10))
+    # Arrange
+    payload = bytes(10)
+
+    # Act
+    with pytest.raises(ValueError, match="56 bytes") as raised:
+        DiskInfo.parse(payload)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_raw_profile_masks_nothing() -> None:
+    # Arrange
     payload = build_payload()
 
-    assert mask_disk_info(payload, RAW_PROFILE) == payload
+    # Act
+    masked = mask_disk_info(payload, RAW_PROFILE)
+
+    # Assert
+    assert masked == payload
 
 
 def test_content_profile_erases_provenance_but_keeps_identity() -> None:
+    # Arrange
     factory = build_payload(
         manufacturing_date=bytes([0x61, 0x02, 0x15]),
         rewritten_date=bytes([0x61, 0x02, 0x15]),
         writer_serial=bytes([0x00, 0x00]),
         rewrite_count=bytes([0x00]),
     )
+
+    # Act
     rewritten = build_payload()
 
+    # Assert
     assert mask_disk_info(factory, CONTENT_PROFILE) == mask_disk_info(rewritten, CONTENT_PROFILE)
     assert mask_disk_info(factory, CONTENT_PROFILE)[0x10:0x13] == b"SMB"
 
 
 def test_content_profile_keeps_a_different_game_distinct() -> None:
+    # Arrange
     one = build_payload()
+
+    # Act
     other = build_payload(game_name=b"ZEL")
 
+    # Assert
     assert mask_disk_info(one, CONTENT_PROFILE) != mask_disk_info(other, CONTENT_PROFILE)
 
 
 def test_content_profile_keeps_the_game_version_distinct() -> None:
+    # Arrange
     one = build_payload()
+
+    # Act
     other = build_payload(game_version=bytes([0x01]))
 
+    # Assert
     assert mask_disk_info(one, CONTENT_PROFILE) != mask_disk_info(other, CONTENT_PROFILE)
 
 
 def test_data_profile_erases_the_whole_disk_info_block() -> None:
-    masked = mask_disk_info(build_payload(), DATA_PROFILE)
+    # Arrange
+    payload = build_payload()
 
+    # Act
+    masked = mask_disk_info(payload, DATA_PROFILE)
+
+    # Assert
     assert masked == bytes([0x01]) + bytes(55)
 
 
 def test_every_profile_declares_a_version() -> None:
-    for profile in (RAW_PROFILE, CONTENT_PROFILE, DATA_PROFILE):
-        assert profile.version >= 1
-        assert profile.name
+    # Arrange
+    profiles = (RAW_PROFILE, CONTENT_PROFILE, DATA_PROFILE)
+
+    # Act
+    declared = [(profile.version >= 1, bool(profile.name)) for profile in profiles]
+
+    # Assert
+    assert declared == [(True, True)] * len(profiles)
 
 
 def test_fields_cover_every_byte_of_the_block_exactly_once() -> None:
+    # Arrange
     covered = [0] * 56
+
+    # Act
     for field in DISK_INFO_FIELDS:
         for index in range(field.offset, field.offset + field.length):
             covered[index] += 1
 
+    # Assert
     assert covered == [1] * 56
 
 
 def test_masking_rejects_a_block_of_the_wrong_length() -> None:
-    with pytest.raises(ValueError, match="56 bytes"):
-        mask_disk_info(bytes(10), RAW_PROFILE)
+    # Arrange
+    payload = bytes(10)
+
+    # Act
+    with pytest.raises(ValueError, match="56 bytes") as raised:
+        mask_disk_info(payload, RAW_PROFILE)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_disk_info_exposes_every_scalar_field() -> None:
-    info = DiskInfo.parse(build_payload())
+    # Arrange
+    payload = build_payload()
 
+    # Act
+    info = DiskInfo.parse(payload)
+
+    # Assert
     assert info.country == 0x49
     assert info.disk_version == 2
     assert info.masked(RAW_PROFILE) == info.payload

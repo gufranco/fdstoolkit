@@ -92,8 +92,13 @@ def run(app: FastAPI, client: TestClient, route: str, payload: dict[str, object]
 def test_a_disk_job_refuses_when_no_stick_is_attached(
     client: TestClient, route: str, payload: dict[str, object]
 ) -> None:
-    answer = client.post(route, json=payload)
+    # Arrange
+    body = dict(payload)
 
+    # Act
+    answer = client.post(route, json=body)
+
+    # Assert
     assert answer.status_code == CONFLICT
     assert "no FDSStick is attached" in answer.json()["detail"]
 
@@ -101,9 +106,14 @@ def test_a_disk_job_refuses_when_no_stick_is_attached(
 def test_a_dump_job_reads_the_disk_and_closes_the_drive(
     app: FastAPI, client: TestClient, attached: SimulatedDrive
 ) -> None:
+    # Arrange
+    expected = JobState.DONE
+
+    # Act
     job = run(app, client, "/api/jobs/dump", {"sides": 1})
 
-    assert job["state"] == JobState.DONE
+    # Assert
+    assert job["state"] == expected
     assert job["result"]["grade"] == "clean"
     assert job["steps"] == ["reading side 0"]
     assert attached.closed
@@ -111,24 +121,33 @@ def test_a_dump_job_reads_the_disk_and_closes_the_drive(
 
 @pytest.mark.usefixtures("attached")
 def test_a_dump_job_honours_repeated_passes(app: FastAPI, client: TestClient) -> None:
+    # Arrange
+    expected = JobState.DONE
+
+    # Act
     job = run(app, client, "/api/jobs/dump", {"sides": 1, "passes": 2})
 
-    assert job["state"] == JobState.DONE
+    # Assert
+    assert job["state"] == expected
     assert job["steps"] == ["reading side 0", "reading side 0"]
 
 
 def test_a_two_side_dump_job_waits_for_the_disk_to_be_turned(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     drive = FacingDrive(disk_of(TWO_SIDE))
     serve(monkeypatch, drive)
-
     job_id = client.post("/api/jobs/dump", json={"sides": 2}).json()["id"]
-    assert app.state.jobs.wait_for_state(job_id, JobState.WAITING, SETTLE)
+    reached = app.state.jobs.wait_for_state(job_id, JobState.WAITING, SETTLE)
     waiting = client.get(f"/api/jobs/{job_id}").json()
     drive.turn(waiting["prompt"])
+
+    # Act
     answered = client.post(f"/api/jobs/{job_id}/answer", json={"yes": True})
 
+    # Assert
+    assert reached
     assert "turn the disk over" in waiting["prompt"]
     assert answered.status_code == OK
     assert app.state.jobs.wait(job_id, SETTLE)
@@ -138,12 +157,15 @@ def test_a_two_side_dump_job_waits_for_the_disk_to_be_turned(
 def test_a_declined_turn_fails_the_dump_job(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(monkeypatch, FacingDrive(disk_of(TWO_SIDE)))
-
     job_id = client.post("/api/jobs/dump", json={"sides": 2}).json()["id"]
     app.state.jobs.wait_for_state(job_id, JobState.WAITING, SETTLE)
+
+    # Act
     client.post(f"/api/jobs/{job_id}/answer", json={"yes": False})
 
+    # Assert
     assert app.state.jobs.wait(job_id, SETTLE)
     failed = client.get(f"/api/jobs/{job_id}").json()
     assert failed["state"] == JobState.FAILED
@@ -153,17 +175,26 @@ def test_a_declined_turn_fails_the_dump_job(
 def test_a_dump_from_a_drive_with_no_disk_fails_the_job(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(monkeypatch, SimulatedDrive(None))
 
+    # Act
     job = run(app, client, "/api/jobs/dump", {"sides": 1})
 
+    # Assert
     assert job["state"] == JobState.FAILED
     assert "no disk" in job["error"]
 
 
 def test_a_dump_of_more_sides_than_a_disk_has_is_refused(client: TestClient) -> None:
-    answer = client.post("/api/jobs/dump", json={"sides": 4})
+    # Arrange
+    route = "/api/jobs/dump"
+    payload = {"sides": 4}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
 
 
@@ -181,8 +212,14 @@ def long_image() -> str:
 
 @pytest.mark.usefixtures("attached")
 def test_a_write_job_refuses_a_side_longer_than_any_factory_side(client: TestClient) -> None:
-    answer = client.post("/api/jobs/write", json={"data": long_image(), "confirm": True})
+    # Arrange
+    route = "/api/jobs/write"
+    payload = {"data": long_image(), "confirm": True}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert "Tick long side to write it anyway" in answer.json()["detail"]
 
@@ -190,6 +227,10 @@ def test_a_write_job_refuses_a_side_longer_than_any_factory_side(client: TestCli
 def test_a_write_job_writes_a_long_side_when_told_to(
     app: FastAPI, client: TestClient, attached: SimulatedDrive
 ) -> None:
+    # Arrange
+    expected = JobState.DONE
+
+    # Act
     job = run(
         app,
         client,
@@ -197,14 +238,21 @@ def test_a_write_job_writes_a_long_side_when_told_to(
         {"data": long_image(), "confirm": True, "long_side": True},
     )
 
-    assert job["state"] == JobState.DONE
+    # Assert
+    assert job["state"] == expected
     assert attached.write_count == 1
 
 
 @pytest.mark.usefixtures("attached")
 def test_a_write_job_refuses_without_a_confirmation(client: TestClient) -> None:
-    answer = client.post("/api/jobs/write", json={"data": ONE})
+    # Arrange
+    route = "/api/jobs/write"
+    payload = {"data": ONE}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert "confirm" in answer.json()["detail"]
 
@@ -212,9 +260,14 @@ def test_a_write_job_refuses_without_a_confirmation(client: TestClient) -> None:
 def test_a_confirmed_write_job_verifies_and_returns_the_backup(
     app: FastAPI, client: TestClient, attached: SimulatedDrive
 ) -> None:
+    # Arrange
+    expected = JobState.DONE
+
+    # Act
     job = run(app, client, "/api/jobs/write", {"data": ONE, "confirm": True})
 
-    assert job["state"] == JobState.DONE
+    # Assert
+    assert job["state"] == expected
     assert job["result"]["headline"] == "the disk reads back as written, on this drive, grade clean"
     assert any("read the disk on a second drive" in step for step in job["steps"])
     assert job["result"]["file"]["name"] == "before.fds"
@@ -225,14 +278,18 @@ def test_a_confirmed_write_job_verifies_and_returns_the_backup(
 def test_a_two_side_write_job_turns_the_disk_once(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     drive = FacingDrive(disk_of(TWO_SIDE))
     serve(monkeypatch, drive)
-
     job_id = client.post("/api/jobs/write", json={"data": OTHER, "confirm": True}).json()["id"]
-    assert app.state.jobs.wait_for_state(job_id, JobState.WAITING, SETTLE)
+    reached = app.state.jobs.wait_for_state(job_id, JobState.WAITING, SETTLE)
     drive.turn("")
+
+    # Act
     client.post(f"/api/jobs/{job_id}/answer", json={"yes": True})
 
+    # Assert
+    assert reached
     assert app.state.jobs.wait(job_id, SETTLE)
     done = client.get(f"/api/jobs/{job_id}").json()
     assert done["state"] == JobState.DONE
@@ -243,11 +300,14 @@ def test_a_two_side_write_job_turns_the_disk_once(
 def test_a_multi_pass_dump_job_keeps_its_unstable_grade_and_names_the_blocks(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     plan = FaultPlan(bad_crc_blocks=frozenset({1}), unstable_blocks=frozenset({0}))
     serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), plan=plan))
 
+    # Act
     job = run(app, client, "/api/jobs/dump", {"passes": 3, "retries": 0})
 
+    # Assert
     assert job["result"]["grade"] == "unstable"
     assert "side 0: block 0 differs between passes" in job["steps"]
 
@@ -255,10 +315,13 @@ def test_a_multi_pass_dump_job_keeps_its_unstable_grade_and_names_the_blocks(
 def test_a_write_job_that_fails_still_offers_the_backup(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), plan=FaultPlan(writes_do_not_stick=True)))
 
+    # Act
     job = run(app, client, "/api/jobs/write", {"data": OTHER, "confirm": True})
 
+    # Assert
     assert job["state"] == JobState.FAILED
     assert job["kept"]["name"] == "before.fds"
     assert base64.b64decode(job["kept"]["data"])[:1] == bytes([0x01])
@@ -267,12 +330,15 @@ def test_a_write_job_that_fails_still_offers_the_backup(
 def test_a_surface_job_can_be_stopped_between_patterns(
     app: FastAPI, client: TestClient, attached: SimulatedDrive
 ) -> None:
+    # Arrange
     started = client.post("/api/jobs/surface", json={"confirm": True, "passes": 3}).json()
+
+    # Act
     client.post(f"/api/jobs/{started['id']}/stop", json={})
+
+    # Assert
     assert app.state.jobs.wait(started["id"], SETTLE)
-
     job = client.get(f"/api/jobs/{started['id']}").json()
-
     assert started["stoppable"] is True
     assert job["state"] == JobState.DONE
     assert job["result"]["rows"][0]["refusal"] == ""
@@ -283,13 +349,16 @@ def test_a_surface_job_can_be_stopped_between_patterns(
 def test_a_write_job_reports_blocks_that_did_not_read_back(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(
         monkeypatch,
         SimulatedDrive(disk_of(ONE_SIDE), plan=FaultPlan(unstable_blocks=frozenset({1}))),
     )
 
+    # Act
     job = run(app, client, "/api/jobs/write", {"data": ONE, "confirm": True})
 
+    # Assert
     assert job["state"] == JobState.DONE
     assert job["result"]["rows"] == [
         {"side": 0, "block": 1, "finding": "did not read back as written"}
@@ -301,27 +370,41 @@ def test_a_write_job_reports_blocks_that_did_not_read_back(
 def test_a_write_the_disk_does_not_take_fails_the_job(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), plan=FaultPlan(writes_do_not_stick=True)))
     other = base64.b64encode(blank_image(sides=1, headered=False, formatted=True, game_name="ZEL"))
 
+    # Act
     job = run(app, client, "/api/jobs/write", {"data": other.decode("ascii"), "confirm": True})
 
+    # Assert
     assert job["state"] == JobState.FAILED
     assert "did not take the write" in job["error"]
 
 
 @pytest.mark.usefixtures("attached")
 def test_a_surface_job_refuses_without_a_confirmation(client: TestClient) -> None:
-    answer = client.post("/api/jobs/surface", json={"sides": 1})
+    # Arrange
+    route = "/api/jobs/surface"
+    payload = {"sides": 1}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
 
 
 @pytest.mark.usefixtures("attached")
 def test_a_confirmed_surface_job_reports_its_coverage(app: FastAPI, client: TestClient) -> None:
+    # Arrange
+    expected = JobState.DONE
+
+    # Act
     job = run(app, client, "/api/jobs/surface", {"sides": 1, "quick": True, "confirm": True})
 
-    assert job["state"] == JobState.DONE
+    # Assert
+    assert job["state"] == expected
     assert job["result"]["rows"][0]["coverage"] > 0
     assert job["result"]["headline"] == "grade clean"
     assert "side 0 pass 1 pattern unique data" in job["steps"]
@@ -330,34 +413,43 @@ def test_a_confirmed_surface_job_reports_its_coverage(app: FastAPI, client: Test
 
 @pytest.mark.usefixtures("attached")
 def test_a_surface_job_can_leave_the_disk_blank(app: FastAPI, client: TestClient) -> None:
-    job = run(
-        app,
-        client,
-        "/api/jobs/surface",
-        {"sides": 1, "quick": True, "confirm": True, "finish": "blank"},
-    )
+    # Arrange
+    payload: dict[str, object] = {"sides": 1, "quick": True, "confirm": True, "finish": "blank"}
 
+    # Act
+    job = run(app, client, "/api/jobs/surface", payload)
+
+    # Assert
     assert job["result"]["rows"][0]["finish_verified"]
 
 
 def test_a_surface_job_names_why_it_stopped(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(
         monkeypatch,
         SimulatedDrive(disk_of(ONE_SIDE), plan=FaultPlan(unstable_blocks=frozenset({1}))),
     )
 
+    # Act
     job = run(app, client, "/api/jobs/surface", {"sides": 1, "quick": True, "confirm": True})
 
+    # Assert
     assert job["result"]["headline"].startswith("stopped early: a block failed on two patterns")
     assert not job["result"]["ok"]
 
 
 @pytest.mark.usefixtures("attached")
 def test_an_unknown_finish_is_refused(client: TestClient) -> None:
-    answer = client.post("/api/jobs/surface", json={"confirm": True, "finish": "nonsense"})
+    # Arrange
+    route = "/api/jobs/surface"
+    payload = {"confirm": True, "finish": "nonsense"}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == BAD_REQUEST
 
 
@@ -378,10 +470,13 @@ def held_fixture(monkeypatch: pytest.MonkeyPatch) -> Iterator[threading.Event]:
 def test_a_second_disk_job_while_one_runs_is_refused(
     app: FastAPI, client: TestClient, held: threading.Event
 ) -> None:
+    # Arrange
     first = client.post("/api/jobs/dump", json={"sides": 1}).json()
 
+    # Act
     answer = client.post("/api/jobs/dump", json={"sides": 1})
 
+    # Assert
     assert answer.status_code == CONFLICT
     assert "dump is already running" in answer.json()["detail"]
     held.set()
@@ -391,10 +486,13 @@ def test_a_second_disk_job_while_one_runs_is_refused(
 def test_the_running_job_is_reported_as_current(
     app: FastAPI, client: TestClient, held: threading.Event
 ) -> None:
+    # Arrange
     first = client.post("/api/jobs/dump", json={"sides": 1}).json()
 
+    # Act
     current = client.get("/api/jobs/current").json()
 
+    # Assert
     assert current["job"]["id"] == first["id"]
     held.set()
     assert app.state.jobs.wait(first["id"], SETTLE)
@@ -404,6 +502,7 @@ def test_the_running_job_is_reported_as_current(
 def test_a_job_whose_thread_cannot_start_closes_the_drive(
     app: FastAPI, attached: SimulatedDrive, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     real_start = threading.Thread.start
 
     def refuse_job_threads(self: threading.Thread) -> None:
@@ -415,8 +514,10 @@ def test_a_job_whose_thread_cannot_start_closes_the_drive(
     monkeypatch.setattr(threading.Thread, "start", refuse_job_threads)
     client = TestClient(app, raise_server_exceptions=False, base_url="http://127.0.0.1")
 
+    # Act
     answer = client.post("/api/jobs/dump", json={"sides": 1})
 
+    # Assert
     assert answer.status_code == 500
     assert attached.closed
 
@@ -428,6 +529,7 @@ class Nothing(BaseModel):
 def test_a_job_that_loses_the_race_for_the_drive_closes_it(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     drive = SimulatedDrive(disk_of(ONE_SIDE))
     release = threading.Event()
 
@@ -443,34 +545,49 @@ def test_a_job_that_loses_the_race_for_the_drive_closes_it(
     monkeypatch.setattr(
         "fdstoolkit.ui.hardware_routes.open_fdsstick", opened_while_another_job_starts
     )
-
     answer = client.post("/api/jobs/dump", json={"sides": 1})
 
+    # Act
     release.set()
+
+    # Assert
     assert answer.status_code == CONFLICT
     assert drive.closed
 
 
 @pytest.mark.usefixtures("attached")
 def test_answering_a_job_that_is_not_waiting_is_refused(app: FastAPI, client: TestClient) -> None:
+    # Arrange
     job = run(app, client, "/api/jobs/dump", {"sides": 1})
 
+    # Act
     answer = client.post(f"/api/jobs/{job['id']}/answer", json={"yes": True})
 
+    # Assert
     assert answer.status_code == CONFLICT
 
 
 def test_an_unknown_job_is_not_found(client: TestClient) -> None:
-    answer = client.get("/api/jobs/nothing")
+    # Arrange
+    route = "/api/jobs/nothing"
 
+    # Act
+    answer = client.get(route)
+
+    # Assert
     assert answer.status_code == NOT_FOUND
 
 
 @pytest.mark.usefixtures("attached")
 def test_a_calibration_against_its_reference_reads_clean(app: FastAPI, client: TestClient) -> None:
+    # Arrange
+    expected = "done"
+
+    # Act
     job = run(app, client, "/api/jobs/calibrate", {"mode": "speed", "reference": ONE, "passes": 2})
 
-    assert job["state"] == "done"
+    # Assert
+    assert job["state"] == expected
     assert job["stoppable"]
     assert job["steps"][0].startswith("judge the drive only with a disk it did not write")
     assert job["steps"][1].startswith("read 1: 2 of 2 blocks")
@@ -483,23 +600,40 @@ def test_a_calibration_against_its_reference_reads_clean(app: FastAPI, client: T
 def test_a_calibration_without_a_reference_reads_by_checksum(
     app: FastAPI, client: TestClient
 ) -> None:
+    # Arrange
+    expected = True
+
+    # Act
     job = run(app, client, "/api/jobs/calibrate", {"mode": "head", "passes": 1})
 
-    assert job["result"]["ok"] is True
+    # Assert
+    assert job["result"]["ok"] is expected
     assert "pulses short" not in job["steps"][1]
 
 
 @pytest.mark.usefixtures("attached")
 def test_a_calibration_mode_it_does_not_know_is_refused(client: TestClient) -> None:
-    answer = client.post("/api/jobs/calibrate", json={"mode": "belt"})
+    # Arrange
+    route = "/api/jobs/calibrate"
+    payload = {"mode": "belt"}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == BAD_REQUEST
 
 
 @pytest.mark.usefixtures("attached")
 def test_a_reference_side_it_lacks_is_refused(client: TestClient) -> None:
-    answer = client.post("/api/jobs/calibrate", json={"reference": ONE, "side": 1})
+    # Arrange
+    route = "/api/jobs/calibrate"
+    payload = {"reference": ONE, "side": 1}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert "has 1 side(s), so it has no side 1" in answer.json()["detail"]
 
@@ -517,13 +651,16 @@ class SlowReads(SimulatedDrive):
 def test_a_calibration_stops_between_reads_when_asked(
     monkeypatch: pytest.MonkeyPatch, app: FastAPI, client: TestClient
 ) -> None:
+    # Arrange
     gate = threading.Event()
     serve(monkeypatch, SlowReads(disk_of(ONE_SIDE), gate))
     job_id = client.post("/api/jobs/calibrate", json={"passes": 50}).json()["id"]
 
+    # Act
     stopping = client.post(f"/api/jobs/{job_id}/stop")
-    gate.set()
 
+    # Assert
+    gate.set()
     assert stopping.status_code == OK
     assert stopping.json()["stopping"] is True
     assert app.state.jobs.wait(job_id, SETTLE)
@@ -534,24 +671,31 @@ def test_a_calibration_stops_between_reads_when_asked(
 def test_a_job_that_cannot_stop_refuses_the_stop(
     monkeypatch: pytest.MonkeyPatch, app: FastAPI, client: TestClient
 ) -> None:
+    # Arrange
     serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE)))
     job = run(app, client, "/api/jobs/dump", {"sides": 1})
 
+    # Act
     answer = client.post(f"/api/jobs/{job['id']}/stop")
 
+    # Assert
     assert answer.status_code == CONFLICT
 
 
 @pytest.mark.usefixtures("attached")
 def test_a_bracketed_calibration_waits_for_each_step(app: FastAPI, client: TestClient) -> None:
+    # Arrange
     job_id = client.post(
         "/api/jobs/calibrate", json={"reference": ONE, "passes": 2, "bracket": True}
     ).json()["id"]
-
-    assert app.state.jobs.wait_for_state(job_id, JobState.WAITING, SETTLE)
+    reached = app.state.jobs.wait_for_state(job_id, JobState.WAITING, SETTLE)
     waiting = client.get(f"/api/jobs/{job_id}").json()
+
+    # Act
     client.post(f"/api/jobs/{job_id}/answer", json={"yes": True})
 
+    # Assert
+    assert reached
     assert "one small step" in waiting["prompt"]
     assert app.state.jobs.wait(job_id, SETTLE)
     assert len(client.get(f"/api/jobs/{job_id}").json()["result"]["rows"]) == 2
@@ -560,10 +704,13 @@ def test_a_bracketed_calibration_waits_for_each_step(app: FastAPI, client: TestC
 def test_a_calibration_job_on_a_stick_that_sends_counts_shows_the_timing(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), sends_counts=True))
 
+    # Act
     job = run(app, client, "/api/jobs/calibrate", {"mode": "speed", "passes": 1})
 
+    # Assert
     assert any(step.startswith("timing: short") for step in job["steps"])
     assert job["result"]["ok"] is True
     assert len(job["result"]["timing"]) == 1
@@ -571,15 +718,21 @@ def test_a_calibration_job_on_a_stick_that_sends_counts_shows_the_timing(
 
 @pytest.mark.usefixtures("attached")
 def test_a_dump_job_can_save_a_qd(app: FastAPI, client: TestClient) -> None:
+    # Arrange
+    expected = "dump.qd"
+
+    # Act
     job = run(app, client, "/api/jobs/dump", {"qd": True})
 
-    assert job["result"]["name"] == "dump.qd"
+    # Assert
+    assert job["result"]["name"] == expected
     assert job["result"]["size"] % 65536 == 0
 
 
 def test_a_dump_job_that_fails_still_offers_its_captures(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     class LostAndSkipping(SimulatedDrive):
         @property
         def resyncs(self) -> tuple[tuple[int, int], ...]:
@@ -587,8 +740,10 @@ def test_a_dump_job_that_fails_still_offers_its_captures(
 
     serve(monkeypatch, LostAndSkipping(disk_of(TWO_SIDE), plan=FaultPlan(link_lost_after=1)))
 
+    # Act
     job = run(app, client, "/api/jobs/dump", {"keep_captures": True})
 
+    # Assert
     assert job["state"] == JobState.FAILED
     assert job["kept"]["name"].endswith(".zip")
     assert any("the USB link skipped 1 packet(s)" in step for step in job["steps"])
@@ -597,6 +752,7 @@ def test_a_dump_job_that_fails_still_offers_its_captures(
 def test_a_dump_job_says_when_the_usb_link_skipped_packets(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     class Skipping(SimulatedDrive):
         @property
         def resyncs(self) -> tuple[tuple[int, int], ...]:
@@ -604,18 +760,23 @@ def test_a_dump_job_says_when_the_usb_link_skipped_packets(
 
     serve(monkeypatch, Skipping(disk_of(ONE_SIDE)))
 
+    # Act
     job = run(app, client, "/api/jobs/dump", {})
 
+    # Assert
     assert any("the USB link skipped 1 packet(s)" in step for step in job["steps"])
 
 
 def test_a_dump_job_names_a_gap_the_ram_adapter_would_skip(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), plan=FaultPlan(short_gap_before=1)))
 
+    # Act
     job = run(app, client, "/api/jobs/dump", {})
 
+    # Assert
     assert any(step.startswith("side 0: [FDS017] ") for step in job["steps"])
 
 
@@ -623,7 +784,12 @@ def test_a_dump_job_names_a_gap_the_ram_adapter_would_skip(
 def test_a_calibration_job_reports_the_spread_of_its_reads(
     app: FastAPI, client: TestClient
 ) -> None:
+    # Arrange
+    expected = {"reads clean": 2}
+
+    # Act
     job = run(app, client, "/api/jobs/calibrate", {"mode": "speed", "reference": ONE, "passes": 2})
 
-    assert job["result"]["spread"] == {"reads clean": 2}
+    # Assert
+    assert job["result"]["spread"] == expected
     assert job["result"]["timing"] == []

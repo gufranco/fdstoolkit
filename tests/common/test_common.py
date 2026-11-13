@@ -9,55 +9,108 @@ from fdstoolkit.cli.common import Container, container_of, fail, guard_output, r
 
 
 def test_a_message_becomes_a_failing_exit() -> None:
-    error = fail("broken")
+    # Arrange
+    message = "broken"
 
+    # Act
+    error = fail(message)
+
+    # Assert
     assert isinstance(error, typer.Exit)
     assert error.exit_code == 1
 
 
 def test_an_fds_suffix_names_the_fds_container(tmp_path: Path) -> None:
-    assert container_of(tmp_path / "a.fds") is Container.FDS
+    # Arrange
+    path = tmp_path / "a.fds"
+
+    # Act
+    result = container_of(path)
+
+    # Assert
+    assert result is Container.FDS
     assert container_of(tmp_path / "a.FDS") is Container.FDS
 
 
 def test_a_qd_suffix_names_the_qd_container(tmp_path: Path) -> None:
-    assert container_of(tmp_path / "a.qd") is Container.QD
+    # Arrange
+    path = tmp_path / "a.qd"
+
+    # Act
+    result = container_of(path)
+
+    # Assert
+    assert result is Container.QD
 
 
 def test_another_suffix_is_refused(tmp_path: Path) -> None:
-    with pytest.raises(typer.Exit):
-        container_of(tmp_path / "a.zip")
+    # Arrange
+    path = tmp_path / "a.zip"
+
+    # Act
+    with pytest.raises(typer.Exit) as raised:
+        container_of(path)
+
+    # Assert
+    assert raised.type is typer.Exit
 
 
 def test_a_missing_file_is_refused(tmp_path: Path) -> None:
-    with pytest.raises(typer.Exit):
-        read_image(tmp_path / "missing.fds")
+    # Arrange
+    path = tmp_path / "missing.fds"
+
+    # Act
+    with pytest.raises(typer.Exit) as raised:
+        read_image(path)
+
+    # Assert
+    assert raised.type is typer.Exit
 
 
 def test_a_present_file_comes_back_with_its_container(tmp_path: Path) -> None:
+    # Arrange
     path = tmp_path / "a.fds"
     path.write_bytes(b"data")
 
+    # Act
     data, container = read_image(path)
 
+    # Assert
     assert data == b"data"
     assert container is Container.FDS
 
 
 def test_an_existing_output_is_refused_without_force(tmp_path: Path) -> None:
+    # Arrange
     path = tmp_path / "out.fds"
     path.write_bytes(b"")
 
-    with pytest.raises(typer.Exit):
+    # Act
+    with pytest.raises(typer.Exit) as raised:
         guard_output(path, force=False)
+
+    # Assert
+    assert raised.type is typer.Exit
 
 
 def test_an_existing_output_is_allowed_with_force(tmp_path: Path) -> None:
+    # Arrange
     path = tmp_path / "out.fds"
     path.write_bytes(b"")
 
-    guard_output(path, force=True)
+    # Act
+    allowed = guard_output(path, force=True)
+
+    # Assert
+    assert allowed is None
 
 
 def test_a_new_output_needs_no_force(tmp_path: Path) -> None:
-    guard_output(tmp_path / "new.fds", force=False)
+    # Arrange
+    path = tmp_path / "new.fds"
+
+    # Act
+    allowed = guard_output(path, force=False)
+
+    # Assert
+    assert allowed is None

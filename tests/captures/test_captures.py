@@ -32,10 +32,13 @@ CAPTURES = (
 
 
 def test_a_bundle_written_to_a_directory_reads_back_the_same(tmp_path: Path) -> None:
+    # Arrange
     written = write_bundle(tmp_path, CAPTURES, image="game.fds", created=CREATED)
 
+    # Act
     bundle = load_bundle(tmp_path)
 
+    # Assert
     assert tmp_path / MANIFEST in written
     assert bundle.captures == CAPTURES
     assert bundle.image == "game.fds"
@@ -45,10 +48,13 @@ def test_a_bundle_written_to_a_directory_reads_back_the_same(tmp_path: Path) -> 
 
 
 def test_the_manifest_names_every_capture_with_its_digest(tmp_path: Path) -> None:
+    # Arrange
     write_bundle(tmp_path, CAPTURES, image="game.fds", created=CREATED)
 
+    # Act
     manifest = json.loads((tmp_path / MANIFEST).read_text(encoding="utf-8"))
 
+    # Assert
     assert manifest["format"] == "fdstoolkit-captures"
     assert [entry["file"] for entry in manifest["captures"]] == [
         "side0.read01.raw03",
@@ -59,81 +65,137 @@ def test_the_manifest_names_every_capture_with_its_digest(tmp_path: Path) -> Non
 
 
 def test_a_zip_bundle_reads_back_the_same(tmp_path: Path) -> None:
+    # Arrange
     archive = tmp_path / "captures.zip"
+
+    # Act
     archive.write_bytes(bundle_zip(CAPTURES, image="game.fds", created=CREATED))
 
+    # Assert
     assert load_bundle(archive).captures == CAPTURES
     assert read_zip(archive.read_bytes()).captures == CAPTURES
 
 
 def test_a_capture_that_changed_since_it_was_kept_is_refused(tmp_path: Path) -> None:
+    # Arrange
     write_bundle(tmp_path, CAPTURES, image="game.fds", created=CREATED)
     (tmp_path / "side0.read01.raw03").write_bytes(b"tampered")
 
-    with pytest.raises(BundleError, match=r"side0\.read01\.raw03 does not match its digest"):
+    # Act
+    with pytest.raises(
+        BundleError, match=r"side0\.read01\.raw03 does not match its digest"
+    ) as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_capture_the_manifest_names_but_is_gone_is_refused(tmp_path: Path) -> None:
+    # Arrange
     write_bundle(tmp_path, CAPTURES, image="game.fds", created=CREATED)
     (tmp_path / "side1.read01.raw03").unlink()
 
-    with pytest.raises(BundleError, match=r"side1\.read01\.raw03 is missing"):
+    # Act
+    with pytest.raises(BundleError, match=r"side1\.read01\.raw03 is missing") as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_directory_without_a_manifest_is_refused(tmp_path: Path) -> None:
+    # Arrange
     (tmp_path / "loose.raw03").write_bytes(b"\x00")
 
-    with pytest.raises(BundleError, match=r"no manifest\.json"):
+    # Act
+    with pytest.raises(BundleError, match=r"no manifest\.json") as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_path_that_is_neither_a_directory_nor_a_zip_is_refused(tmp_path: Path) -> None:
-    with pytest.raises(BundleError, match="neither a capture directory nor a zip"):
-        load_bundle(tmp_path / "nothing.zip")
+    # Arrange
+    path = tmp_path / "nothing.zip"
+
+    # Act
+    with pytest.raises(BundleError, match="neither a capture directory nor a zip") as raised:
+        load_bundle(path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_bytes_that_are_not_a_zip_are_refused() -> None:
-    with pytest.raises(BundleError, match="not a zip archive"):
-        read_zip(b"not a zip")
+    # Arrange
+    data = b"not a zip"
+
+    # Act
+    with pytest.raises(BundleError, match="not a zip archive") as raised:
+        read_zip(data)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_manifest_of_another_format_is_refused(tmp_path: Path) -> None:
+    # Arrange
     (tmp_path / MANIFEST).write_text(json.dumps({"format": "other", "version": 1}), "utf-8")
 
-    with pytest.raises(BundleError, match="not a capture manifest"):
+    # Act
+    with pytest.raises(BundleError, match="not a capture manifest") as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_manifest_that_is_not_json_is_refused(tmp_path: Path) -> None:
+    # Arrange
     (tmp_path / MANIFEST).write_text("{", "utf-8")
 
-    with pytest.raises(BundleError, match="does not parse"):
+    # Act
+    with pytest.raises(BundleError, match="does not parse") as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_manifest_entry_with_an_impossible_side_is_refused(tmp_path: Path) -> None:
+    # Arrange
     write_bundle(tmp_path, CAPTURES, image="game.fds", created=CREATED)
     manifest = json.loads((tmp_path / MANIFEST).read_text(encoding="utf-8"))
     manifest["captures"][0]["side"] = 7
     (tmp_path / MANIFEST).write_text(json.dumps(manifest), "utf-8")
 
-    with pytest.raises(BundleError, match="names side 7"):
+    # Act
+    with pytest.raises(BundleError, match="names side 7") as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_manifest_entry_missing_a_field_is_refused(tmp_path: Path) -> None:
+    # Arrange
     write_bundle(tmp_path, CAPTURES, image="game.fds", created=CREATED)
     manifest = json.loads((tmp_path / MANIFEST).read_text(encoding="utf-8"))
     del manifest["captures"][0]["sha256"]
     (tmp_path / MANIFEST).write_text(json.dumps(manifest), "utf-8")
 
-    with pytest.raises(BundleError, match="does not describe a capture"):
+    # Act
+    with pytest.raises(BundleError, match="does not describe a capture") as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_zip_member_larger_than_any_capture_is_refused() -> None:
+    # Arrange
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(
@@ -153,49 +215,81 @@ def test_a_zip_member_larger_than_any_capture_is_refused() -> None:
         )
         archive.writestr("big.raw03", bytes(MAX_CAPTURE_BYTES + 1))
 
-    with pytest.raises(BundleError, match=r"big\.raw03 is larger than any capture"):
+    # Act
+    with pytest.raises(BundleError, match=r"big\.raw03 is larger than any capture") as raised:
         read_zip(buffer.getvalue())
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_manifest_that_is_not_an_object_is_refused(tmp_path: Path) -> None:
+    # Arrange
     (tmp_path / MANIFEST).write_text("[]", "utf-8")
 
-    with pytest.raises(BundleError, match="not a capture manifest"):
+    # Act
+    with pytest.raises(BundleError, match="not a capture manifest") as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_manifest_whose_captures_are_not_a_list_is_refused(tmp_path: Path) -> None:
+    # Arrange
     write_bundle(tmp_path, CAPTURES, image="game.fds", created=CREATED)
     manifest = json.loads((tmp_path / MANIFEST).read_text(encoding="utf-8"))
     manifest["captures"] = "side0.read01.raw03"
     (tmp_path / MANIFEST).write_text(json.dumps(manifest), "utf-8")
 
-    with pytest.raises(BundleError, match="does not list its captures"):
+    # Act
+    with pytest.raises(BundleError, match="does not list its captures") as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_manifest_entry_that_is_not_an_object_is_refused(tmp_path: Path) -> None:
+    # Arrange
     write_bundle(tmp_path, CAPTURES, image="game.fds", created=CREATED)
     manifest = json.loads((tmp_path / MANIFEST).read_text(encoding="utf-8"))
     manifest["captures"][0] = "side0.read01.raw03"
     (tmp_path / MANIFEST).write_text(json.dumps(manifest), "utf-8")
 
-    with pytest.raises(BundleError, match="does not describe a capture"):
+    # Act
+    with pytest.raises(BundleError, match="does not describe a capture") as raised:
         load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_zip_missing_a_listed_capture_is_refused() -> None:
+    # Arrange
     whole = zipfile.ZipFile(io.BytesIO(bundle_zip(CAPTURES, image="game.fds", created=CREATED)))
     buffer = io.BytesIO()
     with whole, zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(MANIFEST, whole.read(MANIFEST))
 
-    with pytest.raises(BundleError, match=r"side0\.read01\.raw03 is missing"):
+    # Act
+    with pytest.raises(BundleError, match=r"side0\.read01\.raw03 is missing") as raised:
         read_zip(buffer.getvalue())
+
+    # Assert
+    assert raised.type is BundleError
 
 
 def test_a_bundle_is_stamped_in_utc_to_the_second() -> None:
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", created_now())
+    # Arrange
+    pattern = r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"
+    string = created_now()
+
+    # Act
+    result = re.fullmatch(pattern, string)
+
+    # Assert
+    assert result
 
 
 class Recorder:
@@ -208,14 +302,27 @@ class Recorder:
 
 
 def test_the_latest_capture_of_a_side_is_its_last_read() -> None:
+    # Arrange
+    expected = b"\x01\x02\x04"
+
+    # Act
     source = Recorder(CAPTURES)
 
-    assert latest_capture(source, 0) == b"\x01\x02\x04"
+    # Assert
+    assert latest_capture(source, 0) == expected
     assert latest_capture(source, 1) == b"\x05"
 
 
 def test_a_source_without_captures_or_without_that_side_gives_none() -> None:
-    assert latest_capture(object(), 0) is None
+    # Arrange
+    source = object()
+    side = 0
+
+    # Act
+    result = latest_capture(source, side)
+
+    # Assert
+    assert result is None
     assert latest_capture(Recorder(CAPTURES[:2]), 1) is None
 
 
@@ -256,22 +363,31 @@ def forged_bundle() -> bytes:
 
 
 def test_a_member_that_inflates_past_its_claimed_size_is_refused_without_inflating() -> None:
+    # Arrange
     bundle = forged_bundle()
     tracemalloc.start()
 
-    with pytest.raises(BundleError, match=r"bomb\.raw03 is damaged"):
+    # Act
+    with pytest.raises(BundleError, match=r"bomb\.raw03 is damaged") as raised:
         read_zip(bundle)
 
+    # Assert
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
+    assert raised.type is BundleError
     assert peak < PEAK_BUDGET
 
 
 def test_a_manifest_listing_one_capture_twice_is_refused() -> None:
+    # Arrange
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(MANIFEST, manifest_listing("same.raw03", "same.raw03"))
         archive.writestr("same.raw03", b"\x01")
 
-    with pytest.raises(BundleError, match=r"lists same\.raw03 more than once"):
+    # Act
+    with pytest.raises(BundleError, match=r"lists same\.raw03 more than once") as raised:
         read_zip(buffer.getvalue())
+
+    # Assert
+    assert raised.type is BundleError

@@ -21,14 +21,20 @@ def disk_with_info(**overrides: bytes) -> Disk:
 
 
 def test_a_factory_disk_reports_no_rewrite() -> None:
-    report = provenance_of(disk_with_info(x1F=bytes([0x61, 0x02, 0x15])))
+    # Arrange
+    disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert report.sides[0].origin is Origin.FACTORY
     assert report.sides[0].rewrite_count == 0
     assert report.sides[0].writer_serial == 0xFFFF
 
 
 def test_a_kiosk_disk_reports_its_rewrite() -> None:
+    # Arrange
     report = provenance_of(
         disk_with_info(
             x1F=bytes([0x61, 0x02, 0x15]),
@@ -38,8 +44,10 @@ def test_a_kiosk_disk_reports_its_rewrite() -> None:
         )
     )
 
+    # Act
     side = report.sides[0]
 
+    # Assert
     assert side.origin is Origin.REWRITTEN
     assert side.manufacturing_date == (1986, 2, 15)
     assert side.rewritten_date == (1988, 8, 1)
@@ -48,143 +56,257 @@ def test_a_kiosk_disk_reports_its_rewrite() -> None:
 
 
 def test_a_disk_whose_dates_are_not_valid_bcd_is_flagged() -> None:
-    report = provenance_of(disk_with_info(x1F=bytes([0xAB, 0x02, 0x15])))
+    # Arrange
+    disk = disk_with_info(x1F=bytes([0xAB, 0x02, 0x15]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert report.sides[0].manufacturing_date is None
     assert "manufacturing date" in " ".join(report.sides[0].notes)
 
 
 def test_a_rewrite_count_that_is_not_bcd_is_flagged() -> None:
-    report = provenance_of(disk_with_info(x34=bytes([0xAF])))
+    # Arrange
+    disk = disk_with_info(x34=bytes([0xAF]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert report.sides[0].rewrite_count is None
     assert "rewrite count" in " ".join(report.sides[0].notes)
 
 
 def test_a_rewritten_disk_without_a_serial_is_noted() -> None:
+    # Arrange
+    disk = disk_with_info(x2C=bytes([0x63, 0x08, 0x01]), x34=bytes([0x02]))
+
+    # Act
     report = provenance_of(
-        disk_with_info(x2C=bytes([0x63, 0x08, 0x01]), x34=bytes([0x02])),
+        disk,
     )
 
+    # Assert
     assert "no Disk Writer serial" in " ".join(report.sides[0].notes)
 
 
 def test_an_unformatted_side_has_no_provenance() -> None:
+    # Arrange
     disk, _ = decode(blank_image(sides=1, headered=False, formatted=False))
 
+    # Act
     report = provenance_of(disk)
 
+    # Assert
     assert report.sides[0].origin is Origin.UNKNOWN
     assert report.sides[0].manufacturing_date is None
 
 
 def test_the_report_covers_every_side() -> None:
-    disk, _ = decode(blank_image(sides=2, headered=False, formatted=True))
+    # Arrange
+    data = blank_image(sides=2, headered=False, formatted=True)
 
+    # Act
+    disk, _ = decode(data)
+
+    # Assert
     assert len(provenance_of(disk).sides) == 2
 
 
 def test_the_report_renders_as_data() -> None:
+    # Arrange
+    expected = 2
+
+    # Act
     record = provenance_of(disk_with_info(x34=bytes([0x02]))).sides[0].as_dict()
 
-    assert record["rewrite_count"] == 2
+    # Assert
+    assert record["rewrite_count"] == expected
     assert record["origin"] == "rewritten"
     assert list(record) == sorted(record)
 
 
 def test_a_rewritten_date_that_is_not_bcd_is_flagged() -> None:
-    report = provenance_of(disk_with_info(x2C=bytes([0xAB, 0x02, 0x15]), x34=bytes([0x01])))
+    # Arrange
+    disk = disk_with_info(x2C=bytes([0xAB, 0x02, 0x15]), x34=bytes([0x01]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert report.sides[0].rewritten_date is None
     assert "rewritten date" in " ".join(report.sides[0].notes)
 
 
 def test_a_disk_with_a_serial_but_no_rewrite_count_is_flagged() -> None:
-    report = provenance_of(disk_with_info(x31=bytes([0x34, 0x12]), x34=bytes([0x00])))
+    # Arrange
+    disk = disk_with_info(x31=bytes([0x34, 0x12]), x34=bytes([0x00]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert report.sides[0].origin is Origin.REWRITTEN
     assert "rewrite count is zero" in " ".join(report.sides[0].notes)
 
 
 def test_a_signature_written_over_the_provenance_region_is_reported() -> None:
-    report = provenance_of(disk_with_info(x20=b"hCON by hal9999"))
+    # Arrange
+    disk = disk_with_info(x20=b"hCON by hal9999")
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert report.sides[0].signature == "hCON by hal9999"
     assert any("readable text" in note for note in report.sides[0].notes)
 
 
 def test_a_clean_provenance_region_carries_no_signature() -> None:
-    assert provenance_of(disk_with_info()).sides[0].signature is None
+    # Arrange
+    expected = None
+
+    # Act
+    result = provenance_of(disk_with_info()).sides[0].signature
+
+    # Assert
+    assert result is expected
 
 
 def test_a_short_run_of_text_is_not_a_signature() -> None:
-    assert provenance_of(disk_with_info(x1F=b"ab")).sides[0].signature is None
+    # Arrange
+    expected = None
+
+    # Act
+    result = provenance_of(disk_with_info(x1F=b"ab")).sides[0].signature
+
+    # Assert
+    assert result is expected
 
 
 def test_an_unformatted_side_carries_no_signature() -> None:
-    blank, _ = decode(blank_image(sides=1, headered=False, formatted=False))
+    # Arrange
+    data = blank_image(sides=1, headered=False, formatted=False)
 
+    # Act
+    blank, _ = decode(data)
+
+    # Assert
     assert provenance_of(blank).sides[0].signature is None
 
 
 def test_a_rewrite_dated_after_the_kiosk_service_ended_is_flagged() -> None:
-    report = provenance_of(disk_with_info(x2C=bytes([0x86, 0x05, 0x01]), x34=bytes([0x01])))
+    # Arrange
+    disk = disk_with_info(x2C=bytes([0x86, 0x05, 0x01]), x34=bytes([0x01]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert any("after the Disk Writer service ended" in note for note in report.sides[0].notes)
 
 
 def test_a_rewrite_dated_during_the_kiosk_era_is_not_flagged() -> None:
-    report = provenance_of(disk_with_info(x2C=bytes([0x63, 0x05, 0x01]), x34=bytes([0x01])))
+    # Arrange
+    disk = disk_with_info(x2C=bytes([0x63, 0x05, 0x01]), x34=bytes([0x01]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert not any("service ended" in note for note in report.sides[0].notes)
 
 
 def test_the_disk_colour_is_named() -> None:
-    assert provenance_of(disk_with_info(x36=bytes([0xFF]))).sides[0].disk_colour == "blue"
+    # Arrange
+    expected = "blue"
+
+    # Act
+    result = provenance_of(disk_with_info(x36=bytes([0xFF]))).sides[0].disk_colour
+
+    # Assert
+    assert result == expected
     assert provenance_of(disk_with_info(x36=bytes([0x00]))).sides[0].disk_colour == "yellow"
 
 
 def test_an_unlisted_disk_type_is_unknown() -> None:
-    assert provenance_of(disk_with_info(x36=bytes([0x42]))).sides[0].disk_colour == "unknown"
+    # Arrange
+    expected = "unknown"
+
+    # Act
+    result = provenance_of(disk_with_info(x36=bytes([0x42]))).sides[0].disk_colour
+
+    # Assert
+    assert result == expected
 
 
 def test_an_unformatted_side_has_no_colour() -> None:
-    blank, _ = decode(blank_image(sides=1, headered=False, formatted=False))
+    # Arrange
+    data = blank_image(sides=1, headered=False, formatted=False)
 
+    # Act
+    blank, _ = decode(data)
+
+    # Assert
     assert provenance_of(blank).sides[0].disk_colour is None
 
 
 def test_a_manufacturing_date_after_the_service_ended_is_flagged() -> None:
-    report = provenance_of(disk_with_info(x1F=bytes([0x86, 0x05, 0x01])))
+    # Arrange
+    disk = disk_with_info(x1F=bytes([0x86, 0x05, 0x01]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert any(note.startswith("manufactured 2011") for note in report.sides[0].notes)
 
 
 def test_an_unwritten_writer_serial_is_a_factory_disk() -> None:
-    report = provenance_of(disk_with_info(x31=b"\xff\xff", x2C=b"\xff\xff\xff"))
+    # Arrange
+    disk = disk_with_info(x31=b"\xff\xff", x2C=b"\xff\xff\xff")
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert report.sides[0].origin is Origin.FACTORY
     assert not any("BCD" in note for note in report.sides[0].notes)
 
 
 def test_a_real_serial_still_reads_as_a_kiosk_rewrite() -> None:
-    report = provenance_of(disk_with_info(x31=b"\x72\x21", x2C=bytes([0x91, 0x05, 0x10])))
+    # Arrange
+    disk = disk_with_info(x31=b"\x72\x21", x2C=bytes([0x91, 0x05, 0x10]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert report.sides[0].origin is Origin.REWRITTEN
 
 
 def test_a_date_that_is_neither_blank_nor_unwritten_is_still_reported() -> None:
-    report = provenance_of(disk_with_info(x2C=bytes([0xAB, 0xCD, 0xEF])))
+    # Arrange
+    disk = disk_with_info(x2C=bytes([0xAB, 0xCD, 0xEF]))
 
+    # Act
+    report = provenance_of(disk)
+
+    # Assert
     assert any("rewritten date is not valid BCD" in note for note in report.sides[0].notes)
 
 
 def test_factory_fields_on_a_streamed_side_read_as_rewritten() -> None:
+    # Arrange
     disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
-
     report = provenance_of(disk, layouts={0: STREAMED})
 
+    # Act
     side = report.sides[0]
+
+    # Assert
     assert side.origin is Origin.REWRITTEN
     assert any(
         note.startswith("the captures show a side written in one stream") for note in side.notes
@@ -193,59 +315,77 @@ def test_factory_fields_on_a_streamed_side_read_as_rewritten() -> None:
 
 
 def test_factory_fields_on_a_duplicated_side_stay_factory() -> None:
+    # Arrange
     disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
-
     report = provenance_of(disk, layouts={0: DUPLICATED})
 
+    # Act
     side = report.sides[0]
+
+    # Assert
     assert side.origin is Origin.FACTORY
     assert any(note.startswith("the captures show a duplicator's layout") for note in side.notes)
 
 
 def test_an_unsettled_layout_leaves_the_fields_to_decide() -> None:
+    # Arrange
     disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
 
+    # Act
     report = provenance_of(disk, layouts={0: UNSETTLED})
 
+    # Assert
     assert report.sides[0].origin is Origin.FACTORY
 
 
 def test_a_kiosk_rewrite_on_a_streamed_side_adds_only_the_layout() -> None:
+    # Arrange
     disk = disk_with_info(
         x1F=bytes([0x61, 0x02, 0x15]),
         x2C=bytes([0x63, 0x08, 0x01]),
         x31=bytes([0x34, 0x12]),
         x34=bytes([0x03]),
     )
-
     report = provenance_of(disk, layouts={0: STREAMED})
 
+    # Act
     side = report.sides[0]
+
+    # Assert
     assert side.origin is Origin.REWRITTEN
     assert not any("data fields still say factory" in note for note in side.notes)
     assert any(note.startswith("the captures show") for note in side.notes)
 
 
 def test_a_side_without_disk_information_still_reports_its_layout() -> None:
+    # Arrange
     disk, _ = decode(blank_image(sides=1, headered=False, formatted=False))
 
+    # Act
     report = provenance_of(disk, layouts={0: STREAMED})
 
+    # Assert
     assert report.sides[0].origin is Origin.UNKNOWN
     assert any(note.startswith("the captures show") for note in report.sides[0].notes)
 
 
 def test_the_layout_renders_with_the_side() -> None:
+    # Arrange
     disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
 
+    # Act
     shown = provenance_of(disk, layouts={0: STREAMED}).sides[0].as_dict()
 
+    # Assert
     assert shown["layout"] == "streamed"
 
 
 def test_a_side_read_without_captures_has_no_layout() -> None:
+    # Arrange
     disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
 
+    # Act
     shown = provenance_of(disk).sides[0].as_dict()
 
+    # Assert
     assert shown["layout"] is None

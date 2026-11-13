@@ -33,72 +33,103 @@ def _write(path: Path, *, tail: bytes = bytes(41)) -> Path:
 
 
 def test_identical_dumps_report_full_stability(tmp_path: Path) -> None:
+    # Arrange
     first = _write(tmp_path / "a.fds")
     second = _write(tmp_path / "b.fds")
 
+    # Act
     result = runner.invoke(app, ["reads", str(first), str(second)])
 
+    # Assert
     assert result.exit_code == 0
     assert "stability" in result.stdout
 
 
 def test_differing_dumps_report_the_unstable_block(tmp_path: Path) -> None:
+    # Arrange
     first = _write(tmp_path / "a.fds")
     second = _write(tmp_path / "b.fds", tail=bytes([0x0F]) + bytes(40))
 
+    # Act
     result = runner.invoke(app, ["reads", str(first), str(second)])
 
+    # Assert
     assert result.exit_code == 1
     assert "block" in result.stdout
 
 
 def test_reads_can_print_json(tmp_path: Path) -> None:
+    # Arrange
     first = _write(tmp_path / "a.fds")
     second = _write(tmp_path / "b.fds")
-
     result = runner.invoke(app, ["reads", str(first), str(second), "--json"])
 
+    # Act
     payload = json.loads(result.stdout)
+
+    # Assert
     assert payload["passes"] == 2
     assert payload["stability"] == 1.0
     assert payload["decay"] == "none"
 
 
 def test_a_single_dump_is_refused(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["reads", str(_write(tmp_path / "a.fds"))])
+    # Arrange
+    arguments = ["reads", str(_write(tmp_path / "a.fds"))]
 
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
     assert result.exit_code == 1
     assert "at least two" in result.stdout
 
 
 def test_an_image_can_be_graded(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["grade", str(_write(tmp_path / "a.fds"))])
+    # Arrange
+    arguments = ["grade", str(_write(tmp_path / "a.fds"))]
 
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
     assert result.exit_code == 0
     assert "confidence" in result.stdout
 
 
 def test_grading_can_print_json(tmp_path: Path) -> None:
+    # Arrange
     result = runner.invoke(app, ["grade", str(_write(tmp_path / "a.fds")), "--json"])
 
+    # Act
     payload = json.loads(result.stdout)
+
+    # Assert
     assert "grade" in payload
     assert "reasons" in payload
 
 
 def test_grading_can_read_repeated_dumps(tmp_path: Path) -> None:
+    # Arrange
     first = _write(tmp_path / "a.fds")
     second = _write(tmp_path / "b.fds")
 
+    # Act
     result = runner.invoke(app, ["grade", str(first), "--read", str(second)])
 
+    # Assert
     assert result.exit_code == 0
     assert "read stability" in result.stdout
 
 
 def test_grading_can_show_the_per_block_confidence(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["grade", str(_write(tmp_path / "a.fds")), "--map"])
+    # Arrange
+    arguments = ["grade", str(_write(tmp_path / "a.fds")), "--map"]
 
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
     assert "disk_info" in result.stdout
 
 
@@ -121,11 +152,14 @@ def _write_with_amount(path: Path) -> Path:
 
 
 def test_reads_name_a_block_one_dump_missed(tmp_path: Path) -> None:
+    # Arrange
     full = _write_with_amount(tmp_path / "a.fds")
     short = _write(tmp_path / "b.fds")
-
     result = runner.invoke(app, ["reads", str(full), str(short), str(full)])
+
+    # Act
     listed = runner.invoke(app, ["reads", str(full), str(short), str(full), "--json"])
 
+    # Assert
     assert "side 0 block   1  missing from 1 read(s)" in result.stdout
     assert json.loads(listed.stdout)["missing"] == [[0, 1, 1]]

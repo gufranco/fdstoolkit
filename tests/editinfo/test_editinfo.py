@@ -20,93 +20,211 @@ def info_of(disk: Disk, side: int = 0) -> DiskInfo:
 
 
 def test_a_text_field_is_written_padded() -> None:
-    updated, changes = apply_edits(sample(), side=0, edits={"game_name": "ZEL"})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"game_name": "ZEL"}
 
+    # Act
+    updated, changes = apply_edits(disk, side=side, edits=edits)
+
+    # Assert
     assert info_of(updated).game_name == "ZEL"
     assert changes[0].field == "game_name"
 
 
 def test_a_numeric_field_is_written() -> None:
-    updated, _ = apply_edits(sample(), side=0, edits={"game_version": 3})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"game_version": 3}
 
+    # Act
+    updated, _ = apply_edits(disk, side=side, edits=edits)
+
+    # Assert
     assert info_of(updated).game_version == 3
 
 
 def test_a_date_is_written_in_bcd() -> None:
-    updated, _ = apply_edits(sample(), side=0, edits={"manufacturing_date": "1987-05-09"})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"manufacturing_date": "1987-05-09"}
 
+    # Act
+    updated, _ = apply_edits(disk, side=side, edits=edits)
+
+    # Assert
     assert info_of(updated).manufacturing_date == (1987, 5, 9)
 
 
 def test_a_change_reports_the_old_and_the_new_value() -> None:
-    _, changes = apply_edits(sample(), side=0, edits={"game_name": "ZEL"})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"game_name": "ZEL"}
 
+    # Act
+    _, changes = apply_edits(disk, side=side, edits=edits)
+
+    # Assert
     assert changes[0].before == "SMB"
     assert changes[0].after == "ZEL"
 
 
 def test_editing_nothing_changes_nothing() -> None:
+    # Arrange
     disk = sample()
 
+    # Act
     updated, changes = apply_edits(disk, side=0, edits={})
 
+    # Assert
     assert updated == disk
     assert changes == ()
 
 
 def test_editing_keeps_the_rest_of_the_block() -> None:
-    updated, _ = apply_edits(sample(), side=0, edits={"game_name": "ZEL"})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"game_name": "ZEL"}
 
+    # Act
+    updated, _ = apply_edits(disk, side=side, edits=edits)
+
+    # Assert
     assert info_of(updated).is_verified
     assert info_of(updated).country == 0x49
 
 
 def test_an_unknown_field_is_refused() -> None:
-    with pytest.raises(ValueError, match="unknown field"):
-        apply_edits(sample(), side=0, edits={"colour": "blue"})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"colour": "blue"}
+
+    # Act
+    with pytest.raises(ValueError, match="unknown field") as raised:
+        apply_edits(disk, side=side, edits=edits)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_field_that_is_not_editable_is_refused() -> None:
-    with pytest.raises(ValueError, match="not editable"):
-        apply_edits(sample(), side=0, edits={"verification": "x"})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"verification": "x"}
+
+    # Act
+    with pytest.raises(ValueError, match="not editable") as raised:
+        apply_edits(disk, side=side, edits=edits)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_side_that_does_not_exist_is_refused() -> None:
-    with pytest.raises(ValueError, match="no side 3"):
-        apply_edits(sample(), side=3, edits={"game_name": "ZEL"})
+    # Arrange
+    disk = sample()
+    side = 3
+    edits = {"game_name": "ZEL"}
+
+    # Act
+    with pytest.raises(ValueError, match="no side 3") as raised:
+        apply_edits(disk, side=side, edits=edits)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_an_unformatted_side_cannot_be_edited() -> None:
+    # Arrange
     disk, _ = decode(blank_image(sides=1, headered=False, formatted=False))
 
-    with pytest.raises(ValueError, match="no disk information block"):
+    # Act
+    with pytest.raises(ValueError, match="no disk information block") as raised:
         apply_edits(disk, side=0, edits={"game_name": "ZEL"})
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_text_value_longer_than_its_field_is_refused() -> None:
-    with pytest.raises(ValueError, match="3 byte"):
-        apply_edits(sample(), side=0, edits={"game_name": "TOOLONG"})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"game_name": "TOOLONG"}
+
+    # Act
+    with pytest.raises(ValueError, match="3 byte") as raised:
+        apply_edits(disk, side=side, edits=edits)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_numeric_value_outside_a_byte_is_refused() -> None:
-    with pytest.raises(ValueError, match="between 0 and 255"):
-        apply_edits(sample(), side=0, edits={"game_version": 300})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"game_version": 300}
+
+    # Act
+    with pytest.raises(ValueError, match="between 0 and 255") as raised:
+        apply_edits(disk, side=side, edits=edits)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_an_edit_string_is_parsed_into_a_pair() -> None:
-    assert parse_edit("game_name=ZEL") == ("game_name", "ZEL")
+    # Arrange
+    text = "game_name=ZEL"
+
+    # Act
+    result = parse_edit(text)
+
+    # Assert
+    assert result == ("game_name", "ZEL")
 
 
 def test_an_edit_string_without_an_equals_sign_is_refused() -> None:
-    with pytest.raises(ValueError, match="field=value"):
-        parse_edit("game_name")
+    # Arrange
+    text = "game_name"
+
+    # Act
+    with pytest.raises(ValueError, match="field=value") as raised:
+        parse_edit(text)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_every_editable_field_is_named() -> None:
-    assert "game_name" in EDITABLE_FIELDS
-    assert "verification" not in EDITABLE_FIELDS
+    # Arrange
+    fields = EDITABLE_FIELDS
+
+    # Act
+    names = set(fields)
+
+    # Assert
+    assert "game_name" in names
+    assert "verification" not in names
 
 
 def test_a_date_that_is_not_a_date_is_refused() -> None:
-    with pytest.raises(ValueError, match="YYYY-MM-DD"):
-        apply_edits(sample(), side=0, edits={"manufacturing_date": "yesterday"})
+    # Arrange
+    disk = sample()
+    side = 0
+    edits = {"manufacturing_date": "yesterday"}
+
+    # Act
+    with pytest.raises(ValueError, match="YYYY-MM-DD") as raised:
+        apply_edits(disk, side=side, edits=edits)
+
+    # Assert
+    assert raised.type is ValueError

@@ -150,9 +150,14 @@ afterEach(() => {
 
 describe('start', () => {
   it('opens the command named in the address and orders the families', async () => {
+    // Arrange
+    const expected = 'blank';
+
+    // Act
     await open('blank');
 
-    expect(panel().querySelector('.command-name').textContent).toBe('blank');
+    // Assert
+    expect(panel().querySelector('.command-name').textContent).toBe(expected);
     expect([...document.querySelectorAll('#families button')].map((node) => node.dataset.family)).toEqual([
       'inspect',
       'repair',
@@ -164,97 +169,138 @@ describe('start', () => {
   });
 
   it('opens the first command when the address names none it knows', async () => {
+    // Arrange
+    const expected = 'info';
+
+    // Act
     await open('missing');
 
-    expect(panel().querySelector('.command-name').textContent).toBe('info');
+    // Assert
+    expect(panel().querySelector('.command-name').textContent).toBe(expected);
   });
 
   it('says what went wrong when the catalogue cannot be read', async () => {
+    // Arrange
+    const expected = 'the server stopped';
+
+    // Act
     await open('info', { 'GET /api/catalogue': () => reply(500, { detail: 'the server stopped' }) });
 
-    expect(panel().querySelector('.reason').textContent).toBe('the server stopped');
+    // Assert
+    expect(panel().querySelector('.reason').textContent).toBe(expected);
   });
 
   it('shows an empty page when the catalogue carries no command and no family order', async () => {
+    // Arrange
+    const expected = 'Choose a command on the left.';
+
+    // Act
     await open('info', { 'GET /api/catalogue': () => reply(200, { forms: [] }) });
 
-    expect(panel().textContent).toBe('Choose a command on the left.');
+    // Assert
+    expect(panel().textContent).toBe(expected);
     expect(document.querySelector('#commands .no-match')).not.toBeNull();
   });
 });
 
 describe('the command list', () => {
   it('switches to the first command of a family', async () => {
+    // Arrange
     await open('info');
 
+    // Act
     document.querySelector('#families [data-family=repair]').click();
 
+    // Assert
     expect(panel().querySelector('.command-name').textContent).toBe('consensus');
     expect(window.location.hash).toBe('#consensus');
   });
 
   it('opens the command clicked in the list', async () => {
+    // Arrange
     await open('dump');
 
+    // Act
     document.querySelectorAll('#commands button')[2].click();
 
+    // Assert
     expect(panel().querySelector('.command-name').textContent).toBe('write');
   });
 
   it('filters across families and opens the first match', async () => {
+    // Arrange
     await open('info');
     const search = document.getElementById('search');
-
     search.value = 'wri';
+
+    // Act
     search.dispatchEvent(new Event('input'));
 
+    // Assert
     expect(panel().querySelector('.command-name').textContent).toBe('write');
   });
 
   it('keeps the open command when the filter matches nothing', async () => {
+    // Arrange
     await open('info');
     const search = document.getElementById('search');
-
     search.value = 'nothing-like-this';
+
+    // Act
     search.dispatchEvent(new Event('input'));
 
+    // Assert
     expect(document.querySelector('#commands .no-match').textContent).toBe('No command matches that.');
     expect(panel().querySelector('.command-name').textContent).toBe('info');
   });
 
   it('follows the address when it changes', async () => {
+    // Arrange
     await open('info');
-
     window.history.replaceState(null, '', '#blank');
+
+    // Act
     window.dispatchEvent(new Event('hashchange'));
 
+    // Assert
     expect(panel().querySelector('.command-name').textContent).toBe('blank');
   });
 
   it('keeps working when the address cannot be rewritten', async () => {
+    // Arrange
     await open('info');
     vi.spyOn(window.history, 'replaceState').mockImplementation(() => {
       throw new Error('blocked');
     });
 
+    // Act
     document.querySelector('#families [data-family=container]').click();
 
+    // Assert
     expect(panel().querySelector('.command-name').textContent).toBe('blank');
   });
 
   it('falls back to the summary the catalogue carries when no translation exists', async () => {
+    // Arrange
+    const expected = 'Not translated.';
+
+    // Act
     await open('oddity');
 
-    expect(panel().querySelector('.summary').textContent).toBe('Not translated.');
+    // Assert
+    expect(panel().querySelector('.summary').textContent).toBe(expected);
   });
 });
 
 describe('languages', () => {
   it('translates the page and remembers the choice', async () => {
+    // Arrange
     await open('info');
 
+    // Act
     document.querySelector('[data-language=ja]').click();
 
+    // Assert
     expect(document.documentElement.lang).toBe('ja');
     expect(document.querySelector('[data-language=ja]').getAttribute('aria-pressed')).toBe('true');
     expect(window.localStorage.getItem('fdstoolkit.language')).toBe('ja');
@@ -262,14 +308,17 @@ describe('languages', () => {
   });
 
   it('falls back to English for a language it does not carry', async () => {
+    // Arrange
     await open('info');
     const unknown = document.createElement('button');
     unknown.dataset.language = 'xx';
     document.querySelector('.languages').append(unknown);
     await start();
 
+    // Act
     unknown.click();
 
+    // Assert
     expect(document.querySelector('[data-i18n=title]').textContent).toBe('Famicom Disk System Toolkit');
     document.querySelector('[data-language=en]').click();
   });
@@ -277,9 +326,14 @@ describe('languages', () => {
 
 describe('the form', () => {
   it('builds every kind of control with its limits and help', async () => {
+    // Arrange
+    const expected = 'SELECT';
+
+    // Act
     await open('blank');
 
-    expect(field('sides').tagName).toBe('SELECT');
+    // Assert
+    expect(field('sides').tagName).toBe(expected);
     expect(field('sides').value).toBe('1');
     expect(field('passes').min).toBe('1');
     expect(field('passes').max).toBe('20');
@@ -292,17 +346,25 @@ describe('the form', () => {
   });
 
   it('says a command needs nothing when it has no fields', async () => {
+    // Arrange
+    const expected = 'This command needs nothing from you. Press the button.';
+
+    // Act
     await open('status');
 
-    expect(panel().textContent).toContain('This command needs nothing from you. Press the button.');
+    // Assert
+    expect(panel().textContent).toContain(expected);
   });
 
   it('names the file chosen and what the field accepts', async () => {
+    // Arrange
     await open('info');
     const node = field('data');
 
+    // Act
     choose(node, [new File([new Uint8Array([1])], 'game.fds')]);
 
+    // Assert
     expect(panel().querySelector('.file-name').textContent).toBe('game.fds');
     expect(panel().textContent).toContain('Expects .fds, .qd');
     choose(node, []);
@@ -310,13 +372,16 @@ describe('the form', () => {
   });
 
   it('explains a value as soon as it goes out of range', async () => {
+    // Arrange
     await open('blank');
     const node = field('passes');
     node.checkValidity = () => false;
     Object.defineProperty(node, 'validity', { value: { rangeOverflow: true }, configurable: true });
 
+    // Act
     node.dispatchEvent(new Event('input'));
 
+    // Assert
     expect(node.closest('label').classList.contains('missing')).toBe(true);
     expect(node.closest('label').querySelector('.field-problem').textContent).toBe('Must be 20 or less.');
   });
@@ -324,93 +389,120 @@ describe('the form', () => {
 
 describe('running a command', () => {
   it('refuses to run with a required field empty', async () => {
+    // Arrange
     await open('info');
 
+    // Act
     await run();
 
+    // Assert
     expect(panel().querySelector('.output .banner').textContent).toBe('Still needed: data');
     expect(sent.filter((entry) => entry.key === 'POST /api/info')).toEqual([]);
   });
 
   it('refuses to run with a value out of range', async () => {
+    // Arrange
     await open('blank');
     field('game_name').value = 'SMB';
     const node = field('passes');
     node.checkValidity = () => false;
     Object.defineProperty(node, 'validity', { value: { rangeUnderflow: true }, configurable: true });
 
+    // Act
     await run();
 
+    // Assert
     expect(panel().querySelector('.output .reason').textContent).toBe('passes: Must be 1 or more.');
   });
 
   it('sends typed values and shows the answer', async () => {
+    // Arrange
     await open('blank', { 'POST /api/blank': () => reply(200, { headline: 'made a blank disk', ok: true }) });
     field('game_name').value = 'SMB';
     field('sides').value = '2';
     field('ratio').value = '';
-
     await run();
 
+    // Act
     const call = sent.find((entry) => entry.key === 'POST /api/blank');
+
+    // Assert
     expect(call.body).toEqual({ sides: 2, passes: 1, formatted: true, game_name: 'SMB' });
     expect(panel().querySelector('.output .banner').textContent).toBe('made a blank disk');
     expect(panel().querySelector('button.run').disabled).toBe(false);
   });
 
   it('encodes the chosen file and derives the output name from it', async () => {
+    // Arrange
     await open('info', { 'POST /api/info': () => reply(200, { text: 'Game name: SMB' }) });
     choose(field('data'), [new File([new Uint8Array([1, 2])], 'smb.qd')]);
-
     await run();
 
+    // Act
     const call = sent.find((entry) => entry.key === 'POST /api/info');
+
+    // Assert
     expect(call.body).toEqual({ data: 'AQI=', name: 'smb.fds' });
   });
 
   it('sends every file of a many-file field', async () => {
+    // Arrange
     await open('consensus', { 'POST /api/consensus': () => reply(200, { headline: 'merged' }) });
     choose(field('images'), [new File([new Uint8Array([1])], 'a.fds'), new File([new Uint8Array([2])], 'b.fds')]);
-
     await run();
 
+    // Act
     const call = sent.find((entry) => entry.key === 'POST /api/consensus');
+
+    // Assert
     expect(call.body).toEqual({ images: ['AQ==', 'Ag=='] });
   });
 
   it('leaves out optional files nobody chose and keeps the default name', async () => {
+    // Arrange
     await open('lint', { 'POST /api/lint': () => reply(200, { headline: 'clean', ok: true }) });
-
     await run();
 
+    // Act
     const call = sent.find((entry) => entry.key === 'POST /api/lint');
+
+    // Assert
     expect(call.body).toEqual({ report: 'report.json' });
   });
 
   it('uses GET for a command that reads only', async () => {
+    // Arrange
     await open('status', { 'GET /api/status': () => reply(200, { headline: 'healthy', ok: true }) });
 
+    // Act
     await run();
 
+    // Assert
     expect(panel().querySelector('.output .banner').textContent).toBe('healthy');
   });
 
   it('says the server failed when its answer is not a result', async () => {
+    // Arrange
     await open('status', { 'GET /api/status': () => ({ ok: false, status: 500, json: async () => JSON.parse('Internal Server Error') }) });
 
+    // Act
     await run();
 
+    // Assert
     expect(panel().querySelector('.output .reason').textContent).toBe(
       'The server answered 500 with something that is not a result. Its terminal shows what went wrong.',
     );
   });
 
   it('reports a refusal with the reason and a hint', async () => {
+    // Arrange
     await open('blank', { 'POST /api/blank': () => reply(422, { detail: [{ loc: ['body', 'game_name'], msg: 'too long' }] }) });
     field('game_name').value = 'SMB';
 
+    // Act
     await run();
 
+    // Assert
     expect(panel().querySelector('.output .reason').textContent).toBe('game name: too long');
   });
 });
@@ -428,63 +520,87 @@ describe('the drive commands', () => {
   };
 
   it('says whether the stick is connected, with the detail as a sentence', async () => {
+    // Arrange
+    const expected =
+      'No FDSStick is connected, so this command cannot reach a real drive. None connected at 16D0:0AAA';
+
+    // Act
     await open('dump');
 
-    expect(panel().querySelector('.banner.bad').textContent).toBe(
-      'No FDSStick is connected, so this command cannot reach a real drive. None connected at 16D0:0AAA',
-    );
+    // Assert
+    expect(panel().querySelector('.banner.bad').textContent).toBe(expected);
   });
 
   it('says when the stick is connected', async () => {
+    // Arrange
+    const expected = 'An FDSStick is connected. 1 device(s) connected';
+
+    // Act
     await open('dump', { 'GET /api/hardware': () => reply(200, { connected: true, detail: '1 device(s) connected' }) });
 
-    expect(panel().querySelector('.banner.good').textContent).toBe('An FDSStick is connected. 1 device(s) connected');
+    // Assert
+    expect(panel().querySelector('.banner.good').textContent).toBe(expected);
   });
 
   it('says when the stick state cannot be read', async () => {
+    // Arrange
+    const expected = 'The device state could not be read: Hid failed';
+
+    // Act
     await open('dump', { 'GET /api/hardware': () => reply(500, { detail: 'hid failed' }) });
 
-    expect(panel().querySelector('.banner.bad').textContent).toBe('The device state could not be read: Hid failed');
+    // Assert
+    expect(panel().querySelector('.banner.bad').textContent).toBe(expected);
   });
 
   it('runs a dump as a job with no erase dialog', async () => {
+    // Arrange
     await open('dump', { 'POST /api/jobs/dump': () => reply(200, done) });
 
+    // Act
     await run();
 
+    // Assert
     expect(document.querySelector('dialog')).toBeNull();
     expect(panel().querySelector('.output a').download).toBe('dump.fds');
   });
 
   it('writes nothing when the erase is cancelled', async () => {
+    // Arrange
     await open('write');
     choose(field('data'), [new File([new Uint8Array([1])], 'game.fds')]);
-
     panel().querySelector('button.run').click();
     await settle();
     document.querySelector('dialog .plain').click();
+
+    // Act
     await settle();
 
+    // Assert
     expect(panel().querySelector('.output .banner').textContent).toBe('Cancelled. Nothing was written.');
     expect(sent.filter((entry) => entry.key === 'POST /api/jobs/write')).toEqual([]);
   });
 
   it('confirms the erase in the request once the dialog agrees', async () => {
+    // Arrange
     const written = { ...done, command: 'write', writes: true, result: { headline: 'written', ok: true } };
     await open('write', { 'POST /api/jobs/write': () => reply(200, written) });
     choose(field('data'), [new File([new Uint8Array([1])], 'game.fds')]);
-
     panel().querySelector('button.run').click();
     await settle();
     document.querySelector('dialog .danger').click();
     await settle();
 
+    // Act
     const call = sent.find((entry) => entry.key === 'POST /api/jobs/write');
+
+    // Assert
     expect(call.body).toEqual({ data: 'AQ==', confirm: true });
     expect(panel().querySelector('.output .banner').textContent).toBe('written');
   });
 
   it('shows a failed answer to the turn prompt without losing the job', async () => {
+    // Arrange
     const waiting = { ...done, state: 'waiting', prompt: 'turn the disk over', result: null };
     const failed = { ...waiting, state: 'failed', prompt: '', error: 'declined' };
     let polls = 0;
@@ -496,11 +612,13 @@ describe('the drive commands', () => {
       },
       'POST /api/jobs/j1/answer': () => reply(409, { detail: 'that job is not waiting for an answer' }),
     });
-
     await run();
-    panel().querySelector('.turn .plain').click();
-    await settle();
 
+    // Act
+    panel().querySelector('.turn .plain').click();
+
+    // Assert
+    await settle();
     expect(panel().querySelector('.output').textContent).toContain('that job is not waiting for an answer');
     await vi.waitFor(() => expect(panel().querySelector('.output .reason').textContent).toBe('declined'), {
       timeout: 3000,
@@ -508,6 +626,7 @@ describe('the drive commands', () => {
   });
 
   it('stops a job that can stop and reports a stop the server refused', async () => {
+    // Arrange
     const measuring = { ...done, state: 'running', stoppable: true, result: null };
     let polls = 0;
     await open('dump', {
@@ -518,11 +637,13 @@ describe('the drive commands', () => {
       },
       'POST /api/jobs/j1/stop': () => reply(409, { detail: 'that job cannot be stopped' }),
     });
-
     await run();
-    panel().querySelector('.job .dialog-actions .plain').click();
-    await settle();
 
+    // Act
+    panel().querySelector('.job .dialog-actions .plain').click();
+
+    // Assert
+    await settle();
     expect(sent.some((entry) => entry.key === 'POST /api/jobs/j1/stop')).toBe(true);
     expect(panel().querySelector('.output').textContent).toContain('that job cannot be stopped');
     await vi.waitFor(() => expect(panel().querySelector('.output .reason').textContent).toBe('stopped'), {
@@ -531,6 +652,7 @@ describe('the drive commands', () => {
   });
 
   it('asks before the page closes while a job writes', async () => {
+    // Arrange
     const writing = { ...done, command: 'write', writes: true, state: 'running', result: null };
     let polls = 0;
     await open('write', {
@@ -545,10 +667,12 @@ describe('the drive commands', () => {
     await settle();
     document.querySelector('dialog .danger').click();
     await settle();
-
     const leaving = new Event('beforeunload', { cancelable: true });
+
+    // Act
     window.dispatchEvent(leaving);
 
+    // Assert
     expect(leaving.defaultPrevented).toBe(true);
     await vi.waitFor(() => expect(panel().querySelector('.output .reason').textContent).toBe('stalled'), {
       timeout: 3000,
@@ -556,16 +680,26 @@ describe('the drive commands', () => {
   });
 
   it('picks up a job that is already running', async () => {
+    // Arrange
+    const expected = 'dump';
+
+    // Act
     await open('info', { 'GET /api/jobs/current': () => reply(200, { job: done }) });
 
-    expect(panel().querySelector('.command-name').textContent).toBe('dump');
+    // Assert
+    expect(panel().querySelector('.command-name').textContent).toBe(expected);
     expect(panel().querySelector('.output a').download).toBe('dump.fds');
   });
 
   it('ignores a running job for a command the page does not offer', async () => {
+    // Arrange
+    const expected = 'info';
+
+    // Act
     await open('info', { 'GET /api/jobs/current': () => reply(200, { job: { ...done, command: 'gone' } }) });
 
-    expect(panel().querySelector('.command-name').textContent).toBe('info');
+    // Assert
+    expect(panel().querySelector('.command-name').textContent).toBe(expected);
   });
 });
 
@@ -577,12 +711,26 @@ describe('problemFor', () => {
   }
 
   it('says nothing for a valid value or a node with no validation', () => {
-    expect(problemFor({ checkValidity: () => true }, limits)).toBe('');
+    // Arrange
+    const expected = '';
+
+    // Act
+    const result = problemFor({ checkValidity: () => true }, limits);
+
+    // Assert
+    expect(result).toBe(expected);
     expect(problemFor({}, limits)).toBe('');
   });
 
   it('names every kind of problem in the page language', () => {
-    expect(problemFor(failing({ tooShort: true }), limits)).toBe('Needs at least 3 characters.');
+    // Arrange
+    const expected = 'Needs at least 3 characters.';
+
+    // Act
+    const result = problemFor(failing({ tooShort: true }), limits);
+
+    // Assert
+    expect(result).toBe(expected);
     expect(problemFor(failing({ tooLong: true }), limits)).toBe('No more than 3 characters.');
     expect(problemFor(failing({ badInput: true }), limits)).toBe('That is not the shape this field expects.');
     expect(problemFor(failing({ valueMissing: true }), limits)).toBe('This one is required.');
@@ -592,43 +740,62 @@ describe('problemFor', () => {
 
 describe('sentence', () => {
   it('capitalises the first letter and leaves the rest alone', () => {
-    expect(sentence('none connected at 16D0:0AAA')).toBe('None connected at 16D0:0AAA');
+    // Arrange
+    const expected = 'None connected at 16D0:0AAA';
+
+    // Act
+    const result = sentence('none connected at 16D0:0AAA');
+
+    // Assert
+    expect(result).toBe(expected);
     expect(sentence('')).toBe('');
   });
 });
 
 describe('the rest of the result layouts', () => {
   it('lists a change that carries no marks, only its two values', () => {
+    // Arrange
     const target = document.createElement('div');
 
+    // Act
     renderResult(target, { changes: [{ left: 'A', right: 'B', moved: false }] });
 
+    // Assert
     expect(target.querySelector('.change-marks')).toBeNull();
     expect(target.querySelector('.change-values').textContent).toContain('A');
   });
 
   it('shows the notes an export carries next to its file', () => {
+    // Arrange
     const target = document.createElement('div');
 
+    // Act
     renderResult(target, { name: 'dump.fds', data: 'AQ==', size: 1, notes: ['[FDS016] lost'] });
 
+    // Assert
     expect(target.querySelector('.download').getAttribute('download')).toBe('dump.fds');
     expect(target.querySelector('.download-notes .banner.warn').textContent).toBe('[FDS016] lost');
   });
 
   it('lays out a list that mixes values and records as pairs', () => {
+    // Arrange
     const target = document.createElement('div');
 
+    // Act
     renderResult(target, { mixed: [1, { side: 0 }] });
 
+    // Assert
     expect(target.querySelector('dl dl')).not.toBeNull();
   });
 
   it('offers a file on its own when nothing else came with it', () => {
+    // Arrange
     const target = document.createElement('div');
 
+    // Act
     renderResult(target, { headline: '', file: { name: 'before.fds', data: 'AA==', size: 1 } });
 
+    // Assert
     expect(target.querySelector('a').download).toBe('before.fds');
     expect(target.querySelector('dl')).toBeNull();
   });
@@ -636,27 +803,45 @@ describe('the rest of the result layouts', () => {
 
 describe('initialLanguage', () => {
   it('keeps a remembered language the page carries', () => {
+    // Arrange
     window.localStorage.setItem('fdstoolkit.language', 'ja');
 
-    expect(initialLanguage()).toBe('ja');
+    // Act
+    const language = initialLanguage();
+
+    // Assert
+    expect(language).toBe('ja');
     window.localStorage.removeItem('fdstoolkit.language');
   });
 
   it('follows the browser when nothing is remembered', () => {
+    // Arrange
+    const expected = 'ja';
+
+    // Act
     vi.spyOn(navigator, 'language', 'get').mockReturnValue('ja-JP');
 
-    expect(initialLanguage()).toBe('ja');
+    // Assert
+    expect(initialLanguage()).toBe(expected);
   });
 
   it('falls back to English for a browser language it does not carry, or none', () => {
-    const language = vi.spyOn(navigator, 'language', 'get').mockReturnValue('pt-BR');
-    expect(initialLanguage()).toBe('en');
+    // Arrange
+    const language = vi.spyOn(navigator, 'language', 'get');
+    const answers = ['pt-BR', ''];
 
-    language.mockReturnValue('');
-    expect(initialLanguage()).toBe('en');
+    // Act
+    const chosen = answers.map((answer) => {
+      language.mockReturnValue(answer);
+      return initialLanguage();
+    });
+
+    // Assert
+    expect(chosen).toEqual(['en', 'en']);
   });
 
   it('works when storage is blocked', () => {
+    // Arrange
     vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
     });
@@ -664,8 +849,10 @@ describe('initialLanguage', () => {
       throw new Error('blocked');
     });
 
+    // Act
     rememberLanguage('ja');
 
+    // Assert
     expect(initialLanguage()).toBe('en');
   });
 });

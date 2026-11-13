@@ -33,37 +33,52 @@ def stick_fixture() -> Iterator[FdsStick]:
 
 
 def test_two_dumps_of_the_disk_in_the_drive_agree(stick: FdsStick) -> None:
+    # Arrange
     first = dump(stick, sides=ONE_SIDE)
     second = dump(stick, sides=ONE_SIDE)
 
+    # Act
     payloads = [[block.payload for block in result.sides[0].blocks] for result in (first, second)]
+
+    # Assert
     assert payloads[0] == payloads[1]
     assert first.grade is Grade.CLEAN
 
 
 def test_a_calibration_reads_the_disk_in_the_drive(stick: FdsStick) -> None:
-    result = calibrate(stick, mode=Mode.SPEED, reads=CALIBRATION_READS)
+    # Arrange
+    mode = Mode.SPEED
 
+    # Act
+    result = calibrate(stick, mode=mode, reads=CALIBRATION_READS)
+
+    # Assert
     assert len(result.samples) == CALIBRATION_READS
     assert result.last is not None
     assert result.last.read == result.last.expected
 
 
 def test_the_calibration_disk_writes_and_reads_back(stick: FdsStick) -> None:
+    # Arrange
     required(SCRATCH_ENV, "with a scratch disk in the drive, since this overwrites side A")
 
+    # Act
     report = write_verified(
         stick, stick, calibration_disk(ONE_SIDE), confirm=lambda _: True, backup=None
     )
 
+    # Assert
     assert report.verified
 
 
 def test_a_quick_surface_pass_holds_on_a_scratch_disk(stick: FdsStick) -> None:
+    # Arrange
     required(SCRATCH_ENV, "with a scratch disk in the drive, since this overwrites side A")
 
+    # Act
     report = surface_test(
         stick, stick, sides=ONE_SIDE, confirm=lambda _: True, plan=SurfacePlan(fill=False)
     )
 
+    # Assert
     assert report.passed

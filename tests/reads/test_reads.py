@@ -25,30 +25,50 @@ def _with_first_byte(value: int) -> Disk:
 
 
 def test_a_single_read_is_refused() -> None:
-    with pytest.raises(ValueError, match="at least two reads"):
-        compare_reads([_disk()])
+    # Arrange
+    disks = [_disk()]
+
+    # Act
+    with pytest.raises(ValueError, match="at least two reads") as raised:
+        compare_reads(disks)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_reads_of_different_shapes_are_refused() -> None:
+    # Arrange
     two_sides = Disk(sides=(_disk().sides[0], _disk().sides[0]))
 
-    with pytest.raises(ValueError, match="different numbers of sides"):
+    # Act
+    with pytest.raises(ValueError, match="different numbers of sides") as raised:
         compare_reads([_disk(), two_sides])
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_read_that_missed_a_block_is_counted_rather_than_refused() -> None:
+    # Arrange
     amount = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([BlockKind.FILE_AMOUNT, 0]))
     full = Disk(sides=(Side(blocks=(*_disk().sides[0].blocks, amount), tail=b"", capacity=65500),))
 
+    # Act
     stats = compare_reads([full, _disk(), full])
 
+    # Assert
     assert [entry.missing for entry in stats.blocks] == [0, 1]
     assert stats.blocks[1].stable
 
 
 def test_identical_reads_are_perfectly_stable() -> None:
-    stats = compare_reads([_disk(), _disk(), _disk()])
+    # Arrange
+    disks = [_disk(), _disk(), _disk()]
 
+    # Act
+    stats = compare_reads(disks)
+
+    # Assert
     assert stats.passes == 3
     assert stats.stability == 1.0
     assert not stats.unstable_blocks
@@ -56,8 +76,13 @@ def test_identical_reads_are_perfectly_stable() -> None:
 
 
 def test_a_block_that_differs_in_one_read_is_unstable() -> None:
-    stats = compare_reads([_with_first_byte(0xFF), _with_first_byte(0xFF), _with_first_byte(0xFE)])
+    # Arrange
+    disks = [_with_first_byte(0xFF), _with_first_byte(0xFF), _with_first_byte(0xFE)]
 
+    # Act
+    stats = compare_reads(disks)
+
+    # Assert
     assert stats.stability < 1.0
     assert stats.unstable_blocks == ((0, 0),)
     assert stats.blocks[0].variants == 2
@@ -65,49 +90,77 @@ def test_a_block_that_differs_in_one_read_is_unstable() -> None:
 
 
 def test_bits_dropping_to_zero_read_as_decay() -> None:
-    stats = compare_reads([_with_first_byte(0xFF), _with_first_byte(0xFF), _with_first_byte(0x0F)])
+    # Arrange
+    disks = [_with_first_byte(0xFF), _with_first_byte(0xFF), _with_first_byte(0x0F)]
 
+    # Act
+    stats = compare_reads(disks)
+
+    # Assert
     assert stats.blocks[0].ones_lost == 4
     assert stats.blocks[0].ones_gained == 0
     assert stats.decay is Decay.LOSS
 
 
 def test_bits_appearing_read_as_gain() -> None:
-    stats = compare_reads([_with_first_byte(0x00), _with_first_byte(0x00), _with_first_byte(0xF0)])
+    # Arrange
+    disks = [_with_first_byte(0x00), _with_first_byte(0x00), _with_first_byte(0xF0)]
 
+    # Act
+    stats = compare_reads(disks)
+
+    # Assert
     assert stats.blocks[0].ones_gained == 4
     assert stats.blocks[0].ones_lost == 0
     assert stats.decay is Decay.GAIN
 
 
 def test_flips_in_both_directions_read_as_mixed() -> None:
-    stats = compare_reads(
-        [
-            _with_first_byte(0b1010_1010),
-            _with_first_byte(0b1010_1010),
-            _with_first_byte(0b0101_0101),
-        ]
-    )
+    # Arrange
+    disks = [
+        _with_first_byte(0b1010_1010),
+        _with_first_byte(0b1010_1010),
+        _with_first_byte(0b0101_0101),
+    ]
 
+    # Act
+    stats = compare_reads(disks)
+
+    # Assert
     assert stats.decay is Decay.MIXED
 
 
 def test_a_tie_between_two_readings_still_reports_both_variants() -> None:
-    stats = compare_reads([_with_first_byte(0x01), _with_first_byte(0x02)])
+    # Arrange
+    disks = [_with_first_byte(0x01), _with_first_byte(0x02)]
 
+    # Act
+    stats = compare_reads(disks)
+
+    # Assert
     assert stats.blocks[0].variants == 2
     assert stats.blocks[0].modal_share == pytest.approx(0.5)
 
 
 def test_a_block_report_names_where_it_came_from() -> None:
-    stats = compare_reads([_disk(), _disk()])
+    # Arrange
+    disks = [_disk(), _disk()]
 
+    # Act
+    stats = compare_reads(disks)
+
+    # Assert
     assert stats.blocks[0].side == 0
     assert stats.blocks[0].block == 0
     assert stats.blocks[0].kind == "disk_info"
 
 
 def test_the_flip_rate_is_the_complement_of_the_modal_share() -> None:
-    stats = compare_reads([_with_first_byte(0xFF), _with_first_byte(0xFF), _with_first_byte(0xFE)])
+    # Arrange
+    disks = [_with_first_byte(0xFF), _with_first_byte(0xFF), _with_first_byte(0xFE)]
 
+    # Act
+    stats = compare_reads(disks)
+
+    # Assert
     assert stats.blocks[0].flip_rate == pytest.approx(1 / 3)

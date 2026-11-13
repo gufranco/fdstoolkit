@@ -58,18 +58,26 @@ test.afterEach(async ({ request }) => {
 });
 
 test('every control on the page is at least 44 pixels tall', async ({ page }) => {
+  // Arrange
+  const expected = [];
+
+  // Act
   await openCommand(page, 'surface');
 
-  expect(await shortControls(page, 'body')).toEqual([]);
+  // Assert
+  expect(await shortControls(page, 'body')).toEqual(expected);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
 test('the erase dialog is modal, labelled and starts on a visible cancel', async ({ page, request }) => {
+  // Arrange
   await openCommand(page, 'write');
   await page.locator('input[data-field=data]').setInputFiles(await blankImage(request));
 
+  // Act
   await page.locator('#panel button.run').click();
 
+  // Assert
   const dialog = page.getByRole('dialog', { name: ERASE_TITLE });
   await expect(dialog).toBeVisible();
   expect(await dialog.evaluate((node) => node.matches(':modal'))).toBe(true);
@@ -78,35 +86,35 @@ test('the erase dialog is modal, labelled and starts on a visible cancel', async
   expect(ring.outline > 0 || ring.shadow !== 'none').toBe(true);
   expect(await shortControls(page, 'dialog')).toEqual([]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
-
   await page.keyboard.press('Escape');
-
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('#panel .output .banner')).toHaveText('Cancelled. Nothing was written.');
   expect(await nothingRunning(request)).toBe(true);
 });
 
 test('a two-sided write asks for one turn and offers the backup', async ({ page, request }) => {
+  // Arrange
   await openCommand(page, 'write');
   await page.locator('input[data-field=data]').setInputFiles(await blankImage(request));
   await page.locator('#panel button.run').click();
 
+  // Act
   await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
 
+  // Assert
   const prompt = page.getByRole('alert');
   await expect(prompt).toContainText('turn the disk over');
   await expect(page.locator('#panel .steps li').first()).toHaveText('reading side 0 before writing it');
   expect(await shortControls(page, '.turn')).toEqual([]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
-
   await prompt.getByRole('button', { name: TURNED }).click();
-
   await expect(page.locator('#panel .output .banner')).toHaveText('the disk reads back as written, on this drive, grade clean');
   await expect(page.getByRole('link', { name: 'Download before.fds' })).toBeVisible();
   expect(await nothingRunning(request)).toBe(true);
 });
 
 test('closing the page while a write waits asks first', async ({ page, request }) => {
+  // Arrange
   await openCommand(page, 'write');
   await page.locator('input[data-field=data]').setInputFiles(await blankImage(request));
   await page.locator('#panel button.run').click();
@@ -117,21 +125,26 @@ test('closing the page while a write waits asks first', async ({ page, request }
     asked = dialog.type();
     await dialog.dismiss();
   });
-
   await page.close({ runBeforeUnload: true });
   await expect.poll(() => asked).toBe('beforeunload');
-
   await page.getByRole('alert').getByRole('button', { name: 'Stop' }).click();
+
+  // Act
   await expect(page.locator('#panel .output .banner')).toHaveText('The disk operation stopped.');
+
+  // Assert
   expect(await nothingRunning(request)).toBe(true);
 });
 
 test('a page opened during a job picks it up instead of starting another', async ({ page, request }) => {
+  // Arrange
   const started = await request.post('/api/jobs/dump', { data: { sides: 2 } });
-  expect(started.ok()).toBe(true);
 
+  // Act
   await page.goto('/?e2e#info');
 
+  // Assert
+  expect(started.ok()).toBe(true);
   await expect(page.locator('#panel .command-name')).toHaveText('dump');
   const prompt = page.getByRole('alert');
   await expect(prompt).toContainText('turn the disk over');
@@ -141,46 +154,55 @@ test('a page opened during a job picks it up instead of starting another', async
 });
 
 test('a two-sided surface test turns the disk twice and grades clean', async ({ page }) => {
+  // Arrange
   await openCommand(page, 'surface');
   await expect(page.locator('#panel button.run')).toHaveCount(1);
   await page.locator('select[data-field=sides]').selectOption('2');
   await page.locator('input[data-field=quick]').check();
   await page.locator('select[data-field=finish]').selectOption('blank');
   await page.locator('#panel button.run').click();
+
+  // Act
   await page.getByRole('button', { name: 'Erase and continue' }).click();
 
+  // Assert
   for (const side of ['B', 'A']) {
     const prompt = page.getByRole('alert').filter({ hasText: `side ${side} label faces up` });
     await expect(prompt).toBeVisible();
     await prompt.getByRole('button', { name: TURNED }).click();
   }
-
   await expect(page.locator('#panel .output .banner')).toHaveText('grade clean');
   await expect(page.getByRole('link', { name: 'Download before.fds' })).toBeVisible();
 });
 
 test('a calibration reports every read and a verdict', async ({ page }) => {
+  // Arrange
   await openCommand(page, 'calibrate');
   await page.locator('select[data-field=mode]').selectOption('head');
   await page.locator('input[data-field=passes]').fill('3');
-
   await page.locator('#panel button.run').click();
 
+  // Act
   await expect(page.locator('#panel .output .banner')).toHaveText(/^reads clean: the whole side reads/);
+
+  // Assert
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
 test('a dump offers its captures, and reads maps them back at phone width', async ({ page }) => {
+  // Arrange
   await page.setViewportSize({ width: 320, height: 700 });
   await openCommand(page, 'dump');
   await page.locator('input[data-field=keep_captures]').check();
+
+  // Act
   await page.locator('#panel button.run').click();
 
+  // Assert
   const bundle = page.getByRole('link', { name: 'Download dump.captures.zip' });
   await expect(page.getByRole('link', { name: 'Download dump.fds' })).toBeVisible();
   await expect(bundle).toBeVisible();
   expect(await overflow(page)).toBeLessThanOrEqual(0);
-
   const href = await bundle.getAttribute('href');
   const zip = Buffer.from(href.slice(href.indexOf(',') + 1), 'base64');
   await openCommand(page, 'reads');
@@ -188,32 +210,32 @@ test('a dump offers its captures, and reads maps them back at phone width', asyn
     name: 'dump.captures.zip', mimeType: 'application/zip', buffer: zip,
   });
   await page.locator('#panel button.run').click();
-
   await expect(page.locator('#panel .output')).toContainText('weak');
   expect(await shortControls(page, '#panel')).toEqual([]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
+  // Arrange
   await page.setViewportSize({ width: 320, height: 700 });
   await openCommand(page, 'write');
   await page.locator('input[data-field=calibration]').check();
   await page.locator('#panel button.run').click();
   await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
-
   await expect(page.locator('#panel .output')).toContainText('trusted drive confirmation');
   await expect(page.locator('#panel .output')).toContainText('Clean the read head first');
-
   await page.locator('input[data-field=trusted_drive]').check();
   await page.locator('#panel button.run').click();
   await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
-
   const prompt = page.getByRole('alert').filter({ hasText: 'side B label faces up' });
   await expect(prompt).toBeVisible();
   await expect(page.locator('#panel .steps li').first()).toContainText('Write this disk only on a drive you already trust');
   await prompt.getByRole('button', { name: TURNED }).click();
 
+  // Act
   await expect(page.locator('#panel .output .banner')).toHaveText('the disk reads back as written, on this drive, grade clean');
+
+  // Assert
   expect(await shortControls(page, '#panel')).toEqual([]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });

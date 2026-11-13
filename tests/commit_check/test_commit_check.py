@@ -33,9 +33,14 @@ def check_message(tmp_path: Path, message: str) -> subprocess.CompletedProcess[s
     ],
 )
 def test_a_conventional_subject_passes(tmp_path: Path, subject: str) -> None:
+    # Arrange
+    expected = 0
+
+    # Act
     result = check_message(tmp_path, f"{subject}\n\nbody\n")
 
-    assert result.returncode == 0, result.stderr
+    # Assert
+    assert result.returncode == expected, result.stderr
 
 
 @pytest.mark.parametrize(
@@ -51,16 +56,26 @@ def test_a_conventional_subject_passes(tmp_path: Path, subject: str) -> None:
 def test_a_subject_that_breaks_the_convention_is_refused(
     tmp_path: Path, subject: str, reason: str
 ) -> None:
+    # Arrange
+    expected = 1
+
+    # Act
     result = check_message(tmp_path, f"{subject}\n")
 
-    assert result.returncode == 1
+    # Assert
+    assert result.returncode == expected
     assert reason in result.stderr
 
 
 def test_git_comment_lines_are_ignored(tmp_path: Path) -> None:
+    # Arrange
+    expected = 0
+
+    # Act
     result = check_message(tmp_path, "# Please enter the message\nfix: keep the finish reason\n")
 
-    assert result.returncode == 0, result.stderr
+    # Assert
+    assert result.returncode == expected, result.stderr
 
 
 def run_git(repository: Path, *arguments: str) -> None:
@@ -68,6 +83,7 @@ def run_git(repository: Path, *arguments: str) -> None:
 
 
 def test_a_range_is_refused_when_any_commit_in_it_breaks_the_convention(tmp_path: Path) -> None:
+    # Arrange
     run_git(tmp_path, "init", "-q")
     run_git(tmp_path, "config", "user.email", "check@example.invalid")
     run_git(tmp_path, "config", "user.name", "check")
@@ -75,6 +91,7 @@ def test_a_range_is_refused_when_any_commit_in_it_breaks_the_convention(tmp_path
     run_git(tmp_path, "commit", "-q", "--allow-empty", "-m", "feat: add a thing")
     run_git(tmp_path, "commit", "-q", "--allow-empty", "-m", "Added another thing")
 
+    # Act
     result = subprocess.run(
         [BASH, str(SCRIPT), "--range", "HEAD~2..HEAD"],
         capture_output=True,
@@ -83,26 +100,40 @@ def test_a_range_is_refused_when_any_commit_in_it_breaks_the_convention(tmp_path
         cwd=tmp_path,
     )
 
+    # Assert
     assert result.returncode == 1
     assert "Added another thing" in result.stderr
     assert "feat: add a thing" not in result.stderr
 
 
 def test_an_unknown_argument_is_refused(tmp_path: Path) -> None:
+    # Arrange
+    capture_output = True
+    text = True
+    check = False
+
+    # Act
     result = subprocess.run(
-        [BASH, str(SCRIPT), "--what"], capture_output=True, text=True, check=False, cwd=tmp_path
+        [BASH, str(SCRIPT), "--what"],
+        capture_output=capture_output,
+        text=text,
+        check=check,
+        cwd=tmp_path,
     )
 
+    # Assert
     assert result.returncode == 2
     assert "usage" in result.stderr
 
 
 def test_a_range_git_cannot_read_fails_instead_of_passing(tmp_path: Path) -> None:
+    # Arrange
     run_git(tmp_path, "init", "-q")
     run_git(tmp_path, "config", "user.email", "check@example.invalid")
     run_git(tmp_path, "config", "user.name", "check")
     run_git(tmp_path, "commit", "-q", "--allow-empty", "-m", "chore: start")
 
+    # Act
     result = subprocess.run(
         [BASH, str(SCRIPT), "--range", f"{'d' * 40}..HEAD"],
         capture_output=True,
@@ -111,5 +142,6 @@ def test_a_range_git_cannot_read_fails_instead_of_passing(tmp_path: Path) -> Non
         cwd=tmp_path,
     )
 
+    # Assert
     assert result.returncode == 2
     assert "cannot read the commit range" in result.stderr

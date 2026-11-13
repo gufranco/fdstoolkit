@@ -46,29 +46,38 @@ def attach(monkeypatch: pytest.MonkeyPatch) -> FacingDrive:
 
 
 def test_blank_writes_the_calibration_image(tmp_path: Path) -> None:
+    # Arrange
     output = tmp_path / "calibration.fds"
 
+    # Act
     result = runner.invoke(app, ["blank", "--calibration", "-o", str(output)])
 
+    # Assert
     assert result.exit_code == 0, result.output
     assert output.read_bytes() == calibration_image(headered=False)
     assert "write it only on a drive you trust" in result.output
 
 
 def test_blank_can_add_a_header_to_the_calibration_image(tmp_path: Path) -> None:
+    # Arrange
     output = tmp_path / "calibration.fds"
 
+    # Act
     result = runner.invoke(app, ["blank", "--calibration", "--header", "-o", str(output)])
 
+    # Assert
     assert result.exit_code == 0, result.output
     assert output.read_bytes() == calibration_image(headered=True)
 
 
 def test_blank_refuses_options_the_calibration_image_decides(tmp_path: Path) -> None:
-    result = runner.invoke(
-        app, ["blank", "--calibration", "--game-name", "ABC", "-o", str(tmp_path / "x.fds")]
-    )
+    # Arrange
+    arguments = ["blank", "--calibration", "--game-name", "ABC", "-o", str(tmp_path / "x.fds")]
 
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
     assert result.exit_code == 1
     assert "decides its own sides, format and game name" in result.output
 
@@ -76,10 +85,13 @@ def test_blank_refuses_options_the_calibration_image_decides(tmp_path: Path) -> 
 def test_writing_the_calibration_disk_needs_the_trusted_drive_confirmation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Arrange
     drive = attach(monkeypatch)
 
+    # Act
     result = runner.invoke(app, ["write", "--calibration"])
 
+    # Assert
     assert result.exit_code == 1
     assert "trusted drive confirmation" in result.output
     assert "Pass --trusted-drive" in result.output
@@ -90,10 +102,14 @@ def test_writing_the_calibration_disk_needs_the_trusted_drive_confirmation(
 def test_the_calibration_disk_is_written_and_read_back_on_both_sides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Arrange
     drive = attach(monkeypatch)
+    arguments = ["write", "--calibration", "--trusted-drive"]
 
-    result = runner.invoke(app, ["write", "--calibration", "--trusted-drive"])
+    # Act
+    result = runner.invoke(app, arguments)
 
+    # Assert
     assert result.exit_code == 0, result.output
     assert "verified True" in result.output
     assert drive.turns == 1
@@ -106,22 +122,28 @@ def test_the_calibration_disk_is_written_and_read_back_on_both_sides(
 
 
 def test_write_takes_an_image_or_the_calibration_disk_never_both(tmp_path: Path) -> None:
+    # Arrange
     image = tmp_path / "game.fds"
     image.write_bytes(blank_image(sides=1, headered=False, formatted=True))
-
     both = runner.invoke(app, ["write", str(image), "--calibration", "--trusted-drive"])
+
+    # Act
     neither = runner.invoke(app, ["write"])
 
+    # Assert
     assert both.exit_code == neither.exit_code == 1
     assert "an image or the calibration disk" in both.output
     assert "an image or the calibration disk" in neither.output
 
 
 def test_trusted_drive_only_means_something_with_the_calibration_disk(tmp_path: Path) -> None:
+    # Arrange
     image = tmp_path / "game.fds"
     image.write_bytes(blank_image(sides=1, headered=False, formatted=True))
 
+    # Act
     result = runner.invoke(app, ["write", str(image), "--trusted-drive"])
 
+    # Assert
     assert result.exit_code == 1
     assert "only applies to the calibration disk" in result.output

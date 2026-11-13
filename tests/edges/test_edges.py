@@ -45,22 +45,42 @@ def _write(path: Path, disk: Disk | None = None) -> Path:
 
 
 def test_a_foreign_image_is_refused(tmp_path: Path) -> None:
+    # Arrange
     path = tmp_path / "foreign.qd"
     path.write_bytes(b"HXCQDDRV" + bytes(65528))
 
-    with pytest.raises(typer.Exit):
+    # Act
+    with pytest.raises(typer.Exit) as raised:
         decode_image(path)
+
+    # Assert
+    assert raised.type is typer.Exit
 
 
 def test_an_empty_confidence_report_scores_nothing() -> None:
-    assert ConfidenceReport(blocks=()).mean == 0.0
+    # Arrange
+    expected = 0.0
+
+    # Act
+    result = ConfidenceReport(blocks=()).mean
+
+    # Assert
+    assert result == expected
 
 
 def test_a_statistics_report_with_no_block_is_stable() -> None:
-    assert ReadStatistics(passes=2, blocks=()).stability == 1.0
+    # Arrange
+    expected = 1.0
+
+    # Act
+    result = ReadStatistics(passes=2, blocks=()).stability
+
+    # Assert
+    assert result == expected
 
 
 def test_splicing_a_donor_of_another_shape_is_refused(tmp_path: Path) -> None:
+    # Arrange
     image = _write(tmp_path / "a.fds")
     other = Disk(
         sides=(
@@ -76,15 +96,18 @@ def test_splicing_a_donor_of_another_shape_is_refused(tmp_path: Path) -> None:
     )
     donor = _write(tmp_path / "b.fds", other)
 
+    # Act
     result = runner.invoke(
         app, ["splice", str(image), "--donor", str(donor), "-o", str(tmp_path / "o.fds")]
     )
 
+    # Assert
     assert result.exit_code == 1
     assert "different shape" in result.stdout
 
 
 def test_grading_against_a_dump_with_another_side_count_is_refused(tmp_path: Path) -> None:
+    # Arrange
     image = _write(tmp_path / "a.fds")
     side = Side(
         blocks=(Block(kind=BlockKind.DISK_INFO, payload=_payload()),),
@@ -93,7 +116,9 @@ def test_grading_against_a_dump_with_another_side_count_is_refused(tmp_path: Pat
     )
     second = _write(tmp_path / "b.fds", Disk(sides=(side, side)))
 
+    # Act
     result = runner.invoke(app, ["grade", str(image), "--read", str(second)])
 
+    # Assert
     assert result.exit_code == 1
     assert "different numbers of sides" in result.stdout

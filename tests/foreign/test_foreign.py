@@ -7,37 +7,89 @@ from fdstoolkit.codecs.foreign import ForeignImageError, foreign_format, reject_
 
 
 def test_an_hxc_flux_image_is_recognised() -> None:
-    assert foreign_format(b"HXCQDDRV" + bytes(504)) == "an HxC Floppy Emulator flux image"
+    # Arrange
+    data = b"HXCQDDRV" + bytes(504)
+
+    # Act
+    result = foreign_format(data)
+
+    # Assert
+    assert result == "an HxC Floppy Emulator flux image"
 
 
 def test_a_sharp_mz_qdf_image_is_recognised() -> None:
+    # Arrange
+    expected = "a Sharp MZ Quick Disk image in QDF form"
+
+    # Act
     header = b"-QD format-" + b"\xff" * 5
 
-    assert foreign_format(header + bytes(100)) == "a Sharp MZ Quick Disk image in QDF form"
+    # Assert
+    assert foreign_format(header + bytes(100)) == expected
 
 
 def test_a_sharp_mz_mzq_image_is_recognised() -> None:
+    # Arrange
+    expected = "a Sharp MZ Quick Disk image in MZQ form"
+
+    # Act
     header = b"\x00\x16\x16\xa5\x02CRC"
 
-    assert foreign_format(header + bytes(100)) == "a Sharp MZ Quick Disk image in MZQ form"
+    # Assert
+    assert foreign_format(header + bytes(100)) == expected
 
 
 def test_a_famicom_image_is_not_foreign() -> None:
-    assert foreign_format(blank_image(sides=1, headered=False, formatted=True)) is None
+    # Arrange
+    data = blank_image(sides=1, headered=False, formatted=True)
+
+    # Act
+    result = foreign_format(data)
+
+    # Assert
+    assert result is None
 
 
 def test_an_unformatted_famicom_image_is_not_foreign() -> None:
-    assert foreign_format(blank_image(sides=1, headered=False, formatted=False)) is None
+    # Arrange
+    data = blank_image(sides=1, headered=False, formatted=False)
+
+    # Act
+    result = foreign_format(data)
+
+    # Assert
+    assert result is None
 
 
 def test_a_short_file_is_not_foreign() -> None:
-    assert foreign_format(b"\x00\x16") is None
+    # Arrange
+    data = b"\x00\x16"
+
+    # Act
+    result = foreign_format(data)
+
+    # Assert
+    assert result is None
 
 
 def test_rejecting_a_foreign_image_names_it() -> None:
-    with pytest.raises(ForeignImageError, match="Sharp MZ"):
-        reject_foreign(b"-QD format-" + b"\xff" * 5 + bytes(10))
+    # Arrange
+    data = b"-QD format-" + b"\xff" * 5 + bytes(10)
+
+    # Act
+    with pytest.raises(ForeignImageError, match="Sharp MZ") as raised:
+        reject_foreign(data)
+
+    # Assert
+    assert raised.type is ForeignImageError
 
 
 def test_rejecting_a_famicom_image_does_nothing() -> None:
-    reject_foreign(blank_image(sides=1, headered=False, formatted=True))
+    # Arrange
+    image = blank_image(sides=1, headered=False, formatted=True)
+
+    # Act
+    outcome = reject_foreign(image)
+
+    # Assert
+    assert outcome is None

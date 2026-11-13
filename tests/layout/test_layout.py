@@ -42,8 +42,13 @@ def side_of(blocks: list[bytes], *, noise: bytes, step: int) -> bytes:
 
 
 def test_a_side_the_fdsstick_wrote_reads_as_streamed() -> None:
-    reading = layout_of([real_capture()])
+    # Arrange
+    captures = [real_capture()]
 
+    # Act
+    reading = layout_of(captures)
+
+    # Assert
     assert reading.layout is Layout.STREAMED
     assert reading.quiet_endings == reading.endings
     assert reading.gap_spread is not None
@@ -51,66 +56,87 @@ def test_a_side_the_fdsstick_wrote_reads_as_streamed() -> None:
 
 
 def test_blocks_ending_in_noise_with_uneven_gaps_read_as_duplicated() -> None:
+    # Arrange
     capture = side_of(payloads(), noise=SWITCH_OFF_NOISE, step=GAP_STEP)
 
+    # Act
     reading = layout_of([capture])
 
+    # Assert
     assert reading.layout is Layout.DUPLICATED
     assert reading.quiet_endings == 0
     assert reading.gap_spread == 36
 
 
 def test_quiet_endings_with_uneven_gaps_settle_nothing() -> None:
+    # Arrange
     capture = side_of(payloads(), noise=b"", step=GAP_STEP)
 
+    # Act
     reading = layout_of([capture])
 
+    # Assert
     assert reading.layout is Layout.UNSETTLED
     assert "do not settle" in reading.note()
 
 
 def test_noisy_endings_with_even_gaps_settle_nothing() -> None:
+    # Arrange
     capture = side_of(payloads(), noise=SWITCH_OFF_NOISE, step=0)
 
+    # Act
     reading = layout_of([capture])
 
+    # Assert
     assert reading.layout is Layout.UNSETTLED
 
 
 def test_a_side_with_too_few_blocks_settles_nothing() -> None:
+    # Arrange
     capture = side_of(payloads()[:1], noise=b"", step=0)
 
+    # Act
     reading = layout_of([capture])
 
+    # Assert
     assert reading.layout is Layout.UNSETTLED
     assert reading.gap_spread is None
     assert "too few clean blocks" in reading.note()
 
 
 def test_every_read_of_a_side_is_counted() -> None:
+    # Arrange
     capture = real_capture()
 
+    # Act
     reading = layout_of([capture, capture])
 
+    # Assert
     assert reading.reads == 2
     assert reading.endings == 2 * layout_of([capture]).endings
 
 
 def test_a_streamed_side_names_what_a_factory_side_shows() -> None:
+    # Arrange
     reading = layout_of([real_capture()])
 
+    # Act
     note = reading.note()
 
+    # Assert
     assert note.startswith("the captures show a side written in one stream")
     assert "18 to 73 bits" in note
     assert "only factory reference is one disk" in note
 
 
 def test_a_duplicated_side_says_so() -> None:
+    # Arrange
     reading = layout_of([side_of(payloads(), noise=SWITCH_OFF_NOISE, step=GAP_STEP)])
 
+    # Act
     note = reading.note()
 
+    # Assert
     assert note.startswith("the captures show a duplicator's layout")
 
 
@@ -124,16 +150,24 @@ def bundle_of(*sides: int) -> Bundle:
 
 
 def test_only_the_sides_the_image_has_are_measured() -> None:
+    # Arrange
     bundle = bundle_of(0, 1)
 
+    # Act
     layouts = layouts_for(calibration_disk(1), bundle)
 
+    # Assert
     assert list(layouts) == [0]
     assert layouts[0].layout is Layout.STREAMED
 
 
 def test_captures_of_another_disk_are_refused() -> None:
+    # Arrange
     other, _ = decode(blank_image(sides=1, headered=False, formatted=True))
 
-    with pytest.raises(ValueError, match="another disk"):
+    # Act
+    with pytest.raises(ValueError, match="another disk") as raised:
         layouts_for(other, bundle_of(0))
+
+    # Assert
+    assert raised.type is ValueError

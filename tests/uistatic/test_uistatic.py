@@ -28,27 +28,59 @@ def client_fixture() -> TestClient:
 
 
 def test_every_static_file_is_present() -> None:
-    for name in ("index.html", "app.css", "app.js", "i18n.js"):
-        assert (STATIC_DIR / name).is_file()
+    # Arrange
+    names = ("index.html", "app.css", "app.js", "i18n.js")
+
+    # Act
+    present = [name for name in names if (STATIC_DIR / name).is_file()]
+
+    # Assert
+    assert present == list(names)
 
 
 @pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
 def test_the_static_files_are_served(client: TestClient, name: str) -> None:
-    assert client.get(f"/static/{name}").status_code == OK
+    # Arrange
+    route = f"/static/{name}"
+
+    # Act
+    answer = client.get(route)
+
+    # Assert
+    assert answer.status_code == OK
 
 
 @pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
 def test_an_upgraded_asset_is_not_served_from_a_stale_cache(client: TestClient, name: str) -> None:
-    assert client.get(f"/static/{name}").headers["cache-control"] == "no-cache"
+    # Arrange
+    expected = "no-cache"
+
+    # Act
+    result = client.get(f"/static/{name}").headers["cache-control"]
+
+    # Assert
+    assert result == expected
 
 
 def test_an_answer_that_is_not_an_asset_is_left_cacheable(client: TestClient) -> None:
-    assert "cache-control" not in client.get("/api/forms").headers
+    # Arrange
+    route = "/api/forms"
+
+    # Act
+    answer = client.get(route)
+
+    # Assert
+    assert "cache-control" not in answer.headers
 
 
 def test_the_page_asks_for_assets_under_a_stamp_the_content_decides(client: TestClient) -> None:
-    markup = client.get("/").text
+    # Arrange
+    route = "/"
 
+    # Act
+    markup = client.get(route).text
+
+    # Assert
     assert f"{ASSET_ROOT}/app.js" in markup
     assert "/static/" not in markup
 
@@ -56,35 +88,59 @@ def test_the_page_asks_for_assets_under_a_stamp_the_content_decides(client: Test
 def test_the_page_itself_is_never_cached_so_a_new_stamp_always_arrives(
     client: TestClient,
 ) -> None:
-    assert client.get("/").headers["cache-control"] == "no-store"
+    # Arrange
+    expected = "no-store"
+
+    # Act
+    result = client.get("/").headers["cache-control"]
+
+    # Assert
+    assert result == expected
 
 
 @pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
 def test_a_stamped_asset_is_served_and_may_be_kept_forever(client: TestClient, name: str) -> None:
-    answer = client.get(f"{ASSET_ROOT}/{name}")
+    # Arrange
+    route = f"{ASSET_ROOT}/{name}"
 
+    # Act
+    answer = client.get(route)
+
+    # Assert
     assert answer.status_code == OK
     assert "immutable" in answer.headers["cache-control"]
 
 
 def test_the_stamp_follows_the_bytes_of_every_asset(tmp_path: Path) -> None:
+    # Arrange
     before = _stamp_over(tmp_path, {"app.js": b"one"})
+
+    # Act
     after = _stamp_over(tmp_path, {"app.js": b"two"})
 
+    # Assert
     assert before != after
 
 
 def test_the_stamp_holds_still_while_the_assets_do(tmp_path: Path) -> None:
+    # Arrange
     once = _stamp_over(tmp_path, {"app.js": b"one"})
+
+    # Act
     again = _stamp_over(tmp_path, {"app.js": b"one"})
 
+    # Assert
     assert once == again
 
 
 def test_a_folder_beside_the_assets_does_not_move_the_stamp(tmp_path: Path) -> None:
+    # Arrange
     plain = _stamp_over(tmp_path, {"app.js": b"one"})
+
+    # Act
     with_folder = _stamp_over(tmp_path, {"app.js": b"one"}, folders=("cache",))
 
+    # Assert
     assert plain == with_folder
 
 
@@ -100,104 +156,212 @@ def _stamp_over(root: Path, files: dict[str, bytes], folders: tuple[str, ...] = 
 
 
 def test_the_markup_is_a_complete_document() -> None:
-    assert MARKUP.startswith("<!doctype html>")
-    assert MARKUP.rstrip().endswith("</html>")
+    # Arrange
+    path = STATIC_DIR / "index.html"
+
+    # Act
+    markup = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert markup.startswith("<!doctype html>")
+    assert markup.rstrip().endswith("</html>")
 
 
 def test_the_page_declares_a_language_and_a_viewport() -> None:
-    assert '<html lang="en">' in MARKUP
-    assert 'name="viewport"' in MARKUP
+    # Arrange
+    path = STATIC_DIR / "index.html"
+
+    # Act
+    markup = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert '<html lang="en">' in markup
+    assert 'name="viewport"' in markup
 
 
 def test_the_page_has_exactly_one_top_level_heading() -> None:
-    assert MARKUP.count("<h1") == 1
+    # Arrange
+    expected = 1
+
+    # Act
+    result = MARKUP.count("<h1")
+
+    # Assert
+    assert result == expected
 
 
 def test_no_heading_level_is_skipped() -> None:
-    levels = [int(found) for found in re.findall(r"<h([1-6])", MARKUP)]
+    # Arrange
+    pattern = r"<h([1-6])"
 
+    # Act
+    levels = [int(found) for found in re.findall(pattern, MARKUP)]
+
+    # Assert
     assert levels
     assert max(levels) - min(levels) < len(set(levels))
 
 
 def test_no_translated_element_wraps_a_control() -> None:
+    # Arrange
     translated = re.findall(r'<(\w+)[^>]*\bdata-i18n="[^"]*"[^>]*>(.*?)</\1>', MARKUP, re.DOTALL)
+
+    # Act
     swallowed = [
         tag for tag, inner in translated if re.search(r"<(input|select|textarea|button)", inner)
     ]
 
+    # Assert
     assert swallowed == []
 
 
 def test_the_page_renders_its_commands_from_the_catalogue() -> None:
+    # Arrange
+    path = STATIC_DIR / "app.js"
+
+    # Act
+    script = path.read_text(encoding="utf-8")
+
+    # Assert
     assert 'id="commands"' in MARKUP
-    assert "catalogue.forms" in SCRIPT
+    assert "catalogue.forms" in script
 
 
 def test_the_page_hardcodes_no_command() -> None:
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
     hardcoded = set(re.findall(r"'/api/([\w-]+)'", SCRIPT)) - {"catalogue", "hardware"}
 
-    assert hardcoded == set()
+    # Assert
+    assert hardcoded == expected
 
 
 def test_the_page_offers_a_control_for_every_field_kind() -> None:
-    for kind in ("file", "files", "flag", "number", "choice"):
-        assert f"'{kind}'" in SCRIPT
+    # Arrange
+    kinds = ("file", "files", "flag", "number", "choice")
+
+    # Act
+    missing = [kind for kind in kinds if f"'{kind}'" not in SCRIPT]
+
+    # Assert
+    assert missing == []
 
 
 def test_the_claim_about_where_data_goes_is_in_the_markup_not_fetched() -> None:
-    assert 'data-i18n="footer.cli"' in MARKUP
+    # Arrange
+    path = STATIC_DIR / "index.html"
+
+    # Act
+    markup = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert 'data-i18n="footer.cli"' in markup
     assert "/api/about" not in SCRIPT
 
 
 def test_every_input_carries_a_label() -> None:
+    # Arrange
     inputs = re.findall(r"<input[^>]*>", MARKUP)
+
+    # Act
     labelled = re.findall(r"<label[^>]*>", MARKUP)
 
+    # Assert
     assert len(labelled) >= len(inputs) - MARKUP.count('type="checkbox"')
 
 
 def test_every_control_meets_the_target_size() -> None:
-    assert f"min-height: {TARGET_SIZE_PX}px" in STYLES
+    # Arrange
+    path = STATIC_DIR / "app.css"
+
+    # Act
+    styles = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert f"min-height: {TARGET_SIZE_PX}px" in styles
 
 
 def test_a_visible_focus_indicator_is_defined() -> None:
-    assert "focus-visible" in STYLES
-    assert "outline" in STYLES
+    # Arrange
+    path = STATIC_DIR / "app.css"
+
+    # Act
+    styles = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert "focus-visible" in styles
+    assert "outline" in styles
 
 
 def test_reduced_motion_is_honoured() -> None:
-    assert "prefers-reduced-motion" in STYLES
+    # Arrange
+    path = STATIC_DIR / "app.css"
+
+    # Act
+    styles = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert "prefers-reduced-motion" in styles
 
 
 def test_a_dark_scheme_is_defined() -> None:
-    assert "prefers-color-scheme: dark" in STYLES
+    # Arrange
+    path = STATIC_DIR / "app.css"
+
+    # Act
+    styles = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert "prefers-color-scheme: dark" in styles
 
 
 def test_the_page_covers_every_command_the_catalogue_names(client: TestClient) -> None:
-    listed = set(client.get("/api/catalogue").json()["commands"])
+    # Arrange
+    iterable = client.get("/api/catalogue").json()["commands"]
 
+    # Act
+    listed = set(iterable)
+
+    # Assert
     assert listed == set(ROUTE_FOR_COMMAND)
 
 
 def test_every_endpoint_the_script_calls_is_registered() -> None:
+    # Arrange
     called = set(re.findall(r"call\('(/api/[\w-]+)'", SCRIPT))
+
+    # Act
     registered = set(ROUTE_FOR_COMMAND.values()) | {
         "/api/catalogue",
         "/api/doctor",
         "/api/hardware",
     }
 
+    # Assert
     assert called - registered == set()
 
 
 def test_the_page_never_reaches_outside_this_machine() -> None:
-    assert "http://" not in SCRIPT
-    assert "https://" not in SCRIPT
+    # Arrange
+    path = STATIC_DIR / "app.js"
+
+    # Act
+    script = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert "http://" not in script
+    assert "https://" not in script
     assert "//cdn" not in MARKUP
 
 
 def test_the_markup_loads_no_remote_resource() -> None:
-    sources = re.findall(r'(?:src|href)="([^"]+)"', MARKUP)
+    # Arrange
+    pattern = r'(?:src|href)="([^"]+)"'
 
+    # Act
+    sources = re.findall(pattern, MARKUP)
+
+    # Assert
     assert all(source.startswith("/static/") for source in sources)

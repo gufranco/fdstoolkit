@@ -74,13 +74,16 @@ def run(app: FastAPI, client: TestClient, route: str, payload: dict[str, object]
 def test_a_dump_job_recovers_a_failed_block_like_the_command_line(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(
         monkeypatch,
         SimulatedDrive(BLANK, plan=FaultPlan(bad_crc_blocks=frozenset({1}))),
     )
 
+    # Act
     job = run(app, client, "/api/jobs/dump", {"retries": 2})
 
+    # Assert
     assert job["state"] == "done", job
     assert "side 0 block 1: recovered by a pulse vote across 3 reads" in job["steps"]
     assert job["result"]["grade"] == "marginal"
@@ -90,10 +93,14 @@ def test_a_dump_job_recovers_a_failed_block_like_the_command_line(
 def test_a_dump_job_hands_back_the_captures_it_was_asked_to_keep(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     serve(monkeypatch, SimulatedDrive(disk_with_a_file()))
+    payload: dict[str, object] = {"keep_captures": True}
 
-    job = run(app, client, "/api/jobs/dump", {"keep_captures": True})
+    # Act
+    job = run(app, client, "/api/jobs/dump", payload)
 
+    # Assert
     kept = job["result"]["captures"]
     assert kept["name"] == "dump.captures.zip"
     bundle = read_zip(base64.b64decode(kept["data"]))
@@ -102,82 +109,114 @@ def test_a_dump_job_hands_back_the_captures_it_was_asked_to_keep(
 
 
 def test_consensus_rebuilds_a_disk_from_uploaded_captures(client: TestClient) -> None:
+    # Arrange
     disk = disk_with_a_file()
-
     body = client.post("/api/consensus", json={"captures": b64(zipped(disk, VOTED))}).json()
 
+    # Act
     rebuilt, _ = fds.decode(base64.b64decode(body["file"]["data"]))
+
+    # Assert
     assert [b.payload for b in rebuilt.sides[0].blocks] == [b.payload for b in disk.sides[0].blocks]
     assert body["ok"]
     assert "1 block(s) recovered by a pulse vote" in body["headline"]
 
 
 def test_consensus_merges_uploaded_captures_with_a_dump(client: TestClient) -> None:
+    # Arrange
     disk = disk_with_a_file()
 
+    # Act
     body = client.post(
         "/api/consensus",
         json={"images": [b64(image_of(disk))], "captures": b64(zipped(disk, VOTED))},
     ).json()
 
+    # Assert
     assert body["ok"]
     assert body["headline"] == "every dump agrees on every block"
 
 
 def test_consensus_from_captures_names_the_block_it_could_not_fix(client: TestClient) -> None:
-    body = client.post(
-        "/api/consensus", json={"captures": b64(zipped(disk_with_a_file(), (10,)))}
-    ).json()
+    # Arrange
+    payload = {"captures": b64(zipped(disk_with_a_file(), (10,)))}
 
+    # Act
+    body = client.post("/api/consensus", json=payload).json()
+
+    # Assert
     assert not body["ok"]
     assert body["rows"] == [{"side": 0, "block": DAMAGED}]
 
 
 def test_consensus_refuses_captures_that_are_not_a_bundle(client: TestClient) -> None:
-    answer = client.post("/api/consensus", json={"captures": b64(b"not a zip")})
+    # Arrange
+    route = "/api/consensus"
+    payload = {"captures": b64(b"not a zip")}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert "is neither a capture bundle, a zip holding manifest.json" in answer.json()["detail"]
 
 
 def test_consensus_of_a_single_dump_is_refused_rather_than_crashing(client: TestClient) -> None:
-    answer = client.post("/api/consensus", json={"images": [b64(image_of(disk_with_a_file()))]})
+    # Arrange
+    route = "/api/consensus"
+    payload = {"images": [b64(image_of(disk_with_a_file()))]}
 
+    # Act
+    answer = client.post(route, json=payload)
+
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert "at least two dumps" in answer.json()["detail"]
 
 
 def test_reads_maps_weak_blocks_in_uploaded_captures(client: TestClient) -> None:
+    # Arrange
+    expected = 3
+
+    # Act
     body = client.post(
         "/api/reads", json={"captures": b64(zipped(disk_with_a_file(), (None, 10, None)))}
     ).json()
 
-    assert body["reads"] == 3
+    # Assert
+    assert body["reads"] == expected
     assert [(row["side"], row["block"]) for row in body["weak"]] == [(0, DAMAGED)]
 
 
 def test_grade_counts_weak_blocks_from_uploaded_captures(client: TestClient) -> None:
+    # Arrange
     disk = disk_with_a_file()
 
+    # Act
     body = client.post(
         "/api/grade",
         json={"data": b64(image_of(disk)), "captures": b64(zipped(disk, (None, 10, None)))},
     ).json()
 
+    # Assert
     assert body["grade"] == "marginal"
     assert any(reason["metric"] == "weak blocks" for reason in body["reasons"])
 
 
 def test_grade_fails_on_a_short_gap_every_uploaded_read_shows(client: TestClient) -> None:
+    # Arrange
     disk = disk_with_a_file()
     bundle = bundle_zip(
         (short_gapped(disk, 1), short_gapped(disk, 2)), image=IMAGE, created=CREATED
     )
 
+    # Act
     body = client.post(
         "/api/grade", json={"data": b64(image_of(disk)), "captures": b64(bundle)}
     ).json()
 
+    # Assert
     assert body["grade"] != "clean"
     assert [reason["value"] for reason in body["reasons"] if reason["metric"] == "warnings"] == [1]
 
@@ -185,9 +224,11 @@ def test_grade_fails_on_a_short_gap_every_uploaded_read_shows(client: TestClient
 def test_calibration_replays_uploaded_captures_without_opening_the_drive(
     app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     no_drive(monkeypatch)
     disk = disk_with_a_file()
 
+    # Act
     job = run(
         app,
         client,
@@ -199,41 +240,54 @@ def test_calibration_replays_uploaded_captures_without_opening_the_drive(
         },
     )
 
+    # Assert
     assert job["state"] == "done", job
     assert len(job["result"]["rows"]) == 2
     assert any("console error 27" in line for line in job["steps"])
 
 
 def test_calibration_refuses_captures_with_no_read_of_that_side(client: TestClient) -> None:
+    # Arrange
+    route = "/api/jobs/calibrate"
+    payload = {"mode": "speed", "side": 1, "captures": b64(zipped(disk_with_a_file(), (None,)))}
+
+    # Act
     answer = client.post(
-        "/api/jobs/calibrate",
-        json={"mode": "speed", "side": 1, "captures": b64(zipped(disk_with_a_file(), (None,)))},
+        route,
+        json=payload,
     )
 
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert "hold no read of side 1" in answer.json()["detail"]
 
 
 def test_grade_refuses_uploaded_captures_of_another_disk(client: TestClient) -> None:
+    # Arrange
     disk = disk_with_a_file()
     other, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name="OTH"))
 
+    # Act
     answer = client.post(
         "/api/grade",
         json={"data": b64(image_of(other)), "captures": b64(zipped(disk, (None, None, None)))},
     )
 
+    # Assert
     assert answer.status_code == UNPROCESSABLE
     assert "the captures are of another disk" in answer.json()["detail"]
 
 
 def test_reads_accepts_an_uploaded_zip_of_raw_timing_files(client: TestClient) -> None:
+    # Arrange
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("game-A.raw", loopy_raw())
         archive.writestr("game2-A.raw", qdc_raw())
 
+    # Act
     body = client.post("/api/reads", json={"captures": b64(buffer.getvalue())}).json()
 
+    # Assert
     assert body["reads"] == 2
     assert body["weak"] == []

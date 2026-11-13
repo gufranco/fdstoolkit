@@ -29,35 +29,61 @@ def documented(text: str) -> set[str]:
 
 @pytest.mark.parametrize("name", READMES)
 def test_every_command_is_documented(name: str) -> None:
-    text = Path(name).read_text(encoding="utf-8")
+    # Arrange
+    encoding = "utf-8"
 
+    # Act
+    text = Path(name).read_text(encoding=encoding)
+
+    # Assert
     assert commands() - documented(text) == set()
 
 
 @pytest.mark.parametrize("name", READMES)
 def test_no_entry_names_a_command_that_does_not_exist(name: str) -> None:
-    text = Path(name).read_text(encoding="utf-8")
+    # Arrange
+    encoding = "utf-8"
 
+    # Act
+    text = Path(name).read_text(encoding=encoding)
+
+    # Assert
     assert documented(text) - commands() == set()
 
 
 def test_both_languages_document_the_same_commands() -> None:
+    # Arrange
     english = documented(Path("README.md").read_text(encoding="utf-8"))
+
+    # Act
     japanese = documented(Path("README.ja.md").read_text(encoding="utf-8"))
 
+    # Assert
     assert english == japanese
 
 
 @pytest.mark.parametrize("name", READMES)
 def test_every_command_block_is_a_bash_block(name: str) -> None:
-    text = Path(name).read_text(encoding="utf-8")
+    # Arrange
+    encoding = "utf-8"
 
+    # Act
+    text = Path(name).read_text(encoding=encoding)
+
+    # Assert
     assert "```console" not in text
 
 
 def test_the_two_readmes_point_at_each_other() -> None:
-    assert "README.ja.md" in Path("README.md").read_text(encoding="utf-8")
-    assert "README.md" in Path("README.ja.md").read_text(encoding="utf-8")
+    # Arrange
+    english, japanese = Path("README.md"), Path("README.ja.md")
+
+    # Act
+    texts = (english.read_text(encoding="utf-8"), japanese.read_text(encoding="utf-8"))
+
+    # Assert
+    assert "README.ja.md" in texts[0]
+    assert "README.md" in texts[1]
 
 
 def referenced(name: str) -> set[str]:
@@ -67,32 +93,51 @@ def referenced(name: str) -> set[str]:
 
 @pytest.mark.parametrize("name", READMES)
 def test_every_screenshot_it_shows_exists(name: str) -> None:
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
     missing = {path for path in referenced(name) if not Path(path).is_file()}
 
-    assert missing == set()
+    # Assert
+    assert missing == expected
 
 
 @pytest.mark.parametrize("name", READMES)
 def test_every_command_carries_a_screenshot(name: str) -> None:
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
     shown = {Path(path).stem.rsplit("-", maxsplit=1)[0] for path in referenced(name)}
 
-    assert commands() - shown - {"web", "doctor"} == set()
+    # Assert
+    assert commands() - shown - {"web", "doctor"} == expected
 
 
 @pytest.mark.parametrize("name", READMES)
 def test_both_schemes_are_offered_for_every_shot(name: str) -> None:
+    # Arrange
     shots = referenced(name)
+
+    # Act
     light = {path for path in shots if path.endswith("-light.png")}
 
+    # Assert
     assert len(light) * 2 == len(shots)
 
 
 def test_no_screenshot_on_disk_goes_unused() -> None:
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
     on_disk = {
         f"assets/screenshots/{path.name}" for path in Path("assets/screenshots").glob("*.png")
     }
 
-    assert on_disk - referenced("README.md") == set()
+    # Assert
+    assert on_disk - referenced("README.md") == expected
 
 
 def readme_opening() -> str:
@@ -104,8 +149,13 @@ def readme_opening() -> str:
 
 
 def test_the_package_description_is_the_readme_sentence() -> None:
-    manifest = Path("pyproject.toml").read_text(encoding="utf-8")
+    # Arrange
+    encoding = "utf-8"
 
+    # Act
+    manifest = Path("pyproject.toml").read_text(encoding=encoding)
+
+    # Assert
     assert f'description = "{readme_opening()}"' in manifest
 
 
@@ -123,13 +173,22 @@ def japanese_labels() -> dict[str, str]:
 
 
 def test_the_command_reference_is_grouped_by_the_declared_families() -> None:
+    # Arrange
+    expected = [family.value for family in Family]
+
+    # Act
     headings = reference_headings("README.md", "## Command reference")
 
-    assert headings == [family.value for family in Family]
+    # Assert
+    assert headings == expected
 
 
 def test_the_japanese_command_reference_uses_the_page_labels() -> None:
+    # Arrange
     headings = reference_headings("README.ja.md", "## コマンドリファレンス")
+
+    # Act
     labels = japanese_labels()
 
+    # Assert
     assert headings == [labels[family.value.lower()] for family in Family]

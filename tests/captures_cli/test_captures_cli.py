@@ -38,11 +38,15 @@ def saved(disk: Disk, path: Path) -> Path:
 
 
 def test_consensus_rebuilds_a_disk_from_saved_captures(tmp_path: Path) -> None:
+    # Arrange
     bundle, disk = bundle_of(tmp_path, (10, 90, 170))
     output = tmp_path / "rebuilt.fds"
+    arguments = ["consensus", "--captures", str(bundle), "-o", str(output)]
 
-    result = runner.invoke(app, ["consensus", "--captures", str(bundle), "-o", str(output)])
+    # Act
+    result = runner.invoke(app, arguments)
 
+    # Assert
     assert result.exit_code == 0, result.output
     assert "1 block(s) recovered by a pulse vote" in result.output
     rebuilt, _ = fds.decode(output.read_bytes())
@@ -50,91 +54,120 @@ def test_consensus_rebuilds_a_disk_from_saved_captures(tmp_path: Path) -> None:
 
 
 def test_consensus_merges_saved_captures_with_image_dumps(tmp_path: Path) -> None:
+    # Arrange
     bundle, disk = bundle_of(tmp_path, (10, 90, 170))
     dump = saved(disk, tmp_path / "dump.fds")
     output = tmp_path / "merged.fds"
 
+    # Act
     result = runner.invoke(
         app, ["consensus", str(dump), "--captures", str(bundle), "-o", str(output)]
     )
 
+    # Assert
     assert result.exit_code == 0, result.output
     assert output.is_file()
 
 
 def test_consensus_of_dumps_and_captures_prints_only_json_on_stdout(tmp_path: Path) -> None:
+    # Arrange
     bundle, disk = bundle_of(tmp_path, (10, 90, 170))
     dump = saved(disk, tmp_path / "dump.fds")
     output = tmp_path / "merged.fds"
 
+    # Act
     result = runner.invoke(
         app, ["consensus", str(dump), "--captures", str(bundle), "-o", str(output), "--json"]
     )
 
+    # Assert
     assert json.loads(result.stdout)["output"] == str(output)
     assert "recovered by a pulse vote" in result.stderr
 
 
 def test_consensus_says_which_block_the_captures_could_not_fix(tmp_path: Path) -> None:
+    # Arrange
     bundle, _ = bundle_of(tmp_path, (10,))
 
+    # Act
     result = runner.invoke(
         app, ["consensus", "--captures", str(bundle), "-o", str(tmp_path / "out.fds")]
     )
 
+    # Assert
     assert result.exit_code == 1
     assert f"block {DAMAGED}: never read clean" in result.output
 
 
 def test_consensus_needs_something_to_merge(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["consensus", "-o", str(tmp_path / "out.fds")])
+    # Arrange
+    arguments = ["consensus", "-o", str(tmp_path / "out.fds")]
 
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
     assert result.exit_code == 1
     assert "needs dumps, saved captures, or both" in result.output
 
 
 def test_consensus_refuses_a_bundle_that_does_not_load(tmp_path: Path) -> None:
-    result = runner.invoke(
-        app, ["consensus", "--captures", str(tmp_path), "-o", str(tmp_path / "out.fds")]
-    )
+    # Arrange
+    arguments = ["consensus", "--captures", str(tmp_path), "-o", str(tmp_path / "out.fds")]
 
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
     assert result.exit_code == 1
     assert "there is no manifest.json and no capture file to import" in result.output
 
 
 def test_reads_maps_the_weak_blocks_in_saved_captures(tmp_path: Path) -> None:
+    # Arrange
     bundle, _ = bundle_of(tmp_path, (None, 10, None))
 
+    # Act
     result = runner.invoke(app, ["reads", "--captures", str(bundle)])
 
+    # Assert
     assert result.exit_code == 1
     assert f"side 0 block {DAMAGED} (file data)" in result.output
 
 
 def test_reads_of_steady_captures_finds_no_weak_block(tmp_path: Path) -> None:
+    # Arrange
     bundle, _ = bundle_of(tmp_path, (None, None, None))
 
+    # Act
     result = runner.invoke(app, ["reads", "--captures", str(bundle), "--json"])
 
+    # Assert
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["weak"] == []
 
 
 def test_reads_still_needs_two_dumps_without_captures(tmp_path: Path) -> None:
+    # Arrange
     dump = saved(disk_with_a_file(), tmp_path / "one.fds")
 
+    # Act
     result = runner.invoke(app, ["reads", str(dump)])
 
+    # Assert
     assert result.exit_code == 1
 
 
 def test_grade_counts_weak_blocks_from_saved_captures(tmp_path: Path) -> None:
+    # Arrange
     bundle, disk = bundle_of(tmp_path, (None, 10, None))
     image = saved(disk, tmp_path / "dump.fds")
-
     result = runner.invoke(app, ["grade", str(image), "--captures", str(bundle), "--json"])
 
+    # Act
     payload = json.loads(result.output)
+
+    # Assert
     assert payload["grade"] == "marginal"
     assert {"metric": "weak blocks", "value": 1, "threshold": 0.0, "passed": False} in payload[
         "reasons"
@@ -142,14 +175,17 @@ def test_grade_counts_weak_blocks_from_saved_captures(tmp_path: Path) -> None:
 
 
 def test_calibrate_reads_saved_captures_without_a_drive(tmp_path: Path) -> None:
+    # Arrange
     bundle, disk = bundle_of(tmp_path, (10, None))
     reference = saved(disk, tmp_path / "reference.fds")
 
+    # Act
     result = runner.invoke(
         app,
         ["calibrate", "head", "--reference", str(reference), "--captures", str(bundle)],
     )
 
+    # Assert
     assert result.exit_code == 0, result.output
     assert "  read 1:" in result.output
     assert "  read 2:" in result.output
@@ -157,50 +193,63 @@ def test_calibrate_reads_saved_captures_without_a_drive(tmp_path: Path) -> None:
 
 
 def test_calibrate_says_when_the_captures_hold_no_read_of_that_side(tmp_path: Path) -> None:
+    # Arrange
     bundle, _ = bundle_of(tmp_path, (None,))
 
+    # Act
     result = runner.invoke(app, ["calibrate", "speed", "--captures", str(bundle), "--side", "1"])
 
+    # Assert
     assert result.exit_code == 1
     assert "holds no read of side 1" in result.output
 
 
 def test_consensus_from_captures_reports_json(tmp_path: Path) -> None:
+    # Arrange
     bundle, _ = bundle_of(tmp_path, (10,))
     output = tmp_path / "out.fds"
-
     result = runner.invoke(
         app, ["consensus", "--captures", str(bundle), "-o", str(output), "--json"]
     )
 
+    # Act
     payload = json.loads(result.output)
+
+    # Assert
     assert result.exit_code == 1
     assert payload["output"] == str(output)
     assert payload["unresolved"] == [[0, DAMAGED]]
 
 
 def test_grade_refuses_captures_of_another_disk(tmp_path: Path) -> None:
+    # Arrange
     bundle, _ = bundle_of(tmp_path, (None, None, None))
     other, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name="OTH"))
     image = saved(other, tmp_path / "other.fds")
 
+    # Act
     result = runner.invoke(app, ["grade", str(image), "--captures", str(bundle)])
 
+    # Assert
     assert result.exit_code == 1
     assert "the captures are of another disk" in result.stdout
 
 
 def test_grade_cannot_compare_captures_with_an_image_that_holds_no_block(tmp_path: Path) -> None:
+    # Arrange
     bundle, _ = bundle_of(tmp_path, (None, None, None))
     empty = tmp_path / "empty.fds"
     empty.write_bytes(bytes(fds.SIDE_SIZE))
 
+    # Act
     result = runner.invoke(app, ["grade", str(empty), "--captures", str(bundle)])
 
+    # Assert
     assert "the captures are of another disk" not in result.stdout
 
 
 def test_grade_names_a_short_gap_every_saved_read_shows(tmp_path: Path) -> None:
+    # Arrange
     disk = disk_with_a_file()
     directory = tmp_path / "captures"
     write_bundle(
@@ -208,19 +257,24 @@ def test_grade_names_a_short_gap_every_saved_read_shows(tmp_path: Path) -> None:
     )
     image = saved(disk, tmp_path / "dump.fds")
 
+    # Act
     result = runner.invoke(app, ["grade", str(image), "--captures", str(directory)])
 
+    # Assert
     assert result.exit_code == 1
     assert "side 0: [FDS017] gap before this block is shorter" in result.stdout
 
 
 def test_reads_accepts_a_directory_of_raw_timing_files(tmp_path: Path) -> None:
+    # Arrange
     directory = tmp_path / "raw"
     directory.mkdir()
     (directory / "game-A.raw").write_bytes(loopy_raw())
     (directory / "game2-A.raw").write_bytes(qdc_raw())
 
+    # Act
     result = runner.invoke(app, ["reads", "--captures", str(directory), "--json"])
 
+    # Assert
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["reads"] == 2

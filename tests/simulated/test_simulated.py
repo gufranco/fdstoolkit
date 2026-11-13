@@ -40,21 +40,27 @@ def fixed_classes(counts: bytes) -> bytes:
 def test_the_bit_rate_meter_reads_the_speed_the_drive_runs_at(
     speed: float, jitter: int, seed: int
 ) -> None:
+    # Arrange
     counts = drive_counts(blank_side(), DriveModel(speed=speed, jitter=jitter, seed=seed))
-
     timing = measure_timing(counts)
 
+    # Act
     expected = CAPTURE_CLOCK_KHZ * speed / NOMINAL_SHORT
+
+    # Assert
     assert abs(timing.rate_khz - expected) / expected < RATE_ERROR
 
 
 @SETTINGS
 @given(speed=st.floats(min_value=0.93, max_value=1.06), seed=st.integers(min_value=0, max_value=99))
 def test_a_drive_well_inside_the_tolerance_is_named_inside(speed: float, seed: int) -> None:
+    # Arrange
     counts = drive_counts(blank_side(), DriveModel(speed=speed, seed=seed))
 
+    # Act
     timing = measure_timing(counts)
 
+    # Assert
     assert timing.rate_in_tolerance
 
 
@@ -66,10 +72,13 @@ def test_a_drive_well_inside_the_tolerance_is_named_inside(speed: float, seed: i
     seed=st.integers(min_value=0, max_value=99),
 )
 def test_a_drive_well_outside_the_tolerance_is_named_outside(speed: float, seed: int) -> None:
+    # Arrange
     counts = drive_counts(blank_side(), DriveModel(speed=speed, seed=seed))
 
+    # Act
     timing = measure_timing(counts)
 
+    # Assert
     assert not timing.rate_in_tolerance
 
 
@@ -79,11 +88,14 @@ def test_a_drive_well_outside_the_tolerance_is_named_outside(speed: float, seed:
     seed=st.integers(min_value=0, max_value=99),
 )
 def test_the_lead_in_reported_is_the_lead_in_the_disk_carries(lead_in: int, seed: int) -> None:
+    # Arrange
     side = blank_side()
     counts = drive_counts(side, DriveModel(lead_in=lead_in, seed=seed))
 
+    # Act
     found = sample(fixed_classes(counts), side)
 
+    # Assert
     assert found.lead_in == lead_in
 
 
@@ -93,11 +105,14 @@ def test_the_lead_in_reported_is_the_lead_in_the_disk_carries(lead_in: int, seed
     seed=st.integers(min_value=0, max_value=99),
 )
 def test_a_read_full_of_stray_pulses_names_the_read_line(strays: int, seed: int) -> None:
+    # Arrange
     side = blank_side()
     counts = drive_counts(side, DriveModel(strays=strays, seed=seed))
 
+    # Act
     headline = Calibration(mode=Mode.SPEED, samples=(sample(fixed_classes(counts), side),)).headline
 
+    # Assert
     assert headline.endswith(NOISY_READ)
 
 
@@ -107,11 +122,14 @@ def test_a_read_full_of_stray_pulses_names_the_read_line(strays: int, seed: int)
     seed=st.integers(min_value=0, max_value=99),
 )
 def test_a_drive_that_only_runs_off_speed_is_not_called_noisy(speed: float, seed: int) -> None:
+    # Arrange
     side = blank_side()
     counts = drive_counts(side, DriveModel(speed=speed, seed=seed))
 
+    # Act
     headline = Calibration(mode=Mode.SPEED, samples=(sample(fixed_classes(counts), side),)).headline
 
+    # Assert
     assert NOISY_READ not in headline
 
 
@@ -123,6 +141,7 @@ def test_a_drive_that_only_runs_off_speed_is_not_called_noisy(speed: float, seed
 def test_a_short_gap_counts_against_the_disk_only_when_every_read_shows_it(
     reads: int, flawed: st.DataObject
 ) -> None:
+    # Arrange
     disk = disk_with_a_file()
     shown_by = flawed.draw(st.sets(st.integers(min_value=1, max_value=reads), min_size=1))
     captures = [
@@ -132,6 +151,8 @@ def test_a_short_gap_counts_against_the_disk_only_when_every_read_shows_it(
         for read in range(1, reads + 1)
     ]
 
+    # Act
     kept = settled(captured_findings(captures), captures)
 
+    # Assert
     assert bool(kept) == (len(shown_by) == reads)

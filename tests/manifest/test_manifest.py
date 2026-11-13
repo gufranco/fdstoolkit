@@ -39,29 +39,40 @@ def manifest_dict(tmp_path: Path) -> dict[str, Any]:
 
 
 def test_a_manifest_builds_a_parseable_disk(tmp_path: Path) -> None:
+    # Arrange
     data = build_from_manifest(DiskManifest.from_dict(manifest_dict(tmp_path), root=tmp_path))
 
+    # Act
     _, findings = decode(data)
 
+    # Assert
     assert [finding.code for finding in findings] == []
     assert len(data) == SIDE_SIZE
 
 
 def test_the_built_disk_carries_the_declared_identity(tmp_path: Path) -> None:
+    # Arrange
     data = build_from_manifest(DiskManifest.from_dict(manifest_dict(tmp_path), root=tmp_path))
     disk, _ = decode(data)
+
+    # Act
     info = DiskInfo.parse(disk.sides[0].blocks[0].payload)
 
+    # Assert
     assert info.game_name == "SMB"
     assert info.licensee == 1
     assert info.is_verified
 
 
 def test_the_built_disk_carries_the_declared_files(tmp_path: Path) -> None:
+    # Arrange
     data = build_from_manifest(DiskManifest.from_dict(manifest_dict(tmp_path), root=tmp_path))
     disk, _ = decode(data)
+
+    # Act
     files = extract_files(disk)
 
+    # Assert
     assert [entry.name for entry in files] == ["MAIN"]
     assert files[0].address == 0x6000
     assert files[0].kind is FileKind.PROGRAM
@@ -69,41 +80,57 @@ def test_the_built_disk_carries_the_declared_files(tmp_path: Path) -> None:
 
 
 def test_a_build_carries_no_date_so_it_is_reproducible(tmp_path: Path) -> None:
+    # Arrange
     manifest = DiskManifest.from_dict(manifest_dict(tmp_path), root=tmp_path)
     disk, _ = decode(build_from_manifest(manifest))
+
+    # Act
     info = DiskInfo.parse(disk.sides[0].blocks[0].payload)
 
+    # Assert
     assert info.raw("manufacturing_date") == bytes(3)
     assert info.raw("rewritten_date") == b"\xff\xff\xff"
 
 
 def test_a_declared_date_is_written_in_bcd(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     payload["manufacturing_date"] = "1986-02-15"
-
     disk, _ = decode(build_from_manifest(DiskManifest.from_dict(payload, root=tmp_path)))
+
+    # Act
     info = DiskInfo.parse(disk.sides[0].blocks[0].payload)
 
+    # Assert
     assert info.manufacturing_date == (1986, 2, 15)
 
 
 def test_two_builds_of_one_manifest_are_identical(tmp_path: Path) -> None:
-    manifest = DiskManifest.from_dict(manifest_dict(tmp_path), root=tmp_path)
+    # Arrange
+    payload = manifest_dict(tmp_path)
 
+    # Act
+    manifest = DiskManifest.from_dict(payload, root=tmp_path)
+
+    # Assert
     assert build_from_manifest(manifest) == build_from_manifest(manifest)
 
 
 def test_a_manifest_loads_from_json(tmp_path: Path) -> None:
+    # Arrange
     path = tmp_path / "disk.json"
     path.write_text(json.dumps(manifest_dict(tmp_path)), encoding="utf-8")
 
+    # Act
     manifest = load_manifest(path)
 
+    # Assert
     assert manifest.game_name == "SMB"
     assert len(manifest.sides) == 1
 
 
 def test_a_relative_file_path_resolves_against_the_manifest(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     (tmp_path / "main.prg").write_bytes(bytes([0x01]) * 8)
     sides: list[dict[str, Any]] = payload["sides"]
@@ -111,64 +138,101 @@ def test_a_relative_file_path_resolves_against_the_manifest(tmp_path: Path) -> N
     path = tmp_path / "disk.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
 
+    # Act
     disk, _ = decode(build_from_manifest(load_manifest(path)))
 
+    # Assert
     assert extract_files(disk)[0].data == bytes([0x01]) * 8
 
 
 def test_a_missing_file_is_reported(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     sides: list[dict[str, Any]] = payload["sides"]
     sides[0]["files"][0]["path"] = str(tmp_path / "nope.prg")
 
-    with pytest.raises(ValueError, match="not found"):
+    # Act
+    with pytest.raises(ValueError, match="not found") as raised:
         build_from_manifest(DiskManifest.from_dict(payload, root=tmp_path))
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_manifest_without_sides_is_refused(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="at least one side"):
-        DiskManifest.from_dict({"game_name": "SMB", "sides": []}, root=tmp_path)
+    # Arrange
+    payload: dict[str, object] = {"game_name": "SMB", "sides": []}
+
+    # Act
+    with pytest.raises(ValueError, match="at least one side") as raised:
+        DiskManifest.from_dict(payload, root=tmp_path)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_game_name_of_the_wrong_length_is_refused(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     payload["game_name"] = "TOOLONG"
 
-    with pytest.raises(ValueError, match="three characters"):
+    # Act
+    with pytest.raises(ValueError, match="three characters") as raised:
         DiskManifest.from_dict(payload, root=tmp_path)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_an_unknown_file_kind_is_refused(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     sides: list[dict[str, Any]] = payload["sides"]
     sides[0]["files"][0]["kind"] = "sound"
 
-    with pytest.raises(ValueError, match="unknown file kind"):
+    # Act
+    with pytest.raises(ValueError, match="unknown file kind") as raised:
         DiskManifest.from_dict(payload, root=tmp_path)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_date_that_is_not_a_date_is_refused(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     payload["manufacturing_date"] = "not-a-date"
 
-    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+    # Act
+    with pytest.raises(ValueError, match="YYYY-MM-DD") as raised:
         DiskManifest.from_dict(payload, root=tmp_path)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_multi_side_manifest_builds_every_side(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     sides: list[dict[str, Any]] = payload["sides"]
     sides.append({"side": 1, "disk_number": 0, "files": []})
 
+    # Act
     disk, _ = decode(build_from_manifest(DiskManifest.from_dict(payload, root=tmp_path)))
 
+    # Assert
     assert disk.side_count == 2
     assert disk.sides[1].declared_file_count == 0
 
 
 def test_a_manifest_defaults_to_the_nintendo_licence_string(tmp_path: Path) -> None:
-    manifest = DiskManifest.from_dict(manifest_dict(tmp_path), root=tmp_path)
+    # Arrange
+    payload = manifest_dict(tmp_path)
 
+    # Act
+    manifest = DiskManifest.from_dict(payload, root=tmp_path)
+
+    # Assert
     assert manifest.boots_on_stock_hardware
     disk, _ = decode(build_from_manifest(manifest))
     info = disk.sides[0].disk_info
@@ -177,11 +241,14 @@ def test_a_manifest_defaults_to_the_nintendo_licence_string(tmp_path: Path) -> N
 
 
 def test_the_licence_check_can_be_bypassed(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     payload["licence"] = "bypass"
 
+    # Act
     manifest = DiskManifest.from_dict(payload, root=tmp_path)
 
+    # Assert
     assert not manifest.boots_on_stock_hardware
     disk, _ = decode(build_from_manifest(manifest))
     info = disk.sides[0].disk_info
@@ -190,18 +257,26 @@ def test_the_licence_check_can_be_bypassed(tmp_path: Path) -> None:
 
 
 def test_a_custom_licence_string_is_written_verbatim(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     payload["license"] = "*HOMEBREW-FDS*"
 
+    # Act
     manifest = DiskManifest.from_dict(payload, root=tmp_path)
 
+    # Assert
     assert manifest.verification == b"*HOMEBREW-FDS*"
     assert not manifest.boots_on_stock_hardware
 
 
 def test_a_licence_string_of_the_wrong_length_is_refused(tmp_path: Path) -> None:
+    # Arrange
     payload = manifest_dict(tmp_path)
     payload["licence"] = "TOO SHORT"
 
-    with pytest.raises(ValueError, match="14 characters"):
+    # Act
+    with pytest.raises(ValueError, match="14 characters") as raised:
         DiskManifest.from_dict(payload, root=tmp_path)
+
+    # Assert
+    assert raised.type is ValueError

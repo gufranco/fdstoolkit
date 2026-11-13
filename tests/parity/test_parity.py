@@ -32,31 +32,57 @@ def web_routes() -> set[str]:
 
 
 def test_every_command_has_a_route() -> None:
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
     missing = cli_commands() - CLI_ONLY - set(ROUTE_FOR_COMMAND)
 
-    assert missing == set()
+    # Assert
+    assert missing == expected
 
 
 def test_the_map_names_no_command_the_cli_does_not_have() -> None:
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
     invented = set(ROUTE_FOR_COMMAND) - cli_commands()
 
-    assert invented == set()
+    # Assert
+    assert invented == expected
 
 
 def test_every_mapped_route_is_registered() -> None:
+    # Arrange
     registered = web_routes()
+
+    # Act
     absent = {
         command: path for command, path in ROUTE_FOR_COMMAND.items() if path not in registered
     }
 
+    # Assert
     assert absent == {}
 
 
 def test_the_catalogue_lists_every_command(client: TestClient) -> None:
-    listed = set(client.get("/api/catalogue").json()["commands"])
+    # Arrange
+    iterable = client.get("/api/catalogue").json()["commands"]
 
+    # Act
+    listed = set(iterable)
+
+    # Assert
     assert listed == cli_commands() - CLI_ONLY
 
 
 def test_only_the_server_and_the_install_check_are_left_out() -> None:
-    assert CLI_ONLY.isdisjoint(ROUTE_FOR_COMMAND)
+    # Arrange
+    left_out = CLI_ONLY
+
+    # Act
+    routed = left_out & set(ROUTE_FOR_COMMAND)
+
+    # Assert
+    assert routed == set()

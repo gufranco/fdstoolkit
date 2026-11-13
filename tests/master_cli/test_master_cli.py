@@ -80,73 +80,92 @@ def _corpus(tmp_path: Path) -> Path:
 
 
 def test_a_missing_path_is_refused_by_name(tmp_path: Path) -> None:
-    result = runner.invoke(
-        app, ["consensus", str(tmp_path / "nowhere"), "-o", str(tmp_path / "out.fds")]
-    )
+    # Arrange
+    arguments = ["consensus", str(tmp_path / "nowhere"), "-o", str(tmp_path / "out.fds")]
 
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
     assert result.exit_code == 1
     assert "not found:" in result.stdout
     assert "nowhere" in result.stdout
 
 
 def test_dumps_of_one_disk_need_an_output(tmp_path: Path) -> None:
+    # Arrange
     root = _corpus(tmp_path)
 
+    # Act
     result = runner.invoke(app, ["consensus", str(root / "a.fds"), str(root / "b.fds")])
 
+    # Assert
     assert result.exit_code == 2
 
 
 def test_dumps_of_one_disk_can_report_json(tmp_path: Path) -> None:
+    # Arrange
     root = _corpus(tmp_path)
     output = tmp_path / "merged.fds"
-
     result = runner.invoke(
         app, ["consensus", str(root / "a.fds"), str(root / "a.fds"), "-o", str(output), "--json"]
     )
 
+    # Act
     payload = json.loads(result.stdout)
+
+    # Assert
     assert result.exit_code == 0
     assert payload["disagreements"] == []
     assert output.is_file()
 
 
 def test_a_consensus_written_to_a_qd_file_is_quick_disk(tmp_path: Path) -> None:
+    # Arrange
     root = _corpus(tmp_path)
     output = tmp_path / "merged.qd"
 
+    # Act
     result = runner.invoke(
         app, ["consensus", str(root / "a.fds"), str(root / "a.fds"), "-o", str(output)]
     )
 
+    # Assert
     assert result.exit_code == 0
     assert output.stat().st_size == qd.SIDE_SIZE
 
 
 def test_a_bad_block_is_spliced_from_a_donor(tmp_path: Path) -> None:
+    # Arrange
     broken = _write_qd(tmp_path / "broken.qd", _disk(data_byte=1), corrupt=True)
     donor = _write_qd(tmp_path / "donor.qd", _disk(data_byte=1))
     output = tmp_path / "fixed.fds"
 
+    # Act
     result = runner.invoke(app, ["splice", str(broken), "--donor", str(donor), "-o", str(output)])
 
+    # Assert
     assert result.exit_code == 0
     assert "taken from donor.qd" in result.stdout
     assert output.is_file()
 
 
 def test_a_block_with_no_good_donor_is_reported(tmp_path: Path) -> None:
+    # Arrange
     broken = _write_qd(tmp_path / "broken.qd", _disk(data_byte=1), corrupt=True)
     donor = _write_qd(tmp_path / "donor.qd", _disk(data_byte=1), corrupt=True)
     output = tmp_path / "fixed.fds"
 
+    # Act
     result = runner.invoke(app, ["splice", str(broken), "--donor", str(donor), "-o", str(output)])
 
+    # Assert
     assert result.exit_code == 1
     assert "no donor carries a good copy" in result.stdout
 
 
 def test_a_consensus_names_a_block_one_dump_missed(tmp_path: Path) -> None:
+    # Arrange
     full = insert_file(
         fds.decode(blank_image(sides=1, headered=False, formatted=True))[0],
         side=0,
@@ -158,12 +177,14 @@ def test_a_consensus_names_a_block_one_dump_missed(tmp_path: Path) -> None:
         _write_fds(tmp_path / name, disk)
         for name, disk in (("a.fds", full), ("b.fds", short), ("c.fds", full))
     ]
-
     result = runner.invoke(app, ["consensus", *map(str, paths), "-o", str(tmp_path / "o.fds")])
+
+    # Act
     listed = runner.invoke(
         app, ["consensus", *map(str, paths), "-o", str(tmp_path / "p.fds"), "--json"]
     )
 
+    # Assert
     assert result.exit_code == 0
     assert "missing from 1 dump(s), decided by the others" in result.stdout
     assert len(json.loads(listed.stdout)["missing"]) == 2
@@ -185,21 +206,27 @@ def long_data_disk() -> Disk:
 
 
 def test_a_consensus_into_fds_says_a_block_boundary_is_lost(tmp_path: Path) -> None:
+    # Arrange
     source = _write_qd(tmp_path / "a.qd", long_data_disk())
 
+    # Act
     result = runner.invoke(
         app, ["consensus", str(source), str(source), "-o", str(tmp_path / "o.fds")]
     )
 
+    # Assert
     assert "[FDS016]" in result.stderr
     assert "write a .qd to keep the boundary" in result.stderr
 
 
 def test_a_consensus_into_qd_keeps_the_boundary_quietly(tmp_path: Path) -> None:
+    # Arrange
     source = _write_qd(tmp_path / "a.qd", long_data_disk())
 
+    # Act
     result = runner.invoke(
         app, ["consensus", str(source), str(source), "-o", str(tmp_path / "o.qd")]
     )
 
+    # Assert
     assert "FDS016" not in result.stderr

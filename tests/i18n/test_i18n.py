@@ -49,59 +49,122 @@ def _used_keys() -> set[str]:
 
 
 def test_both_languages_carry_the_same_keys() -> None:
-    assert _keys("en") == _keys("ja")
+    # Arrange
+    expected = _keys("ja")
+
+    # Act
+    result = _keys("en")
+
+    # Assert
+    assert result == expected
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_key_the_page_uses_exists(language: str) -> None:
-    assert _used_keys() - _keys(language) == set()
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
+    result = _used_keys() - _keys(language)
+
+    # Assert
+    assert result == expected
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_no_dictionary_is_empty(language: str) -> None:
-    assert len(_keys(language)) > 1
+    # Arrange
+    obj = _keys(language)
+
+    # Act
+    result = len(obj)
+
+    # Assert
+    assert result > 1
 
 
 def test_every_japanese_string_is_japanese() -> None:
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
     untranslated = {
         key
         for key, value in _values("ja").items()
         if value.isascii() and key not in THE_SAME_IN_BOTH_LANGUAGES
     }
 
-    assert untranslated == set()
+    # Assert
+    assert untranslated == expected
 
 
 def test_the_page_offers_both_languages() -> None:
-    assert 'data-language="en"' in MARKUP
-    assert 'data-language="ja"' in MARKUP
+    # Arrange
+    path = STATIC_DIR / "index.html"
+
+    # Act
+    markup = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert 'data-language="en"' in markup
+    assert 'data-language="ja"' in markup
 
 
 def test_the_language_choice_survives_storage_being_unavailable() -> None:
-    assert DICTIONARIES.count("try {") >= STORAGE_GUARDS
-    assert "localStorage" in DICTIONARIES
+    # Arrange
+    path = STATIC_DIR / "i18n.js"
+
+    # Act
+    dictionaries = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert dictionaries.count("try {") >= STORAGE_GUARDS
+    assert "localStorage" in dictionaries
 
 
 def test_the_page_script_pulls_the_dictionaries_in_itself() -> None:
-    assert "from './i18n.js'" in SCRIPT
+    # Arrange
+    path = STATIC_DIR / "app.js"
+
+    # Act
+    script = path.read_text(encoding="utf-8")
+
+    # Assert
+    assert "from './i18n.js'" in script
     assert "import { start }" in MARKUP
 
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_command_family_carries_a_label(language: str) -> None:
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
     wanted = {f"family.{form.family}" for form in forms()}
 
-    assert wanted - _keys(language) == set()
+    # Assert
+    assert wanted - _keys(language) == expected
 
 
 def test_no_label_names_a_family_that_does_not_exist() -> None:
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
     declared = {key for key in _keys("en") if key.startswith("family.")}
 
-    assert declared - {f"family.{form.family}" for form in forms()} == set()
+    # Assert
+    assert declared - {f"family.{form.family}" for form in forms()} == expected
 
 
 def test_no_key_is_declared_twice_in_one_language() -> None:
-    for language in LANGUAGES:
-        declared = re.findall(r"^    '([\w.]+)':", _block(language), re.MULTILINE)
+    # Arrange
+    pattern = r"^    '([\w.]+)':"
 
-        assert len(declared) == len(set(declared))
+    # Act
+    declared = {
+        language: re.findall(pattern, _block(language), re.MULTILINE) for language in LANGUAGES
+    }
+
+    # Assert
+    assert all(len(keys) == len(set(keys)) for keys in declared.values())

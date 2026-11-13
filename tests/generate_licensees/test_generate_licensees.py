@@ -38,57 +38,83 @@ def companies(count: int) -> list[tuple[str, int]]:
 
 
 def test_every_company_is_read_by_its_hex_code() -> None:
+    # Arrange
     table_of: Callable[[str], dict[str, str]] = load_script().company_table
 
+    # Act
     table = table_of(enum_source(companies(ENOUGH)))
 
+    # Assert
     assert len(table) == ENOUGH
     assert table["0x01"] == "Company001"
     assert table["0x78"] == "Company120"
 
 
 def test_members_of_a_later_enum_are_left_out() -> None:
+    # Arrange
     table_of: Callable[[str], dict[str, str]] = load_script().company_table
 
+    # Act
     table = table_of(enum_source(companies(ENOUGH)))
 
+    # Assert
     assert "Late" not in table.values()
 
 
 def test_a_code_named_twice_is_refused() -> None:
+    # Arrange
     table_of: Callable[[str], dict[str, str]] = load_script().company_table
     members = [*companies(ENOUGH), ("Again", 0x01)]
 
-    with pytest.raises(ValueError, match=r"code 0x01 is named twice, Company001 and Again"):
+    # Act
+    with pytest.raises(
+        ValueError, match=r"code 0x01 is named twice, Company001 and Again"
+    ) as raised:
         table_of(enum_source(members))
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_table_too_short_to_be_the_real_one_is_refused() -> None:
+    # Arrange
     table_of: Callable[[str], dict[str, str]] = load_script().company_table
 
-    with pytest.raises(ValueError, match=r"read only 3 companies"):
+    # Act
+    with pytest.raises(ValueError, match=r"read only 3 companies") as raised:
         table_of(enum_source(companies(3)))
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_source_without_the_enum_is_refused() -> None:
+    # Arrange
     table_of: Callable[[str], dict[str, str]] = load_script().company_table
 
-    with pytest.raises(ValueError, match=r"expected one Company enum, found 0"):
+    # Act
+    with pytest.raises(ValueError, match=r"expected one Company enum, found 0") as raised:
         table_of("namespace Demo {}\n")
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_the_script_writes_the_table_with_its_provenance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Arrange
     source = tmp_path / "FdsBlockDiskInfo.cs"
     source.write_text(enum_source(companies(ENOUGH)), encoding="utf-8")
     output = tmp_path / "licensees.json"
     arguments = [str(SCRIPT), str(source), "--commit", "abc123", "--version", "9.9.9"]
     monkeypatch.setattr(sys, "argv", [*arguments, "--output", str(output)])
-
     code = load_script().main()
 
+    # Act
     document = json.loads(output.read_text(encoding="utf-8"))
+
+    # Assert
     assert code == 0
     assert document["package"] == "nes-containers 9.9.9"
     assert document["source"].endswith("/blob/abc123/FdsBlockDiskInfo.cs")

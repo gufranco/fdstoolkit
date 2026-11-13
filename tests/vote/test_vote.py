@@ -48,11 +48,14 @@ def damaged(side: Side, block: int, offsets: tuple[int, ...]) -> bytes:
 
 
 def test_three_reads_each_wrong_in_a_different_place_are_voted_back() -> None:
+    # Arrange
     side = reference_side()
     reads = [damaged(side, DAMAGED, (offset,)) for offset in (10, 90, 170)]
 
+    # Act
     result = vote_side(reads)
 
+    # Assert
     assert DAMAGED in result.recovered
     assert result.unresolved == ()
     assert [block.payload for block in result.side.blocks] == [b.payload for b in side.blocks]
@@ -60,78 +63,110 @@ def test_three_reads_each_wrong_in_a_different_place_are_voted_back() -> None:
 
 
 def test_a_block_one_read_got_right_is_taken_from_that_read() -> None:
+    # Arrange
     side = reference_side()
     clean = pack_raw03(unpack_raw03(encode_block_stream([b.payload for b in side.blocks])))
     reads = [damaged(side, DAMAGED, (10,)), clean]
 
+    # Act
     result = vote_side(reads)
 
+    # Assert
     assert result.recovered == ()
     assert result.unresolved == ()
     assert [block.payload for block in result.side.blocks] == [b.payload for b in side.blocks]
 
 
 def test_two_reads_that_both_fail_a_block_are_not_enough_to_vote() -> None:
+    # Arrange
     side = reference_side()
     reads = [damaged(side, DAMAGED, (10,)), damaged(side, DAMAGED, (90,))]
 
+    # Act
     result = vote_side(reads)
 
+    # Assert
     assert DAMAGED in result.unresolved
     assert f"a vote needs {MIN_VOTERS}" in result.notes[0]
 
 
 def test_damage_every_read_shares_is_not_voted_away() -> None:
+    # Arrange
     side = reference_side()
     reads = [damaged(side, DAMAGED, (10,)) for _ in range(MIN_VOTERS)]
 
+    # Act
     result = vote_side(reads)
 
+    # Assert
     assert DAMAGED in result.unresolved
     assert result.recovered == ()
 
 
 def test_reads_with_no_block_in_them_vote_nothing() -> None:
-    result = vote_side([pack_raw03(bytes(4000))] * MIN_VOTERS)
+    # Arrange
+    captures = [pack_raw03(bytes(4000))] * MIN_VOTERS
 
+    # Act
+    result = vote_side(captures)
+
+    # Assert
     assert result.side.blocks == ()
     assert result.recovered == ()
     assert result.notes == ("no read found a single block on this side",)
 
 
 def test_a_failed_block_is_copied_from_the_read_that_got_it_right() -> None:
+    # Arrange
     side = reference_side()
     last = len(side.blocks) - 1
     gap = bytes(TRAILING_GAP)
     stream = unpack_raw03(encode_block_stream([b.payload for b in side.blocks]))
     broken = pack_raw03(unpack_raw03(damaged(side, last, (10,))) + gap)
 
+    # Act
     result = vote_side([broken, pack_raw03(stream + gap)])
 
+    # Assert
     assert last in result.copied
     assert [block.payload for block in result.side.blocks] == [b.payload for b in side.blocks]
 
 
 def test_no_captures_at_all_vote_nothing() -> None:
-    result = vote_side([])
+    # Arrange
+    captures: list[bytes] = []
 
+    # Act
+    result = vote_side(captures)
+
+    # Assert
     assert result.side.blocks == ()
     assert result.notes == ("no read found a single block on this side",)
 
 
 def test_the_repair_rounds_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
     monkeypatch.setattr(vote, "ROUNDS_PER_BLOCK", 0)
     side = reference_side()
     reads = [damaged(side, DAMAGED, (offset,)) for offset in (10, 90, 170)]
 
+    # Act
     result = vote_side(reads)
 
+    # Assert
     assert DAMAGED in result.unresolved
     assert result.recovered == ()
 
 
 def test_a_pulse_only_one_read_reaches_is_not_voted_into_the_block() -> None:
-    assert vote.majority([b"\x00\x01", b"\x00\x01", b"\x00\x01\x02\x02"]) == b"\x00\x01"
+    # Arrange
+    windows = [b"\x00\x01", b"\x00\x01", b"\x00\x01\x02\x02"]
+
+    # Act
+    result = vote.majority(windows)
+
+    # Assert
+    assert result == b"\x00\x01"
 
 
 def slipped(side: Side, block: int, offset: int) -> bytes:
@@ -144,6 +179,7 @@ def slipped(side: Side, block: int, offset: int) -> bytes:
 
 
 def test_a_read_that_gained_a_pulse_still_votes_after_the_slip() -> None:
+    # Arrange
     side = reference_side()
     reads = [
         slipped(side, DAMAGED, 10),
@@ -151,13 +187,16 @@ def test_a_read_that_gained_a_pulse_still_votes_after_the_slip() -> None:
         damaged(side, DAMAGED, (170,)),
     ]
 
+    # Act
     result = vote_side(reads)
 
+    # Assert
     assert DAMAGED in result.recovered
     assert [block.payload for block in result.side.blocks] == [b.payload for b in side.blocks]
 
 
 def test_positions_alone_cannot_vote_past_a_slip() -> None:
+    # Arrange
     side = reference_side()
     reads = [
         slipped(side, DAMAGED, 10),
@@ -168,13 +207,15 @@ def test_positions_alone_cannot_vote_past_a_slip() -> None:
         vote.window_of(read, vote.locate(read, *vote.occurrence_of(read, DAMAGED)) or 0)
         for read in (vote.parse_read(unpack_raw03(packed)) for packed in reads)
     ]
-
     positional = vote.majority(windows)
     aligned = vote.aligned_majority(windows, 1)
 
+    # Act
     clean = vote.window_of(
         vote.parse_read(unpack_raw03(encode_block_stream([b.payload for b in side.blocks]))),
         DAMAGED,
     )
+
+    # Assert
     assert positional[: len(clean)] != clean
     assert aligned[: len(clean)] == clean

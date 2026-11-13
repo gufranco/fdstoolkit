@@ -44,88 +44,125 @@ def side_bytes(files: int = 1, *, crc: bytes | None = None) -> bytes:
 
 
 def test_decode_reads_one_side_per_block_of_data() -> None:
-    disk, findings = decode(side_bytes() * 2)
+    # Arrange
+    data = side_bytes() * 2
 
+    # Act
+    disk, findings = decode(data)
+
+    # Assert
     assert disk.side_count == 2
     assert findings == ()
 
 
 def test_decode_keeps_the_stored_crc_of_every_block() -> None:
-    disk, _ = decode(side_bytes())
+    # Arrange
+    data = side_bytes()
 
+    # Act
+    disk, _ = decode(data)
+
+    # Assert
     assert all(block.crc_status is CrcStatus.VALID for block in disk.sides[0].blocks)
 
 
 def test_decode_reports_a_size_that_is_not_a_whole_number_of_sides() -> None:
-    disk, findings = decode(side_bytes()[: SIDE_SIZE - 4096])
+    # Arrange
+    data = side_bytes()[: SIDE_SIZE - 4096]
 
+    # Act
+    disk, findings = decode(data)
+
+    # Assert
     assert disk.side_count == 1
     assert "FDS010" in [finding.code for finding in findings]
 
 
 def test_encode_preserves_a_null_crc_by_default() -> None:
+    # Arrange
     original = side_bytes(crc=bytes(2))
     disk, _ = decode(original)
 
+    # Act
     data, _ = encode(disk)
 
+    # Assert
     assert data == original
 
 
 def test_encode_preserves_a_wrong_crc_by_default() -> None:
+    # Arrange
     original = side_bytes(crc=bytes([0x34, 0x12]))
     disk, _ = decode(original)
 
+    # Act
     data, _ = encode(disk)
 
+    # Assert
     assert data == original
 
 
 def test_encode_can_recompute_every_crc() -> None:
+    # Arrange
     disk, _ = decode(side_bytes(crc=bytes(2)))
-
     data, _ = encode(disk, crc_mode=CrcMode.COMPUTE)
+
+    # Act
     rebuilt, _ = decode(data)
 
+    # Assert
     assert all(block.crc_status is CrcStatus.VALID for block in rebuilt.sides[0].blocks)
 
 
 def test_encode_can_null_every_crc() -> None:
+    # Arrange
     disk, _ = decode(side_bytes())
-
     data, _ = encode(disk, crc_mode=CrcMode.NULL)
+
+    # Act
     rebuilt, _ = decode(data)
 
+    # Assert
     assert all(block.crc_status is CrcStatus.NULL for block in rebuilt.sides[0].blocks)
 
 
 def test_encode_computes_a_crc_that_is_missing_when_preserving() -> None:
+    # Arrange
     disk, _ = decode_fds(b"".join(blocks()).ljust(65500, b"\0"))
-
     data, _ = encode(disk)
+
+    # Act
     rebuilt, _ = decode(data)
 
+    # Assert
     assert all(block.crc_status is CrcStatus.VALID for block in rebuilt.sides[0].blocks)
 
 
 def test_encode_pads_each_side_to_the_nominal_size() -> None:
+    # Arrange
     disk, _ = decode(side_bytes())
 
+    # Act
     data, _ = encode(disk)
 
+    # Assert
     assert len(data) == SIDE_SIZE
 
 
 def test_encode_round_trips_an_unformatted_side() -> None:
+    # Arrange
     original = bytes(SIDE_SIZE)
     disk, _ = decode(original)
 
+    # Act
     data, _ = encode(disk)
 
+    # Assert
     assert data == original
 
 
 def test_encode_reports_a_side_that_exceeds_the_nominal_size() -> None:
+    # Arrange
     disk, _ = decode(side_bytes(files=1))
     oversized = Disk(
         sides=(
@@ -137,47 +174,65 @@ def test_encode_reports_a_side_that_exceeds_the_nominal_size() -> None:
         )
     )
 
+    # Act
     _, findings = encode(oversized)
 
+    # Assert
     assert "FDS011" in [finding.code for finding in findings]
 
 
 def test_encode_rejects_a_disk_with_no_sides() -> None:
-    with pytest.raises(ValueError, match="at least one side"):
-        encode(Disk(sides=()))
+    # Arrange
+    disk = Disk(sides=())
+
+    # Act
+    with pytest.raises(ValueError, match="at least one side") as raised:
+        encode(disk)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_side_longer_than_the_nominal_size_is_written_whole() -> None:
+    # Arrange
     disk, _ = decode(side_bytes())
     side = disk.sides[0]
     stuffed = Disk(
         sides=(side.__class__(blocks=side.blocks, tail=bytes(SIDE_SIZE), capacity=SIDE_SIZE),)
     )
 
+    # Act
     data, findings = encode(stuffed)
 
+    # Assert
     assert len(data) > SIDE_SIZE
     assert "FDS011" in [finding.code for finding in findings]
 
 
 def test_a_single_side_shorter_than_a_full_side_is_only_noted() -> None:
+    # Arrange
     disk, _ = decode_fds(blank_image(sides=1, headered=False, formatted=True))
     data, _ = encode(disk)
-
     _, findings = decode(data[:57344])
 
+    # Act
     finding = next(entry for entry in findings if entry.code == "FDS010")
+
+    # Assert
     assert finding.severity is Severity.INFO
     assert finding.detail["short_single_side"] is True
 
 
 def test_a_partial_second_side_is_still_a_warning() -> None:
+    # Arrange
     disk, _ = decode_fds(blank_image(sides=2, headered=False, formatted=True))
     data, _ = encode(disk)
-
     _, findings = decode(data[: 65536 + 100])
 
+    # Act
     finding = next(entry for entry in findings if entry.code == "FDS010")
+
+    # Assert
     assert finding.severity is Severity.WARNING
 
 
@@ -194,11 +249,14 @@ def with_long_data(payloads: list[bytes], *, actual: bytes) -> bytes:
 
 
 def test_decode_reads_a_data_block_past_the_size_its_header_declares() -> None:
+    # Arrange
     actual = bytes(range(256)) * 2
     data = with_long_data(blocks(files=2), actual=actual)
 
+    # Act
     disk, findings = decode(data)
 
+    # Assert
     assert disk.sides[0].blocks[3].payload == bytes([0x04]) + actual
     assert disk.sides[0].blocks[3].crc_status is CrcStatus.VALID
     assert len(disk.sides[0].blocks) == 6
@@ -206,17 +264,21 @@ def test_decode_reads_a_data_block_past_the_size_its_header_declares() -> None:
 
 
 def test_decode_keeps_the_declared_size_of_a_damaged_data_block() -> None:
+    # Arrange
     payloads = blocks(files=1)
     data = bytearray(side_bytes(1))
     data[DATA_OFFSET + 2] ^= 0xFF
 
+    # Act
     disk, findings = decode(bytes(data))
 
+    # Assert
     assert len(disk.sides[0].blocks[3].payload) == len(payloads[3])
     assert "FDS016" not in [finding.code for finding in findings]
 
 
 def test_decode_reads_a_data_block_shorter_than_its_header_declares() -> None:
+    # Arrange
     payloads = blocks(files=2)
     header = bytearray(payloads[2])
     header[0x0D:0x0F] = (200).to_bytes(2, "little")
@@ -225,8 +287,10 @@ def test_decode_reads_a_data_block_shorter_than_its_header_declares() -> None:
     for payload in payloads:
         out += payload + encode_crc(block_crc(payload))
 
+    # Act
     disk, findings = decode(bytes(out).ljust(SIDE_SIZE, bytes(1)))
 
+    # Assert
     assert disk.sides[0].blocks[3].payload == payloads[3]
     assert len(disk.sides[0].blocks) == 6
     assert "FDS012" in [finding.code for finding in findings]
@@ -258,11 +322,14 @@ def side_with_failing_data(files: int) -> bytes:
 
 
 def test_a_side_of_many_failing_data_blocks_decodes_in_linear_time() -> None:
+    # Arrange
     hostile = side_with_failing_data(HOSTILE_FILES)
     started = time.perf_counter()
 
+    # Act
     disk, findings = decode(hostile)
 
+    # Assert
     assert time.perf_counter() - started < DECODE_BUDGET_S
     assert [finding.code for finding in findings].count("FDS002") == HOSTILE_FILES
     assert disk.sides[0].file_count == HOSTILE_FILES

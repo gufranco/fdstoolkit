@@ -84,7 +84,9 @@ footer gives a major.
 ## Tests
 
 Tests are named for the behaviour they check rather than the function they call,
-and each one has a single act. If a test needs a comment to be understood, the
-test is doing too much.
+and each one has a single act. Every test opens its three blocks with the bare
+markers `# Arrange`, `# Act` and `# Assert`, `// Arrange` and so on in
+JavaScript, and carries no other comment. If a test needs one to be understood,
+the test is doing too much.
 
 A bug fix ships with a test that fails without the fix.

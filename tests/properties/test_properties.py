@@ -62,30 +62,42 @@ def disks(draw: st.DrawFn, *, capacity: int = fds.SIDE_SIZE) -> Disk:
 @SETTINGS
 @given(disks())
 def test_an_fds_image_survives_a_round_trip(disk: Disk) -> None:
+    # Arrange
     data, _ = fds.encode(disk, headered=False)
     rebuilt, _ = fds.decode(data)
+
+    # Act
     again, _ = fds.encode(rebuilt, headered=False)
 
+    # Assert
     assert again == data
 
 
 @SETTINGS
 @given(disks(capacity=qd.SIDE_SIZE))
 def test_a_qd_image_survives_a_round_trip(disk: Disk) -> None:
+    # Arrange
     data, _ = qd.encode(disk)
     rebuilt, _ = qd.decode(data)
+
+    # Act
     again, _ = qd.encode(rebuilt)
 
+    # Assert
     assert again == data
 
 
 @SETTINGS
 @given(disks())
 def test_a_header_survives_a_round_trip(disk: Disk) -> None:
+    # Arrange
     data, _ = fds.encode(disk, headered=True)
     rebuilt, _ = fds.decode(data)
+
+    # Act
     again, _ = fds.encode(rebuilt, headered=True)
 
+    # Assert
     assert again == data
     assert rebuilt.header_side_count == disk.side_count
 
@@ -93,37 +105,45 @@ def test_a_header_survives_a_round_trip(disk: Disk) -> None:
 @SETTINGS
 @given(disks())
 def test_canonicalisation_is_reversible(disk: Disk) -> None:
+    # Arrange
     data, _ = fds.encode(disk, headered=False)
     parsed, _ = fds.decode(data)
 
+    # Act
     result = canonicalise(parsed, CONTENT_PROFILE)
 
+    # Assert
     assert restore(result) == data
 
 
 @SETTINGS
 @given(disks())
 def test_canonicalisation_is_idempotent(disk: Disk) -> None:
+    # Arrange
     data, _ = fds.encode(disk, headered=False)
     parsed, _ = fds.decode(data)
-
     once = canonicalise(parsed, CONTENT_PROFILE)
+
+    # Act
     twice = canonicalise(fds.decode(once.data)[0], CONTENT_PROFILE)
 
+    # Assert
     assert once.data == twice.data
 
 
 @SETTINGS
 @given(disks(), st.integers(min_value=0, max_value=9))
 def test_the_rewrite_count_never_changes_the_content_digest(disk: Disk, count: int) -> None:
+    # Arrange
     original = canonicalise(disk, CONTENT_PROFILE).sha256
-
     rewritten = bytearray(disk.sides[0].blocks[0].payload)
     rewritten[0x34] = count
     blocks = (
         Block(kind=BlockKind.DISK_INFO, payload=bytes(rewritten)),
         *disk.sides[0].blocks[1:],
     )
+
+    # Act
     altered = Disk(
         sides=(
             Side(blocks=blocks, tail=b"", capacity=disk.sides[0].capacity),
@@ -131,27 +151,45 @@ def test_the_rewrite_count_never_changes_the_content_digest(disk: Disk, count: i
         )
     )
 
+    # Assert
     assert canonicalise(altered, CONTENT_PROFILE).sha256 == original
 
 
 @SETTINGS
 @given(sides())
 def test_a_pulse_stream_decodes_back_to_its_blocks(side: Side) -> None:
+    # Arrange
     payloads = [block.payload for block in side.blocks]
     stream = encode_block_stream(payloads, encoding=RawEncoding.ERA_B)
 
+    # Act
     decoded, _ = decode_raw03(unpack_raw03(stream))
 
+    # Assert
     assert [block.payload for block in decoded.blocks] == payloads
 
 
 @SETTINGS
 @given(st.binary(min_size=0, max_size=256))
 def test_a_crc_round_trips_through_its_encoding(payload: bytes) -> None:
-    assert decode_crc(encode_crc(block_crc(payload))) == block_crc(payload)
+    # Arrange
+    data = encode_crc(block_crc(payload))
+
+    # Act
+    result = decode_crc(data)
+
+    # Assert
+    assert result == block_crc(payload)
 
 
 @SETTINGS
 @given(st.binary(max_size=512), st.binary(max_size=512))
 def test_an_ips_patch_turns_one_file_into_the_other(source: bytes, target: bytes) -> None:
-    assert apply_ips(build_ips(source, target), source) == target
+    # Arrange
+    patch = build_ips(source, target)
+
+    # Act
+    result = apply_ips(patch, source)
+
+    # Assert
+    assert result == target

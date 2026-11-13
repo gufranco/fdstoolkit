@@ -37,26 +37,47 @@ def tracked() -> set[str]:
 
 
 def test_every_test_file_is_tracked_by_git() -> None:
-    assert on_disk() - tracked() == set()
+    # Arrange
+    expected: set[str] = set()
+
+    # Act
+    result = on_disk() - tracked()
+
+    # Assert
+    assert result == expected
 
 
 def test_no_python_file_is_hidden_from_a_clean_checkout() -> None:
+    # Arrange
+    expected = []
+
+    # Act
     hidden = git("-c", "core.excludesFile=/dev/null", "status", "--porcelain", "-uall")
 
-    assert [line for line in hidden if line.startswith("??") and line.endswith(".py")] == []
+    # Assert
+    assert [line for line in hidden if line.startswith("??") and line.endswith(".py")] == expected
 
 
 def test_the_page_tests_run_in_continuous_integration() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    # Arrange
+    encoding = "utf-8"
 
+    # Act
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding=encoding)
+
+    # Assert
     assert "pnpm test:coverage" in workflow
     assert "pnpm e2e" in workflow
 
 
 def test_every_page_script_is_covered_by_a_test_file() -> None:
+    # Arrange
     scripts = {path.stem for path in (ROOT / "src/fdstoolkit/ui/static").glob("*.js")}
+
+    # Act
     exercised = "".join(
         path.read_text(encoding="utf-8") for path in (ROOT / "tests/web").glob("*.test.js")
     )
 
+    # Assert
     assert {name for name in scripts if f"static/{name}.js" not in exercised} == set()

@@ -31,27 +31,37 @@ def chunks(count: int) -> Iterator[bytes]:
 
 
 def test_a_chunked_body_past_the_ceiling_is_refused(client: TestClient) -> None:
+    # Arrange
+    route = "/api/verify"
+    content = chunks(MAX_BODY_BYTES // CHUNK + 1)
+    headers = {"content-type": "application/json"}
+
+    # Act
     answer = client.post(
-        "/api/verify",
-        content=chunks(MAX_BODY_BYTES // CHUNK + 1),
-        headers={"content-type": "application/json"},
+        route,
+        content=content,
+        headers=headers,
     )
 
+    # Assert
     assert answer.status_code == TOO_LARGE
     assert "accepts" in answer.json()["detail"]
 
 
 def test_a_chunked_body_inside_the_ceiling_is_read(client: TestClient) -> None:
+    # Arrange
     image = base64.b64encode(blank_image(sides=1, headered=False, formatted=True)).decode()
     payload = json.dumps({"data": image}).encode()
     half = len(payload) // 2
 
+    # Act
     answer = client.post(
         "/api/verify",
         content=iter([payload[:half], payload[half:]]),
         headers={"content-type": "application/json"},
     )
 
+    # Assert
     assert answer.status_code == OK
 
 
@@ -81,27 +91,33 @@ async def ignore(message: Message) -> None:
 
 
 def test_a_scope_that_is_not_http_passes_through_untouched() -> None:
+    # Arrange
     inner = Recorder()
     startup: Message = {"type": "lifespan.startup"}
     shutdown: Message = {"type": "lifespan.shutdown"}
 
+    # Act
     asyncio.run(
         BodyLimit(inner, limit=1)({"type": "lifespan"}, incoming(startup, shutdown), ignore)
     )
 
+    # Assert
     assert inner.scopes == ["lifespan"]
     assert inner.messages == [startup, shutdown]
 
 
 def test_after_the_body_the_app_hears_the_client_directly() -> None:
+    # Arrange
     inner = Recorder()
     gone: Message = {"type": "http.disconnect"}
     request: Message = {"type": "http.request", "body": b"{}", "more_body": False}
 
+    # Act
     asyncio.run(
         BodyLimit(inner, limit=CHUNK)(
             {"type": "http", "headers": []}, incoming(request, gone), ignore
         )
     )
 
+    # Assert
     assert inner.messages == [request, gone]

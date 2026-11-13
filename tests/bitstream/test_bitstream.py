@@ -23,81 +23,135 @@ def sample_side(sides: int = 1):  # noqa: ANN201
 
 
 def test_a_gap_is_its_bit_count_rounded_down_to_whole_bytes() -> None:
-    assert gap_length(LEAD_IN_BITS) == 3537
+    # Arrange
+    expected = 3537
+
+    # Act
+    result = gap_length(LEAD_IN_BITS)
+
+    # Assert
+    assert result == expected
     assert gap_length(GAP_BITS) == 122
 
 
 def test_a_bitstream_opens_with_the_lead_in_and_its_terminator() -> None:
-    stream = encode_side_bitstream(sample_side())
+    # Arrange
+    side = sample_side()
 
+    # Act
+    stream = encode_side_bitstream(side)
+
+    # Assert
     assert stream[: gap_length(LEAD_IN_BITS)] == bytes(gap_length(LEAD_IN_BITS))
     assert stream[gap_length(LEAD_IN_BITS)] == GAP_TERMINATOR
 
 
 def test_every_block_is_followed_by_its_crc() -> None:
+    # Arrange
     side = sample_side()
-    stream = encode_side_bitstream(side)
     start = gap_length(LEAD_IN_BITS) + 1
     first = side.blocks[0]
 
+    # Act
+    stream = encode_side_bitstream(side)
+
+    # Assert
     assert stream[start : start + first.size] == first.payload
     stored = stream[start + first.size] | (stream[start + first.size + 1] << 8)
     assert stored == first.computed_crc
 
 
 def test_blocks_are_separated_by_a_gap_and_a_terminator() -> None:
+    # Arrange
     side = sample_side()
     stream = encode_side_bitstream(side)
+
+    # Act
     start = gap_length(LEAD_IN_BITS) + 1 + side.blocks[0].size + 2
 
+    # Assert
     assert stream[start : start + gap_length(GAP_BITS)] == bytes(gap_length(GAP_BITS))
     assert stream[start + gap_length(GAP_BITS)] == GAP_TERMINATOR
 
 
 def test_the_emulated_size_matches_the_stream_it_describes() -> None:
+    # Arrange
     side = sample_side()
 
-    assert emulated_side_size(side) == len(encode_side_bitstream(side))
+    # Act
+    size = emulated_side_size(side)
+
+    # Assert
+    assert size == len(encode_side_bitstream(side))
 
 
 def test_a_side_with_more_files_needs_more_room() -> None:
+    # Arrange
     small = sample_side()
+
+    # Act
     stream = encode_side_bitstream(small)
 
+    # Assert
     assert len(stream) > gap_length(LEAD_IN_BITS)
     assert emulated_side_size(small) > small.content_size
 
 
 def test_an_unformatted_side_carries_only_the_lead_in() -> None:
+    # Arrange
     disk, _ = decode(blank_image(sides=1, headered=False, formatted=False))
 
+    # Act
     stream = encode_side_bitstream(disk.sides[0])
 
+    # Assert
     assert stream == bytes(gap_length(LEAD_IN_BITS)) + bytes([GAP_TERMINATOR])
 
 
 def test_a_stored_crc_is_preserved_rather_than_recomputed() -> None:
+    # Arrange
     as_qd, _ = encode_qd(decode(blank_image(sides=1, headered=False, formatted=True))[0])
     from_qd, _ = decode_qd(as_qd)
     side = from_qd.sides[0]
-
     stream = encode_side_bitstream(side)
     start = gap_length(LEAD_IN_BITS) + 1 + side.blocks[0].size
+
+    # Act
     stored = stream[start] | (stream[start + 1] << 8)
 
+    # Assert
     assert stored == side.blocks[0].stored_crc
 
 
 def test_the_gap_constants_are_the_documented_ones() -> None:
-    assert LEAD_IN_BITS == 28300
-    assert GAP_BITS == 976
-    assert GAP_TERMINATOR == 0x80
+    # Arrange
+    documented = (28300, 976, 0x80)
+
+    # Act
+    constants = (LEAD_IN_BITS, GAP_BITS, GAP_TERMINATOR)
+
+    # Assert
+    assert constants == documented
 
 
 def test_a_negative_gap_is_rejected() -> None:
-    with pytest.raises(ValueError, match="cannot be negative"):
-        gap_length(-1)
+    # Arrange
+    bits = -1
+
+    # Act
+    with pytest.raises(ValueError, match="cannot be negative") as raised:
+        gap_length(bits)
+
+    # Assert
+    assert raised.type is ValueError
 
 
 def test_a_side_that_fits_the_emulation_buffer_is_reported() -> None:
-    assert fits_emulation_buffer(sample_side())
+    # Arrange
+    side = sample_side()
+
+    # Act
+    result = fits_emulation_buffer(side)
+
+    # Assert
+    assert result

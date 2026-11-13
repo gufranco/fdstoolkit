@@ -53,15 +53,18 @@ def dumped(side: Side) -> DumpResult:
 
 
 def test_a_block_every_read_failed_is_recovered_by_the_vote() -> None:
+    # Arrange
     side = reference_side()
     captures = [
         Capture(side=0, read=number, data=damaged(side, offset))
         for number, offset in enumerate((10, 90, 170), start=1)
     ]
-
     outcome = recover(dumped(side), captures)
 
+    # Act
     block = outcome.result.sides[0].blocks[DAMAGED]
+
+    # Assert
     assert block.crc_ok
     assert block.payload == side.blocks[DAMAGED].payload
     assert block.attempts == len(captures)
@@ -71,17 +74,21 @@ def test_a_block_every_read_failed_is_recovered_by_the_vote() -> None:
 
 
 def test_too_few_reads_leave_the_block_failed_and_say_why() -> None:
+    # Arrange
     side = reference_side()
     captures = [Capture(side=0, read=1, data=damaged(side, 10))]
 
+    # Act
     outcome = recover(dumped(side), captures)
 
+    # Assert
     assert not outcome.result.sides[0].blocks[DAMAGED].crc_ok
     assert outcome.recovered == ()
     assert "a vote needs 3" in outcome.lines[0]
 
 
 def test_a_dump_that_read_clean_is_left_alone() -> None:
+    # Arrange
     side = reference_side()
     clean = DumpResult(
         sides=(
@@ -95,13 +102,16 @@ def test_a_dump_that_read_clean_is_left_alone() -> None:
         )
     )
 
+    # Act
     outcome = recover(clean, [])
 
+    # Assert
     assert outcome.result == clean
     assert outcome.lines == ()
 
 
 def test_a_bundle_is_rebuilt_into_a_disk_side_by_side() -> None:
+    # Arrange
     side = reference_side()
     bundle = Bundle(
         captures=tuple(
@@ -112,8 +122,10 @@ def test_a_bundle_is_rebuilt_into_a_disk_side_by_side() -> None:
         created="2026-09-25T12:00:00Z",
     )
 
+    # Act
     rebuilt = rebuild(bundle)
 
+    # Assert
     assert [block.payload for block in rebuilt.disk.sides[0].blocks] == [
         block.payload for block in side.blocks
     ]
@@ -122,6 +134,7 @@ def test_a_bundle_is_rebuilt_into_a_disk_side_by_side() -> None:
 
 
 def test_a_bundle_with_a_block_no_vote_can_fix_says_which() -> None:
+    # Arrange
     side = reference_side()
     bundle = Bundle(
         captures=(Capture(side=0, read=1, data=damaged(side, 10)),),
@@ -129,23 +142,29 @@ def test_a_bundle_with_a_block_no_vote_can_fix_says_which() -> None:
         created="2026-09-25T12:00:00Z",
     )
 
+    # Act
     rebuilt = rebuild(bundle)
 
+    # Assert
     assert rebuilt.unresolved == ((0, DAMAGED),)
     assert any("never read clean" in line for line in rebuilt.lines)
 
 
 def test_a_failed_block_with_no_saved_reads_stays_failed_and_says_so() -> None:
+    # Arrange
     side = reference_side()
 
+    # Act
     outcome = recover(dumped(side), [])
 
+    # Assert
     assert not outcome.result.sides[0].blocks[DAMAGED].crc_ok
     assert outcome.recovered == ()
     assert outcome.lines == ("  side 0 no read found a single block on this side",)
 
 
 def test_captures_whose_disk_info_never_read_clean_are_judged_by_their_headers() -> None:
+    # Arrange
     side = reference_side()
     other = insert_file(
         decode(blank_image(sides=1, headered=False, formatted=True, game_name="REC"))[0],
@@ -158,18 +177,23 @@ def test_captures_whose_disk_info_never_read_clean_are_judged_by_their_headers()
     capture = Capture(side=0, read=1, data=pack_raw03(bytes(values) + bytes(4000)))
     bundle = Bundle(captures=(capture,), image="x.fds", created="2026-09-26T00:00:00Z")
 
+    # Act
     foreign = captures_of_another_disk(other, bundle)
 
+    # Assert
     assert foreign == (
         "the captures are of another disk: their side 0 file headers differ from the image's"
     )
 
 
 def test_captures_of_the_same_disk_are_accepted() -> None:
+    # Arrange
     side = reference_side()
     capture = Capture(side=0, read=1, data=damaged(side, 40))
     bundle = Bundle(captures=(capture,), image="x.fds", created="2026-09-26T00:00:00Z")
 
+    # Act
     foreign = captures_of_another_disk(Disk(sides=(side,)), bundle)
 
+    # Assert
     assert foreign == ""

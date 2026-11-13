@@ -41,13 +41,19 @@ def sample_disk():  # noqa: ANN201
 
 @pytest.mark.parametrize("name", sorted(PROFILES))
 def test_every_profile_has_a_view(name: str) -> None:
+    # Arrange
+    masked = PROFILES[name].masked
+
+    # Act
     view = ProfileView.of(name)
 
+    # Assert
     assert view.name == name
-    assert view.masks == sorted(PROFILES[name].masked)
+    assert view.masks == sorted(masked)
 
 
 def test_a_diagnostic_view_carries_its_code_and_severity() -> None:
+    # Arrange
     finding = Diagnostic(
         code="FDS001",
         severity=Severity.WARNING,
@@ -56,8 +62,10 @@ def test_a_diagnostic_view_carries_its_code_and_severity() -> None:
         offset=42,
     )
 
+    # Act
     view = DiagnosticView.of(finding)
 
+    # Assert
     assert view.code == "FDS001"
     assert view.severity == str(Severity.WARNING)
     assert view.side == 1
@@ -65,50 +73,73 @@ def test_a_diagnostic_view_carries_its_code_and_severity() -> None:
 
 
 def test_a_disk_view_describes_every_side() -> None:
-    view = DiskView.of(sample_disk())
+    # Arrange
+    disk = sample_disk()
 
+    # Act
+    view = DiskView.of(disk)
+
+    # Assert
     assert len(view.sides) == 2
     assert view.sides[0].index == 0
     assert view.sides[0].blocks
 
 
 def test_a_disk_view_marks_a_file_past_the_declared_count_as_hidden() -> None:
-    view = DiskView.of(sample_disk())
+    # Arrange
+    disk = sample_disk()
 
+    # Act
+    view = DiskView.of(disk)
+
+    # Assert
     assert all(not entry.hidden for entry in view.files)
 
 
 def test_a_digest_view_carries_every_hash() -> None:
-    view = DigestView.of(digests_of(IMAGE))
+    # Arrange
+    digests = digests_of(IMAGE)
 
+    # Act
+    view = DigestView.of(digests)
+
+    # Assert
     assert view.size == len(IMAGE)
     assert len(view.sha256) == 64
 
 
 def test_a_grade_view_carries_its_reasons() -> None:
+    # Arrange
     disk, findings = decode(IMAGE)
 
+    # Act
     view = GradeResult.of(grade_disk(confidence=score_disk(disk), findings=findings))
 
+    # Assert
     assert view.grade
     assert view.reasons
     assert all(reason.metric for reason in view.reasons)
 
 
 def test_a_reads_view_carries_the_decay_direction() -> None:
+    # Arrange
     disk, _ = decode(IMAGE)
 
+    # Act
     view = ReadsResult.of(compare_reads([disk, disk]))
 
+    # Assert
     assert view.passes == 2
     assert view.stability == pytest.approx(1.0)
     assert view.decay
 
 
 def test_a_job_result_is_read_back_as_the_model_that_made_it() -> None:
+    # Arrange
     dumped = DumpedResult(name="dump.fds", data="AA==", size=1, grade="clean")
     reported = ReportedFile(headline="written", file=FileResult(name="b.fds", data="AA==", size=1))
 
+    # Act
     views = [
         JobView.model_validate(
             {
@@ -122,12 +153,15 @@ def test_a_job_result_is_read_back_as_the_model_that_made_it() -> None:
         for made in (dumped, reported)
     ]
 
+    # Assert
     assert [type(view.result) for view in views] == [DumpedResult, ReportedFile]
 
 
 def test_a_kept_file_is_typed() -> None:
+    # Arrange
     kept = FileResult(name="backup.fds", data="AA==", size=1)
 
+    # Act
     view = JobView.model_validate(
         {
             "id": "j",
@@ -138,10 +172,12 @@ def test_a_kept_file_is_typed() -> None:
         }
     )
 
+    # Assert
     assert view.kept == kept
 
 
 def test_calibration_rows_are_typed() -> None:
+    # Arrange
     row = CalibrationRow(
         read=8,
         expected=8,
@@ -153,6 +189,7 @@ def test_calibration_rows_are_typed() -> None:
         verdict="reads clean",
     )
 
+    # Act
     result = CalibrationResult.model_validate(
         {
             "headline": "h",
@@ -164,6 +201,7 @@ def test_calibration_rows_are_typed() -> None:
         }
     )
 
+    # Assert
     assert result.rows == [row]
 
 
@@ -182,14 +220,21 @@ def job_result_samples() -> dict[type[BaseModel], BaseModel]:
 
 
 def test_every_job_result_model_has_a_sample() -> None:
-    members = set(get_args(get_args(JobResult)[0]))
+    # Arrange
+    iterable = get_args(get_args(JobResult)[0])
 
+    # Act
+    members = set(iterable)
+
+    # Assert
     assert members == set(job_result_samples())
 
 
 def test_every_job_result_model_reads_back_as_itself() -> None:
+    # Arrange
     samples = job_result_samples()
 
+    # Act
     read_back = {
         model: type(
             JobView.model_validate(
@@ -205,4 +250,5 @@ def test_every_job_result_model_reads_back_as_itself() -> None:
         for model, sample in samples.items()
     }
 
+    # Assert
     assert read_back == {model: model for model in samples}

@@ -48,26 +48,57 @@ class SideDrive:
 
 
 def test_counts_from_a_clean_side_are_pulse_timing() -> None:
-    assert classify(counts_of(packed_side())) is Nature.TIMING
+    # Arrange
+    data = counts_of(packed_side())
+
+    # Act
+    result = classify(data)
+
+    # Assert
+    assert result is Nature.TIMING
 
 
 def test_packed_classes_are_not_pulse_timing() -> None:
-    assert classify(packed_side()) is Nature.CLASSES
+    # Arrange
+    data = packed_side()
+
+    # Act
+    result = classify(data)
+
+    # Assert
+    assert result is Nature.CLASSES
 
 
 def test_an_empty_answer_is_nothing() -> None:
-    assert classify(b"") is Nature.NOTHING
+    # Arrange
+    data = b""
+
+    # Act
+    result = classify(data)
+
+    # Assert
+    assert result is Nature.NOTHING
 
 
 def test_counts_that_decode_no_block_are_named_as_such() -> None:
+    # Arrange
+    expected = Nature.UNDECODED
+
+    # Act
     scattered = bytes(80 + byte % 120 for byte in noise(20000))
 
-    assert classify(scattered) is Nature.UNDECODED
+    # Assert
+    assert classify(scattered) is expected
 
 
 def test_timing_reports_each_class_at_its_measured_length() -> None:
-    timing = measure_timing(counts_of(packed_side()))
+    # Arrange
+    counts = counts_of(packed_side())
 
+    # Act
+    timing = measure_timing(counts)
+
+    # Assert
     assert timing.means == pytest.approx(
         tuple(nominal * CLOCK_SCALE for nominal in NOMINALS), abs=1.0
     )
@@ -76,15 +107,24 @@ def test_timing_reports_each_class_at_its_measured_length() -> None:
 
 
 def test_a_wider_jitter_reads_as_a_wider_spread() -> None:
+    # Arrange
     tight = measure_timing(counts_of(packed_side(), jitter=1))
+
+    # Act
     loose = measure_timing(counts_of(packed_side(), jitter=6))
 
+    # Assert
     assert loose.spread_percent > tight.spread_percent
 
 
 def test_the_timing_line_names_every_class_and_the_spread() -> None:
-    line = measure_timing(counts_of(packed_side())).render()
+    # Arrange
+    timing = measure_timing(counts_of(packed_side()))
 
+    # Act
+    line = timing.render()
+
+    # Assert
     assert line.startswith("timing: short ")
     assert "medium" in line
     assert "long" in line
@@ -92,37 +132,53 @@ def test_the_timing_line_names_every_class_and_the_spread() -> None:
 
 
 def test_a_timing_reader_measures_a_read_that_sends_counts_and_hands_on_classes() -> None:
+    # Arrange
     lines: list[str] = []
     reader = TimingReader(SideDrive(counts_of(packed_side())), note=lines.append)
 
+    # Act
     packed = reader.read_raw_side(what="calibration read 1")
 
+    # Assert
     assert unpack_raw03(packed)[: len(unpack_raw03(packed_side()))] == unpack_raw03(packed_side())
     assert lines[0].startswith("timing: short")
     assert len(reader.timings) == 1
 
 
 def test_a_timing_reader_passes_pulse_classes_on_untouched_and_silent() -> None:
+    # Arrange
     lines: list[str] = []
     reader = TimingReader(SideDrive(packed_side()), note=lines.append)
 
+    # Act
     packed = reader.read_raw_side(what="calibration read 1")
 
+    # Assert
     assert packed == packed_side()
     assert lines == []
     assert reader.timings == []
 
 
 def test_the_timing_line_names_the_bit_rate_against_the_adapter_tolerance() -> None:
-    timing = measure_timing(counts_of(packed_side(), scale=1.0))
+    # Arrange
+    counts = counts_of(packed_side(), scale=1.0)
 
+    # Act
+    timing = measure_timing(counts)
+
+    # Assert
     assert timing.rate_khz == pytest.approx(96.8, abs=0.5)
     assert "bit rate 96." in timing.render()
     assert "inside the ±10% the RAM adapter accepts" in timing.render()
 
 
 def test_a_rate_far_off_nominal_is_named_outside_the_tolerance() -> None:
-    timing = measure_timing(counts_of(packed_side(), scale=1.25))
+    # Arrange
+    counts = counts_of(packed_side(), scale=1.25)
 
+    # Act
+    timing = measure_timing(counts)
+
+    # Assert
     assert timing.rate_khz < 96.4 * 0.9
     assert "outside the ±10% the RAM adapter accepts" in timing.render()

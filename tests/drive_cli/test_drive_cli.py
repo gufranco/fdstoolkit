@@ -56,20 +56,22 @@ def attach(
 def test_a_drive_that_reads_the_reference_clean_passes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # Arrange
     disk = disk_with(FILES)
     attach(monkeypatch, disk)
     reference = saved(disk, tmp_path / "reference.fds")
-
-    result = runner.invoke(
-        app, ["calibrate", "speed", "--reference", str(reference), "--passes", "2"]
-    )
-
-    assert result.exit_code == 0, result.output
-    assert NOT_THIS_DRIVE in result.output
+    arguments = ["calibrate", "speed", "--reference", str(reference), "--passes", "2"]
     first = (
         f"  read 1: 8 of 8 blocks, 0 pulses short, 0 long, 0 invalid, lead-in {LEAD_IN_BITS} bits: "
         "reads clean"
     )
+
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
+    assert result.exit_code == 0, result.output
+    assert NOT_THIS_DRIVE in result.output
     assert first in result.output
     assert "  read 2:" in result.output
     assert "the same as the last read" in result.output
@@ -79,37 +81,46 @@ def test_a_drive_that_reads_the_reference_clean_passes(
 def test_a_disk_that_differs_from_the_reference_fails_and_names_the_blocks(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # Arrange
     attach(monkeypatch, disk_with(FILES - 1))
     reference = saved(disk_with(FILES), tmp_path / "reference.fds")
 
+    # Act
     result = runner.invoke(
         app, ["calibrate", "head", "--reference", str(reference), "--passes", "1"]
     )
 
+    # Assert
     assert result.exit_code == 1
     assert "not read" in result.output
 
 
 def test_without_a_reference_the_checksums_decide(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
     attach(monkeypatch, disk_with(FILES))
 
+    # Act
     result = runner.invoke(app, ["calibrate", "head", "--passes", "1"])
 
+    # Assert
     assert result.exit_code == 0, result.output
     assert "pulses short" not in result.output
     assert "reads clean" in result.output
 
 
 def test_a_calibration_prints_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Arrange
     disk = disk_with(FILES)
     attach(monkeypatch, disk)
     reference = saved(disk, tmp_path / "reference.fds")
-
     result = runner.invoke(
         app, ["calibrate", "speed", "--reference", str(reference), "--passes", "1", "--json"]
     )
 
+    # Act
     payload = json.loads(result.stdout)
+
+    # Assert
     assert payload["mode"] == "speed"
     assert "judge the drive only with a disk it did not write" in result.stderr
     assert payload["clean"] is True
@@ -120,13 +131,16 @@ def test_a_calibration_prints_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 def test_a_reference_side_the_image_lacks_is_refused(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # Arrange
     attach(monkeypatch, disk_with(FILES))
     reference = saved(disk_with(FILES), tmp_path / "reference.fds")
 
+    # Act
     result = runner.invoke(
         app, ["calibrate", "speed", "--reference", str(reference), "--side", "1"]
     )
 
+    # Assert
     assert result.exit_code == 1
     assert "has 1 side(s), so it has no side 1" in result.output
 
@@ -134,33 +148,44 @@ def test_a_reference_side_the_image_lacks_is_refused(
 def test_a_drive_that_stops_answering_ends_the_calibration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Arrange
     attach(monkeypatch, None)
 
+    # Act
     result = runner.invoke(app, ["calibrate", "speed", "--passes", "1"])
 
+    # Assert
     assert result.exit_code == 1
     assert "no disk in the drive" in result.output
 
 
 def test_a_mode_it_does_not_know_is_refused() -> None:
-    result = runner.invoke(app, ["calibrate", "belt"])
+    # Arrange
+    arguments = ["calibrate", "belt"]
 
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
     assert result.exit_code == 2
 
 
 def test_a_bracketed_calibration_asks_before_every_read_after_the_first(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # Arrange
     disk = disk_with(FILES)
     attach(monkeypatch, disk)
     reference = saved(disk, tmp_path / "reference.fds")
 
+    # Act
     result = runner.invoke(
         app,
         ["calibrate", "head", "--reference", str(reference), "--passes", "3", "--bracket"],
         input="y\ny\n",
     )
 
+    # Assert
     assert result.output.count("turn the adjustment one small step") == 2
     assert "it still reads: keep turning the same way until it stops" in result.output
 
@@ -174,11 +199,14 @@ def attach_counting(monkeypatch: pytest.MonkeyPatch, disk: Disk | None) -> Simul
 def test_a_calibration_on_a_stick_that_sends_classes_shows_no_timing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Arrange
     attach(monkeypatch, disk_with(FILES))
-
     result = runner.invoke(app, ["calibrate", "speed", "--passes", "1", "--json"])
 
+    # Act
     payload = json.loads(result.stdout)
+
+    # Assert
     assert "timing" not in result.stderr
     assert payload["timing"] == []
     assert result.exit_code == 0
@@ -187,11 +215,14 @@ def test_a_calibration_on_a_stick_that_sends_classes_shows_no_timing(
 def test_a_calibration_on_a_stick_that_sends_counts_shows_the_timing_of_each_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Arrange
     attach_counting(monkeypatch, disk_with(FILES))
-
     result = runner.invoke(app, ["calibrate", "speed", "--passes", "2", "--json"])
 
+    # Act
     payload = json.loads(result.stdout)
+
+    # Assert
     assert result.stderr.count("timing: short") == 2
     assert len(payload["timing"]) == 2
     assert payload["clean"] is True
