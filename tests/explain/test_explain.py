@@ -194,12 +194,13 @@ def test_a_removed_file_is_reported() -> None:
 
 def test_changed_file_data_is_reported_with_both_sizes() -> None:
     # Arrange
-    result = explain(with_file(sample()), with_file(sample(), data=b"\x01\x02\x03"))
+    left, right = with_file(sample()), with_file(sample(), data=b"\x01\x02\x03")
 
     # Act
-    entry = result.files[0]
+    result = explain(left, right)
 
     # Assert
+    entry = result.files[0]
     assert entry.change is FileChange.CHANGED
     assert entry.detail == "2 bytes against 3"
 

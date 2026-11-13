@@ -164,12 +164,12 @@ def test_a_re_read_that_loses_an_earlier_block_still_recovers_by_header() -> Non
     disk = disk_with_files()
     last_data = len(disk.sides[0].blocks) - 1
     drive = DroppingDrive(disk, dropped=3, plan=FaultPlan(flaky_blocks={last_data: 2}))
-    result = dump(drive, sides=1, retries=2)
 
     # Act
-    recovered = result.sides[0].blocks[last_data]
+    result = dump(drive, sides=1, retries=2)
 
     # Assert
+    recovered = result.sides[0].blocks[last_data]
     assert recovered.crc_ok
     assert recovered.payload == disk.sides[0].blocks[last_data].payload
 

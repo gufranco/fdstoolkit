@@ -300,12 +300,13 @@ def with_trailing(extra: bytes) -> bytes:
 
 def test_a_test_data_block_after_the_last_file_is_named_as_information() -> None:
     # Arrange
-    _, findings = decode(with_trailing(bytes([0x05]) + bytes([0x6D, 0xB6, 0xDB]) * 40))
+    image = with_trailing(bytes([0x05]) + bytes([0x6D, 0xB6, 0xDB]) * 40)
 
     # Act
-    named = [finding for finding in findings if finding.code == "FDS020"]
+    _, findings = decode(image)
 
     # Assert
+    named = [finding for finding in findings if finding.code == "FDS020"]
     assert [(finding.severity, finding.detail["pattern"]) for finding in named] == [
         (Severity.INFO, True)
     ]
@@ -314,12 +315,13 @@ def test_a_test_data_block_after_the_last_file_is_named_as_information() -> None
 
 def test_a_type_5_block_without_the_test_pattern_is_named_without_it() -> None:
     # Arrange
-    _, findings = decode(with_trailing(bytes([0x05, 0x12, 0x34, 0x56, 0x78])))
+    image = with_trailing(bytes([0x05, 0x12, 0x34, 0x56, 0x78]))
 
     # Act
-    named = [finding for finding in findings if finding.code == "FDS020"]
+    _, findings = decode(image)
 
     # Assert
+    named = [finding for finding in findings if finding.code == "FDS020"]
     assert [finding.detail["pattern"] for finding in named] == [False]
 
 

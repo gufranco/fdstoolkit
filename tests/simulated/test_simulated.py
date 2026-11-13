@@ -42,10 +42,10 @@ def test_the_bit_rate_meter_reads_the_speed_the_drive_runs_at(
 ) -> None:
     # Arrange
     counts = drive_counts(blank_side(), DriveModel(speed=speed, jitter=jitter, seed=seed))
-    timing = measure_timing(counts)
+    expected = CAPTURE_CLOCK_KHZ * speed / NOMINAL_SHORT
 
     # Act
-    expected = CAPTURE_CLOCK_KHZ * speed / NOMINAL_SHORT
+    timing = measure_timing(counts)
 
     # Assert
     assert abs(timing.rate_khz - expected) / expected < RATE_ERROR

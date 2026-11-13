@@ -454,12 +454,13 @@ def test_every_marked_commandopens_a_drive_in_the_cli() -> None:
 
 def test_status_reports_only_the_device_checks(client: TestClient) -> None:
     # Arrange
-    body = client.get("/api/status").json()
+    route = "/api/status"
 
     # Act
-    names = {check["name"] for check in body["checks"]}
+    body = client.get(route).json()
 
     # Assert
+    names = {check["name"] for check in body["checks"]}
     assert "fdsstick" in names
     assert "python" not in names
     assert isinstance(body["healthy"], bool)

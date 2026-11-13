@@ -35,12 +35,12 @@ def stick_fixture() -> Iterator[FdsStick]:
 def test_two_dumps_of_the_disk_in_the_drive_agree(stick: FdsStick) -> None:
     # Arrange
     first = dump(stick, sides=ONE_SIDE)
-    second = dump(stick, sides=ONE_SIDE)
 
     # Act
-    payloads = [[block.payload for block in result.sides[0].blocks] for result in (first, second)]
+    second = dump(stick, sides=ONE_SIDE)
 
     # Assert
+    payloads = [[block.payload for block in result.sides[0].blocks] for result in (first, second)]
     assert payloads[0] == payloads[1]
     assert first.grade is Grade.CLEAN
 

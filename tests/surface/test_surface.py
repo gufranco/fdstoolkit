@@ -96,14 +96,15 @@ def test_the_unique_pattern_writes_every_pulse_class() -> None:
 
 def test_the_unique_pattern_changes_with_its_key_and_differs_between_files() -> None:
     # Arrange
-    side = pattern_disk(SurfacePattern.UNIQUE, sides=1, key=KEY).sides[0]
+    pattern = SurfacePattern.UNIQUE
 
     # Act
-    files = [b.payload for b in side.blocks if b.kind is BlockKind.FILE_DATA]
+    side = pattern_disk(pattern, sides=1, key=KEY).sides[0]
 
     # Assert
+    files = [b.payload for b in side.blocks if b.kind is BlockKind.FILE_DATA]
     assert len(set(files)) == len(files)
-    assert data_of(SurfacePattern.UNIQUE, KEY) != data_of(SurfacePattern.UNIQUE, OTHER_KEY)
+    assert data_of(pattern, KEY) != data_of(pattern, OTHER_KEY)
 
 
 def test_every_pulse_class_is_written_in_one_pass() -> None:
@@ -790,12 +791,12 @@ def test_a_failed_pass_counts_the_misread_pulses_from_the_capture() -> None:
     # Arrange
     fault = FaultPlan(bad_crc_blocks=frozenset({3}), unstable_blocks=frozenset({3}))
     drive = SimulatedDrive(scratch_disk(), plan=fault)
-    report = surface_test(drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(key=KEY))
 
     # Act
-    failed = [entry for entry in report.passes if not entry.verified]
+    report = surface_test(drive, drive, sides=1, confirm=lambda _: True, plan=SurfacePlan(key=KEY))
 
     # Assert
+    failed = [entry for entry in report.passes if not entry.verified]
     assert failed
     assert all(entry.compared > 0 for entry in failed)
     assert report.pulse_reading is not None

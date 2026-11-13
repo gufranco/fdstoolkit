@@ -514,12 +514,13 @@ def two_blocks_with_gap(bits: int) -> bytes:
 
 def test_a_gap_shorter_than_the_adapter_ignores_is_named_with_its_length() -> None:
     # Arrange
-    _, findings = decode_raw03(two_blocks_with_gap(SHORTEST_GAP_BITS + 2))
+    values = two_blocks_with_gap(SHORTEST_GAP_BITS + 2)
 
     # Act
-    short = [finding for finding in findings if finding.code == "FDS017"]
+    _, findings = decode_raw03(values)
 
     # Assert
+    short = [finding for finding in findings if finding.code == "FDS017"]
     assert len(short) == 1
     assert short[0].detail["bits"] in range(ADAPTER_BLIND_BITS)
 
@@ -542,12 +543,13 @@ def garbage_after(values: bytes) -> bytes:
 def test_undecodable_pulses_after_the_last_declared_block_are_information() -> None:
     # Arrange
     values = unpack_raw03(encode_raw03(sample_disk(files=1), side=0, encoding=RawEncoding.ERA_B))
-    _, findings = decode_raw03(garbage_after(values))
+    read = garbage_after(values)
 
     # Act
-    trailing = [finding for finding in findings if finding.code == "FDS018"]
+    _, findings = decode_raw03(read)
 
     # Assert
+    trailing = [finding for finding in findings if finding.code == "FDS018"]
     assert [finding.severity for finding in trailing] == [Severity.INFO]
     assert "FDS015" not in [finding.code for finding in findings]
 
@@ -555,25 +557,27 @@ def test_undecodable_pulses_after_the_last_declared_block_are_information() -> N
 def test_a_lost_sync_mark_inside_the_declared_blocks_stays_a_warning() -> None:
     # Arrange
     first = bytes([0x80, 0x01]) + bytes(55)
-    _, findings = decode_raw03(
-        encoded(first + encode_crc(block_crc(first[1:]))) + encoded(bytes([0x41, 0x02, 0x00, 0x00]))
+    values = encoded(first + encode_crc(block_crc(first[1:]))) + encoded(
+        bytes([0x41, 0x02, 0x00, 0x00])
     )
 
     # Act
-    lost = [finding for finding in findings if finding.code == "FDS015"]
+    _, findings = decode_raw03(values)
 
     # Assert
+    lost = [finding for finding in findings if finding.code == "FDS015"]
     assert [finding.detail["block"] for finding in lost] == [1]
 
 
 def test_a_short_gap_names_the_block_it_precedes() -> None:
     # Arrange
-    _, findings = decode_raw03(two_blocks_with_gap(SHORTEST_GAP_BITS + 2))
+    values = two_blocks_with_gap(SHORTEST_GAP_BITS + 2)
 
     # Act
-    short = [finding for finding in findings if finding.code == "FDS017"]
+    _, findings = decode_raw03(values)
 
     # Assert
+    short = [finding for finding in findings if finding.code == "FDS017"]
     assert short[0].detail["block"] == 1
 
 
@@ -693,12 +697,12 @@ def test_a_test_data_block_in_a_capture_is_named_as_information() -> None:
     # Arrange
     values = calibration_values() + bytes([GAP_VALUE]) * GAP_BITS
     values += encode_era_b(bytes([SYNC_MARK, 0x05]) + bytes([0x6D, 0xB6, 0xDB]) * 20)
-    _, findings = decode_raw03(values)
 
     # Act
-    named = [finding for finding in findings if finding.code == "FDS020"]
+    _, findings = decode_raw03(values)
 
     # Assert
+    named = [finding for finding in findings if finding.code == "FDS020"]
     assert [finding.severity for finding in named] == [Severity.INFO]
     assert "FDS015" not in [finding.code for finding in findings]
 

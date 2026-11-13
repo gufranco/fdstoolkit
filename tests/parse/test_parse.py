@@ -94,12 +94,12 @@ def test_a_null_crc_is_reported_but_not_an_error() -> None:
     # Arrange
     payloads = [disk_info(), file_amount(0)]
     raw = b"".join(payload + bytes(2) for payload in payloads)
-    _, findings = parse_side(raw, has_crc=True)
 
     # Act
-    codes = [finding.code for finding in findings]
+    _, findings = parse_side(raw, has_crc=True)
 
     # Assert
+    codes = [finding.code for finding in findings]
     assert codes.count("FDS003") == 2
     assert "FDS002" not in codes
 

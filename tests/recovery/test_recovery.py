@@ -59,12 +59,12 @@ def test_a_block_every_read_failed_is_recovered_by_the_vote() -> None:
         Capture(side=0, read=number, data=damaged(side, offset))
         for number, offset in enumerate((10, 90, 170), start=1)
     ]
-    outcome = recover(dumped(side), captures)
 
     # Act
-    block = outcome.result.sides[0].blocks[DAMAGED]
+    outcome = recover(dumped(side), captures)
 
     # Assert
+    block = outcome.result.sides[0].blocks[DAMAGED]
     assert block.crc_ok
     assert block.payload == side.blocks[DAMAGED].payload
     assert block.attempts == len(captures)

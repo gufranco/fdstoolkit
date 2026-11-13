@@ -705,12 +705,12 @@ def test_without_a_reference_a_block_read_clean_earlier_becomes_the_reference() 
     # Arrange
     side = reference_side()
     reader = Reader([stream(side), nudged(stream(side), shorter=True)])
-    result = calibrate(reader, mode=Mode.SPEED, reads=2)
 
     # Act
-    first, second = result.samples
+    result = calibrate(reader, mode=Mode.SPEED, reads=2)
 
     # Assert
+    first, second = result.samples
     assert not first.referenced
     assert second.referenced
     assert second.short > second.long

@@ -241,13 +241,13 @@ def test_files_can_be_renumbered() -> None:
         Block(kind=block.kind, payload=bytes(payload)) if block is headers[1] else block
         for block in disk.sides[0].blocks
     )
-    result, report = rebuild(patch_side(disk, blocks), options=RebuildOptions(renumber=True))
+    renumbered = patch_side(disk, blocks)
 
     # Act
-    numbers = [header.number for header in result.sides[0].file_headers]
+    result, report = rebuild(renumbered, options=RebuildOptions(renumber=True))
 
     # Assert
-    assert numbers == [0, 1]
+    assert [header.number for header in result.sides[0].file_headers] == [0, 1]
     assert [action.kind for action in report.actions] == ["renumber"]
 
 

@@ -19,24 +19,24 @@ def test_an_hxc_flux_image_is_recognised() -> None:
 
 def test_a_sharp_mz_qdf_image_is_recognised() -> None:
     # Arrange
-    expected = "a Sharp MZ Quick Disk image in QDF form"
+    image = b"-QD format-" + b"\xff" * 5 + bytes(100)
 
     # Act
-    header = b"-QD format-" + b"\xff" * 5
+    found = foreign_format(image)
 
     # Assert
-    assert foreign_format(header + bytes(100)) == expected
+    assert found == "a Sharp MZ Quick Disk image in QDF form"
 
 
 def test_a_sharp_mz_mzq_image_is_recognised() -> None:
     # Arrange
-    expected = "a Sharp MZ Quick Disk image in MZQ form"
+    image = b"\x00\x16\x16\xa5\x02CRC" + bytes(100)
 
     # Act
-    header = b"\x00\x16\x16\xa5\x02CRC"
+    found = foreign_format(image)
 
     # Assert
-    assert foreign_format(header + bytes(100)) == expected
+    assert found == "a Sharp MZ Quick Disk image in MZQ form"
 
 
 def test_a_famicom_image_is_not_foreign() -> None:

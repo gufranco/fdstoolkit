@@ -113,14 +113,13 @@ def test_a_stored_crc_is_preserved_rather_than_recomputed() -> None:
     as_qd, _ = encode_qd(decode(blank_image(sides=1, headered=False, formatted=True))[0])
     from_qd, _ = decode_qd(as_qd)
     side = from_qd.sides[0]
-    stream = encode_side_bitstream(side)
     start = gap_length(LEAD_IN_BITS) + 1 + side.blocks[0].size
 
     # Act
-    stored = stream[start] | (stream[start + 1] << 8)
+    stream = encode_side_bitstream(side)
 
     # Assert
-    assert stored == side.blocks[0].stored_crc
+    assert stream[start] | (stream[start + 1] << 8) == side.blocks[0].stored_crc
 
 
 def test_the_gap_constants_are_the_documented_ones() -> None:

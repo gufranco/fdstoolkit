@@ -35,19 +35,18 @@ def test_a_factory_disk_reports_no_rewrite() -> None:
 
 def test_a_kiosk_disk_reports_its_rewrite() -> None:
     # Arrange
-    report = provenance_of(
-        disk_with_info(
-            x1F=bytes([0x61, 0x02, 0x15]),
-            x2C=bytes([0x63, 0x08, 0x01]),
-            x31=bytes([0x34, 0x12]),
-            x34=bytes([0x03]),
-        )
+    disk = disk_with_info(
+        x1F=bytes([0x61, 0x02, 0x15]),
+        x2C=bytes([0x63, 0x08, 0x01]),
+        x31=bytes([0x34, 0x12]),
+        x34=bytes([0x03]),
     )
 
     # Act
-    side = report.sides[0]
+    report = provenance_of(disk)
 
     # Assert
+    side = report.sides[0]
     assert side.origin is Origin.REWRITTEN
     assert side.manufacturing_date == (1986, 2, 15)
     assert side.rewritten_date == (1988, 8, 1)
@@ -301,12 +300,12 @@ def test_a_date_that_is_neither_blank_nor_unwritten_is_still_reported() -> None:
 def test_factory_fields_on_a_streamed_side_read_as_rewritten() -> None:
     # Arrange
     disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
-    report = provenance_of(disk, layouts={0: STREAMED})
 
     # Act
-    side = report.sides[0]
+    report = provenance_of(disk, layouts={0: STREAMED})
 
     # Assert
+    side = report.sides[0]
     assert side.origin is Origin.REWRITTEN
     assert any(
         note.startswith("the captures show a side written in one stream") for note in side.notes
@@ -317,12 +316,12 @@ def test_factory_fields_on_a_streamed_side_read_as_rewritten() -> None:
 def test_factory_fields_on_a_duplicated_side_stay_factory() -> None:
     # Arrange
     disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
-    report = provenance_of(disk, layouts={0: DUPLICATED})
 
     # Act
-    side = report.sides[0]
+    report = provenance_of(disk, layouts={0: DUPLICATED})
 
     # Assert
+    side = report.sides[0]
     assert side.origin is Origin.FACTORY
     assert any(note.startswith("the captures show a duplicator's layout") for note in side.notes)
 
@@ -346,12 +345,12 @@ def test_a_kiosk_rewrite_on_a_streamed_side_adds_only_the_layout() -> None:
         x31=bytes([0x34, 0x12]),
         x34=bytes([0x03]),
     )
-    report = provenance_of(disk, layouts={0: STREAMED})
 
     # Act
-    side = report.sides[0]
+    report = provenance_of(disk, layouts={0: STREAMED})
 
     # Assert
+    side = report.sides[0]
     assert side.origin is Origin.REWRITTEN
     assert not any("data fields still say factory" in note for note in side.notes)
     assert any(note.startswith("the captures show") for note in side.notes)

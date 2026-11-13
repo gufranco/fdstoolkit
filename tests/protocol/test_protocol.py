@@ -504,12 +504,13 @@ def test_a_side_written_then_read_back_arrives_unchanged() -> None:
     encoded = encode_block_stream([block.payload for block in disk.sides[0].blocks])
     device = FakeFdsStick()
     stick_over(device).write_raw_side(encoded)
-
-    # Act
     device.side = bytes(device.written)[: len(encoded)]
 
+    # Act
+    read = stick_over(device).read_raw_side()
+
     # Assert
-    assert stick_over(device).read_raw_side() == device.side
+    assert read == device.side
 
 
 def test_reading_a_side_through_the_driver_yields_its_blocks() -> None:
