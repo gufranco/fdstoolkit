@@ -195,8 +195,10 @@ def codec_check(
     )
 
 
-def _identity_check() -> Check:
-    expected = ((1, REFERENCE_BLANK_64_SHA256), (2, REFERENCE_BLANK_128_SHA256))
+REFERENCE_BLANKS: Final = ((1, REFERENCE_BLANK_64_SHA256), (2, REFERENCE_BLANK_128_SHA256))
+
+
+def _identity_check(expected: tuple[tuple[int, str], ...]) -> Check:
     for sides, reference in expected:
         built = blank_image(sides=sides, headered=True, formatted=False)
         digest = hashlib.sha256(built).hexdigest()
@@ -218,6 +220,7 @@ def diagnose(
     load_hid: Callable[[], Enumerator] = load_hid,
     python: tuple[int, int, int] | None = None,
     lock_path: Path = LOCK_PATH,
+    references: tuple[tuple[int, str], ...] = REFERENCE_BLANKS,
 ) -> DoctorReport:
     interpreter = python if python is not None else sys.version_info[:3]
     return DoctorReport(
@@ -227,6 +230,6 @@ def diagnose(
             Check("platform", CheckStatus.OK, f"{platform.system()} {platform.machine()}"),
             *hardware_checks(load_hid, lock_path),
             codec_check(),
-            _identity_check(),
+            _identity_check(references),
         )
     )

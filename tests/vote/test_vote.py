@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -12,9 +11,6 @@ from fdstoolkit.drive import vote
 from fdstoolkit.drive.align import good_block
 from fdstoolkit.drive.vote import MIN_VOTERS, vote_side
 from fdstoolkit.edit.files import FileSpec, insert_file
-
-if TYPE_CHECKING:
-    import pytest
 
 FILES = 2
 DAMAGED = 3
@@ -144,14 +140,13 @@ def test_no_captures_at_all_vote_nothing() -> None:
     assert result.notes == ("no read found a single block on this side",)
 
 
-def test_the_repair_rounds_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_repair_rounds_are_bounded() -> None:
     # Arrange
-    monkeypatch.setattr(vote, "ROUNDS_PER_BLOCK", 0)
     side = reference_side()
     reads = [damaged(side, DAMAGED, (offset,)) for offset in (10, 90, 170)]
 
     # Act
-    result = vote_side(reads)
+    result = vote_side(reads, rounds_per_block=0)
 
     # Assert
     assert DAMAGED in result.unresolved

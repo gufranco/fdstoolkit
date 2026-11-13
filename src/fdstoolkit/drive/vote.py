@@ -177,7 +177,7 @@ def _repair(working: Read, slot: int, reads: Sequence[Read]) -> Repair | None:
     return None
 
 
-def vote_side(captures: Sequence[bytes]) -> VoteResult:
+def vote_side(captures: Sequence[bytes], *, rounds_per_block: int = ROUNDS_PER_BLOCK) -> VoteResult:
     reads = [parse_read(unpack_detected(packed)) for packed in captures]
     working = max(reads, key=lambda read: len(read.blocks), default=None)
     if working is None or not working.blocks:
@@ -187,7 +187,7 @@ def vote_side(captures: Sequence[bytes]) -> VoteResult:
     methods: dict[bytes, str] = {}
     notes: list[str] = []
     tried: set[int] = set()
-    for _ in range(len(working.blocks) * ROUNDS_PER_BLOCK):
+    for _ in range(len(working.blocks) * rounds_per_block):
         failing = [
             slot
             for slot, block in enumerate(working.blocks)

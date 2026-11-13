@@ -8,7 +8,6 @@ from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import TRUSTED_DRIVE, calibration_disk, calibration_image
-from fdstoolkit.cli import hardware_cmds
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
 
@@ -16,6 +15,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     import pytest
+import typer
 
 runner = CliRunner()
 
@@ -25,23 +25,19 @@ def blank_two_sides() -> FacingDrive:
     return FacingDrive(disk)
 
 
-def turning(drive: FacingDrive) -> Callable[..., Callable[[str], bool]]:
-    def answer(message: str) -> bool:
+def turning(drive: FacingDrive) -> Callable[..., bool]:
+    def answer(message: str, **_: object) -> bool:
         if "turn the disk over" in message:
             drive.turn(message)
         return True
 
-    def build(*, yes: bool) -> Callable[[str], bool]:
-        del yes
-        return answer
-
-    return build
+    return answer
 
 
 def attach(monkeypatch: pytest.MonkeyPatch) -> FacingDrive:
     drive = blank_two_sides()
     monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.open_fdsstick", lambda: drive)
-    monkeypatch.setattr(hardware_cmds, "prompter", turning(drive))
+    monkeypatch.setattr(typer, "confirm", turning(drive))
     return drive
 
 

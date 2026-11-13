@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -151,8 +150,7 @@ def _stamp_over(root: Path, files: dict[str, bytes], folders: tuple[str, ...] = 
         (folder / name).write_bytes(body)
     for name in folders:
         (folder / name).mkdir()
-    with patch("fdstoolkit.ui.app.STATIC_DIR", folder):
-        return asset_stamp()
+    return asset_stamp(folder)
 
 
 def test_the_markup_is_a_complete_document() -> None:

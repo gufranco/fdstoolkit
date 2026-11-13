@@ -4,13 +4,19 @@ import json
 import logging
 import sys
 import threading
-from collections.abc import Callable, Iterator
+import webbrowser
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
+from typing import Any
 
 import click
 import pytest
+import typer
 from device import FakeFdsStick
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
+from fastapi import FastAPI
+from hid_double import FakeHid, stick
+from server_double import FakeUvicorn
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
@@ -23,10 +29,8 @@ from fdstoolkit.codecs.qd import encode as encode_qd
 from fdstoolkit.codecs.raw import encode_raw03
 from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus, FileKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.doctor import Check, CheckStatus
 from fdstoolkit.drive.captures import Capture, load_bundle, write_bundle
 from fdstoolkit.edit.files import FileSpec, insert_file
-from fdstoolkit.hardware import session
 from fdstoolkit.hardware.fdsstick import FdsStick, HidApiTransport
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import Grade
@@ -610,19 +614,15 @@ def attach_facing(monkeypatch: pytest.MonkeyPatch, source: Path) -> FacingDrive:
     return drive
 
 
-def operator(drive: FacingDrive, *, turns: bool) -> Callable[..., Callable[[str], bool]]:
-    def answer(message: str) -> bool:
+def operator(drive: FacingDrive, *, turns: bool) -> Callable[..., bool]:
+    def answer(message: str, **_: object) -> bool:
         if "turn the disk over" in message:
             if turns:
                 drive.turn(message)
             return turns
         return True
 
-    def build(*, yes: bool) -> Callable[[str], bool]:
-        del yes
-        return answer
-
-    return build
+    return answer
 
 
 def test_write_turns_the_disk_once_for_a_two_side_image(
@@ -630,7 +630,7 @@ def test_write_turns_the_disk_once_for_a_two_side_image(
 ) -> None:
     # Arrange
     drive = attach_facing(monkeypatch, image)
-    monkeypatch.setattr(hardware_cmds, "prompter", operator(drive, turns=True))
+    monkeypatch.setattr(typer, "confirm", operator(drive, turns=True))
 
     # Act
     result = runner.invoke(app, ["write", str(image)])
@@ -646,7 +646,7 @@ def test_write_stops_when_the_turn_is_declined(
 ) -> None:
     # Arrange
     drive = attach_facing(monkeypatch, image)
-    monkeypatch.setattr(hardware_cmds, "prompter", operator(drive, turns=False))
+    monkeypatch.setattr(typer, "confirm", operator(drive, turns=False))
 
     # Act
     result = runner.invoke(app, ["write", str(image)])
@@ -1513,19 +1513,17 @@ def test_write_warns_when_an_interrupt_lands_mid_write(
     single_side: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    attach(monkeypatch, single_side)
-    original = session.write_verified
+    disk, _, _, _ = common.decode_image(single_side)
 
-    def interrupt(*_: object, **__: object) -> object:
-        raise KeyboardInterrupt
+    class Interrupted(SimulatedDrive):
+        def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+            del side, blocks
+            raise KeyboardInterrupt
 
-    hardware_cmds.write_verified = interrupt  # type: ignore[assignment]
+    monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.open_fdsstick", lambda: Interrupted(disk))
 
     # Act
-    try:
-        result = runner.invoke(app, ["write", str(single_side), "--yes"])
-    finally:
-        hardware_cmds.write_verified = original  # type: ignore[assignment]
+    result = runner.invoke(app, ["write", str(single_side), "--yes"])
 
     # Assert
     assert result.exit_code == 1
@@ -2077,29 +2075,16 @@ def test_doctor_fails_on_an_unhealthy_installation(monkeypatch: pytest.MonkeyPat
 
 def test_web_starts_the_application(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
-    started: list[tuple[str, int]] = []
-    answered: list[frozenset[str]] = []
-
-    def fake_server() -> tuple[object, object]:
-        def run(built: object, *, host: str, port: int) -> None:
-            del built
-            started.append((host, port))
-
-        def build(*, allowed_hosts: frozenset[str]) -> object:
-            answered.append(allowed_hosts)
-            return object()
-
-        return run, build
-
-    monkeypatch.setattr(hardware_cmds, "web_server", fake_server)
+    server = FakeUvicorn()
+    monkeypatch.setitem(sys.modules, "uvicorn", server)
 
     # Act
     result = runner.invoke(app, ["web", "--port", "9123", "--no-open"])
 
     # Assert
     assert result.exit_code == 0
-    assert started == [("127.0.0.1", 9123)]
-    assert answered == [frozenset({"127.0.0.1"})]
+    assert server.started == [("127.0.0.1", 9123)]
+    assert isinstance(server.apps[0], FastAPI)
 
 
 def test_web_starts_hidapi_on_the_main_thread_before_it_serves(
@@ -2108,17 +2093,13 @@ def test_web_starts_hidapi_on_the_main_thread_before_it_serves(
     # Arrange
     order: list[str] = []
 
-    def run(*_: object, **__: object) -> None:
-        order.append("run")
+    class PrimedHid(FakeHid):
+        def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, Any]]:
+            order.append("prime")
+            return super().enumerate(vendor_id, product_id)
 
-    def build(**_: object) -> object:
-        return object()
-
-    def prime() -> None:
-        order.append("prime")
-
-    monkeypatch.setattr(hardware_cmds, "_require_web", lambda: (run, build))
-    monkeypatch.setattr(hardware_cmds, "prime_hid", prime)
+    monkeypatch.setitem(sys.modules, "uvicorn", FakeUvicorn(order))
+    monkeypatch.setitem(sys.modules, "hid", PrimedHid([]))
 
     # Act
     result = runner.invoke(app, ["web", "--no-open"])
@@ -2130,17 +2111,17 @@ def test_web_starts_hidapi_on_the_main_thread_before_it_serves(
 
 def test_web_verbose_prints_every_job_step(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
-    monkeypatch.setattr(hardware_cmds, "_require_web", _stub_web)
+    monkeypatch.setitem(sys.modules, "uvicorn", FakeUvicorn())
     package = logging.getLogger("fdstoolkit")
     before = (package.level, list(package.handlers))
-    result = runner.invoke(app, ["web", "--verbose", "--no-open"])
-    level, handlers = package.level, list(package.handlers)
-    package.setLevel(before[0])
 
     # Act
-    package.handlers = before[1]
+    result = runner.invoke(app, ["web", "--verbose", "--no-open"])
 
     # Assert
+    level, handlers = package.level, list(package.handlers)
+    package.setLevel(before[0])
+    package.handlers = before[1]
     assert result.exit_code == 0
     assert level == logging.DEBUG
     assert len(handlers) == len(before[1]) + 1
@@ -2148,10 +2129,7 @@ def test_web_verbose_prints_every_job_step(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_web_says_which_extra_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
-    def no_server() -> tuple[object, object]:
-        raise ImportError
-
-    monkeypatch.setattr(hardware_cmds, "web_server", no_server)
+    monkeypatch.setitem(sys.modules, "uvicorn", None)
 
     # Act
     result = runner.invoke(app, ["web"])
@@ -2246,8 +2224,8 @@ def test_dump_asks_the_operator_to_turn_the_disk_over(
         drive.facing = 1
         return True
 
-    monkeypatch.setattr(hardware_cmds, "open_drive", open_one_face)
-    monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.typer.confirm", flipped)
+    monkeypatch.setattr(hardware_cmds, "open_fdsstick", open_one_face)
+    monkeypatch.setattr(typer, "confirm", flipped)
 
     # Act
     result = runner.invoke(
@@ -2371,7 +2349,7 @@ def test_dump_can_be_told_the_disk_is_already_turned_over(
         del args, kwargs
         return OneFace(disk)
 
-    monkeypatch.setattr(hardware_cmds, "open_drive", open_one_face)
+    monkeypatch.setattr(hardware_cmds, "open_fdsstick", open_one_face)
 
     # Act
     result = runner.invoke(
@@ -2388,21 +2366,12 @@ def test_web_opens_a_browser_unless_told_not_to(monkeypatch: pytest.MonkeyPatch)
     # Arrange
     opened: list[str] = []
 
-    def fake_server() -> tuple[object, object]:
-        def run(built: object, *, host: str, port: int) -> None:
-            del built, host, port
-
-        def build(**_: object) -> object:
-            return object()
-
-        return run, build
-
     def remember(address: str) -> bool:
         opened.append(address)
         return True
 
-    monkeypatch.setattr(hardware_cmds, "web_server", fake_server)
-    monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.webbrowser.open", remember)
+    monkeypatch.setitem(sys.modules, "uvicorn", FakeUvicorn())
+    monkeypatch.setattr(webbrowser, "open", remember)
 
     # Act
     result = runner.invoke(app, ["web", "--port", "9124"])
@@ -2412,19 +2381,9 @@ def test_web_opens_a_browser_unless_told_not_to(monkeypatch: pytest.MonkeyPatch)
     assert opened == ["http://127.0.0.1:9124"]
 
 
-def _stub_web() -> tuple[Callable[..., None], Callable[..., object]]:
-    def run(*_: object, **__: object) -> None:
-        return None
-
-    def build(**_: object) -> object:
-        return object()
-
-    return run, build
-
-
 def test_a_loopback_bind_says_nothing_leaves_this_machine(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
-    monkeypatch.setattr(hardware_cmds, "_require_web", _stub_web)
+    monkeypatch.setitem(sys.modules, "uvicorn", FakeUvicorn())
 
     # Act
     result = runner.invoke(app, ["web", "--host", "127.0.0.1", "--no-open"])
@@ -2437,7 +2396,7 @@ def test_a_published_bind_warns_instead_of_claiming_privacy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
-    monkeypatch.setattr(hardware_cmds, "_require_web", _stub_web)
+    monkeypatch.setitem(sys.modules, "uvicorn", FakeUvicorn())
 
     # Act
     result = runner.invoke(app, ["web", "--host", PUBLISHED_HOST, "--no-open"])
@@ -2447,25 +2406,11 @@ def test_a_published_bind_warns_instead_of_claiming_privacy(
     assert "there is no password" in result.stdout
 
 
-def ready_checks() -> tuple[Check, ...]:
-    return (
-        Check("hardware support", CheckStatus.OK, "hidapi is installed"),
-        Check("fdsstick", CheckStatus.OK, "1 device(s) connected"),
-    )
-
-
-def absent_checks() -> tuple[Check, ...]:
-    return (
-        Check("hardware support", CheckStatus.OK, "hidapi is installed"),
-        Check("fdsstick", CheckStatus.WARNING, "none connected at 16D0:0AAA"),
-    )
-
-
 def test_status_reports_a_ready_stick_and_what_it_cannot_say(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
-    monkeypatch.setattr(hardware_cmds, "hardware_checks", ready_checks)
+    monkeypatch.setitem(sys.modules, "hid", FakeHid([stick()]))
 
     # Act
     result = runner.invoke(app, ["status"])
@@ -2478,25 +2423,26 @@ def test_status_reports_a_ready_stick_and_what_it_cannot_say(
 
 def test_status_fails_and_marks_a_missing_stick(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
-    monkeypatch.setattr(hardware_cmds, "hardware_checks", absent_checks)
+    monkeypatch.setitem(sys.modules, "hid", FakeHid([]))
 
     # Act
     result = runner.invoke(app, ["status"])
 
     # Assert
     assert result.exit_code == 1
-    assert "none connected at 16D0:0AAA [warning]" in result.stdout
+    assert "none connected at 16D0:0AAA" in result.stdout
+    assert "[warning]" in result.stdout
 
 
 def test_status_can_print_json(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
-    monkeypatch.setattr(hardware_cmds, "hardware_checks", absent_checks)
-    result = runner.invoke(app, ["status", "--json"])
+    monkeypatch.setitem(sys.modules, "hid", FakeHid([]))
 
     # Act
-    payload = json.loads(result.stdout)
+    result = runner.invoke(app, ["status", "--json"])
 
     # Assert
+    payload = json.loads(result.stdout)
     assert result.exit_code == 1
     assert payload["ready"] is False
     assert [check["name"] for check in payload["checks"]] == ["hardware support", "fdsstick"]

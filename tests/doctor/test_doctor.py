@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from hid_double import FakeHandle, FakeHid, stick
 
-from fdstoolkit import doctor as doctor_module
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.doctor import (
@@ -19,42 +19,6 @@ from fdstoolkit.doctor import (
 )
 from fdstoolkit.hardware.device_lock import acquire_drive_lock
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
-
-
-class FakeHandle:
-    def __init__(self, error: OSError | None) -> None:
-        self._error = error
-        self.closed = False
-
-    def open_path(self, path: bytes) -> None:
-        del path
-        if self._error is not None:
-            raise self._error
-
-    def close(self) -> None:
-        self.closed = True
-
-
-class FakeHid:
-    def __init__(
-        self,
-        devices: list[dict[str, Any]],
-        *,
-        open_error: OSError | None = None,
-    ) -> None:
-        self._devices = devices
-        self._open_error = open_error
-        self.handle = FakeHandle(open_error)
-
-    def device(self) -> FakeHandle:
-        return self.handle
-
-    def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, Any]]:
-        return [
-            device
-            for device in self._devices
-            if device["vendor_id"] == vendor_id and device["product_id"] == product_id
-        ]
 
 
 def missing_hid() -> FakeHid:
@@ -180,16 +144,6 @@ def test_the_real_loader_imports_the_hid_module(monkeypatch: pytest.MonkeyPatch)
 
     # Assert
     assert loaded is module
-
-
-def stick(**extra: Any) -> dict[str, Any]:
-    entry: dict[str, Any] = {
-        "vendor_id": VENDOR_ID,
-        "product_id": PRODUCT_ID,
-        "path": b"/dev/hidraw0",
-    }
-    entry.update(extra)
-    return entry
 
 
 def test_a_connected_stick_is_named_so_a_submission_can_quote_it() -> None:
@@ -406,14 +360,12 @@ def test_a_codec_that_raises_is_reported_rather_than_crashing() -> None:
     assert "did not survive" in check.detail
 
 
-def test_a_blank_that_misses_its_published_digest_is_reported(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_a_blank_that_misses_its_published_digest_is_reported() -> None:
     # Arrange
-    monkeypatch.setattr(doctor_module, "REFERENCE_BLANK_64_SHA256", "0" * 64)
+    references = ((1, "0" * 64),)
 
     # Act
-    report = diagnose(load_hid=missing_hid)
+    report = diagnose(load_hid=missing_hid, references=references)
 
     # Assert
     assert status_of(report, "identity") is CheckStatus.FAILED

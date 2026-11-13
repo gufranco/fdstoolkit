@@ -75,9 +75,9 @@ STATIC_DIR: Final = Path(str(resources.files("fdstoolkit.ui") / "static"))
 STAMP_LENGTH: Final = 12
 
 
-def asset_stamp() -> str:
+def asset_stamp(directory: Path = STATIC_DIR) -> str:
     digest = sha256()
-    for path in sorted(STATIC_DIR.iterdir()):
+    for path in sorted(directory.iterdir()):
         if path.is_file():
             digest.update(path.name.encode("utf-8"))
             digest.update(path.read_bytes())
