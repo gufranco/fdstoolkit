@@ -71,13 +71,20 @@ a factor of two and carry no tolerance.
   flash, and one published reading of `0x06` is a 64 KB block erase.
 - The write stream follows the one captured write of the official tool, as
   fdsstick-cli documents it from a USB capture of `fdsstick_20160926.exe`: a
-  `C0 00 AB` header, then values 1 to 3 packed four to a byte, each data bit
-  one value, bytes taken in nibble-interleaved order, a lead-in of 6,750 and
-  gaps of 224 bytes of `0xAA`, the last packet filled with `0xAA`, and `0x20 00`
-  after the data. The official tool sends that report once after the last side;
-  this driver sends it after every side, because it reads each side back before
-  writing the next. An earlier reading took `0x20 00` for an emulator eject; the
-  capture shows the official tool sending it to finish a physical write.
+  `C0 00 AB` header, then values 1 to 3 packed four to a byte, each data bit one
+  value, bytes taken in nibble-interleaved order, and `0x20 00` after the data.
+  The lengths between blocks are not the tool's: they come from factory sides
+  read through this toolkit. A lead-in of 4,500 bytes of `0xAA` puts the first
+  block where a factory side has it, 250-byte gaps read back as 1,006 bits
+  against the factory's 1,005, and after the last block a gap of about 243 bytes
+  is followed by `D7 75 5D` repeated, which writes the bits 0, 1, 1 that a
+  factory side carries to the end of its track. The stick plays the four values
+  of each byte lowest bits first, which is why the fill is not `D7 5D 75`: that
+  order reads back as a different pattern. The official tool sends
+  `0x20 00` once after the last side; this driver sends it after every side,
+  because it reads each side back before writing the next. An earlier reading
+  took `0x20 00` for an emulator eject; the capture shows the official tool
+  sending it to finish a physical write.
 - The report map changed between firmware generations. A console app that opened
   this same device in 2015 started a read with `0x11` and took data from `0x12`,
   with separate `0x13` and `0x14` for writing and no mode byte anywhere. The two

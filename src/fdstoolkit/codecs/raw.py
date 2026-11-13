@@ -32,8 +32,10 @@ ADAPTER_BLIND_BITS: Final = 488
 GAP_FILL: Final = 0xAA
 WRITE_HEADER: Final = bytes([0xC0, 0x00, 0xAB])
 WRITE_GAP_BYTE: Final = 0xAA
-WRITE_LEAD_IN_BYTES: Final = 6750
-WRITE_GAP_BYTES: Final = 224
+WRITE_LEAD_IN_BYTES: Final = 4500
+WRITE_GAP_BYTES: Final = 250
+WRITE_TAIL_GAP_BYTES: Final = 243
+WRITE_FILL: Final = bytes([0xD7, 0x75, 0x5D])
 WRITE_PACKET_BYTES: Final = 255
 WRITE_BIT_ONE: Final = 1
 WRITE_ZERO_THEN_ZERO: Final = 2
@@ -273,8 +275,10 @@ def encode_write_stream(payloads: Sequence[bytes]) -> bytes:
             stream += bytes([WRITE_GAP_BYTE]) * WRITE_GAP_BYTES
         framed = bytes([SYNC_MARK]) + payload + encode_crc(block_crc(payload))
         stream += pack_raw03(encode_write_block(framed))
+    tail = WRITE_TAIL_GAP_BYTES + -(len(stream) + WRITE_TAIL_GAP_BYTES) % len(WRITE_FILL)
+    stream += bytes([WRITE_GAP_BYTE]) * tail
     short = -len(stream) % WRITE_PACKET_BYTES
-    return bytes(stream + bytes([WRITE_GAP_BYTE]) * short)
+    return bytes(stream + WRITE_FILL * (short // len(WRITE_FILL)))
 
 
 def _nibble(values: bytes) -> int:
@@ -299,14 +303,25 @@ def _block_size(kind: int, pending: int) -> int:
     return length
 
 
+def _block_at(stream: bytes, start: int) -> int | None:
+    return None if stream[start : start + 1] in (b"", bytes([WRITE_GAP_BYTE])) else start
+
+
+def _block_after(stream: bytes, end: int) -> int | None:
+    start = end + WRITE_GAP_BYTES
+    if stream[end:start] != bytes([WRITE_GAP_BYTE]) * WRITE_GAP_BYTES:
+        return None
+    return _block_at(stream, start)
+
+
 def decode_write_stream(stream: bytes) -> tuple[bytes, ...]:
     if not stream.startswith(WRITE_HEADER):
         message = "the stream does not start with the write header"
         raise ValueError(message)
-    cursor = len(WRITE_HEADER) + WRITE_LEAD_IN_BYTES
+    cursor = _block_at(stream, len(WRITE_HEADER) + WRITE_LEAD_IN_BYTES)
     payloads: list[bytes] = []
     pending = 0
-    while stream[cursor:].strip(bytes([WRITE_GAP_BYTE])):
+    while cursor is not None:
         kind = _unframe(unpack_raw03(stream[cursor : cursor + NIBBLE_BITS]), 2)[1]
         size = 1 + _block_size(kind, pending) + CRC_SIZE
         framed = _unframe(unpack_raw03(stream[cursor : cursor + 2 * size]), size)
@@ -319,7 +334,7 @@ def decode_write_stream(stream: bytes) -> tuple[bytes, ...]:
         if kind == BlockKind.FILE_HEADER:
             pending = FileHeader.parse(payload).size
         payloads.append(payload)
-        cursor += 2 * size + WRITE_GAP_BYTES
+        cursor = _block_after(stream, cursor + 2 * size)
     return tuple(payloads)
 
 

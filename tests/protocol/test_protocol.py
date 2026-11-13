@@ -19,7 +19,6 @@ from fdstoolkit.hardware.fdsstick import (
     READS_AFTER_WRITE,
     SETTLE_PAUSE_S,
     VENDOR_ID,
-    WRITE_FILL,
     WRITE_PAYLOAD,
     WRITE_STARTS,
     FdsStick,
@@ -34,6 +33,8 @@ EMULATOR_REPORTS = frozenset({0x21, 0x22, 0x23})
 FINISH = bytes([0x20, 0x00])
 WRITE_REPORT_LENGTH = 0x100
 PACKETS_PAST_THE_WRAP = 300
+FACTORY_FILL = bytes([0xD7, 0x75, 0x5D])
+FILLS_PER_PACKET = 85
 
 
 def raw_side(packets: int = PACKETS_PAST_THE_WRAP) -> bytes:
@@ -229,21 +230,21 @@ def test_a_device_that_stops_once_the_disk_has_turned_is_not_a_fault() -> None:
 
     stick_over(device).write_raw_side(body, fill_to=LEAD_IN_PACKETS + 20)
 
-    assert bytes(device.written) == body + WRITE_FILL * (3 * WRITE_PAYLOAD)
+    assert bytes(device.written) == body + FACTORY_FILL * (3 * FILLS_PER_PACKET)
     assert device.finishes == [bytes([ID_FINISH_WRITE, 0x00])]
 
 
 def test_a_device_that_stops_inside_the_image_says_how_much_was_written() -> None:
     device = FakeFdsStick(accepts_writes=LEAD_IN_PACKETS + 3)
 
-    with pytest.raises(HardwareFaultError, match="after 29 of 40 packet") as raised:
+    with pytest.raises(HardwareFaultError, match="after 20 of 40 packet") as raised:
         stick_over(device).write_raw_side(bytes(WRITE_PAYLOAD * 40), fill_to=60)
 
     assert raised.value.kind is FaultKind.LINK
     assert "only part of the image" in str(raised.value)
 
 
-def test_a_side_written_from_blocks_is_blanked_to_the_end_of_the_track() -> None:
+def test_a_side_written_from_blocks_is_filled_to_the_end_of_the_track() -> None:
     disk = decode(blank_image(sides=1, headered=False, formatted=True, game_name="PAD"))[0]
     blocks = [block.payload for block in disk.sides[0].blocks]
     stream = encode_write_stream(blocks)
@@ -253,7 +254,7 @@ def test_a_side_written_from_blocks_is_blanked_to_the_end_of_the_track() -> None
 
     assert len(device.written) == BLANKED_PACKETS * WRITE_PAYLOAD
     assert bytes(device.written).startswith(stream)
-    assert bytes(device.written)[-WRITE_PAYLOAD:] == WRITE_FILL * WRITE_PAYLOAD
+    assert bytes(device.written)[-WRITE_PAYLOAD:] == FACTORY_FILL * FILLS_PER_PACKET
 
 
 def test_a_packet_the_device_refuses_once_is_sent_again() -> None:

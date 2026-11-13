@@ -23,7 +23,7 @@ English | [日本語](README.ja.md)
 
 </div>
 
-**28** commands, every one but `doctor` also on the local web page. **1,421** Python tests and **134** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**28** commands, every one but `doctor` also on the local web page. **1,767** Python tests and **138** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -523,9 +523,17 @@ fdstoolkit write --calibration --trusted-drive [--backup <p>] [--retries N] [--y
 
 Write a disk, read it back and compare. `--backup` saves the current contents first. Prompts unless `--yes`.
 
-A side carrying more than 54,958 bytes of blocks, the longest of 345 factory sides measured, is refused before anything is written, because its last files may run past the end of the track. `--long-side` writes it anyway. Every write then blanks the rest of the side with gap, the way factory duplicators wrote whole tracks, so no older blocks remain past the image for a reader to take as hidden files. The stick stops taking data where the side ends: 568 packets, about 72,400 bytes of track, in each of three runs on one drive. If the side ends before the image does, the write stops and says how much of the image was written.
+A side carrying more than 54,958 bytes of blocks, the longest of 345 factory sides measured, is refused before anything is written, because its last files may run past the end of the track. `--long-side` writes it anyway. Every write then fills the rest of the side with the pattern factory duplicators leave there, so no older blocks remain past the image for a reader to take as hidden files. The stick stops taking data where the side ends: 568 packets, about 72,400 bytes of track, in each of three runs on one drive. If the side ends before the image does, the write stops and says how much of the image was written.
 
-The stream sent to the FDSStick follows the one captured write of the official FDSStick tool, as the fdsstick-cli project documents it: a short header, a lead-in and gaps of the tool's own lengths, each block's bits in the order the tool sends them, and a finishing report after each side. It has written and read back whole sides through one FDSStick on firmware 3.12. On other firmware, write the calibration disk to a scratch disk before trusting a write with anything else.
+The stream sent to the FDSStick follows the one captured write of the official FDSStick tool, as the fdsstick-cli project documents it: a short header, each block's bits in the order the tool sends them, and a finishing report after each side. What lies between the blocks follows factory sides instead, as both sides of one factory disk read through this toolkit:
+
+| Part of the side | Factory side, as read | Official tool's lengths, as read | This writer, as read |
+|---|---|---|---|
+| First block, counted from where the drive turns ready | 16,490 to 17,970 bits | 25,416 to 27,572 bits | 16,736 to 18,312 bits |
+| Gap between two blocks | 982 to 1,055 bits, most near 1,005 | 902 bits | 1,006 bits |
+| After the last block | a 976-bit gap, then the bits 0, 1, 1 repeated to the end of the track | gap | a 975-bit gap, then the same pattern |
+
+Two things still tell a rewritten side from a factory one. On a factory side the lead-in follows a stretch that reads as noise, while the FDSStick starts writing gap as soon as the drive is ready. A duplicator's gaps also wander by a few dozen bits where this writer's do not. The data, the checksums and the disk information fields are the image's own, so `provenance` reads a rewrite of a factory image as factory. It has written and read back whole sides through one FDSStick on firmware 3.12. On other firmware, write the calibration disk to a scratch disk before trusting a write with anything else.
 
 Two ways a drive refuses a write are named from the readback. A disk that reads back exactly as before did not take the write at all: check the controller, FD3206P rather than FD7201P. A side whose write-protect tab is broken off may be refused too, though whether the drive enforces the tab for an FDSStick is not documented. Some drives also carry a lockout circuit that blocks the write gate, with no error, when it rises before the drive reports ready or stays up past about a second, per a [nesdev forum thread](https://forums.nesdev.org/viewtopic.php?t=26678) citing the Backup Utilisation Guide. A disk that took every block but its disk information block is a drive whose power board was never modified for writing, since only an FMD-POWER-01, or a later board modified for it, rewrites the Nintendo header. `surface` stops on either with the same reason.
 

@@ -8,6 +8,7 @@ from enum import IntEnum
 from typing import Final, Protocol, cast, runtime_checkable
 
 from fdstoolkit.codecs.raw import (
+    WRITE_FILL,
     WRITE_GAP_BYTE,
     WRITE_HEADER,
     WRITE_LEAD_IN_BYTES,
@@ -39,7 +40,7 @@ READS_AFTER_WRITE: Final = 8
 WRITE_STARTS: Final = 8
 SETTLE_PAUSE_S: Final = 2.0
 LEAD_IN_PACKETS: Final = (len(WRITE_HEADER) + WRITE_LEAD_IN_BYTES) // WRITE_PAYLOAD
-WRITE_FILL: Final = bytes([WRITE_GAP_BYTE])
+PACKET_PAD: Final = bytes([WRITE_GAP_BYTE])
 
 logger = logging.getLogger(__name__)
 
@@ -96,13 +97,13 @@ class ReportId(IntEnum):
 def _packets(values: bytes) -> tuple[bytes, ...]:
     return tuple(
         bytes([ReportId.DISK_WRITE])
-        + values[start : start + WRITE_PAYLOAD].ljust(WRITE_PAYLOAD, WRITE_FILL)
+        + values[start : start + WRITE_PAYLOAD].ljust(WRITE_PAYLOAD, PACKET_PAD)
         for start in range(0, len(values), WRITE_PAYLOAD)
     )
 
 
 def _blank_packet() -> bytes:
-    return bytes([ReportId.DISK_WRITE]) + WRITE_FILL * WRITE_PAYLOAD
+    return bytes([ReportId.DISK_WRITE]) + WRITE_FILL * (WRITE_PAYLOAD // len(WRITE_FILL))
 
 
 @runtime_checkable
