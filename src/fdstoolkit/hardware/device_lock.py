@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 import tempfile
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Final
+from typing import Final, Protocol, cast
 
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 
@@ -21,20 +23,47 @@ class DriveBusyError(HardwareFaultError):
     pass
 
 
-def _lock_exclusively(descriptor: int) -> None:
-    if sys.platform == "win32":  # pragma: no cover
-        import msvcrt  # noqa: PLC0415
+class WindowsLocking(Protocol):
+    LK_NBLCK: int
 
-        msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
-    else:  # pragma: no cover
-        import fcntl  # noqa: PLC0415
+    def locking(self, fd: int, mode: int, nbytes: int, /) -> None: ...
 
-        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+class PosixLocking(Protocol):
+    LOCK_EX: int
+    LOCK_NB: int
+
+    def flock(self, fd: int, operation: int, /) -> None: ...
+
+
+def windows_lock(descriptor: int, module: object) -> None:
+    msvcrt = cast("WindowsLocking", module)
+    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+
+
+def posix_lock(descriptor: int, module: object) -> None:
+    fcntl = cast("PosixLocking", module)
+    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+Locker = Callable[[int, object], None]
+LOCKERS: Final[Mapping[str, tuple[str, Locker]]] = {"win32": ("msvcrt", windows_lock)}
+POSIX_LOCKER: Final[tuple[str, Locker]] = ("fcntl", posix_lock)
+
+
+def lock_exclusively(
+    descriptor: int,
+    *,
+    platform: str = sys.platform,
+    load: Callable[[str], object] = importlib.import_module,
+) -> None:
+    module, lock = LOCKERS.get(platform, POSIX_LOCKER)
+    lock(descriptor, load(module))
 
 
 def _try_lock(descriptor: int) -> bool:
     try:
-        _lock_exclusively(descriptor)
+        lock_exclusively(descriptor)
     except OSError:
         return False
     return True
