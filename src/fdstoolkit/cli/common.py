@@ -43,14 +43,6 @@ class ManifestChoice(StrEnum):
     FDSPACKER = "fdspacker"
 
 
-class TargetChoice(StrEnum):
-    NT_MINI = "nt-mini"
-    MISTER = "mister"
-    EVERDRIVE_N8_PRO = "everdrive-n8-pro"
-    MESEN2 = "mesen2"
-    FCEUX = "fceux"
-
-
 KIND_FOR_CHOICE: Final[dict[KindChoice, FileKind]] = {
     KindChoice.PROGRAM: FileKind.PROGRAM,
     KindChoice.CHARACTER: FileKind.CHARACTER,

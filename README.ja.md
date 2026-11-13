@@ -23,7 +23,7 @@
 
 </div>
 
-コマンドは **28** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,782** 件、ページが **142** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
+コマンドは **26** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,764** 件、ページが **142** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
 
 ---
 
@@ -388,19 +388,6 @@ fdstoolkit convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/convert-dark.png">
 <img alt="ローカル Web ページの convert コマンド" src="assets/screenshots/convert-light.png">
-</picture>
-
-#### `export`
-
-```bash
-fdstoolkit export <image> --target <t> -d <dir> [--force]
-```
-
-機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`。いずれもヘッダなしの `.fds` を書き出します。
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
-<img alt="ローカル Web ページの export コマンド" src="assets/screenshots/export-light.png">
 </picture>
 
 #### `blank`
@@ -847,7 +834,6 @@ fdstoolkit web
 | `POST /api/splice` | `splice` |
 | `POST /api/consensus` | `consensus` |
 | `POST /api/save` | `save` |
-| `POST /api/export` | `export` |
 | `POST /api/build` | `build` |
 | `GET /api/status` | `status` |
 | `GET /api/hardware` | FDSStick が接続されているか。各ページの表示に使います |

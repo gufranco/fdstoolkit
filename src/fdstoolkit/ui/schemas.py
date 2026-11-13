@@ -330,7 +330,6 @@ class Catalogue(BaseModel):
     forms: list[dict[str, Any]] = Field(default_factory=_no_rows)
     families: list[str] = Field(default_factory=list)
     profiles: list[ProfileView]
-    export_targets: list[str]
     commands: list[str]
     extras: dict[str, Any] = Field(default_factory=dict)
 
@@ -389,10 +388,6 @@ class SaveSpec(BaseModel):
 
 class SpliceSpec(ImageSpec):
     donors: list[str] = Field(default_factory=list)
-
-
-class ExportSpec(ImageSpec):
-    target: str
 
 
 class BuildSpec(BaseModel):

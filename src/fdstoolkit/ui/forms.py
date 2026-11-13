@@ -7,7 +7,6 @@ from typing import Any, Final, cast, get_type_hints
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
-from fdstoolkit.build.targets import TARGETS
 from fdstoolkit.cli.common import Family
 from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.core.diskinfo import PROFILES
@@ -45,7 +44,6 @@ CHOICES: Final[dict[str, tuple[str, ...]]] = {
     "save_as": ("ips", "ups", "image"),
     "finish": tuple(str(item) for item in Finish),
     "kind": ("program", "character", "nametable"),
-    "target": tuple(TARGETS),
     "sides": tuple(str(count) for count in range(1, SIDES_PER_DISK + 1)),
     "action": ("find", "apply", "extract", "blank"),
     "mode": tuple(str(item) for item in Mode),

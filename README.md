@@ -23,7 +23,7 @@ English | [日本語](README.ja.md)
 
 </div>
 
-**28** commands, every one but `doctor` also on the local web page. **1,782** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**26** commands, every one but `doctor` also on the local web page. **1,764** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -394,19 +394,6 @@ Between `.fds` and `.qd`. `--crc-mode` decides what goes in the CRC fields when 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/convert-dark.png">
 <img alt="The convert command on the local web page" src="assets/screenshots/convert-light.png">
-</picture>
-
-#### `export`
-
-```bash
-fdstoolkit export <image> --target <t> -d <dir> [--force]
-```
-
-The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`. Each writes a headerless `.fds`.
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
-<img alt="The export command on the local web page" src="assets/screenshots/export-light.png">
 </picture>
 
 #### `blank`
@@ -858,7 +845,6 @@ Saved captures travel the same way. A dump with `keep captures` set offers the b
 | `POST /api/splice` | `splice` |
 | `POST /api/consensus` | `consensus` |
 | `POST /api/save` | `save` |
-| `POST /api/export` | `export` |
 | `POST /api/build` | `build` |
 | `GET /api/status` | `status` |
 | `GET /api/hardware` | whether an FDSStick is connected, for the banner on every page |

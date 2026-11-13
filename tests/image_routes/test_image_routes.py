@@ -258,26 +258,6 @@ def test_a_recipe_file_that_does_not_parse_is_refused(client: TestClient) -> Non
     assert answer.status_code == BAD_REQUEST
 
 
-def test_export_writes_the_layout_a_target_expects(client: TestClient) -> None:
-    body = client.post("/api/export", json={"data": ONE, "target": "mesen2"}).json()
-
-    assert body["files"]
-
-
-def test_export_notes_carry_the_swap_exceptions(client: TestClient) -> None:
-    body = client.post(
-        "/api/export", json={"data": ONE, "name": "Doremikko (Japan).fds", "target": "nt-mini"}
-    ).json()
-
-    assert "automatic side swap" in body["files"][0]["notes"][0]
-
-
-def test_an_unknown_export_target_is_refused(client: TestClient) -> None:
-    answer = client.post("/api/export", json={"data": ONE, "target": "nonsense"})
-
-    assert answer.status_code == BAD_REQUEST
-
-
 def test_a_manifest_that_does_not_parse_is_refused(client: TestClient) -> None:
     rubbish = base64.b64encode(b"{").decode("ascii")
 

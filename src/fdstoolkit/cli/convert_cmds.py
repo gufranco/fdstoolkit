@@ -7,11 +7,9 @@ import typer
 
 from fdstoolkit.build.blank import DEFAULT_GAME_NAME, blank_image
 from fdstoolkit.build.calibration import DECIDES_ITSELF, calibration_image
-from fdstoolkit.build.targets import TARGETS, export_for, swap_warnings
 from fdstoolkit.cli.common import (
     Container,
     Family,
-    TargetChoice,
     container_of,
     decode_image,
     fail,
@@ -103,36 +101,6 @@ def _calibration_image(output: Path, *, header: bool, plain: tuple[int, bool, st
     )
 
 
-def export(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    target: Annotated[TargetChoice, typer.Option("--target", help="the device or emulator")],
-    directory: Annotated[Path, typer.Option("-d", "--directory", help="the card or folder root")],
-    *,
-    force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
-) -> None:
-    """Write an image in the layout a device or emulator expects."""
-    disk, _, _, _ = decode_image(image)
-
-    try:
-        written = export_for(
-            disk,
-            target=target.value,
-            directory=directory,
-            stem=image.stem,
-            force=force,
-        )
-    except FileExistsError as error:
-        message = f"{error}, pass --force to overwrite"
-        raise fail(message) from error
-
-    typer.echo(TARGETS[target.value].description)
-    for path in written:
-        typer.echo(f"wrote {path}")
-    for warning in swap_warnings(image.stem, target=target.value):
-        typer.echo(f"  {warning}")
-
-
 def register(app: typer.Typer) -> None:
     app.command(rich_help_panel=Family.CONTAINER)(convert)
     app.command(rich_help_panel=Family.CONTAINER)(blank)
-    app.command(rich_help_panel=Family.CONTAINER)(export)

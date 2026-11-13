@@ -1461,37 +1461,6 @@ def _game_with_a_file(tmp_path: Path, name: str = "Game") -> Path:
     return built
 
 
-def test_export_writes_a_headerless_image_for_the_nt_mini(tmp_path: Path) -> None:
-    source = _game_with_a_file(tmp_path)
-    card = tmp_path / "card"
-
-    result = runner.invoke(app, ["export", str(source), "--target", "nt-mini", "-d", str(card)])
-
-    assert result.exit_code == 0
-    assert len((card / "Game.fds").read_bytes()) == 2 * SIDE_SIZE
-
-
-def test_export_warns_about_a_known_swap_exception(tmp_path: Path) -> None:
-    source = _game_with_a_file(tmp_path, name="Doremikko (Japan)")
-
-    result = runner.invoke(
-        app, ["export", str(source), "--target", "nt-mini", "-d", str(tmp_path / "card")]
-    )
-
-    assert "automatic side swap" in result.stdout
-
-
-def test_export_refuses_to_overwrite(tmp_path: Path) -> None:
-    source = _game_with_a_file(tmp_path)
-    card = tmp_path / "card"
-    runner.invoke(app, ["export", str(source), "--target", "nt-mini", "-d", str(card)])
-
-    result = runner.invoke(app, ["export", str(source), "--target", "nt-mini", "-d", str(card)])
-
-    assert result.exit_code == 1
-    assert "pass --force" in result.stdout
-
-
 def test_an_everdrive_save_is_read_as_a_headerless_image(tmp_path: Path) -> None:
     source = tmp_path / "bram.srm"
     source.write_bytes(_game_with_a_file(tmp_path).read_bytes())

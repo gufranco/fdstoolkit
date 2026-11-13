@@ -9,7 +9,6 @@ from fastapi import HTTPException
 
 from fdstoolkit.build.fdspacker_export import MANIFEST_NAME, FdsPackerExport
 from fdstoolkit.build.manifest import build_manifest_file
-from fdstoolkit.build.targets import export_for, swap_warnings
 from fdstoolkit.core.bios import predict_boot
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
@@ -29,7 +28,6 @@ from fdstoolkit.ui.schemas import (
     DiffResult,
     DiffSpec,
     EditSpec,
-    ExportSpec,
     ExtractSpec,
     FileResult,
     FilesResult,
@@ -175,24 +173,6 @@ def patch(spec: PatchSpec) -> FileResult:
     except (ValueError, IndexError, KeyError) as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
     return named_file(spec.name, outcome.data)
-
-
-def export(spec: ExportSpec) -> FilesResult:
-    disk = _disk(spec)
-    stem = Path(spec.name).stem
-    with TemporaryDirectory(prefix="fdstoolkit-ui-") as directory:
-        root = Path(directory)
-        try:
-            written = export_for(disk, target=spec.target, directory=root, stem=stem)
-            notes = swap_warnings(stem, target=spec.target)
-        except (ValueError, KeyError, OSError) as error:
-            raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-        return FilesResult(
-            files=[
-                named_file(str(path.relative_to(root)), path.read_bytes(), notes)
-                for path in written
-            ]
-        )
 
 
 def build(spec: BuildSpec) -> FileResult:

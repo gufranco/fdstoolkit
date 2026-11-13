@@ -17,7 +17,6 @@ from fastapi.staticfiles import StaticFiles
 
 from fdstoolkit.build.blank import DEFAULT_GAME_NAME, blank_image
 from fdstoolkit.build.calibration import DECIDES_ITSELF, calibration_image
-from fdstoolkit.build.targets import TARGETS
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.qd import CrcMode
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, restore
@@ -103,7 +102,6 @@ PAGE_POLICY: Final = (
 SIDE_SIZE: Final = fds.SIDE_SIZE
 MIN_READS: Final = 2
 CALIBRATION_NAME: Final = "calibration.fds"
-EXPORT_TARGETS: Final = tuple(TARGETS)
 
 ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "status": "/api/status",
@@ -116,7 +114,6 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "convert": "/api/convert",
     "blank": "/api/blank",
     "build": "/api/build",
-    "export": "/api/export",
     "extract": "/api/extract",
     "insert": "/api/insert",
     "set": "/api/set",
@@ -161,7 +158,6 @@ def catalogue() -> Catalogue:
     return Catalogue(
         version=VERSION,
         profiles=[ProfileView.of(name) for name in sorted(PROFILES)],
-        export_targets=list(EXPORT_TARGETS),
         commands=sorted(ROUTE_FOR_COMMAND),
         forms=[entry.model_dump() for entry in forms()],
         families=list(FAMILY_ORDER),
@@ -328,7 +324,6 @@ def _register_image(app: FastAPI) -> None:
     app.add_api_route("/api/rebuild", image_routes.rebuild_image, methods=["POST"])
     app.add_api_route("/api/patch", image_routes.patch, methods=["POST"])
     app.add_api_route("/api/save", image_routes.save, methods=["POST"])
-    app.add_api_route("/api/export", image_routes.export, methods=["POST"])
     app.add_api_route("/api/build", image_routes.build, methods=["POST"])
 
 
