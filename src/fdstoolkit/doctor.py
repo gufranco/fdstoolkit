@@ -29,8 +29,10 @@ HARDWARE_HINT: Final = (
 )
 UDEV_HINT: Final = (
     "the device is present but cannot be opened, which on Linux means a missing udev rule: "
-    'write SUBSYSTEM=="hidraw", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="0aaa", MODE="0666" '
-    "to /etc/udev/rules.d/99-fdsstick.rules and reload"
+    'write SUBSYSTEM=="hidraw", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="0aaa", '
+    'TAG+="uaccess" to /etc/udev/rules.d/70-fdsstick.rules, reload the rules and plug the '
+    "stick in again. It opens the device to whoever is logged in at the machine, and to no "
+    "other account"
 )
 BCD_MAJOR_SHIFT: Final = 8
 BCD_MASK: Final = 0xFF

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -123,3 +124,20 @@ def test_each_platform_locks_through_its_own_module(platform: str, module: str, 
     # Assert
     assert loaded == [module]
     assert [name for name, _ in recording.calls] == [call]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks and O_NOFOLLOW only")
+def test_a_lock_path_that_is_a_symlink_is_not_followed(tmp_path: Path) -> None:
+    # Arrange
+    target = tmp_path / "someone-elses-file"
+    target.write_bytes(b"kept")
+    path = tmp_path / "drive.lock"
+    path.symlink_to(target)
+
+    # Act
+    with pytest.raises(HardwareFaultError, match="cannot open the drive lock") as refused:
+        acquire_drive_lock(path)
+
+    # Assert
+    assert refused.value.kind is FaultKind.LINK
+    assert target.read_bytes() == b"kept"

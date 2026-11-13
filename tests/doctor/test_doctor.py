@@ -292,6 +292,7 @@ def test_a_device_present_but_unopenable_fails_and_names_the_udev_rule() -> None
     # Assert
     assert status_of(report, "fdsstick access") is CheckStatus.FAILED
     assert "udev" in detail_of(report, "fdsstick access")
+    assert 'TAG+="uaccess"' in detail_of(report, "fdsstick access")
     assert not report.healthy
 
 

@@ -12,6 +12,7 @@ from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 
 LOCK_PATH: Final = Path(tempfile.gettempdir()) / "fdstoolkit-fdsstick.lock"
 LOCK_MODE: Final = 0o600
+NO_FOLLOW: Final[int] = getattr(os, "O_NOFOLLOW", 0)
 BUSY: Final = (
     "another fdstoolkit, on the command line or behind the web page, is using the FDSStick. "
     "Wait for it to finish, since two programs driving one drive corrupt each other's reads "
@@ -83,7 +84,7 @@ class DriveLock:
 
 def acquire_drive_lock(path: Path = LOCK_PATH) -> DriveLock:
     try:
-        descriptor = os.open(path, os.O_RDWR | os.O_CREAT, LOCK_MODE)
+        descriptor = os.open(path, os.O_RDWR | os.O_CREAT | NO_FOLLOW, LOCK_MODE)
     except OSError as error:
         message = (
             f"cannot open the drive lock {path}: {error.strerror}. Another user on this machine "
