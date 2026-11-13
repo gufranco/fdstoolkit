@@ -29,25 +29,30 @@ def consensus(spec: ConsensusSpec) -> ReportedFile:
     if spec.captures is not None:
         rebuilt = rebuild(bundle_of(spec.captures))
         if not disks:
-            rows = [{"side": side, "block": block} for side, block in rebuilt.unresolved]
+            unresolved: list[dict[str, object]] = [
+                {"side": side, "block": block} for side, block in rebuilt.unresolved
+            ]
             return ReportedFile(
                 headline="; ".join(line.strip() for line in rebuilt.lines)
                 or "every block read clean in the captures",
                 file=encoded_file("consensus.fds", rebuilt.disk),
-                rows=rows,
-                ok=not rows,
+                rows=unresolved,
+                ok=not unresolved,
             )
         disks.append(rebuilt.disk)
     try:
         result = build_consensus(disks)
     except ValueError as error:
         refuse(str(error), status=UNPROCESSABLE)
-    rows = [
-        {"side": side, "block": block, "finding": finding}
-        for side, block, finding in result.findings
-    ] + [
-        {"side": side, "block": block, "finding": f"missing from {absent} dump(s)"}
-        for side, block, absent in result.missing
+    rows: list[dict[str, object]] = [
+        *(
+            {"side": side, "block": block, "finding": finding}
+            for side, block, finding in result.findings
+        ),
+        *(
+            {"side": side, "block": block, "finding": f"missing from {absent} dump(s)"}
+            for side, block, absent in result.missing
+        ),
     ]
     headline = (
         f"{len(result.disagreements)} block(s) disagree across the dumps"

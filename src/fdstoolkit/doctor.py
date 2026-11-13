@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Final, Protocol, cast
+from typing import Final, Protocol, cast
 
 from fdstoolkit.build.blank import (
     REFERENCE_BLANK_64_SHA256,
@@ -73,7 +73,7 @@ class Opener(Protocol):
 
 
 class Enumerator(Protocol):
-    def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, Any]]: ...
+    def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, object]]: ...
 
     def device(self) -> Opener: ...
 
@@ -88,7 +88,7 @@ def firmware_text(release: int) -> str:
     return f"{major:x}.{minor:02x}"
 
 
-def _describe(entry: dict[str, Any]) -> str:
+def _describe(entry: dict[str, object]) -> str:
     maker = str(entry.get("manufacturer_string") or "").strip()
     product = str(entry.get("product_string") or "").strip()
     serial = str(entry.get("serial_number") or "").strip()
@@ -102,7 +102,7 @@ def _describe(entry: dict[str, Any]) -> str:
     return name
 
 
-def _access_check(hid: Enumerator, entry: dict[str, Any], lock_path: Path) -> Check:
+def _access_check(hid: Enumerator, entry: dict[str, object], lock_path: Path) -> Check:
     path = entry.get("path")
     if not isinstance(path, bytes):
         return Check("fdsstick access", CheckStatus.WARNING, "the device reported no open path")

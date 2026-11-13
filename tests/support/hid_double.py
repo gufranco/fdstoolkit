@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping, Sequence
 
 from fdstoolkit.hardware.fdsstick import PRODUCT_ID, VENDOR_ID
 
@@ -22,18 +22,18 @@ class FakeHandle:
 class FakeHid:
     def __init__(
         self,
-        devices: list[dict[str, Any]],
+        devices: Sequence[Mapping[str, object]],
         *,
         open_error: OSError | None = None,
     ) -> None:
-        self._devices = devices
+        self._devices = [dict(device) for device in devices]
         self.handle = FakeHandle(open_error)
         self.listed = 0
 
     def device(self) -> FakeHandle:
         return self.handle
 
-    def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, Any]]:
+    def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, object]]:
         self.listed += 1
         return [
             device
@@ -42,8 +42,8 @@ class FakeHid:
         ]
 
 
-def stick(**extra: Any) -> dict[str, Any]:
-    entry: dict[str, Any] = {
+def stick(**extra: object) -> dict[str, object]:
+    entry: dict[str, object] = {
         "vendor_id": VENDOR_ID,
         "product_id": PRODUCT_ID,
         "path": b"/dev/hidraw0",

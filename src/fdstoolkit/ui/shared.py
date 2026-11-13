@@ -5,7 +5,7 @@ import binascii
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, is_dataclass
-from typing import Any, Final, NoReturn
+from typing import Final, NoReturn
 
 from fastapi import HTTPException
 
@@ -84,8 +84,8 @@ def named_file(name: str, data: bytes, notes: Sequence[str] = ()) -> FileResult:
     )
 
 
-def rows_of(items: Iterable[object]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
+def rows_of(items: Iterable[object]) -> list[dict[str, object]]:
+    out: list[dict[str, object]] = []
     for item in items:
         if is_dataclass(item) and not isinstance(item, type):
             out.append(json.loads(json.dumps(asdict(item), default=str)))

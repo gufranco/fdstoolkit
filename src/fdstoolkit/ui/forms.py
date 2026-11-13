@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from typing import Any, Final, cast, get_type_hints
+from typing import Final, cast, get_type_hints
 
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
@@ -74,7 +74,7 @@ class FormField(BaseModel):
     kind: str
     required: bool
     accepts: str = ""
-    default: Any = None
+    default: object = None
     options: list[str] = []
     minimum: float | None = None
     maximum: float | None = None

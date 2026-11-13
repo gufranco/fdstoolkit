@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
 
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import SideFlipError, WriteRefusedError
@@ -54,9 +54,9 @@ class Job:
     state: JobState = JobState.RUNNING
     steps: tuple[str, ...] = ()
     prompt: str = ""
-    result: dict[str, Any] | None = None
+    result: dict[str, object] | None = None
     error: str = ""
-    kept: dict[str, Any] | None = None
+    kept: dict[str, object] | None = None
 
 
 class Controls:
@@ -73,7 +73,7 @@ class Controls:
     def stopped(self) -> bool:
         return self._board.stopping(self._job_id)
 
-    def keep(self, file: dict[str, Any]) -> None:
+    def keep(self, file: dict[str, object]) -> None:
         self._board.keep(self._job_id, file)
 
 
@@ -156,7 +156,7 @@ class JobBoard:
             self._replies = self._replies | {job_id: yes}
             self._changed.notify_all()
 
-    def keep(self, job_id: str, file: dict[str, Any]) -> None:
+    def keep(self, job_id: str, file: dict[str, object]) -> None:
         with self._changed:
             self._put(replace(self._jobs[job_id], kept=file))
 
@@ -190,7 +190,7 @@ class JobBoard:
         *,
         state: JobState,
         error: str = "",
-        result: dict[str, Any] | None = None,
+        result: dict[str, object] | None = None,
     ) -> None:
         with self._changed:
             job = self._jobs[job_id]

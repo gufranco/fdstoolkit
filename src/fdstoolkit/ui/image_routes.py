@@ -75,7 +75,9 @@ def diff(spec: DiffSpec) -> DiffResult:
     left, _, _ = decode_payload(spec.left)
     right, _, _ = decode_payload(spec.right)
     report = compare_images(left, right)
-    blocks = [{"side": side, "block": block} for side, block in report.differing_blocks]
+    blocks: list[dict[str, object]] = [
+        {"side": side, "block": block} for side, block in report.differing_blocks
+    ]
     if not spec.explain:
         return DiffResult(
             headline=report.summary,

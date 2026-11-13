@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Annotated, Any, Final, Self
+from typing import Annotated, Final, Self
 
 from pydantic import BaseModel, Field, Strict
 
@@ -317,7 +317,7 @@ class HardwareResult(BaseModel):
     detail: str
 
 
-def _no_rows() -> list[dict[str, Any]]:
+def _no_rows() -> list[dict[str, object]]:
     return []
 
 
@@ -327,11 +327,11 @@ def _no_files() -> list[FileResult]:
 
 class Catalogue(BaseModel):
     version: str
-    forms: list[dict[str, Any]] = Field(default_factory=_no_rows)
+    forms: list[dict[str, object]] = Field(default_factory=_no_rows)
     families: list[str] = Field(default_factory=list)
     profiles: list[ProfileView]
     commands: list[str]
-    extras: dict[str, Any] = Field(default_factory=dict)
+    extras: dict[str, object] = Field(default_factory=dict)
 
 
 class ImagesSpec(BaseModel):
@@ -431,7 +431,7 @@ class TextResult(BaseModel):
 
 class RowsResult(BaseModel):
     headline: str = ""
-    rows: list[dict[str, Any]] = Field(default_factory=_no_rows)
+    rows: list[dict[str, object]] = Field(default_factory=_no_rows)
     ok: bool = True
 
 
@@ -439,16 +439,16 @@ class DiffResult(BaseModel):
     headline: str
     identical: bool
     same_software: bool | None = None
-    blocks: list[dict[str, Any]] = Field(default_factory=_no_rows)
-    differences: list[dict[str, Any]] = Field(default_factory=_no_rows)
-    file_changes: list[dict[str, Any]] = Field(default_factory=_no_rows)
+    blocks: list[dict[str, object]] = Field(default_factory=_no_rows)
+    differences: list[dict[str, object]] = Field(default_factory=_no_rows)
+    file_changes: list[dict[str, object]] = Field(default_factory=_no_rows)
     ok: bool = True
 
 
 class ReportedFile(BaseModel):
     headline: str
     file: FileResult
-    rows: list[dict[str, Any]] = Field(default_factory=_no_rows)
+    rows: list[dict[str, object]] = Field(default_factory=_no_rows)
     ok: bool = True
 
 
