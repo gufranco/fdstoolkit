@@ -16,7 +16,6 @@ body:
       label: What the computer was talking to
       options:
         - FDSStick
-        - Famicom Dumper
         - Something else
     validations:
       required: true

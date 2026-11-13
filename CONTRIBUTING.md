@@ -73,10 +73,11 @@ Each of those was believed until somebody counted.
 
 ## Hardware claims
 
-Nothing in this project has touched a real drive. Anything asserted about the
-FDSStick, the Famicom Dumper or a disk drive was read from a source rather than
-measured, and a change that turns one of those into a verified claim is the most
-valuable kind of contribution here. Say what you ran.
+The read and write paths have run against one FDSStick on firmware 3.12, and
+the README says which figures came from it. Anything else asserted about the
+stick or a disk drive was read from a source rather than measured, and a change
+that turns one of those into a verified claim is the most valuable kind of
+contribution here. Say what you ran.
 
 ## Commits
 
