@@ -724,7 +724,7 @@ There are three adjustments in the drive, and this command covers what an FDSSti
 | reads slow | Most came back a class long. Raise the motor speed a little |
 | errors with no speed bias | Blocks fail without leaning either way, which does not look like speed |
 | nothing read | No block was found at all: far off speed, or the head or hub is out of position |
-| reads clean | Every block read and every pulse matched |
+| reads clean | Every block read and every pulse its bytes decide matched; the closing pulse of a block runs into whatever follows its checksum, so it is not compared |
 
 A reading leans one way when at least 16 pulses were misread and at least three quarters of them went that way. Both figures were chosen by reasoning about what separates a speed error from noise, not measured on a drive, and they are the first to revisit with real hardware.
 

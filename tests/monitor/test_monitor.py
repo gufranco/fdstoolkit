@@ -9,6 +9,7 @@ from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import (
     LEAD_IN_BITS,
+    block_pulses,
     block_regions,
     block_starts,
     decode_raw03,
@@ -704,6 +705,36 @@ def test_reads_too_noisy_for_any_block_with_noise_at_the_same_places_name_the_di
     ).headline
 
     assert headline.endswith(FIXED_SPOT)
+
+
+CLOSING_BLOCK = 5
+
+
+def closing_pulse_read_long(side: Side) -> bytes:
+    values = bytearray(unpack_raw03(stream(side)))
+    start = block_starts(bytes(values))[CLOSING_BLOCK]
+    closing = start + len(block_pulses(side.blocks[CLOSING_BLOCK].payload)) - 1
+    values[closing] = 2
+    return pack_raw03(bytes(values))
+
+
+def test_a_closing_pulse_read_long_is_not_a_speed_error_against_a_reference() -> None:
+    side = reference_side()
+
+    found = sample(closing_pulse_read_long(side), side)
+
+    assert (found.short, found.long) == (0, 0)
+    assert found.speed is SpeedReading.CLEAN
+
+
+def test_a_closing_pulse_read_long_is_not_a_speed_error_against_learned_blocks() -> None:
+    side = reference_side()
+    learned = learn({}, side.blocks)
+
+    found = sample(closing_pulse_read_long(side), None, learned)
+
+    assert (found.short, found.long) == (0, 0)
+    assert found.speed is SpeedReading.CLEAN
 
 
 def test_a_few_invalid_pulses_carry_no_noise_hint() -> None:

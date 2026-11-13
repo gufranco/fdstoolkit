@@ -261,6 +261,10 @@ def _in_splice(index: int, regions: Sequence[tuple[int, int]]) -> bool:
     return any(end + SPLICE_FIRST <= index < end + SPLICE_VALUES for _, end in regions)
 
 
+def _decided_pulses(payload: bytes) -> bytes:
+    return block_pulses(payload)[:-1]
+
+
 def _leaning(actual: bytes, expected: bytes) -> tuple[int, int, int]:
     pairs = [
         (have, want)
@@ -290,7 +294,7 @@ def _against_learned(
         payload = learned.get(key)
         if payload is None:
             continue
-        expected = block_pulses(payload)
+        expected = _decided_pulses(payload)
         more_short, more_long, more = _leaning(values[start : start + len(expected)], expected)
         short += more_short
         long += more_long
@@ -356,7 +360,7 @@ def _measured(
     for wanted, (_, region) in zip(reference.blocks, placed, strict=True):
         if region is None:
             continue
-        expected = block_pulses(wanted.payload)
+        expected = _decided_pulses(wanted.payload)
         start = starts[region]
         more_short, more_long, more = _leaning(values[start : start + len(expected)], expected)
         short += more_short
