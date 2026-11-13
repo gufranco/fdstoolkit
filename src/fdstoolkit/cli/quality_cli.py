@@ -58,7 +58,6 @@ def reads(
     ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
-    """Compare repeated dumps of one disk and report which blocks move."""
     if captures is not None:
         _weak_report(load_captures(captures), json_output=json_output)
     disks = [decode_image(path)[0] for path in images or []]
@@ -125,7 +124,6 @@ def grade(
     ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
-    """Grade an image and state the measurement behind the grade."""
     disk, findings, _, _ = decode_image(image)
 
     stats = None
@@ -181,5 +179,11 @@ def grade(
 
 
 def register(app: typer.Typer) -> None:
-    app.command(rich_help_panel=Family.CHECK)(reads)
-    app.command(rich_help_panel=Family.CHECK)(grade)
+    app.command(
+        rich_help_panel=Family.CHECK,
+        help="Compare repeated dumps of one disk and report which blocks move.",
+    )(reads)
+    app.command(
+        rich_help_panel=Family.CHECK,
+        help="Grade an image and state the measurement behind the grade.",
+    )(grade)

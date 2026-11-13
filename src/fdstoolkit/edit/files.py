@@ -7,30 +7,13 @@ from fdstoolkit.core.blocks import (
     FILE_NAME_SIZE,
     Block,
     BlockKind,
-    FileHeader,
     FileKind,
 )
 from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.files import file_pairs
 
 MAX_FILE_AMOUNT: Final = 0xFF
 DEFAULT_LOAD_ADDRESS: Final = 0x6000
-
-
-@dataclass(frozen=True, slots=True)
-class ExtractedFile:
-    side: int
-    position: int
-    number: int
-    file_id: int
-    name: str
-    address: int
-    kind: FileKind
-    data: bytes
-    hidden: bool
-
-    @property
-    def size(self) -> int:
-        return len(self.data)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,42 +32,8 @@ def _side_of(disk: Disk, side: int) -> Side:
     return disk.sides[side]
 
 
-def _pairs(side: Side) -> list[tuple[int, Block, Block | None]]:
-    found: list[tuple[int, Block, Block | None]] = []
-    blocks = list(side.blocks)
-    for index, block in enumerate(blocks):
-        if block.kind is not BlockKind.FILE_HEADER:
-            continue
-        follower = blocks[index + 1] if index + 1 < len(blocks) else None
-        data = follower if follower is not None and follower.kind is BlockKind.FILE_DATA else None
-        found.append((index, block, data))
-    return found
-
-
 def declared_file_count(disk: Disk, *, side: int) -> int | None:
     return _side_of(disk, side).declared_file_count
-
-
-def extract_files(disk: Disk) -> tuple[ExtractedFile, ...]:
-    out: list[ExtractedFile] = []
-    for side_index, side in enumerate(disk.sides):
-        declared = side.declared_file_count or 0
-        for position, (_, header_block, data_block) in enumerate(_pairs(side)):
-            header = FileHeader.parse(header_block.payload)
-            out.append(
-                ExtractedFile(
-                    side=side_index,
-                    position=position,
-                    number=header.number,
-                    file_id=header.file_id,
-                    name=header.name,
-                    address=header.address,
-                    kind=header.kind,
-                    data=data_block.payload[1:] if data_block is not None else b"",
-                    hidden=position >= declared,
-                )
-            )
-    return tuple(out)
 
 
 def _header_block(spec: FileSpec, number: int) -> Block:
@@ -118,7 +67,7 @@ def _with_amount(blocks: list[Block], count: int) -> list[Block]:
 
 def insert_file(disk: Disk, *, side: int, spec: FileSpec) -> Disk:
     target = _side_of(disk, side)
-    number = len(_pairs(target))
+    number = len(file_pairs(target))
     if number >= MAX_FILE_AMOUNT:
         message = f"a side holds at most {MAX_FILE_AMOUNT} files, and this one has {number}"
         raise ValueError(message)
@@ -145,7 +94,7 @@ def insert_file(disk: Disk, *, side: int, spec: FileSpec) -> Disk:
 
 def remove_file(disk: Disk, *, side: int, position: int) -> Disk:
     target = _side_of(disk, side)
-    pairs = _pairs(target)
+    pairs = file_pairs(target)
     if not 0 <= position < len(pairs):
         message = f"there is no file at position {position} on side {side}"
         raise ValueError(message)
@@ -168,7 +117,7 @@ def remove_file(disk: Disk, *, side: int, position: int) -> Disk:
 
 def set_declared_file_count(disk: Disk, *, side: int, count: int) -> Disk:
     target = _side_of(disk, side)
-    present = len(_pairs(target))
+    present = len(file_pairs(target))
     if count > present:
         message = f"the side holds only {present} file(s), cannot declare {count}"
         raise ValueError(message)

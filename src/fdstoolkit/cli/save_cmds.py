@@ -192,7 +192,6 @@ def save(
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
     json_output: Annotated[bool, typer.Option("--json", help="find: emit JSON")] = False,
 ) -> None:
-    """Find the file that holds a game's save, and apply, extract or blank that save."""
     ACTIONS[action](
         SaveRequest(
             images=images,
@@ -208,4 +207,7 @@ def save(
 
 
 def register(app: typer.Typer) -> None:
-    app.command(rich_help_panel=Family.REPAIR)(save)
+    app.command(
+        rich_help_panel=Family.REPAIR,
+        help="Find the file that holds a game's save, and apply, extract or blank that save.",
+    )(save)

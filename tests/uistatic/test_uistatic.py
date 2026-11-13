@@ -7,9 +7,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fdstoolkit.ui.app import (
-    ASSET_ROOT,
     ROUTE_FOR_COMMAND,
     STATIC_DIR,
+    asset_root,
     asset_stamp,
     create_app,
 )
@@ -80,7 +80,7 @@ def test_the_page_asks_for_assets_under_a_stamp_the_content_decides(client: Test
     markup = client.get(route).text
 
     # Assert
-    assert f"{ASSET_ROOT}/app.js" in markup
+    assert f"{asset_root()}/app.js" in markup
     assert "/static/" not in markup
 
 
@@ -100,7 +100,7 @@ def test_the_page_itself_is_never_cached_so_a_new_stamp_always_arrives(
 @pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
 def test_a_stamped_asset_is_served_and_may_be_kept_forever(client: TestClient, name: str) -> None:
     # Arrange
-    route = f"{ASSET_ROOT}/{name}"
+    route = f"{asset_root()}/{name}"
 
     # Act
     answer = client.get(route)

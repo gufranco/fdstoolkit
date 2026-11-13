@@ -90,7 +90,6 @@ def status(
     *,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
-    """Report whether an FDSStick is attached, what it says about itself, and whether it opens."""
     checks = hardware_checks()
     ready = all(check.status is CheckStatus.OK for check in checks)
     if json_output:
@@ -143,7 +142,6 @@ def dump(
     ] = False,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
-    """Dump a disk through the FDSStick."""
     container = container_of(output)
     guard_output(output, force=force)
     with closing(open_drive()) as drive:
@@ -263,7 +261,6 @@ def write(
         ),
     ] = False,
 ) -> None:
-    """Write an image, or the calibration disk, then read it back and compare."""
     disk = calibration_target(image, calibration=calibration, trusted_drive=trusted_drive)
     with closing(open_drive()) as drive:
         ask = prompter(yes=yes)
@@ -323,7 +320,6 @@ def surface(
     ] = Finish.LEAVE,
     yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
 ) -> None:
-    """Write and read back every pulse length to grade a scratch disk."""
     with closing(open_drive()) as drive:
         ask = prompter(yes=yes)
 
@@ -465,13 +461,26 @@ def web(
         typer.Option("--verbose", help="print every step of every disk job in this terminal"),
     ] = False,
 ) -> None:
-    """Open the local web interface, which reports exactly what these commands report."""
     _start_web(host=host, port=port, open_browser=not no_open, verbose=verbose)
 
 
 def register(app: typer.Typer) -> None:
-    app.command(rich_help_panel=Family.HARDWARE)(status)
-    app.command(rich_help_panel=Family.HARDWARE)(dump)
-    app.command(rich_help_panel=Family.HARDWARE)(write)
-    app.command(rich_help_panel=Family.HARDWARE)(surface)
-    app.command()(web)
+    app.command(
+        rich_help_panel=Family.HARDWARE,
+        help=(
+            "Report whether an FDSStick is attached, what it says about itself, "
+            "and whether it opens."
+        ),
+    )(status)
+    app.command(rich_help_panel=Family.HARDWARE, help="Dump a disk through the FDSStick.")(dump)
+    app.command(
+        rich_help_panel=Family.HARDWARE,
+        help="Write an image, or the calibration disk, then read it back and compare.",
+    )(write)
+    app.command(
+        rich_help_panel=Family.HARDWARE,
+        help="Write and read back every pulse length to grade a scratch disk.",
+    )(surface)
+    app.command(
+        help="Open the local web interface, which reports exactly what these commands report."
+    )(web)

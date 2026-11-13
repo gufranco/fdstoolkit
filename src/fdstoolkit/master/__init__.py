@@ -1,1 +1,1 @@
-"""Reconstruct the byte stream a disk was manufactured with."""
+from __future__ import annotations

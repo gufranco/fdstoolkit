@@ -41,7 +41,7 @@ def _version_callback(value: bool) -> None:
     raise typer.Exit(code=0)
 
 
-@app.callback()
+@app.callback(help="Famicom Disk System preservation toolkit.")
 def main(
     *,
     version: Annotated[
@@ -49,5 +49,4 @@ def main(
         typer.Option("--version", callback=_version_callback, help="print the version and exit"),
     ] = False,
 ) -> None:
-    """Famicom Disk System preservation toolkit."""
     del version

@@ -84,8 +84,10 @@ def asset_stamp(directory: Path = STATIC_DIR) -> str:
     return digest.hexdigest()[:STAMP_LENGTH]
 
 
-ASSET_STAMP: Final = asset_stamp()
-ASSET_ROOT: Final = f"/assets/{ASSET_STAMP}"
+def asset_root(directory: Path = STATIC_DIR) -> str:
+    return f"/assets/{asset_stamp(directory)}"
+
+
 A_YEAR: Final = 31536000
 NONCE_BYTES: Final = 16
 SHUTDOWN_WAIT_S: Final = 1.0
@@ -138,10 +140,11 @@ def _profile(name: str) -> MaskProfile:
         raise HTTPException(status_code=BAD_REQUEST, detail=message) from error
 
 
-def index() -> HTMLResponse:
+def index(request: Request) -> HTMLResponse:
     nonce = secrets.token_urlsafe(NONCE_BYTES)
     markup = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    stamped = markup.replace("/static/", f"{ASSET_ROOT}/").replace(
+    root: str = request.app.state.asset_root
+    stamped = markup.replace("/static/", f"{root}/").replace(
         PAGE_SCRIPT, f'<script type="module" nonce="{nonce}">'
     )
     return HTMLResponse(
@@ -356,7 +359,8 @@ async def _label_asset_lifetime(
 ) -> Response:
     answer = await call_next(request)
     path = request.url.path
-    if path.startswith(f"{ASSET_ROOT}/"):
+    root: str = request.app.state.asset_root
+    if path.startswith(f"{root}/"):
         answer.headers["cache-control"] = f"public, max-age={A_YEAR}, immutable"
     elif path.startswith("/static/"):
         answer.headers["cache-control"] = "no-cache"
@@ -399,6 +403,7 @@ def create_app(*, allowed_hosts: frozenset[str] = frozenset()) -> FastAPI:
     )
     app.add_exception_handler(Exception, _report_fault)
     app.state.jobs = JobBoard()
+    app.state.asset_root = asset_root()
     app.middleware("http")(_label_asset_lifetime)
     app.add_middleware(BodyLimit, limit=MAX_BODY_BYTES)
     app.middleware("http")(request_guard(allowed_hosts))
@@ -406,6 +411,6 @@ def create_app(*, allowed_hosts: frozenset[str] = frozenset()) -> FastAPI:
     _register_image(app)
     _register_analysis(app)
     _register_hardware(app)
-    app.mount(ASSET_ROOT, StaticFiles(directory=STATIC_DIR), name="assets")
+    app.mount(app.state.asset_root, StaticFiles(directory=STATIC_DIR), name="assets")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

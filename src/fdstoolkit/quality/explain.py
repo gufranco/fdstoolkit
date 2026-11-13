@@ -12,7 +12,7 @@ from fdstoolkit.core.diskinfo import (
     Field,
     bcd_to_int,
 )
-from fdstoolkit.edit.files import ExtractedFile, extract_files
+from fdstoolkit.core.files import ExtractedFile, extract_files
 
 DATE_FIELDS: Final[frozenset[str]] = frozenset({"manufacturing_date", "rewritten_date"})
 TEXT_FIELDS: Final[frozenset[str]] = frozenset({"game_name", "verification"})

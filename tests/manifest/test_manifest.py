@@ -16,8 +16,8 @@ from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import SIDE_SIZE
 from fdstoolkit.core.diskinfo import DiskInfo
+from fdstoolkit.core.files import extract_files
 from fdstoolkit.core.showa import ShowaDateError
-from fdstoolkit.edit.files import extract_files
 
 
 def manifest_dict(tmp_path: Path) -> dict[str, Any]:

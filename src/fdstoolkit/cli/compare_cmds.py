@@ -23,7 +23,6 @@ def diff_command(
     ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Compare two images block by block."""
     left, _, _, _ = decode_image(first)
     right, _, _, _ = decode_image(second)
     report = compare_images(left, right)
@@ -104,4 +103,6 @@ def _print_explanation(
 
 
 def register(app: typer.Typer) -> None:
-    app.command(name="diff", rich_help_panel=Family.CHECK)(diff_command)
+    app.command(
+        name="diff", rich_help_panel=Family.CHECK, help="Compare two images block by block."
+    )(diff_command)

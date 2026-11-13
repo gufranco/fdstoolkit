@@ -6,7 +6,7 @@ from typing import Final
 
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.edit.files import ExtractedFile, extract_files
+from fdstoolkit.core.files import ExtractedFile, extract_files
 
 SAVE_NAME_MARKERS: Final = ("SAVE", "BACKUP", "USR", "RAM", "BRAM")
 MIN_DUMPS: Final = 2

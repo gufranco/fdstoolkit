@@ -13,7 +13,7 @@ from fdstoolkit.build.manifest import ManifestShapeError, build_manifest_file
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.blocks import FileHeader, FileKind
 from fdstoolkit.core.disk import SIDE_SIZE, Disk
-from fdstoolkit.edit.files import extract_files
+from fdstoolkit.core.files import extract_files
 
 DEFAULT_INFO = (
     b"\x01*NINTENDO-HVC*\x00SMB\x20\x00\x00\x00\x00\x00\x00"

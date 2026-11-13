@@ -30,7 +30,6 @@ def splice_command(
     *,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
-    """Repair a bad block by taking it from another dump of the same disk."""
     container = container_of(output)
     guard_output(output, force=force)
     primary, _, _, _ = decode_image(image)
@@ -71,7 +70,6 @@ def consensus(
     ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
-    """Merge dumps of one disk block by block, by majority, and name every disagreement."""
     dumps = paths or []
     if not dumps and captures is None:
         message = "a consensus needs dumps, saved captures, or both"
@@ -157,5 +155,12 @@ def _disk_consensus(
 
 
 def register(app: typer.Typer) -> None:
-    app.command(name="splice", rich_help_panel=Family.REPAIR)(splice_command)
-    app.command(rich_help_panel=Family.REPAIR)(consensus)
+    app.command(
+        name="splice",
+        rich_help_panel=Family.REPAIR,
+        help="Repair a bad block by taking it from another dump of the same disk.",
+    )(splice_command)
+    app.command(
+        rich_help_panel=Family.REPAIR,
+        help="Merge dumps of one disk block by block, by majority, and name every disagreement.",
+    )(consensus)

@@ -107,7 +107,6 @@ def calibrate_command(
     ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
 ) -> None:
-    """Read a side over and over while you adjust the drive, and say what each read shows."""
     wanted = reference_side(reference, side)
     timed: TimingReader | None = None
     if captures is not None:
@@ -132,4 +131,8 @@ def calibrate_command(
 
 
 def register(app: typer.Typer) -> None:
-    app.command(name="calibrate", rich_help_panel=Family.HARDWARE)(calibrate_command)
+    app.command(
+        name="calibrate",
+        rich_help_panel=Family.HARDWARE,
+        help="Read a side over and over while you adjust the drive, and say what each read shows.",
+    )(calibrate_command)

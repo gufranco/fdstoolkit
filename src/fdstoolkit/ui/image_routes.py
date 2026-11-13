@@ -12,9 +12,10 @@ from fdstoolkit.build.manifest import build_manifest_file
 from fdstoolkit.core.bios import predict_boot
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.files import extract_files
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
 from fdstoolkit.edit.emulator import SaveFormat, extract_save, merge_save
-from fdstoolkit.edit.files import FileSpec, extract_files, insert_file
+from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 from fdstoolkit.edit.recipes import load_recipes
 from fdstoolkit.edit.saves import SaveRecipe, find_save_candidates, normalise_saves

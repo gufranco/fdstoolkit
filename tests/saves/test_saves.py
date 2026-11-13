@@ -5,7 +5,7 @@ import pytest
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.edit.files import extract_files
+from fdstoolkit.core.files import extract_files
 from fdstoolkit.edit.saves import (
     SaveRecipe,
     find_save_candidates,

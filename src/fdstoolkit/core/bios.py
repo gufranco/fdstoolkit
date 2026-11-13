@@ -8,7 +8,7 @@ from typing import Final
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.core.diskinfo import VERIFICATION_STRING
-from fdstoolkit.edit.files import ExtractedFile, extract_files
+from fdstoolkit.core.files import ExtractedFile, extract_files
 
 APPROVAL_ADDRESS: Final = 0x2800
 APPROVAL_LENGTH: Final = 224

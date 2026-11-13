@@ -35,7 +35,6 @@ def convert(
     ] = qd.CrcMode.PRESERVE,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
-    """Convert between .fds and .qd."""
     disk, _, _, _ = decode_image(image)
     target = container_of(output)
     guard_output(output, force=force)
@@ -69,7 +68,6 @@ def blank(
         typer.Option("--calibration", help="the calibration disk: two sides of known pulses"),
     ] = False,
 ) -> None:
-    """Create a blank image, or the calibration disk."""
     guard_output(output, force=force)
     if calibration:
         _calibration_image(output, header=header, plain=(sides, formatted, game_name))
@@ -100,5 +98,7 @@ def _calibration_image(output: Path, *, header: bool, plain: tuple[int, bool, st
 
 
 def register(app: typer.Typer) -> None:
-    app.command(rich_help_panel=Family.CONTAINER)(convert)
-    app.command(rich_help_panel=Family.CONTAINER)(blank)
+    app.command(rich_help_panel=Family.CONTAINER, help="Convert between .fds and .qd.")(convert)
+    app.command(
+        rich_help_panel=Family.CONTAINER, help="Create a blank image, or the calibration disk."
+    )(blank)

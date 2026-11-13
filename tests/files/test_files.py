@@ -6,10 +6,10 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode, encode
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.files import extract_files
 from fdstoolkit.edit.files import (
     FileSpec,
     declared_file_count,
-    extract_files,
     insert_file,
     remove_file,
     set_declared_file_count,

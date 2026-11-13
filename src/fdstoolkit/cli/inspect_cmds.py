@@ -55,7 +55,6 @@ def info(
     ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Describe an image, side by side, and with --files every file on it."""
     disk, findings, data, container = decode_image(image)
     payload: dict[str, object] = {
         "path": str(image),
@@ -99,7 +98,6 @@ def verify(
     strict: Annotated[bool, typer.Option("--strict", help="treat warnings as failures")] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Check an image and report every finding."""
     _, findings, _, _ = decode_image(image)
     code = exit_code(findings, strict=strict)
 
@@ -133,7 +131,6 @@ def hash_command(
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Hash an image, every side, and its canonical form, which -o also writes out."""
     disk, _, data, container = decode_image(image)
     side_size = SIDE_SIZE if container is Container.FDS else qd.SIDE_SIZE
     try:
@@ -189,7 +186,6 @@ def provenance(
     ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Report where each side came from: factory, kiosk rewrite, or unknown."""
     disk, _, _, _ = decode_image(image)
     report = provenance_of(disk, layouts=_layouts(disk, captures))
 
@@ -214,7 +210,6 @@ def boot(
     *,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Predict what the console does when it boots each side."""
     disk, _, _, _ = decode_image(image)
     report = predict_boot(disk)
 
@@ -262,7 +257,6 @@ def doctor(
     *,
     json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
 ) -> None:
-    """Check the installation: version, Python and hardware support."""
     report = diagnose()
     if json_output:
         typer.echo(
@@ -284,9 +278,27 @@ def doctor(
 
 
 def register(app: typer.Typer) -> None:
-    app.command(rich_help_panel=Family.INSPECT)(info)
-    app.command(rich_help_panel=Family.CHECK)(verify)
-    app.command(name="hash", rich_help_panel=Family.INSPECT)(hash_command)
-    app.command(rich_help_panel=Family.INSPECT)(provenance)
-    app.command(rich_help_panel=Family.INSPECT)(boot)
-    app.command(rich_help_panel=Family.HARDWARE)(doctor)
+    app.command(
+        rich_help_panel=Family.INSPECT,
+        help="Describe an image, side by side, and with --files every file on it.",
+    )(info)
+    app.command(rich_help_panel=Family.CHECK, help="Check an image and report every finding.")(
+        verify
+    )
+    app.command(
+        name="hash",
+        rich_help_panel=Family.INSPECT,
+        help="Hash an image, every side, and its canonical form, which -o also writes out.",
+    )(hash_command)
+    app.command(
+        rich_help_panel=Family.INSPECT,
+        help="Report where each side came from: factory, kiosk rewrite, or unknown.",
+    )(provenance)
+    app.command(
+        rich_help_panel=Family.INSPECT,
+        help="Predict what the console does when it boots each side.",
+    )(boot)
+    app.command(
+        rich_help_panel=Family.HARDWARE,
+        help="Check the installation: version, Python and hardware support.",
+    )(doctor)

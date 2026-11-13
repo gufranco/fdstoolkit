@@ -21,8 +21,9 @@ from fdstoolkit.cli.common import (
 )
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.files import extract_files
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
-from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, extract_files, insert_file
+from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 from fdstoolkit.patch.apply import apply_patch
 from fdstoolkit.patch.formats import PatchError
@@ -38,7 +39,6 @@ def extract(
     ] = None,
     force: Annotated[bool, typer.Option("--force", help="overwrite existing files")] = False,
 ) -> None:
-    """Write every file on the disk to a directory."""
     disk, _, _, _ = decode_image(image)
     if manifest is ManifestChoice.FDSPACKER:
         _extract_fdspacker(disk, directory, force=force)
@@ -90,7 +90,6 @@ def insert_command(
     side: Annotated[int, typer.Option("--side", min=0, help="which side")] = 0,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
-    """Add a file to a side and write the result."""
     disk, _, _, _ = decode_image(image)
     guard_output(output, force=force)
     if not file.is_file():
@@ -127,7 +126,6 @@ def patch_command(
     *,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
-    """Apply a patch, whether it was made for the headered or headerless image."""
     data, _ = read_image(image)
     if not patch_file.is_file():
         message = f"file not found: {patch_file}"
@@ -164,7 +162,6 @@ def rebuild_command(
     ] = False,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
-    """Re-emit an image from its parsed model, repairing what can be repaired."""
     guard_output(output, force=force)
     disk, _, _, _ = decode_image(image)
 
@@ -202,7 +199,6 @@ def set_command(
     side: Annotated[int, typer.Option("--side", min=0, help="which side")] = 0,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
-    """Change fields of a disk information block."""
     disk, _, _, _ = decode_image(image)
     guard_output(output, force=force)
 
@@ -230,7 +226,6 @@ def build(
     *,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
 ) -> None:
-    """Build a disk image from a manifest."""
     if not manifest.is_file():
         message = f"file not found: {manifest}"
         raise fail(message)
@@ -246,9 +241,25 @@ def build(
 
 
 def register(app: typer.Typer) -> None:
-    app.command(rich_help_panel=Family.REPAIR)(extract)
-    app.command(name="insert", rich_help_panel=Family.REPAIR)(insert_command)
-    app.command(name="patch", rich_help_panel=Family.REPAIR)(patch_command)
-    app.command(name="rebuild", rich_help_panel=Family.REPAIR)(rebuild_command)
-    app.command(name="set", rich_help_panel=Family.REPAIR)(set_command)
-    app.command(rich_help_panel=Family.CONTAINER)(build)
+    app.command(rich_help_panel=Family.REPAIR, help="Write every file on the disk to a directory.")(
+        extract
+    )
+    app.command(
+        name="insert",
+        rich_help_panel=Family.REPAIR,
+        help="Add a file to a side and write the result.",
+    )(insert_command)
+    app.command(
+        name="patch",
+        rich_help_panel=Family.REPAIR,
+        help="Apply a patch, whether it was made for the headered or headerless image.",
+    )(patch_command)
+    app.command(
+        name="rebuild",
+        rich_help_panel=Family.REPAIR,
+        help="Re-emit an image from its parsed model, repairing what can be repaired.",
+    )(rebuild_command)
+    app.command(
+        name="set", rich_help_panel=Family.REPAIR, help="Change fields of a disk information block."
+    )(set_command)
+    app.command(rich_help_panel=Family.CONTAINER, help="Build a disk image from a manifest.")(build)
