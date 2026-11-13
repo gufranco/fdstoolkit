@@ -23,7 +23,7 @@ English | [日本語](README.ja.md)
 
 </div>
 
-**28** commands, every one but `doctor` also on the local web page. **1,814** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**28** commands, every one but `doctor` also on the local web page. **1,797** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -915,23 +915,6 @@ Three passes give the bundle three reads of every side, which is what the weak-b
 4. Run `calibrate speed` and raise or lower the motor speed as it says until it reads clean.
 5. Finish the speed with a console test or a strobe, since the stick cannot see the last percent.
 6. Repeat `calibrate head` with two more factory disks. Then confirm with a disk known to be hard to read: community practice uses a specific side with 39 files, and a pass means all 39 with no checksum error.
-
-### Setting the motor speed with an FDSKey
-
-Without an FDSStick, the speed can be measured on the console itself. `console/` holds a Famicom Disk System program that reads every file on a disk and times its bytes against the CPU clock.
-
-1. Build it with `uv run python scripts/build_console.py`, which writes `console/build/fdstoolkit-console.fds`. It needs [cc65](https://cc65.github.io).
-2. Copy the image to the FDSKey card and start it.
-3. When the title shows, move the RAM adapter cable from the FDSKey to the drive, insert a factory-written disk, and press A. A disk rewritten elsewhere carries its writer's speed in its bit density, so the program warns about one.
-4. Adjust the speed trimmer as the result says, then press A to measure again.
-
-| Stage | Cycles per byte | Speed |
-|---|---|---|
-| Coarse | 135.03 to 165.03 | Within 10 percent, what the RAM adapter accepts |
-| Fine | 141.46 to 156.34 | Within 5 percent |
-| Ultra-fine | 147.06 to 150.02 | Within 1 percent |
-
-The target is 148.53 cycles a byte: 96.4 kbit/s at the NTSC CPU clock. A lower reading means the drive runs fast. The program says which way to turn and counts consecutive ultra-fine passes, so stop after three in a row. Each measurement averages thousands of bytes, so it resolves well under 0.1 percent.
 
 ### Deciding whether it is the drive or the disk
 

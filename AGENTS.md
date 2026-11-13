@@ -45,8 +45,7 @@ a factor of two and carry no tolerance.
   still finds a drive outside the tolerance, by comparing each class against
   what an image of the same disk requires: a class read short means fast, long
   means slow. A drive a percent off misreads no class, so the fine band is left
-  to the console program in `console/`, which times bytes on the Famicom
-  itself, or to a strobe, and the README says so.
+  to a console speed test or a strobe, and the README says so.
 - A drive that reads back its own writes proves nothing about the drive, since a
   drive out of adjustment writes disks only it can read. Calibration is judged
   against a disk this drive did not write, and the command prints that first.

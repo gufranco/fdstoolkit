@@ -129,13 +129,6 @@ jobs:
       - name: Install
         run: uv sync --all-extras --dev --python ${{ matrix.python }}
 
-      - name: Install the 6502 assembler for the console program
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes cc65
-          echo "FDSTOOLKIT_REQUIRE_CC65=1" >> "$GITHUB_ENV"
-
       - name: Tests
         run: uv run pytest --cov --cov-report=term-missing
 
