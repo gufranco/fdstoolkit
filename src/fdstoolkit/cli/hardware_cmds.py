@@ -22,9 +22,10 @@ from fdstoolkit.cli.common import (
     encode_image,
     fail,
     guard_output,
+    side_count,
     writer_for,
 )
-from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
+from fdstoolkit.core.disk import Disk
 from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import created_now, write_bundle
 from fdstoolkit.drive.pulse import pulse_lines
@@ -125,7 +126,7 @@ def dump(
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the dump")],
     *,
     sides: Annotated[
-        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="1 or 2 sides to read")
+        int, typer.Option("--sides", parser=side_count, help="1 or 2 sides to read")
     ] = 1,
     passes: Annotated[
         int, typer.Option("--passes", min=1, max=MAX_PASSES, help="read each side this often")
@@ -309,7 +310,7 @@ def write(
 def surface(
     *,
     sides: Annotated[
-        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="1 or 2 sides to test")
+        int, typer.Option("--sides", parser=side_count, help="1 or 2 sides to test")
     ] = 1,
     backup: Annotated[
         Path | None,

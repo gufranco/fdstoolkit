@@ -11,7 +11,7 @@ from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
 from fdstoolkit.core.blocks import BlockKind, FileKind
 from fdstoolkit.core.diagnostics import Diagnostic, Severity, worst_severity
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side
 from fdstoolkit.drive.captures import Bundle, BundleError
 from fdstoolkit.drive.imported import bundle_from_path
 
@@ -167,3 +167,11 @@ def load_captures(path: Path) -> Bundle:
         return bundle_from_path(path)
     except BundleError as error:
         raise fail(str(error)) from error
+
+
+def side_count(value: object) -> int:
+    text = str(value)
+    if not text.isdigit() or not 1 <= int(text) <= SIDES_PER_DISK:
+        message = f"a disk has 1 or {SIDES_PER_DISK} sides, got {text}"
+        raise typer.BadParameter(message)
+    return int(text)

@@ -15,10 +15,10 @@ from fdstoolkit.cli.common import (
     fail,
     guard_output,
     is_save_file,
+    side_count,
 )
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.core.diagnostics import Severity, worst_severity
-from fdstoolkit.core.disk import SIDES_PER_DISK
 
 
 def convert(
@@ -59,9 +59,7 @@ def convert(
 def blank(
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write")],
     *,
-    sides: Annotated[
-        int, typer.Option("--sides", min=1, max=SIDES_PER_DISK, help="1 or 2 sides")
-    ] = 1,
+    sides: Annotated[int, typer.Option("--sides", parser=side_count, help="1 or 2 sides")] = 1,
     formatted: Annotated[bool, typer.Option("--formatted", help="write a disk info block")] = False,
     header: Annotated[bool, typer.Option("--header", help="write an fwNES header")] = False,
     game_name: Annotated[str, typer.Option("--game-name", help="three-character code")] = "   ",
