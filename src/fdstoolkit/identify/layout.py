@@ -19,8 +19,8 @@ MIN_ENDINGS: Final = 3
 MIN_GAPS: Final = 2
 
 FACTORY_MEASURED: Final = (
-    "Both factory sides measured end every block in stray pulses, with gaps varying by "
-    "18 to 73 bits"
+    "The only factory reference is one disk, whose two sides end every block in stray "
+    "pulses, with gaps varying by 18 to 73 bits"
 )
 
 

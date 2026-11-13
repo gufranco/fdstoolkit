@@ -103,6 +103,7 @@ def test_a_streamed_side_names_what_a_factory_side_shows() -> None:
 
     assert note.startswith("the captures show a side written in one stream")
     assert "18 to 73 bits" in note
+    assert "only factory reference is one disk" in note
 
 
 def test_a_duplicated_side_says_so() -> None:
