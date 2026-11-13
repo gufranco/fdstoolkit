@@ -133,10 +133,13 @@ def _entry(entry: dict[str, object]) -> tuple[str, int, int, str]:
         message = f"an entry in {MANIFEST} does not describe a capture: {entry}"
         raise BundleError(message)
     name, side, read, digest = (entry[field] for field in FIELDS)
-    if not isinstance(side, int) or not 0 <= side < SIDES_PER_DISK:
+    if isinstance(side, bool) or not isinstance(side, int) or not 0 <= side < SIDES_PER_DISK:
         message = f"{name} names side {side}, and a disk has sides 0 and 1"
         raise BundleError(message)
-    return str(name), side, int(str(read)), str(digest)
+    if isinstance(read, bool) or not isinstance(read, int) or read < 1:
+        message = f"{name} names read {read!r}, and reads are counted from 1"
+        raise BundleError(message)
+    return str(name), side, read, str(digest)
 
 
 def _capture(entry: dict[str, object], fetch: Mapping[str, bytes | None]) -> Capture:

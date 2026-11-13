@@ -23,7 +23,7 @@ English | [日本語](README.ja.md)
 
 </div>
 
-**26** commands, every one but `doctor` also on the local web page. **1,771** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**26** commands, every one but `doctor` also on the local web page. **1,794** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -279,7 +279,7 @@ Re-emit from the parsed model: recompute checksums, correct declared sizes, drop
 fdstoolkit set <image> --set field=value... -o <out> [--side N] [--force]
 ```
 
-Change disk information fields. Repeatable. Field names are the ones `info --json` prints.
+Change disk information fields. Repeatable. Field names are the ones `info --json` prints. A date is written `YYYY-MM-DD` and must fall between 1925 and 2024, the years the two BCD digits of a disk date can hold; a day not on the calendar is refused.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/set-dark.png">
@@ -435,7 +435,7 @@ write it only on a drive you trust, with write --calibration --trusted-drive, wh
 fdstoolkit build <manifest> -o <out> [--force]
 ```
 
-A disk built from a JSON manifest naming the disk fields and the files to place.
+A disk built from a JSON manifest naming the disk fields and the files to place. A field that is missing, of the wrong type or out of range is refused with its side, file and name, and dates follow the same rule as `set`.
 
 `build` also reads FDSPacker's `diskinfo.json`, which DupliFDS uses, and tells the two schemas apart by their keys. It builds what FDSPacker builds:
 

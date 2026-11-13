@@ -391,3 +391,21 @@ def test_a_manifest_listing_one_capture_twice_is_refused() -> None:
 
     # Assert
     assert raised.type is BundleError
+
+
+@pytest.mark.parametrize("read", ["x", 0, True])
+def test_a_manifest_entry_whose_read_is_not_a_count_is_refused(
+    tmp_path: Path, read: object
+) -> None:
+    # Arrange
+    write_bundle(tmp_path, CAPTURES, image="game.fds", created=CREATED)
+    manifest = json.loads((tmp_path / MANIFEST).read_text(encoding="utf-8"))
+    manifest["captures"][0]["read"] = read
+    (tmp_path / MANIFEST).write_text(json.dumps(manifest), "utf-8")
+
+    # Act
+    with pytest.raises(BundleError, match="reads are counted from 1") as raised:
+        load_bundle(tmp_path)
+
+    # Assert
+    assert raised.type is BundleError

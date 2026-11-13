@@ -2562,3 +2562,46 @@ def test_provenance_refuses_captures_of_another_disk(tmp_path: Path) -> None:
     # Assert
     assert result.exit_code == 1
     assert "another disk" in result.stdout
+
+
+def test_build_names_the_field_a_toolkit_manifest_leaves_out(tmp_path: Path) -> None:
+    # Arrange
+    manifest = tmp_path / "disk.json"
+    manifest.write_text(json.dumps({"game_name": "ABC", "sides": [{"files": [{"name": "X"}]}]}))
+    arguments = ["build", str(manifest), "-o", str(tmp_path / "out.fds")]
+
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
+    assert result.exit_code == 1
+    assert "side 1 file 1 has no path" in result.output
+
+
+def test_save_blank_names_the_field_a_recipe_leaves_out(single_side: Path, tmp_path: Path) -> None:
+    # Arrange
+    recipes = tmp_path / "recipes.json"
+    recipes.write_text(json.dumps({"version": 1, "recipes": [{"source": "a dump", "position": 0}]}))
+    arguments = ["save", "blank", str(single_side), "--recipes", str(recipes)]
+    arguments += ["-o", str(tmp_path / "out.fds")]
+
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
+    assert result.exit_code == 1
+    assert "recipe 1 has no game_name" in result.output
+
+
+def test_set_refuses_a_date_the_disk_cannot_hold(single_side: Path, tmp_path: Path) -> None:
+    # Arrange
+    out = tmp_path / "dated.fds"
+    arguments = ["set", str(single_side), "-o", str(out), "--set", "manufacturing_date=2030-01-01"]
+
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
+    assert result.exit_code == 1
+    assert "outside 1925 to 2024" in result.output
+    assert not out.exists()

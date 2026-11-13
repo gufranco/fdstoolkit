@@ -1,21 +1,23 @@
 from __future__ import annotations
 
 import json
-import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Final, cast
 
 from fdstoolkit.build.blank import GAME_NAME_LENGTH, disk_info_block
 from fdstoolkit.build.fdspacker import FdsPackerManifest
-from fdstoolkit.codecs.fds import encode
+from fdstoolkit.build.fields import mapping, number, objects, text
+from fdstoolkit.codecs.fds import SIDE_SIZE, encode
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, SHOWA_EPOCH, VERIFICATION_STRING, to_bcd
+from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, VERIFICATION_STRING
+from fdstoolkit.core.showa import encode_date, parse_date
 from fdstoolkit.edit.files import FileSpec, insert_file
 
-DATE_PATTERN: Final = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
-FDS_SIDE_CAPACITY: Final = 65500
+LOAD_ADDRESS: Final = 0x6000
+WORD_LIMIT: Final = 0xFFFF
 
 LICENCE_LENGTH: Final = len(VERIFICATION_STRING)
 LICENCE_NINTENDO: Final = "nintendo"
@@ -62,23 +64,25 @@ class DiskManifest:
         return self.verification == VERIFICATION_STRING
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any], *, root: Path) -> DiskManifest:
-        game_name = str(payload.get("game_name", "   "))
+    def from_dict(cls, payload: Mapping[str, object], *, root: Path) -> DiskManifest:
+        where = "the manifest"
+        game_name = text(payload, "game_name", where=where, default="   ")
         if len(game_name) != GAME_NAME_LENGTH:
             message = f"a game name is exactly three characters, got {len(game_name)}"
-            raise ValueError(message)
-
-        raw_sides: list[dict[str, Any]] = list(payload.get("sides") or [])
+            raise ManifestShapeError(message)
+        raw_sides = objects(payload, "sides", where=where)
         if not raw_sides:
             message = "a manifest needs at least one side"
-            raise ValueError(message)
-
+            raise ManifestShapeError(message)
         return cls(
             game_name=game_name,
-            licensee=int(payload.get("licensee", 0)),
-            game_version=int(payload.get("game_version", 0)),
+            licensee=number(payload, "licensee", where=where, default=0),
+            game_version=number(payload, "game_version", where=where, default=0),
             manufacturing_date=_parse_date(payload.get("manufacturing_date")),
-            sides=tuple(_side_from(entry, root=root) for entry in raw_sides),
+            sides=tuple(
+                _side_from(entry, root=root, number_of=index)
+                for index, entry in enumerate(raw_sides, start=1)
+            ),
             verification=_parse_licence(payload.get("licence", payload.get("license"))),
         )
 
@@ -88,59 +92,53 @@ def _parse_licence(value: object) -> bytes:
         return VERIFICATION_STRING
     if value == LICENCE_BYPASS:
         return bytes(LICENCE_LENGTH)
-    text = str(value)
-    if len(text) != LICENCE_LENGTH:
+    text_value = str(value)
+    if len(text_value) != LICENCE_LENGTH or not text_value.isascii():
         message = (
-            f"a licence string is {LICENCE_LENGTH} characters, "
+            f"a licence string is {LICENCE_LENGTH} characters of ASCII text, "
             f'"{LICENCE_NINTENDO}" or "{LICENCE_BYPASS}", got {value!r}'
         )
-        raise ValueError(message)
-    return text.encode("ascii")
+        raise ManifestShapeError(message)
+    return text_value.encode("ascii")
 
 
 def _parse_date(value: object) -> tuple[int, int, int] | None:
     if value is None:
         return None
-    match = DATE_PATTERN.match(str(value))
-    if match is None:
-        message = f"a date is written YYYY-MM-DD, got {value}"
-        raise ValueError(message)
-    year, month, day = (int(part) for part in match.groups())
-    return (year, month, day)
+    return parse_date(str(value), field="manufacturing_date")
 
 
-def _file_from(entry: dict[str, Any], *, root: Path) -> ManifestFile:
-    kind_name = str(entry.get("kind", "program")).lower()
+def _file_from(entry: Mapping[str, object], *, root: Path, where: str) -> ManifestFile:
+    kind_name = text(entry, "kind", where=where, default="program").lower()
     kind = KINDS.get(kind_name)
     if kind is None:
         known = ", ".join(sorted(KINDS))
         message = f"unknown file kind {kind_name}, known kinds are {known}"
-        raise ValueError(message)
-
-    address = entry.get("address", 0x6000)
-    path = Path(str(entry["path"]))
+        raise ManifestShapeError(message)
+    path = Path(text(entry, "path", where=where))
     return ManifestFile(
-        name=str(entry.get("name", "")),
-        address=int(str(address), 0) if isinstance(address, str) else int(address),
+        name=text(entry, "name", where=where, default=""),
+        address=number(entry, "address", where=where, default=LOAD_ADDRESS, limit=WORD_LIMIT),
         kind=kind,
         path=path if path.is_absolute() else root / path,
     )
 
 
-def _side_from(entry: dict[str, Any], *, root: Path) -> ManifestSide:
+def _side_from(entry: Mapping[str, object], *, root: Path, number_of: int) -> ManifestSide:
+    where = f"side {number_of}"
     return ManifestSide(
-        side=int(entry.get("side", 0)),
-        disk_number=int(entry.get("disk_number", 0)),
-        boot_file=int(entry.get("boot_file", 0)),
+        side=number(entry, "side", where=where, default=0),
+        disk_number=number(entry, "disk_number", where=where, default=0),
+        boot_file=number(entry, "boot_file", where=where, default=0),
         files=tuple(
-            _file_from(item, root=root)
-            for item in cast("list[dict[str, Any]]", entry.get("files") or [])
+            _file_from(item, root=root, where=f"{where} file {index}")
+            for index, item in enumerate(objects(entry, "files", where=where), start=1)
         ),
     )
 
 
 def load_manifest(path: Path) -> DiskManifest:
-    payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    payload = mapping(json.loads(path.read_text(encoding="utf-8")), where=path.name)
     return DiskManifest.from_dict(payload, root=path.parent)
 
 
@@ -162,12 +160,7 @@ def _info_for(manifest: DiskManifest, side: ManifestSide) -> bytes:
     _stamp(payload, "game_version", bytes([manifest.game_version]))
     _stamp(payload, "boot_file", bytes([side.boot_file]))
     if manifest.manufacturing_date is not None:
-        year, month, day = manifest.manufacturing_date
-        _stamp(
-            payload,
-            "manufacturing_date",
-            bytes([to_bcd(year - SHOWA_EPOCH), to_bcd(month), to_bcd(day)]),
-        )
+        _stamp(payload, "manufacturing_date", encode_date(*manifest.manufacturing_date))
     return bytes(payload)
 
 
@@ -178,7 +171,7 @@ def build_from_manifest(manifest: DiskManifest) -> bytes:
             Block(kind=BlockKind.DISK_INFO, payload=_info_for(manifest, side)),
             Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([BlockKind.FILE_AMOUNT, 0])),
         )
-        built = Side(blocks=blocks, tail=b"", capacity=FDS_SIDE_CAPACITY)
+        built = Side(blocks=blocks, tail=b"", capacity=SIDE_SIZE)
         disk = Disk(sides=(built,))
         for entry in side.files:
             if not entry.path.is_file():
@@ -205,8 +198,7 @@ def build_manifest_file(path: Path) -> bytes:
     if not isinstance(payload, dict):
         message = f"a manifest is a JSON object, and {path.name} holds {type(payload).__name__}"
         raise ManifestShapeError(message)
-    if FdsPackerManifest.recognises(cast("dict[str, object]", payload)):
-        return FdsPackerManifest.parse(cast("dict[str, object]", payload), root=path.parent).build()
-    return build_from_manifest(
-        DiskManifest.from_dict(cast("dict[str, Any]", payload), root=path.parent)
-    )
+    fields = cast("dict[str, object]", payload)
+    if FdsPackerManifest.recognises(fields):
+        return FdsPackerManifest.parse(fields, root=path.parent).build()
+    return build_from_manifest(DiskManifest.from_dict(fields, root=path.parent))

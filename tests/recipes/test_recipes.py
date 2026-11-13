@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from fdstoolkit.build.fields import FieldError
 from fdstoolkit.edit.recipes import RECIPE_VERSION, load_recipes, recipes_for
 from fdstoolkit.edit.saves import SaveRecipe
 
@@ -63,7 +64,7 @@ def test_a_file_of_the_wrong_version_is_refused(tmp_path: Path) -> None:
         load_recipes(path)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is FieldError
 
 
 def test_a_file_without_recipes_is_refused(tmp_path: Path) -> None:
@@ -75,7 +76,7 @@ def test_a_file_without_recipes_is_refused(tmp_path: Path) -> None:
         load_recipes(path)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is FieldError
 
 
 def test_a_recipe_without_a_source_is_refused(tmp_path: Path) -> None:
@@ -98,7 +99,7 @@ def test_a_recipe_without_a_source_is_refused(tmp_path: Path) -> None:
         load_recipes(path)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is FieldError
 
 
 def test_a_fill_outside_a_byte_is_refused(tmp_path: Path) -> None:
@@ -128,7 +129,7 @@ def test_a_fill_outside_a_byte_is_refused(tmp_path: Path) -> None:
         load_recipes(path)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is FieldError
 
 
 def test_recipes_are_selected_by_game_and_version() -> None:

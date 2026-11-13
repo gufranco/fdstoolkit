@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from fdstoolkit.build.fields import as_int
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, SHOWA_EPOCH
+from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
+from fdstoolkit.core.showa import encode_date, parse_date
 
-DATE_PATTERN: Final = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 BYTE_MAX: Final = 0xFF
 
 
@@ -54,10 +54,6 @@ def parse_edit(text: str) -> tuple[str, str]:
     return name.strip(), value.strip()
 
 
-def _to_bcd(value: int) -> int:
-    return ((value // 10) << 4) | (value % 10)
-
-
 def _encode_text(name: str, value: object, length: int) -> bytes:
     text = str(value)
     encoded = text.encode("ascii", errors="replace")
@@ -68,7 +64,7 @@ def _encode_text(name: str, value: object, length: int) -> bytes:
 
 
 def _encode_number(name: str, value: object) -> bytes:
-    number = int(str(value), 0) if isinstance(value, str) else int(value)  # type: ignore[arg-type]
+    number = as_int(value, key=name, where="")
     if not 0 <= number <= BYTE_MAX:
         message = f"{name} is a single byte, so it is between 0 and 255, got {number}"
         raise ValueError(message)
@@ -76,12 +72,7 @@ def _encode_number(name: str, value: object) -> bytes:
 
 
 def _encode_date(name: str, value: object) -> bytes:
-    match = DATE_PATTERN.match(str(value))
-    if match is None:
-        message = f"{name} is written YYYY-MM-DD, got {value}"
-        raise ValueError(message)
-    year, month, day = (int(part) for part in match.groups())
-    return bytes([_to_bcd(year - SHOWA_EPOCH), _to_bcd(month), _to_bcd(day)])
+    return encode_date(*parse_date(str(value), field=name))
 
 
 def _encode(name: str, value: object, length: int) -> bytes:

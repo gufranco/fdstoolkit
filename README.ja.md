@@ -23,7 +23,7 @@
 
 </div>
 
-コマンドは **26** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,771** 件、ページが **142** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
+コマンドは **26** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,794** 件、ページが **142** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
 
 ---
 
@@ -273,7 +273,7 @@ fdstoolkit rebuild <image> -o <out> [--keep-tail] [--reveal-hidden] [--drop-hidd
 fdstoolkit set <image> --set field=value... -o <out> [--side N] [--force]
 ```
 
-ディスク情報のフィールドを変更します。複数指定できます。フィールド名は `info --json` が出力するものです。
+ディスク情報のフィールドを変更します。複数指定できます。フィールド名は `info --json` が出力するものです。日付は `YYYY-MM-DD` で書き、ディスクの日付の BCD 2 桁が表せる 1925 年から 2024 年の範囲に収める必要があります。暦にない日付は拒否します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/set-dark.png">
@@ -429,7 +429,7 @@ write it only on a drive you trust, with write --calibration --trusted-drive, wh
 fdstoolkit build <manifest> -o <out> [--force]
 ```
 
-ディスクのフィールドと配置するファイルを記述した JSON マニフェストからディスクを組み立てます。
+ディスクのフィールドと配置するファイルを記述した JSON マニフェストからディスクを組み立てます。欠けているフィールド、型の違うフィールド、範囲外のフィールドは、その面、ファイル、名前を示して拒否します。日付の規則は `set` と同じです。
 
 `build` は、DupliFDS が使う FDSPacker の `diskinfo.json` も読みます。どちらの形式かはキーで見分けます。組み上がるのは FDSPacker と同じディスクです。
 

@@ -1,53 +1,46 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Final
 
+from fdstoolkit.build.fields import FieldError, mapping, number, objects, text
+from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.edit.saves import SaveRecipe
 
 RECIPE_VERSION: Final = 1
-BYTE_MAX: Final = 0xFF
 
 
-def _entry_to_recipe(entry: dict[str, Any]) -> SaveRecipe:
-    source = str(entry.get("source", "")).strip()
-    if not source:
+def _entry_to_recipe(entry: Mapping[str, object], index: int) -> SaveRecipe:
+    where = f"recipe {index}"
+    source = entry.get("source", "")
+    if not isinstance(source, str) or not source.strip():
         message = (
             "every recipe names its source, because a save region is a claim about a game "
             "and a claim without evidence is a guess"
         )
-        raise ValueError(message)
-
-    fill = int(entry.get("fill", 0))
-    if not 0 <= fill <= BYTE_MAX:
-        message = f"a fill byte is between 0 and 255, got {fill}"
-        raise ValueError(message)
-
+        raise FieldError(message)
     return SaveRecipe(
-        game_name=str(entry["game_name"]),
-        game_version=int(entry.get("game_version", 0)),
-        side=int(entry.get("side", 0)),
-        position=int(entry["position"]),
-        fill=fill,
+        game_name=text(entry, "game_name", where=where),
+        game_version=number(entry, "game_version", where=where, default=0),
+        side=number(entry, "side", where=where, default=0, limit=SIDES_PER_DISK - 1),
+        position=number(entry, "position", where=where),
+        fill=number(entry, "fill", where=where, default=0),
     )
 
 
 def load_recipes(path: Path) -> tuple[SaveRecipe, ...]:
-    payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-
-    version = int(payload.get("version", 0))
+    payload = mapping(json.loads(path.read_text(encoding="utf-8")), where=str(path))
+    version = payload.get("version", 0)
     if version != RECIPE_VERSION:
         message = f"this file declares recipe version {version}, expected {RECIPE_VERSION}"
-        raise ValueError(message)
-
-    entries = cast("list[dict[str, Any]]", payload.get("recipes") or [])
+        raise FieldError(message)
+    entries = objects(payload, "recipes", where=str(path))
     if not entries:
         message = f"{path} holds no recipes"
-        raise ValueError(message)
-
-    return tuple(_entry_to_recipe(entry) for entry in entries)
+        raise FieldError(message)
+    return tuple(_entry_to_recipe(entry, index) for index, entry in enumerate(entries, start=1))
 
 
 def recipes_for(

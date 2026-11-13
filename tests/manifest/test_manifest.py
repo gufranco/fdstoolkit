@@ -6,10 +6,16 @@ from typing import Any
 
 import pytest
 
-from fdstoolkit.build.manifest import DiskManifest, build_from_manifest, load_manifest
+from fdstoolkit.build.manifest import (
+    DiskManifest,
+    ManifestShapeError,
+    build_from_manifest,
+    load_manifest,
+)
 from fdstoolkit.codecs.fds import SIDE_SIZE, decode
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.diskinfo import DiskInfo
+from fdstoolkit.core.showa import ShowaDateError
 from fdstoolkit.edit.files import extract_files
 
 
@@ -168,7 +174,7 @@ def test_a_manifest_without_sides_is_refused(tmp_path: Path) -> None:
         DiskManifest.from_dict(payload, root=tmp_path)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is ManifestShapeError
 
 
 def test_a_game_name_of_the_wrong_length_is_refused(tmp_path: Path) -> None:
@@ -181,7 +187,7 @@ def test_a_game_name_of_the_wrong_length_is_refused(tmp_path: Path) -> None:
         DiskManifest.from_dict(payload, root=tmp_path)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is ManifestShapeError
 
 
 def test_an_unknown_file_kind_is_refused(tmp_path: Path) -> None:
@@ -195,7 +201,7 @@ def test_an_unknown_file_kind_is_refused(tmp_path: Path) -> None:
         DiskManifest.from_dict(payload, root=tmp_path)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is ManifestShapeError
 
 
 def test_a_date_that_is_not_a_date_is_refused(tmp_path: Path) -> None:
@@ -208,7 +214,7 @@ def test_a_date_that_is_not_a_date_is_refused(tmp_path: Path) -> None:
         DiskManifest.from_dict(payload, root=tmp_path)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is ShowaDateError
 
 
 def test_a_multi_side_manifest_builds_every_side(tmp_path: Path) -> None:
@@ -279,4 +285,4 @@ def test_a_licence_string_of_the_wrong_length_is_refused(tmp_path: Path) -> None
         DiskManifest.from_dict(payload, root=tmp_path)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is ManifestShapeError

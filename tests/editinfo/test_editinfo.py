@@ -6,6 +6,7 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.core.diskinfo import DiskInfo
+from fdstoolkit.core.showa import ShowaDateError
 from fdstoolkit.edit.diskinfo import EDITABLE_FIELDS, apply_edits, parse_edit
 
 
@@ -227,4 +228,4 @@ def test_a_date_that_is_not_a_date_is_refused() -> None:
         apply_edits(disk, side=side, edits=edits)
 
     # Assert
-    assert raised.type is ValueError
+    assert raised.type is ShowaDateError
