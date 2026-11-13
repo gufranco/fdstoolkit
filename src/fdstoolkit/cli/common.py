@@ -49,7 +49,6 @@ class TargetChoice(StrEnum):
     EVERDRIVE_N8_PRO = "everdrive-n8-pro"
     MESEN2 = "mesen2"
     FCEUX = "fceux"
-    FDSKEY = "fdskey"
 
 
 KIND_FOR_CHOICE: Final[dict[KindChoice, FileKind]] = {
@@ -86,7 +85,7 @@ def _check_save_file(path: Path, data: bytes) -> None:
     if len(data) % fds.SIDE_SIZE == 0 and data[:1] == bytes([BlockKind.DISK_INFO]):
         return
     message = (
-        f"{path.name} is not a Famicom Disk System save: an EverDrive or FDSKey save is the "
+        f"{path.name} is not a Famicom Disk System save: an EverDrive save is the "
         f"whole disk as a headerless image, a multiple of {fds.SIDE_SIZE} bytes that starts "
         f"with the disk information, and this file holds {len(data)} bytes"
     )

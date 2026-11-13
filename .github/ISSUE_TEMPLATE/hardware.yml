@@ -16,7 +16,6 @@ body:
       options:
         - FDSStick
         - Famicom Dumper
-        - FDSKey
         - Something else
     validations:
       required: true

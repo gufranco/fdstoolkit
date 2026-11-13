@@ -1492,20 +1492,6 @@ def test_export_refuses_to_overwrite(tmp_path: Path) -> None:
     assert "pass --force" in result.stdout
 
 
-def test_export_refuses_a_disk_fdskey_will_not_load(tmp_path: Path) -> None:
-    source = _game_with_a_file(tmp_path)
-    content = bytearray(source.read_bytes())
-    content[1:15] = bytes(14)
-    source.write_bytes(bytes(content))
-    card = tmp_path / "card"
-
-    result = runner.invoke(app, ["export", str(source), "--target", "fdskey", "-d", str(card)])
-
-    assert result.exit_code == 1
-    assert "FDSKey refuses a side whose disk information lacks" in result.stdout
-    assert not card.exists()
-
-
 def test_an_everdrive_save_is_read_as_a_headerless_image(tmp_path: Path) -> None:
     source = tmp_path / "bram.srm"
     source.write_bytes(_game_with_a_file(tmp_path).read_bytes())

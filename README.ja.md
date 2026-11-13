@@ -23,7 +23,7 @@
 
 </div>
 
-コマンドは **28** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,797** 件、ページが **142** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
+コマンドは **28** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,782** 件、ページが **142** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
 
 ---
 
@@ -396,9 +396,7 @@ fdstoolkit convert <image> -o <out> [--header|--no-header] [--crc-mode preserve|
 fdstoolkit export <image> --target <t> -d <dir> [--force]
 ```
 
-機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`、`fdskey`。いずれもヘッダなしの `.fds` を書き出します。
-
-`fdskey` では、[FDSKey](https://github.com/ClusterM/fdskey) が読み込める内容も確かめます。FDSKey が拒否するものは拒否します。`*NINTENDO-HVC*` やファイル数ブロックのない面と、宣言されたファイルが、宣言された最後のブロックより前の時点で、ギャップとチェックサムを含めて 1 面あたり 66560 バイトを超える面です。FDSKey が読み込まずに黙って捨てるものは、その名前を示します。この容量を超えた宣言上の最後のファイルや隠しファイル、順序の乱れたブロック以降のすべてのブロック、そして最後のファイルより後の内容です。
+機器やエミュレータが期待するディレクトリ構成で書き出します。対象は `nt-mini`、`mister`、`everdrive-n8-pro`、`mesen2`、`fceux`。いずれもヘッダなしの `.fds` を書き出します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
@@ -444,7 +442,7 @@ fdstoolkit build <manifest> -o <out> [--force]
 
 ディスクのフィールドと配置するファイルを記述した JSON マニフェストからディスクを組み立てます。
 
-`build` は、DupliFDS などの FDSKey 向けプロジェクトが使う FDSPacker の `diskinfo.json` も読みます。どちらの形式かはキーで見分けます。組み上がるのは FDSPacker と同じディスクです。
+`build` は、DupliFDS が使う FDSPacker の `diskinfo.json` も読みます。どちらの形式かはキーで見分けます。組み上がるのは FDSPacker と同じディスクです。
 
 - ディスク情報の各バイトは対応する項目から取ります。省略した未知の項目には FDSPacker の既定値が入ります。
 - `file_amount` は指定どおりに書くので、実際より少ないファイル数を宣言して残りを隠せます。省略すると FDSPacker と同じく 0 です。
@@ -914,18 +912,9 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 [DupliFDS](https://github.com/ClusterM/duplifds) は本体の上でディスクをコピーし、書いた内容を読み返しません。そのため、コピーは元のディスクと比べるまで確かめられていない状態です。
 
 1. 元のディスクをダンプします: `fdstoolkit dump -o source.fds`。
-2. コピーをイメージとして用意します。FDSKey のカード上のコピーは、すでにカード内の `.fds` ファイルです。ディスク上のコピーは `fdstoolkit dump -o copy.fds` で読みます。
+2. コピーを吸い出します: `fdstoolkit dump -o copy.fds`。
 3. 両者を比べます: `fdstoolkit diff source.fds copy.fds --explain`。一致すれば、コピーはすべてのブロックを持っています。DupliFDS が途中で止まったコピーは、途中で止まったものとして報告され、元のファイルのうちいくつを持つかが示されます。DupliFDS は、それまでにコピーしたファイルだけを数えたファイル数を書くからです。
 4. コピーを評価します: コピーをもう一度ダンプしたものと合わせて `fdstoolkit grade copy.fds --read copy2.fds` を実行すると、新しいディスクが安定して読めるかがわかります。`diff` が一致しただけでは、そこまではわかりません。
-
-### FDSKey が保存したイメージの読み方
-
-ゲームが [FDSKey](https://github.com/ClusterM/fdskey) にセーブすると、カードはイメージを書き換えます。そのうち 2 つの規則が、fdstoolkit の報告に表れます。
-
-- 次のブロックと位置が合わなくなる場所にブロックが書かれると、それより後のブロックはすべて捨てられます。隠しファイルはこうして消えることがあり、`info` には元より少ないファイル数が出ます。
-- セーブは、新しいブロックを古い面の上に書き、その後ろは消しません。小さくなった面には最後のブロックの後に古いバイトが残り、`verify` はそれを `FDS007`、最後のブロックの後のゼロでないバイトとして報告します。
-
-ゲームがどのファイルを変え、ほかに動いたものがあるかは、セーブ前のイメージと比べるとわかります: `fdstoolkit diff before.fds after.fds --explain`。
 
 ## フォーマット
 
@@ -943,7 +932,7 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 | `.fds` ヘッダなし | 65500 | なし | No-Intro がハッシュを取る対象 |
 | `.fds` fwNES ヘッダ付き | 16 + 面ごとに 65500 | なし | ヘッダが面数を保持します |
 | `.qd` | 65536 | あり | バーチャルコンソールの吸い出しと Quick Disk のダンプ |
-| `bram.srm` | 65500 | なし | EverDrive N8、または EverDrive 方式で保存する設定の FDSKey が `EDN8/gamedata/<ゲームのファイル名>/` に置くセーブ。ディスク全体をヘッダなしの `.fds` として持ちます。それ以外の `.srm` はサイズを示して拒否します |
+| `bram.srm` | 65500 | なし | EverDrive N8 が `EDN8/gamedata/<ゲームのファイル名>/` に置くセーブ。ディスク全体をヘッダなしの `.fds` として持ちます。それ以外の `.srm` はサイズを示して拒否します |
 | パック済みパルスクラス、`raw03` | 可変 | あり | 1 パルスにつき 2 ビット、FDSStick が量子化済み |
 
 各変換で失われるもの。

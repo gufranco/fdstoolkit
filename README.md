@@ -23,7 +23,7 @@ English | [日本語](README.ja.md)
 
 </div>
 
-**28** commands, every one but `doctor` also on the local web page. **1,797** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**28** commands, every one but `doctor` also on the local web page. **1,782** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -402,9 +402,7 @@ Between `.fds` and `.qd`. `--crc-mode` decides what goes in the CRC fields when 
 fdstoolkit export <image> --target <t> -d <dir> [--force]
 ```
 
-The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`, `fdskey`. Each writes a headerless `.fds`.
-
-`fdskey` also checks what [FDSKey](https://github.com/ClusterM/fdskey) loads. It refuses what FDSKey refuses: a side without `*NINTENDO-HVC*` or without a file amount block, and a side whose declared files run past the emulator's 66560 bytes per side, gaps and checksums included, before the last declared block. It names what FDSKey loads without and drops silently: a last declared file or hidden files past that budget, every block from one out of order onwards, and anything after the last file.
+The directory layout a device or emulator expects. Targets: `nt-mini`, `mister`, `everdrive-n8-pro`, `mesen2`, `fceux`. Each writes a headerless `.fds`.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/export-dark.png">
@@ -450,7 +448,7 @@ fdstoolkit build <manifest> -o <out> [--force]
 
 A disk built from a JSON manifest naming the disk fields and the files to place.
 
-`build` also reads FDSPacker's `diskinfo.json`, which DupliFDS and other FDSKey projects use, and tells the two schemas apart by their keys. It builds what FDSPacker builds:
+`build` also reads FDSPacker's `diskinfo.json`, which DupliFDS uses, and tells the two schemas apart by their keys. It builds what FDSPacker builds:
 
 - Every disk information byte comes from its field, and an unknown field left out takes FDSPacker's default.
 - `file_amount` is written as given, so a side can declare fewer files than it carries and hide the rest. Left out, it is 0, as in FDSPacker.
@@ -925,18 +923,9 @@ One disk cannot answer this. Read several and compare where they failed: a place
 [DupliFDS](https://github.com/ClusterM/duplifds) copies a disk on the console itself and never reads back what it wrote, so a copy is unverified until it is compared with its source.
 
 1. Dump the source disk: `fdstoolkit dump -o source.fds`.
-2. Get the copy as an image. A copy on an FDSKey card is already a `.fds` file on the card. A copy on a disk needs `fdstoolkit dump -o copy.fds`.
+2. Dump the copy: `fdstoolkit dump -o copy.fds`.
 3. Compare them: `fdstoolkit diff source.fds copy.fds --explain`. Identical means the copy holds every block. A copy DupliFDS did not finish is reported as one that stopped early, naming how many of the source's files it holds, because DupliFDS writes a file amount that counts only the files copied so far.
 4. Grade the copy: `fdstoolkit grade copy.fds --read copy2.fds`, with a second dump of the copy, says whether the new disk reads reliably, which a clean `diff` alone does not.
-
-### Reading an image FDSKey saved
-
-When a game saves on an [FDSKey](https://github.com/ClusterM/fdskey), the card rewrites the image, and two of its rules show up in what fdstoolkit reports.
-
-- A block written where the next one no longer lines up drops every block after it. Hidden files can vanish this way, and `info` shows fewer files than the original had.
-- The save writes the new blocks over the old side without clearing what follows. A side that shrank keeps stale bytes after its last block, which `verify` reports as `FDS007`, non-zero bytes after the last block.
-
-Compare the save with the image before it, `fdstoolkit diff before.fds after.fds --explain`, to see which files the game changed and whether anything else moved.
 
 ## Formats
 
@@ -954,7 +943,7 @@ A side is a sequence of blocks:
 | `.fds` headerless | 65500 | No | What No-Intro hashes |
 | `.fds` with fwNES header | 16 + 65500 per side | No | Header carries the side count |
 | `.qd` | 65536 | Yes | Virtual Console rips and Quick Disk dumps |
-| `bram.srm` | 65500 | No | The save an EverDrive N8, or an FDSKey set to save like EverDrive, keeps in `EDN8/gamedata/<game file>/`: the whole disk as a headerless `.fds`. Any other `.srm` is refused with its size |
+| `bram.srm` | 65500 | No | The save an EverDrive N8 keeps in `EDN8/gamedata/<game file>/`: the whole disk as a headerless `.fds`. Any other `.srm` is refused with its size |
 | Packed pulse classes, `raw03` | variable | Yes | Two bits per pulse, already quantised by the FDSStick |
 
 What each conversion costs:
