@@ -4,6 +4,10 @@ import sys
 from pathlib import Path
 
 import pytest
+from hypothesis import settings
+
+settings.register_profile("fixed", derandomize=True, database=None)
+settings.load_profile("fixed")
 
 
 @pytest.fixture(autouse=True)
