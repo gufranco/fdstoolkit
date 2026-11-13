@@ -112,8 +112,11 @@ a factor of two and carry no tolerance.
   such pulse, so the noisiest line still warns.
 - hidapi on macOS answers a write the stick did not take with -1 after five
   seconds instead of raising. A refused packet is sent once more and never
-  skipped past; refused twice before packet 400 is a link fault, and after it
-  the side is full. The first read after a finished write is refused while the
+  skipped past. Every side written from blocks is padded with gap to 700
+  packets; the stick stops taking data where the track ends, 568 packets in
+  three runs on one drive. Refused twice inside the image is a link fault that
+  says how much was written, and refused in the padding means the side ended.
+  The first read after a finished write is refused while the
   drive settles, seen up to 6.6 s after the finish and sometimes after a stale
   first reply. A write started after a read is refused inside its lead-in until
   the drive has finished its scan: on a short side it failed with a pause of up
@@ -123,10 +126,11 @@ a factor of two and carry no tolerance.
   the lead-in has written no block, so the whole session starts again. A
   transport error on a read or a write becomes a link fault, which every caller
   reports, and a read that fails after it kept data is never retried.
-- The stick does not erase past the end of what it writes. A side written over
-  a longer one keeps the old blocks after its own, and `write` fails its
-  verification over them, since another reader would take them for a hidden
-  file. The surface test judges only the blocks it wrote.
+- The stick erases nothing past the last packet it is sent, so without the gap
+  padding a side written over a longer one kept the old blocks after its own,
+  and another reader would take them for a hidden file. `write` still fails its
+  verification over any such block, and the surface test judges only the blocks
+  it wrote.
 - Every real read carries 1,000 to 1,500 stray pulses in its first 3,700
   values while the drive settles, and a burst among them can frame a false
   block. Decoding starts at the first disk information block that passes its

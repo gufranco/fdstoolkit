@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import pytest
-from device import UNPLUGGED, FakeFdsStick
+from device import ID_FINISH_WRITE, UNPLUGGED, FakeFdsStick
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
-from fdstoolkit.codecs.raw import encode_block_stream, encode_raw03
+from fdstoolkit.codecs.raw import encode_block_stream, encode_raw03, encode_write_stream
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.hardware.fdsstick import (
+    BLANKED_PACKETS,
     CHUNK_PAYLOAD,
     LEAD_IN_PACKETS,
     LEGACY_REPORTS,
@@ -17,8 +18,8 @@ from fdstoolkit.hardware.fdsstick import (
     RAW_SIDE_LIMIT,
     READS_AFTER_WRITE,
     SETTLE_PAUSE_S,
-    SETTLED_PACKETS,
     VENDOR_ID,
+    WRITE_FILL,
     WRITE_PAYLOAD,
     WRITE_STARTS,
     FdsStick,
@@ -223,11 +224,36 @@ def test_a_device_that_stops_after_the_lead_in_is_not_started_again() -> None:
 
 
 def test_a_device_that_stops_once_the_disk_has_turned_is_not_a_fault() -> None:
-    device = FakeFdsStick(accepts_writes=SETTLED_PACKETS)
+    body = raw_side()[: (LEAD_IN_PACKETS + 5) * WRITE_PAYLOAD]
+    device = FakeFdsStick(accepts_writes=LEAD_IN_PACKETS + 8)
 
-    stick_over(device).write_raw_side(bytes(WRITE_PAYLOAD * (SETTLED_PACKETS + 5)))
+    stick_over(device).write_raw_side(body, fill_to=LEAD_IN_PACKETS + 20)
 
-    assert len(device.written) == SETTLED_PACKETS * WRITE_PAYLOAD
+    assert bytes(device.written) == body + WRITE_FILL * (3 * WRITE_PAYLOAD)
+    assert device.finishes == [bytes([ID_FINISH_WRITE, 0x00])]
+
+
+def test_a_device_that_stops_inside_the_image_says_how_much_was_written() -> None:
+    device = FakeFdsStick(accepts_writes=LEAD_IN_PACKETS + 3)
+
+    with pytest.raises(HardwareFaultError, match="after 29 of 40 packet") as raised:
+        stick_over(device).write_raw_side(bytes(WRITE_PAYLOAD * 40), fill_to=60)
+
+    assert raised.value.kind is FaultKind.LINK
+    assert "only part of the image" in str(raised.value)
+
+
+def test_a_side_written_from_blocks_is_blanked_to_the_end_of_the_track() -> None:
+    disk = decode(blank_image(sides=1, headered=False, formatted=True, game_name="PAD"))[0]
+    blocks = [block.payload for block in disk.sides[0].blocks]
+    stream = encode_write_stream(blocks)
+    device = FakeFdsStick()
+
+    stick_over(device).write_side(0, blocks)
+
+    assert len(device.written) == BLANKED_PACKETS * WRITE_PAYLOAD
+    assert bytes(device.written).startswith(stream)
+    assert bytes(device.written)[-WRITE_PAYLOAD:] == WRITE_FILL * WRITE_PAYLOAD
 
 
 def test_a_packet_the_device_refuses_once_is_sent_again() -> None:

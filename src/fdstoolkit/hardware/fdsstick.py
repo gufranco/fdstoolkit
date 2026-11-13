@@ -33,7 +33,7 @@ SEQUENCE_MASK: Final = 0xFF
 FIRST_SEQUENCE: Final = 1
 MODE_READ: Final = 0x00
 MODE_WRITE: Final = 0x01
-SETTLED_PACKETS: Final = 400
+BLANKED_PACKETS: Final = 700
 PACKET_ATTEMPTS: Final = 2
 READS_AFTER_WRITE: Final = 8
 WRITE_STARTS: Final = 8
@@ -91,6 +91,18 @@ class ReportId(IntEnum):
     DISK_CHUNK = 0x11
     DISK_WRITE = 0x12
     FINISH_WRITE = 0x20
+
+
+def _packets(values: bytes) -> tuple[bytes, ...]:
+    return tuple(
+        bytes([ReportId.DISK_WRITE])
+        + values[start : start + WRITE_PAYLOAD].ljust(WRITE_PAYLOAD, WRITE_FILL)
+        for start in range(0, len(values), WRITE_PAYLOAD)
+    )
+
+
+def _blank_packet() -> bytes:
+    return bytes([ReportId.DISK_WRITE]) + WRITE_FILL * WRITE_PAYLOAD
 
 
 @runtime_checkable
@@ -220,36 +232,43 @@ class FdsStick:
 
         return bytes(out)
 
-    def write_raw_side(self, values: bytes, *, what: str = "writing a side") -> None:
+    def write_raw_side(
+        self, values: bytes, *, what: str = "writing a side", fill_to: int = 0
+    ) -> None:
+        packets = _packets(values)
+        blank = (_blank_packet(),) * max(fill_to - len(packets), 0)
         for _ in range(WRITE_STARTS - 1):
             try:
-                self._watched_write(values, what)
+                self._watched_write(packets, blank, what)
             except DriveNotReadyError:
                 self._pause(SETTLE_PAUSE_S)
                 continue
             return
-        self._watched_write(values, what)
+        self._watched_write(packets, blank, what)
 
-    def _watched_write(self, values: bytes, what: str) -> None:
+    def _watched_write(
+        self, packets: tuple[bytes, ...], blank: tuple[bytes, ...], what: str
+    ) -> None:
         with self._watchdog.side(what, writing=True):
-            self._watchdog.call(lambda: self._write_and_finish(values))
+            self._watchdog.call(lambda: self._write_and_finish(packets, blank))
             self._written = True
 
-    def _write_and_finish(self, values: bytes) -> None:
-        self._write_raw(values)
+    def _write_and_finish(self, packets: tuple[bytes, ...], blank: tuple[bytes, ...]) -> None:
+        self._write_raw(packets, blank)
         self._transport.send_feature(bytes([ReportId.FINISH_WRITE, 0x00]))
 
-    def _write_raw(self, values: bytes) -> None:
+    def _write_raw(self, packets: tuple[bytes, ...], blank: tuple[bytes, ...]) -> None:
         self._start(MODE_WRITE)
-        for index, start in enumerate(range(0, len(values), WRITE_PAYLOAD)):
-            chunk = values[start : start + WRITE_PAYLOAD]
-            packet = bytes([ReportId.DISK_WRITE]) + chunk.ljust(WRITE_PAYLOAD, WRITE_FILL)
+        for index, packet in enumerate((*packets, *blank)):
             if self._delivered(packet):
                 continue
             if index < LEAD_IN_PACKETS:
                 raise DriveNotReadyError(index)
-            if index < SETTLED_PACKETS:
-                message = f"the device stopped accepting data after {index} packet(s)"
+            if index < len(packets):
+                message = (
+                    f"the device stopped accepting data after {index} of {len(packets)} "
+                    "packet(s), so the side holds only part of the image"
+                )
                 raise HardwareFaultError(message, kind=FaultKind.LINK)
             break
 
@@ -281,7 +300,9 @@ class FdsStick:
             )
 
     def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
-        self.write_raw_side(encode_write_stream(blocks), what=f"writing side {side}")
+        self.write_raw_side(
+            encode_write_stream(blocks), what=f"writing side {side}", fill_to=BLANKED_PACKETS
+        )
 
 
 @runtime_checkable
