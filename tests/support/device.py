@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from fdstoolkit.codecs.raw import decode_write_stream, encode_block_stream
+from fdstoolkit.codecs.raw import encode_block_stream
+from fdstoolkit.codecs.write_stream import decode_write_stream
 
 CHUNK_PAYLOAD = 0xFE
 WRITE_PAYLOAD = 0xFF

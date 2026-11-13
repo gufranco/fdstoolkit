@@ -71,20 +71,24 @@ a factor of two and carry no tolerance.
   flash, and one published reading of `0x06` is a 64 KB block erase.
 - The write stream follows the one captured write of the official tool, as
   fdsstick-cli documents it from a USB capture of `fdsstick_20160926.exe`: a
-  `C0 00 AB` header, then values 1 to 3 packed four to a byte, each data bit one
-  value, bytes taken in nibble-interleaved order, and `0x20 00` after the data.
-  The lengths between blocks are not the tool's: they come from factory sides
-  read through this toolkit. A lead-in of 4,500 bytes of `0xAA` puts the first
-  block where a factory side has it, 250-byte gaps read back as 1,006 bits
-  against the factory's 1,005, and after the last block a gap of about 243 bytes
-  is followed by `D7 75 5D` repeated, which writes the bits 0, 1, 1 that a
-  factory side carries to the end of its track. The stick plays the four values
-  of each byte lowest bits first, which is why the fill is not `D7 5D 75`: that
-  order reads back as a different pattern. The official tool sends
-  `0x20 00` once after the last side; this driver sends it after every side,
-  because it reads each side back before writing the next. An earlier reading
-  took `0x20 00` for an emulator eject; the capture shows the official tool
-  sending it to finish a physical write.
+  `C0 00 AB` header, then one value from 1 to 3 per data bit, packed four to a
+  byte, and `0x20 00` after the data. The stick plays the four values of a byte
+  lowest bits first, and the bits of each data byte lowest first. A one is value
+  1, a zero after a one is 3, and a zero after a zero is 2. The lengths between
+  blocks are not the tool's: they come from factory sides read through this
+  toolkit, and `codecs/write_stream.py` builds each side bit by bit to meet
+  them. An 18,000-bit lead-in puts the first block where a factory side has it,
+  999-bit gaps read back as 1,005 bits, and after the last block a run of 976 to
+  978 zero bits, set by the last two bits of its checksum, reads back as the
+  factory's 976, followed by the factory fill: the bits 1, 1, 0, 1, five zeros,
+  then 1, 1, 0 repeated. Blank packets carry on that fill as `75 5D D7`. The
+  official tool sends `0x20 00` once after the last side; this driver sends it
+  after every side, because it reads each side back before writing the next. An
+  earlier reading took `0x20 00` for an emulator eject; the capture shows the
+  official tool sending it to finish a physical write. A write is always
+  preceded by a read of the same side in the same session: two of four writes
+  that a script started without one stopped partway through the image, leaving a
+  half-written side.
 - The report map changed between firmware generations. A console app that opened
   this same device in 2015 started a read with `0x11` and took data from `0x12`,
   with separate `0x13` and `0x14` for writing and no mode byte anywhere. The two
@@ -157,6 +161,23 @@ a factor of two and carry no tolerance.
 - The read and write paths have run against one FDSStick on firmware 3.12. Every
   other driver test drives a recording stand-in, which proves which bytes we send
   and not that a device accepts them.
+
+## Hard rules
+
+Every disk write stays inside the factory layout, as measured on factory sides:
+gaps of 982 to 1,055 bits between blocks, a run of 975 or 976 bits after the
+last block, and the factory fill to the end of the track. `factory_violations`
+in `codecs/write_stream.py` checks a stream against those ranges, and a test
+runs every kind of side through the encoder and fails the build on any
+violation. A change that moves a write outside them is not done. The first
+block's position is judged as an average over writes, never by one read: the
+drive turns ready at a point that moves by hundreds of bits each time it spins
+up, on factory disks too, and the stick holds the first packet until ready,
+about 2.4 s, then plays one packet every 10 to 11 ms, so the stream cannot shift
+it. Ten writes of the 18,000-bit lead-in averaged 17,337 bits against 17,229 for
+the two factory sides measured. The duplicator's noise after each block and
+before the lead-in is a by-product, not part of the layout, and is never
+imitated.
 
 ## The gates
 

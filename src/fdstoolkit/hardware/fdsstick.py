@@ -7,12 +7,12 @@ from collections.abc import Callable, Iterator, Sequence
 from enum import IntEnum
 from typing import Final, Protocol, cast, runtime_checkable
 
-from fdstoolkit.codecs.raw import (
+from fdstoolkit.codecs.raw import decode_packed
+from fdstoolkit.codecs.write_stream import (
     WRITE_FILL,
     WRITE_GAP_BYTE,
     WRITE_HEADER,
     WRITE_LEAD_IN_BYTES,
-    decode_packed,
     encode_write_stream,
 )
 from fdstoolkit.drive.captures import Capture

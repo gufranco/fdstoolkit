@@ -5,7 +5,8 @@ from device import ID_FINISH_WRITE, UNPLUGGED, FakeFdsStick
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
-from fdstoolkit.codecs.raw import encode_block_stream, encode_raw03, encode_write_stream
+from fdstoolkit.codecs.raw import encode_block_stream, encode_raw03
+from fdstoolkit.codecs.write_stream import encode_write_stream
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.hardware.fdsstick import (
     BLANKED_PACKETS,
@@ -33,7 +34,7 @@ EMULATOR_REPORTS = frozenset({0x21, 0x22, 0x23})
 FINISH = bytes([0x20, 0x00])
 WRITE_REPORT_LENGTH = 0x100
 PACKETS_PAST_THE_WRAP = 300
-FACTORY_FILL = bytes([0xD7, 0x75, 0x5D])
+FACTORY_FILL = bytes([0x75, 0x5D, 0xD7])
 FILLS_PER_PACKET = 85
 
 
