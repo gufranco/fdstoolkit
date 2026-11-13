@@ -4,7 +4,6 @@ import hashlib
 import json
 from importlib import resources
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -30,8 +29,8 @@ def payload_of(tmp_path: Path, name: str, size: int) -> str:
     return name
 
 
-def packer_file(tmp_path: Path, number: int, **fields: Any) -> dict[str, Any]:
-    entry: dict[str, Any] = {
+def packer_file(tmp_path: Path, number: int, **fields: object) -> dict[str, object]:
+    entry: dict[str, object] = {
         "file_number": number,
         "file_indicate_code": number,
         "file_name": f"FILE{number}",
@@ -42,8 +41,8 @@ def packer_file(tmp_path: Path, number: int, **fields: Any) -> dict[str, Any]:
     return {**entry, **fields}
 
 
-def packer_side(tmp_path: Path, **fields: Any) -> dict[str, Any]:
-    side: dict[str, Any] = {
+def packer_side(tmp_path: Path, **fields: object) -> dict[str, object]:
+    side: dict[str, object] = {
         "game_name": "SMB",
         "file_amount": 1,
         "files": [packer_file(tmp_path, 0)],
@@ -51,7 +50,7 @@ def packer_side(tmp_path: Path, **fields: Any) -> dict[str, Any]:
     return {**side, **fields}
 
 
-def build(tmp_path: Path, *sides: dict[str, Any]) -> Disk:
+def build(tmp_path: Path, *sides: dict[str, object]) -> Disk:
     manifest = FdsPackerManifest.parse({"sides": list(sides)}, root=tmp_path)
     disk, _ = decode(manifest.build())
     return disk

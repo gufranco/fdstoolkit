@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -20,28 +19,35 @@ from fdstoolkit.core.files import extract_files
 from fdstoolkit.core.showa import ShowaDateError
 
 
-def manifest_dict(tmp_path: Path) -> dict[str, Any]:
+def manifest_file(tmp_path: Path, **fields: object) -> dict[str, object]:
     payload = tmp_path / "main.prg"
     payload.write_bytes(bytes([0xAA]) * 16)
+    entry: dict[str, object] = {
+        "name": "MAIN",
+        "address": "0x6000",
+        "kind": "program",
+        "path": str(payload),
+    }
+    return {**entry, **fields}
+
+
+def manifest_dict(
+    tmp_path: Path,
+    *,
+    file: dict[str, object] | None = None,
+    more_sides: tuple[dict[str, object], ...] = (),
+) -> dict[str, object]:
+    first: dict[str, object] = {
+        "side": 0,
+        "disk_number": 0,
+        "boot_file": 0,
+        "files": [file if file is not None else manifest_file(tmp_path)],
+    }
     return {
         "game_name": "SMB",
         "licensee": 1,
         "game_version": 0,
-        "sides": [
-            {
-                "side": 0,
-                "disk_number": 0,
-                "boot_file": 0,
-                "files": [
-                    {
-                        "name": "MAIN",
-                        "address": "0x6000",
-                        "kind": "program",
-                        "path": str(payload),
-                    }
-                ],
-            }
-        ],
+        "sides": [first, *more_sides],
     }
 
 
@@ -138,10 +144,8 @@ def test_a_manifest_loads_from_json(tmp_path: Path) -> None:
 
 def test_a_relative_file_path_resolves_against_the_manifest(tmp_path: Path) -> None:
     # Arrange
-    payload = manifest_dict(tmp_path)
+    payload = manifest_dict(tmp_path, file=manifest_file(tmp_path, path="main.prg"))
     (tmp_path / "main.prg").write_bytes(bytes([0x01]) * 8)
-    sides: list[dict[str, Any]] = payload["sides"]
-    sides[0]["files"][0]["path"] = "main.prg"
     path = tmp_path / "disk.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -154,9 +158,7 @@ def test_a_relative_file_path_resolves_against_the_manifest(tmp_path: Path) -> N
 
 def test_a_missing_file_is_reported(tmp_path: Path) -> None:
     # Arrange
-    payload = manifest_dict(tmp_path)
-    sides: list[dict[str, Any]] = payload["sides"]
-    sides[0]["files"][0]["path"] = str(tmp_path / "nope.prg")
+    payload = manifest_dict(tmp_path, file=manifest_file(tmp_path, path=str(tmp_path / "nope.prg")))
 
     # Act
     with pytest.raises(ValueError, match="not found") as raised:
@@ -193,9 +195,7 @@ def test_a_game_name_of_the_wrong_length_is_refused(tmp_path: Path) -> None:
 
 def test_an_unknown_file_kind_is_refused(tmp_path: Path) -> None:
     # Arrange
-    payload = manifest_dict(tmp_path)
-    sides: list[dict[str, Any]] = payload["sides"]
-    sides[0]["files"][0]["kind"] = "sound"
+    payload = manifest_dict(tmp_path, file=manifest_file(tmp_path, kind="sound"))
 
     # Act
     with pytest.raises(ValueError, match="unknown file kind") as raised:
@@ -220,9 +220,7 @@ def test_a_date_that_is_not_a_date_is_refused(tmp_path: Path) -> None:
 
 def test_a_multi_side_manifest_builds_every_side(tmp_path: Path) -> None:
     # Arrange
-    payload = manifest_dict(tmp_path)
-    sides: list[dict[str, Any]] = payload["sides"]
-    sides.append({"side": 1, "disk_number": 0, "files": []})
+    payload = manifest_dict(tmp_path, more_sides=({"side": 1, "disk_number": 0, "files": []},))
 
     # Act
     disk, _ = decode(build_from_manifest(DiskManifest.from_dict(payload, root=tmp_path)))

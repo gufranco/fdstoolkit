@@ -7,7 +7,6 @@ import threading
 import webbrowser
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
-from typing import Any
 
 import click
 import pytest
@@ -2093,7 +2092,7 @@ def test_web_starts_hidapi_on_the_main_thread_before_it_serves(
     order: list[str] = []
 
     class PrimedHid(FakeHid):
-        def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, Any]]:
+        def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, object]]:
             order.append("prime")
             return super().enumerate(vendor_id, product_id)
 

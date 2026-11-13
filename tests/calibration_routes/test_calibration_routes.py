@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 from drive_double import SimulatedDrive
 from fastapi.testclient import TestClient
+from json_view import Json
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import TRUSTED_DRIVE, calibration_disk, calibration_image
@@ -38,13 +39,12 @@ def drive_fixture(monkeypatch: pytest.MonkeyPatch) -> SimulatedDrive:
     return drive
 
 
-def run(app: FastAPI, client: TestClient, payload: dict[str, object]) -> dict[str, Any]:
+def run(app: FastAPI, client: TestClient, payload: dict[str, object]) -> Json:
     started = client.post("/api/jobs/write", json=payload)
     assert started.status_code == OK, started.text
     job_id = started.json()["id"]
     assert app.state.jobs.wait(job_id, SETTLE)
-    finished: dict[str, Any] = client.get(f"/api/jobs/{job_id}").json()
-    return finished
+    return Json(client.get(f"/api/jobs/{job_id}").json())
 
 
 def test_blank_offers_the_calibration_image(client: TestClient) -> None:

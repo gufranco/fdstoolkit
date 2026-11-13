@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import io
 import zipfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 from capture_fixture import (
@@ -19,6 +19,7 @@ from capture_fixture import (
 )
 from drive_double import FaultPlan, SimulatedDrive
 from fastapi.testclient import TestClient
+from json_view import Json
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs import fds
@@ -62,13 +63,12 @@ def no_drive(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("fdstoolkit.ui.hardware_routes.open_fdsstick", opener)
 
 
-def run(app: FastAPI, client: TestClient, route: str, payload: dict[str, object]) -> dict[str, Any]:
+def run(app: FastAPI, client: TestClient, route: str, payload: dict[str, object]) -> Json:
     started = client.post(route, json=payload)
     assert started.status_code == OK, started.text
     job_id = started.json()["id"]
     assert app.state.jobs.wait(job_id, SETTLE)
-    finished: dict[str, Any] = client.get(f"/api/jobs/{job_id}").json()
-    return finished
+    return Json(client.get(f"/api/jobs/{job_id}").json())
 
 
 def test_a_dump_job_recovers_a_failed_block_like_the_command_line(
@@ -87,7 +87,7 @@ def test_a_dump_job_recovers_a_failed_block_like_the_command_line(
     assert job["state"] == "done", job
     assert "side 0 block 1: recovered by a pulse vote across 3 reads" in job["steps"]
     assert job["result"]["grade"] == "marginal"
-    assert job["result"]["captures"] is None
+    assert job["result"]["captures"].value is None
 
 
 def test_a_dump_job_hands_back_the_captures_it_was_asked_to_keep(
@@ -103,7 +103,7 @@ def test_a_dump_job_hands_back_the_captures_it_was_asked_to_keep(
     # Assert
     kept = job["result"]["captures"]
     assert kept["name"] == "dump.captures.zip"
-    bundle = read_zip(base64.b64decode(kept["data"]))
+    bundle = read_zip(base64.b64decode(kept["data"].text()))
     assert bundle.image == "dump.fds"
     assert bundle.sides == (0,)
 

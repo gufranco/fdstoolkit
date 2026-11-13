@@ -22,7 +22,7 @@ English | [日本語](README.ja.md)
 
 </div>
 
-**26** commands, every one but `doctor` also on the local web page. **1,806** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**26** commands, every one but `doctor` also on the local web page. **1,807** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 

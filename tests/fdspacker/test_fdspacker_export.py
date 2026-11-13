@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -24,8 +23,8 @@ def payload_of(tmp_path: Path, name: str, size: int) -> str:
     return name
 
 
-def packer_file(tmp_path: Path, number: int, **fields: Any) -> dict[str, Any]:
-    entry: dict[str, Any] = {
+def packer_file(tmp_path: Path, number: int, **fields: object) -> dict[str, object]:
+    entry: dict[str, object] = {
         "file_number": number,
         "file_indicate_code": number + 0x10,
         "file_name": f"F{number}",
@@ -36,7 +35,7 @@ def packer_file(tmp_path: Path, number: int, **fields: Any) -> dict[str, Any]:
     return {**entry, **fields}
 
 
-def unusual_side(tmp_path: Path) -> dict[str, Any]:
+def unusual_side(tmp_path: Path) -> dict[str, object]:
     return {
         "licensee_code": "$A4",
         "game_name": "Z\0",
@@ -62,7 +61,7 @@ def unusual_side(tmp_path: Path) -> dict[str, Any]:
     }
 
 
-def image_of(tmp_path: Path, *sides: dict[str, Any]) -> bytes:
+def image_of(tmp_path: Path, *sides: dict[str, object]) -> bytes:
     return FdsPackerManifest.parse({"sides": list(sides)}, root=tmp_path).build()
 
 

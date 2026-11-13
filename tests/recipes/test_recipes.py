@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -11,8 +10,8 @@ from fdstoolkit.edit.recipes import RECIPE_VERSION, load_recipes, recipes_for
 from fdstoolkit.edit.saves import SaveRecipe
 
 
-def recipe_file(tmp_path: Path, **overrides: Any) -> Path:
-    payload: dict[str, Any] = {
+def recipe_file(tmp_path: Path, **overrides: object) -> Path:
+    payload: dict[str, object] = {
         "version": RECIPE_VERSION,
         "recipes": [
             {

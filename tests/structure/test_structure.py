@@ -70,3 +70,21 @@ def test_every_page_test_opens_its_three_blocks_with_bare_markers() -> None:
     # Assert
     assert found
     assert {name: markers for name, markers in found.items() if markers != list(MARKERS)} == {}
+
+
+def test_no_python_file_names_typing_any() -> None:
+    # Arrange
+    roots = (TESTS.parent / "src", TESTS)
+
+    # Act
+    found = [
+        f"{path.name}:{node.lineno}"
+        for root in roots
+        for path in sorted(root.rglob("*.py"))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Name | ast.alias)
+        and getattr(node, "id", getattr(node, "name", "")) == "Any"
+    ]
+
+    # Assert
+    assert found == []

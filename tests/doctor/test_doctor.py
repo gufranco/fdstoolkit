@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
 
 import pytest
 from hid_double import FakeHandle, FakeHid, stick
@@ -25,11 +24,11 @@ def missing_hid() -> FakeHid:
     raise ImportError
 
 
-def status_of(report: Any, name: str) -> CheckStatus:
+def status_of(report: DoctorReport, name: str) -> CheckStatus:
     return next(check.status for check in report.checks if check.name == name)
 
 
-def detail_of(report: Any, name: str) -> str:
+def detail_of(report: DoctorReport, name: str) -> str:
     return next(check.detail for check in report.checks if check.name == name)
 
 
@@ -118,7 +117,7 @@ def test_a_report_with_only_warnings_is_healthy() -> None:
 def test_a_usb_stack_that_cannot_list_devices_is_a_warning() -> None:
     # Arrange
     class BrokenHid:
-        def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, Any]]:
+        def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, object]]:
             del vendor_id, product_id
             message = "no backend"
             raise OSError(message)

@@ -3,11 +3,12 @@ from __future__ import annotations
 import base64
 import threading
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 from fastapi.testclient import TestClient
+from json_view import Json
 from pydantic import BaseModel
 
 from fdstoolkit.build.blank import blank_image
@@ -71,13 +72,12 @@ def absent_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("fdstoolkit.ui.hardware_routes.open_fdsstick", opener)
 
 
-def run(app: FastAPI, client: TestClient, route: str, payload: dict[str, object]) -> dict[str, Any]:
+def run(app: FastAPI, client: TestClient, route: str, payload: dict[str, object]) -> Json:
     started = client.post(route, json=payload)
     assert started.status_code == OK, started.text
     job_id = started.json()["id"]
     assert app.state.jobs.wait(job_id, SETTLE)
-    finished: dict[str, Any] = client.get(f"/api/jobs/{job_id}").json()
-    return finished
+    return Json(client.get(f"/api/jobs/{job_id}").json())
 
 
 @pytest.mark.usefixtures("absent")
@@ -324,7 +324,7 @@ def test_a_write_job_that_fails_still_offers_the_backup(
     # Assert
     assert job["state"] == JobState.FAILED
     assert job["kept"]["name"] == "before.fds"
-    assert base64.b64decode(job["kept"]["data"])[:1] == bytes([0x01])
+    assert base64.b64decode(job["kept"]["data"].text())[:1] == bytes([0x01])
 
 
 def test_a_surface_job_can_be_stopped_between_patterns(
@@ -405,10 +405,10 @@ def test_a_confirmed_surface_job_reports_its_coverage(app: FastAPI, client: Test
 
     # Assert
     assert job["state"] == expected
-    assert job["result"]["rows"][0]["coverage"] > 0
+    assert job["result"]["rows"][0]["coverage"].number() > 0
     assert job["result"]["headline"] == "grade clean"
     assert "side 0 pass 1 pattern unique data" in job["steps"]
-    assert job["result"]["rows"][0]["pulses"] is None
+    assert job["result"]["rows"][0]["pulses"].value is None
 
 
 @pytest.mark.usefixtures("attached")
@@ -436,7 +436,9 @@ def test_a_surface_job_names_why_it_stopped(
     job = run(app, client, "/api/jobs/surface", {"sides": 1, "quick": True, "confirm": True})
 
     # Assert
-    assert job["result"]["headline"].startswith("stopped early: a block failed on two patterns")
+    assert (
+        job["result"]["headline"].text().startswith("stopped early: a block failed on two patterns")
+    )
     assert not job["result"]["ok"]
 
 
@@ -589,9 +591,9 @@ def test_a_calibration_against_its_reference_reads_clean(app: FastAPI, client: T
     # Assert
     assert job["state"] == expected
     assert job["stoppable"]
-    assert job["steps"][0].startswith("judge the drive only with a disk it did not write")
-    assert job["steps"][1].startswith("read 1: 2 of 2 blocks")
-    assert job["result"]["ok"] is True
+    assert job["steps"][0].text().startswith("judge the drive only with a disk it did not write")
+    assert job["steps"][1].text().startswith("read 1: 2 of 2 blocks")
+    assert job["result"]["ok"].value is True
     assert job["result"]["mode"] == "speed"
     assert len(job["result"]["rows"]) == 2
 
@@ -607,7 +609,7 @@ def test_a_calibration_without_a_reference_reads_by_checksum(
     job = run(app, client, "/api/jobs/calibrate", {"mode": "head", "passes": 1})
 
     # Assert
-    assert job["result"]["ok"] is expected
+    assert job["result"]["ok"].value is expected
     assert "pulses short" not in job["steps"][1]
 
 
@@ -711,8 +713,8 @@ def test_a_calibration_job_on_a_stick_that_sends_counts_shows_the_timing(
     job = run(app, client, "/api/jobs/calibrate", {"mode": "speed", "passes": 1})
 
     # Assert
-    assert any(step.startswith("timing: short") for step in job["steps"])
-    assert job["result"]["ok"] is True
+    assert any(step.text().startswith("timing: short") for step in job["steps"])
+    assert job["result"]["ok"].value is True
     assert len(job["result"]["timing"]) == 1
 
 
@@ -726,7 +728,7 @@ def test_a_dump_job_can_save_a_qd(app: FastAPI, client: TestClient) -> None:
 
     # Assert
     assert job["result"]["name"] == expected
-    assert job["result"]["size"] % 65536 == 0
+    assert job["result"]["size"].number() % 65536 == 0
 
 
 def test_a_dump_job_that_fails_still_offers_its_captures(
@@ -745,7 +747,7 @@ def test_a_dump_job_that_fails_still_offers_its_captures(
 
     # Assert
     assert job["state"] == JobState.FAILED
-    assert job["kept"]["name"].endswith(".zip")
+    assert job["kept"]["name"].text().endswith(".zip")
     assert any("the USB link skipped 1 packet(s)" in step for step in job["steps"])
 
 
@@ -777,7 +779,7 @@ def test_a_dump_job_names_a_gap_the_ram_adapter_would_skip(
     job = run(app, client, "/api/jobs/dump", {})
 
     # Assert
-    assert any(step.startswith("side 0: [FDS017] ") for step in job["steps"])
+    assert any(step.text().startswith("side 0: [FDS017] ") for step in job["steps"])
 
 
 @pytest.mark.usefixtures("attached")
