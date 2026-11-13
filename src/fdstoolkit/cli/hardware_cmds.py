@@ -29,7 +29,7 @@ from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import created_now, write_bundle
 from fdstoolkit.drive.pulse import pulse_lines
 from fdstoolkit.drive.recovery import recover
-from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
+from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick, prime_hid
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
     MAX_PASSES,
@@ -446,6 +446,7 @@ def _log_steps() -> None:
 
 def _start_web(*, host: str, port: int, open_browser: bool, verbose: bool = False) -> None:
     run, build = _require_web()
+    prime_hid()
     if verbose:
         _log_steps()
     address = f"http://{host}:{port}"

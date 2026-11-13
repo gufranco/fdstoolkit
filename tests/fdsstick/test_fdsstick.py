@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from collections import deque
 from collections.abc import Iterator
@@ -14,10 +15,12 @@ from fdstoolkit.hardware.fdsstick import (
     CHUNK_PAYLOAD,
     PRODUCT_ID,
     VENDOR_ID,
+    WRITE_PAYLOAD,
     FdsStick,
     HidApiTransport,
     ReportId,
     open_fdsstick,
+    prime_hid,
 )
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, StallError
@@ -388,3 +391,71 @@ def test_an_unexpected_failure_while_opening_leaves_the_drive_free(
 
     stick.close()
     assert stick.closed_lock
+
+
+class ThreadNoting(FakeTransport):
+    def __init__(self, responses: dict[int, deque[bytes]] | None = None) -> None:
+        super().__init__(responses)
+        self.threads: set[int] = set()
+
+    def send_feature(self, data: bytes) -> None:
+        self.threads.add(threading.get_ident())
+        super().send_feature(data)
+
+    def get_feature(self, report_id: int, length: int) -> bytes:
+        self.threads.add(threading.get_ident())
+        return super().get_feature(report_id, length)
+
+    def write_output(self, data: bytes) -> int:
+        self.threads.add(threading.get_ident())
+        return super().write_output(data)
+
+
+def test_every_usb_call_of_a_read_runs_on_one_thread() -> None:
+    transport = ThreadNoting({ReportId.DISK_CHUNK: read_packets(bytes(CHUNK_PAYLOAD * 4))})
+
+    FdsStick(transport).read_raw_side()
+
+    assert len(transport.threads) == 1
+
+
+def test_every_usb_call_of_a_write_runs_on_one_thread() -> None:
+    transport = ThreadNoting()
+
+    FdsStick(transport).write_raw_side(bytes(WRITE_PAYLOAD * 3))
+
+    assert len(transport.threads) == 1
+    assert len(transport.outputs) == 3
+
+
+def test_priming_starts_hidapi_by_listing_the_stick(monkeypatch: pytest.MonkeyPatch) -> None:
+    listed: list[tuple[int, int]] = []
+
+    class FakeModule:
+        def device(self) -> FakeHidDevice:
+            return FakeHidDevice()
+
+        def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, object]]:
+            listed.append((vendor_id, product_id))
+            return []
+
+    monkeypatch.setattr(fdsstick_module, "_load_hid", FakeModule)
+
+    prime_hid()
+
+    assert listed == [(VENDOR_ID, PRODUCT_ID)]
+
+
+def test_priming_without_hidapi_says_so_and_returns(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def refuse() -> object:
+        message = "no module named hid"
+        raise ImportError(message)
+
+    monkeypatch.setattr(fdsstick_module, "_load_hid", refuse)
+
+    with caplog.at_level(logging.INFO, logger=fdsstick_module.__name__):
+        prime_hid()
+
+    assert "hidapi is not installed" in caplog.text

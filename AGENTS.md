@@ -138,6 +138,11 @@ a factor of two and carry no tolerance.
   so the driver sends no other value. Pulse timing comes from the firmware: the
   FDSStick's author shows it from his own debug program, and `calibrate`
   measures it from any read whose bytes are pulse counts rather than classes.
+- hidapi on macOS binds to the thread that makes its first call, and cleaning up at
+  exit crashes with SIGTRAP when that thread is gone. `fdstoolkit web` therefore
+  makes the first call on the main thread before it serves. Every USB call of one
+  side runs in one supervised thread: a thread per packet left gaps of up to 25 ms
+  in a web write, and the stick refused the rest of the side.
 - The read and write paths have run against one FDSStick on firmware 3.12. Every
   other driver test drives a recording stand-in, which proves which bytes we send
   and not that a device accepts them.

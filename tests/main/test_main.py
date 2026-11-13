@@ -1731,6 +1731,29 @@ def test_web_starts_the_application(monkeypatch: pytest.MonkeyPatch) -> None:
     assert answered == [frozenset({"127.0.0.1"})]
 
 
+def test_web_starts_hidapi_on_the_main_thread_before_it_serves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order: list[str] = []
+
+    def run(*_: object, **__: object) -> None:
+        order.append("run")
+
+    def build(**_: object) -> object:
+        return object()
+
+    def prime() -> None:
+        order.append("prime")
+
+    monkeypatch.setattr(hardware_cmds, "_require_web", lambda: (run, build))
+    monkeypatch.setattr(hardware_cmds, "prime_hid", prime)
+
+    result = runner.invoke(app, ["web", "--no-open"])
+
+    assert result.exit_code == 0
+    assert order == ["prime", "run"]
+
+
 def test_web_verbose_prints_every_job_step(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hardware_cmds, "_require_web", _stub_web)
     package = logging.getLogger("fdstoolkit")

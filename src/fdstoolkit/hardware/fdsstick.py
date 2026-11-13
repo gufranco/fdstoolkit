@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import time
 from collections.abc import Callable, Iterator, Sequence
 from enum import IntEnum
@@ -39,6 +40,8 @@ WRITE_STARTS: Final = 8
 SETTLE_PAUSE_S: Final = 2.0
 LEAD_IN_PACKETS: Final = (len(WRITE_HEADER) + WRITE_LEAD_IN_BYTES) // WRITE_PAYLOAD
 WRITE_FILL: Final = bytes([WRITE_GAP_BYTE])
+
+logger = logging.getLogger(__name__)
 
 LEGACY_REPORTS: Final = (0x11, 0x12, 0x13, 0x14)
 
@@ -156,14 +159,11 @@ class FdsStick:
         return self._watchdog
 
     def _start(self, mode: int) -> None:
-        start = bytes([ReportId.DISK_START, mode])
-        self._watchdog.call(lambda: self._transport.send_feature(start))
+        self._transport.send_feature(bytes([ReportId.DISK_START, mode]))
 
     def _chunk(self, *, opening: bool) -> bytes:
         try:
-            return self._watchdog.call(
-                lambda: self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
-            )
+            return self._transport.get_feature(ReportId.DISK_CHUNK, CHUNK_PAYLOAD + 3)
         except OSError as error:
             if opening:
                 raise NothingReadError(error) from error
@@ -183,7 +183,7 @@ class FdsStick:
 
     def _watched_read(self, what: str, mode: int) -> bytes:
         with self._watchdog.side(what):
-            return self._read_raw(mode)
+            return self._watchdog.call(lambda: self._read_raw(mode))
 
     def _read_raw(self, mode: int) -> bytes:
         self._start(mode)
@@ -232,10 +232,12 @@ class FdsStick:
 
     def _watched_write(self, values: bytes, what: str) -> None:
         with self._watchdog.side(what, writing=True):
-            self._write_raw(values)
-            finish = bytes([ReportId.FINISH_WRITE, 0x00])
-            self._watchdog.call(lambda: self._transport.send_feature(finish))
+            self._watchdog.call(lambda: self._write_and_finish(values))
             self._written = True
+
+    def _write_and_finish(self, values: bytes) -> None:
+        self._write_raw(values)
+        self._transport.send_feature(bytes([ReportId.FINISH_WRITE, 0x00]))
 
     def _write_raw(self, values: bytes) -> None:
         self._start(MODE_WRITE)
@@ -254,7 +256,7 @@ class FdsStick:
     def _delivered(self, packet: bytes) -> bool:
         for _ in range(PACKET_ATTEMPTS):
             try:
-                taken = self._watchdog.call(lambda: self._transport.write_output(packet))
+                taken = self._transport.write_output(packet)
             except OSError as error:
                 raise HardwareFaultError(
                     _link_lost("during a write", error), kind=FaultKind.LINK
@@ -319,6 +321,8 @@ class HidApiTransport:
 class HidModule(Protocol):
     def device(self) -> HidDevice: ...
 
+    def enumerate(self, vendor_id: int, product_id: int) -> list[dict[str, object]]: ...
+
 
 def _load_hid() -> HidModule:
     return cast("HidModule", importlib.import_module("hid"))
@@ -335,6 +339,15 @@ def _opened(hid: HidModule) -> HidDevice:
         )
         raise HardwareFaultError(message, kind=FaultKind.LINK) from error
     return device
+
+
+def prime_hid() -> None:
+    try:
+        hid = _load_hid()
+    except ImportError:
+        logger.info("hidapi is not installed, so there is no USB layer to start")
+        return
+    hid.enumerate(VENDOR_ID, PRODUCT_ID)
 
 
 def open_fdsstick() -> FdsStick:
