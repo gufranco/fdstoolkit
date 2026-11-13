@@ -427,6 +427,8 @@ def test_a_stick_that_stops_answering_mid_read_is_a_stall(gate: threading.Event)
     assert "reading side 0" in str(caught.value)
     assert "half written" not in str(caught.value)
     assert stick.captures == ()
+    assert not transport.closed_event.is_set()
+    gate.set()
     assert transport.closed_event.wait(1.0)
 
 
@@ -442,6 +444,8 @@ def test_a_stick_that_stops_accepting_a_write_is_a_stall(gate: threading.Event) 
     # Assert
     assert caught.type is StallError
     assert "half written" in str(caught.value)
+    assert not transport.closed_event.is_set()
+    gate.set()
     assert transport.closed_event.wait(1.0)
 
 

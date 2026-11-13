@@ -173,6 +173,8 @@ def test_a_call_that_never_returns_is_a_stall(gate: threading.Event) -> None:
     # Assert
     assert caught.value.kind is FaultKind.TIMEOUT
     assert "reading side 0 did not finish within 0.1 seconds" in str(caught.value)
+    assert not closed.is_set()
+    gate.set()
     assert closed.wait(1.0)
 
 
@@ -264,3 +266,32 @@ def test_only_the_recent_sides_set_the_limit() -> None:
 
     # Assert
     assert watchdog.measured == pytest.approx(1.0)
+
+
+def test_a_call_made_after_the_deadline_closes_the_device_at_once() -> None:
+    # Arrange
+    clock = Clock()
+    closed = threading.Event()
+    watchdog = Watchdog(on_stall=closed.set, now=clock)
+
+    # Act
+    with pytest.raises(StallError) as raised:
+        call_after_the_deadline(watchdog, clock, threading.Event())
+
+    # Assert
+    assert raised.type is StallError
+    assert closed.is_set()
+
+
+def test_a_call_that_returns_in_time_never_closes_the_device() -> None:
+    # Arrange
+    closed = threading.Event()
+    watchdog = Watchdog(on_stall=closed.set)
+
+    # Act
+    with watchdog.side("reading side 0"):
+        answer = watchdog.call(lambda: 7)
+
+    # Assert
+    assert answer == 7
+    assert not closed.is_set()

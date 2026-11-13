@@ -27,6 +27,23 @@ class StallError(HardwareFaultError):
         super().__init__(message + (HALF_WRITTEN if writing else ""), kind=FaultKind.TIMEOUT)
 
 
+class _InFlight:
+    def __init__(self, *, finished: bool = False) -> None:
+        self._lock = threading.Lock()
+        self._finished = finished
+        self._abandoned = False
+
+    def finish(self) -> bool:
+        with self._lock:
+            self._finished = True
+            return self._abandoned
+
+    def abandon(self) -> bool:
+        with self._lock:
+            self._abandoned = True
+            return self._finished
+
+
 class Watchdog:
     def __init__(
         self,
@@ -80,11 +97,12 @@ class Watchdog:
             return action()
         remaining = self._until - self._now()
         if remaining <= 0:
-            raise self._stalled()
+            raise self._stalled(_InFlight(finished=True))
 
         values: list[T] = []
         errors: list[Exception] = []
         done = threading.Event()
+        flight = _InFlight()
 
         def work() -> None:
             try:
@@ -93,14 +111,17 @@ class Watchdog:
                 errors.append(error)
             finally:
                 done.set()
+                if flight.finish():
+                    self._on_stall()
 
         threading.Thread(target=work, name="fdstoolkit-usb", daemon=True).start()
         if not done.wait(remaining):
-            raise self._stalled()
+            raise self._stalled(flight)
         if errors:
             raise errors[0]
         return values[0]
 
-    def _stalled(self) -> StallError:
-        threading.Thread(target=self._on_stall, name="fdstoolkit-close", daemon=True).start()
+    def _stalled(self, flight: _InFlight) -> StallError:
+        if flight.abandon():
+            self._on_stall()
         return StallError(self._what, self._armed, writing=self._writing)

@@ -161,7 +161,10 @@ a factor of two and carry no tolerance.
   exit crashes with SIGTRAP when that thread is gone. `fdstoolkit web` therefore
   makes the first call on the main thread before it serves. Every USB call of one
   side runs in one supervised thread: a thread per packet left gaps of up to 25 ms
-  in a web write, and the stick refused the rest of the side.
+  in a web write, and the stick refused the rest of the side. A side that
+  overruns its deadline is reported at once, but the device is closed by that
+  same thread when the hung call returns: hidapi does not allow closing a device
+  while another thread is inside a call on it.
 - The read and write paths have run against one FDSStick on firmware 3.12. Every
   other driver test drives a recording stand-in, which proves which bytes we send
   and not that a device accepts them.
