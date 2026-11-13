@@ -23,7 +23,6 @@ from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, Watchdog
 
 VENDOR_ID: Final = 0x16D0
 PRODUCT_ID: Final = 0x0AAA
-PRODUCT_STRING: Final = "FDSStick"
 
 CHUNK_PAYLOAD: Final = 0xFE
 WRITE_PAYLOAD: Final = 0xFF

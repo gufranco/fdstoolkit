@@ -17,10 +17,10 @@ from fdstoolkit.build.calibration import (
 )
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
-from fdstoolkit.core.disk import Disk, Side, require_readable_sides
+from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side, require_readable_sides
 from fdstoolkit.drive.captures import latest_capture
 from fdstoolkit.drive.monitor import SpeedReading, lean, sample
-from fdstoolkit.edit.files import FileSpec, insert_file
+from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, insert_file
 from fdstoolkit.hardware.ports import DiskReader, DiskWriter, HardwareFaultError, selects_sides
 from fdstoolkit.hardware.session import (
     MAX_PASSES,
@@ -39,7 +39,7 @@ from fdstoolkit.hardware.session import (
 
 QUICK_FILE_SIZE: Final = 4096
 PATTERN_NAME: Final = "SURFACE"
-SIDE_CAPACITY: Final = fds.SIDE_SIZE
+SIDE_CAPACITY: Final = SIDE_SIZE
 HARD_FAILURES: Final = 2
 KEY_BYTES: Final = 16
 FINISH_INTERRUPTED: Final = (
@@ -259,7 +259,7 @@ def pattern_disk(
                 side=0,
                 spec=FileSpec(
                     name=f"{PATTERN_NAME}{number:02d}"[:8],
-                    address=0x6000,
+                    address=DEFAULT_LOAD_ADDRESS,
                     kind=FileKind.PROGRAM,
                     data=_data(pattern, key=key, side=index, number=number, size=size),
                 ),

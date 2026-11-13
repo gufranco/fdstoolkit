@@ -21,7 +21,7 @@ from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.qd import CrcMode
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, restore
 from fdstoolkit.core.diagnostics import worst_severity
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.disk import SIDE_SIZE, Disk
 from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
 from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import Bundle
@@ -99,7 +99,6 @@ PAGE_POLICY: Final = (
     "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
     "form-action 'self'; frame-ancestors 'none'"
 )
-SIDE_SIZE: Final = fds.SIDE_SIZE
 MIN_READS: Final = 2
 CALIBRATION_NAME: Final = "calibration.fds"
 

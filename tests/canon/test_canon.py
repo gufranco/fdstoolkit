@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.qd import decode as decode_qd
 from fdstoolkit.codecs.qd import encode as encode_qd
 from fdstoolkit.core.canon import (
@@ -15,6 +15,7 @@ from fdstoolkit.core.canon import (
     profile_by_name,
     restore,
 )
+from fdstoolkit.core.disk import SIDE_SIZE
 from fdstoolkit.core.diskinfo import (
     CONTENT_PROFILE,
     DATA_PROFILE,

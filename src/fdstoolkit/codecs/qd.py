@@ -6,11 +6,12 @@ from typing import Final
 from fdstoolkit.core.blocks import Block
 from fdstoolkit.core.crc import encode_crc
 from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
+from fdstoolkit.core.disk import SIDE_SIZE as FDS_SIDE_SIZE
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.core.parse import parse_side
 
 SIDE_SIZE: Final = 65536
-STANDARD_SIDE_SIZES: Final = (65500, 65536)
+STANDARD_SIDE_SIZES: Final = (FDS_SIDE_SIZE, SIDE_SIZE)
 
 
 class CrcMode(StrEnum):

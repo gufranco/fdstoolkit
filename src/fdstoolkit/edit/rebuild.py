@@ -11,9 +11,9 @@ from fdstoolkit.core.blocks import (
     FileHeader,
 )
 from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.edit.files import MAX_FILE_AMOUNT
 
 FILE_NUMBER_OFFSET: Final = 1
-MAX_FILE_AMOUNT: Final = 0xFF
 
 
 @dataclass(frozen=True, slots=True)

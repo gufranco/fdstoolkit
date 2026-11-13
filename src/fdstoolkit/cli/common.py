@@ -11,7 +11,7 @@ from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
 from fdstoolkit.core.blocks import BlockKind, FileKind
 from fdstoolkit.core.diagnostics import Diagnostic, Severity, worst_severity
-from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side
+from fdstoolkit.core.disk import SIDE_SIZE, SIDES_PER_DISK, Disk, Side
 from fdstoolkit.drive.captures import Bundle, BundleError
 from fdstoolkit.drive.imported import bundle_from_path
 
@@ -74,11 +74,11 @@ def is_save_file(path: Path) -> bool:
 
 
 def _check_save_file(path: Path, data: bytes) -> None:
-    if len(data) % fds.SIDE_SIZE == 0 and data[:1] == bytes([BlockKind.DISK_INFO]):
+    if len(data) % SIDE_SIZE == 0 and data[:1] == bytes([BlockKind.DISK_INFO]):
         return
     message = (
         f"{path.name} is not a Famicom Disk System save: an EverDrive save is the "
-        f"whole disk as a headerless image, a multiple of {fds.SIDE_SIZE} bytes that starts "
+        f"whole disk as a headerless image, a multiple of {SIDE_SIZE} bytes that starts "
         f"with the disk information, and this file holds {len(data)} bytes"
     )
     raise fail(message)

@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from typing import Final
 
 from fdstoolkit.codecs.raw import (
-    LEAD_IN_BITS,
     NOMINAL_LONG,
     NOMINAL_MEDIUM,
     NOMINAL_SHORT,
     encode_block_stream,
     unpack_raw03,
 )
+from fdstoolkit.core.bitstream import LEAD_IN_BITS
 from fdstoolkit.core.disk import Side
 
 NOMINALS: Final = (NOMINAL_SHORT, NOMINAL_MEDIUM, NOMINAL_LONG)

@@ -5,14 +5,17 @@ from typing import Final
 
 from fdstoolkit.codecs.raw import (
     GAP_VALUE,
+    LOW_FIRST_SHIFTS,
     MIN_GAP_VALUES,
     SYNC_MARK,
+    VALUES_PER_BYTE,
     PackOrder,
     block_regions,
     encode_bits,
     expected_length,
     unpack_in,
 )
+from fdstoolkit.core.bitstream import BITS_PER_BYTE
 from fdstoolkit.core.blocks import BlockKind, FileHeader
 from fdstoolkit.core.crc import CRC_SIZE, block_crc, decode_crc, encode_crc
 
@@ -23,9 +26,6 @@ WRITE_FILL: Final = bytes([0x75, 0x5D, 0xD7])
 WRITE_BIT_ONE: Final = 1
 WRITE_ZERO_AFTER_ZERO: Final = 2
 WRITE_ZERO_AFTER_ONE: Final = 3
-VALUES_PER_BYTE: Final = 4
-BITS_PER_BYTE: Final = 8
-LOW_FIRST_SHIFTS: Final = (0, 2, 4, 6)
 HEADER_VALUES: Final = len(WRITE_HEADER) * VALUES_PER_BYTE
 PACKET_VALUES: Final = WRITE_PACKET_BYTES * VALUES_PER_BYTE
 SYNC_ZEROS: Final = SYNC_MARK.bit_length() - 1

@@ -24,11 +24,10 @@ from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE, calibration_disk
 from fdstoolkit.cli import common, hardware_cmds
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds, qd
-from fdstoolkit.codecs.fds import SIDE_SIZE
 from fdstoolkit.codecs.qd import encode as encode_qd
 from fdstoolkit.codecs.raw import encode_raw03
 from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus, FileKind
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
 from fdstoolkit.drive.captures import Capture, load_bundle, write_bundle
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.fdsstick import FdsStick, HidApiTransport

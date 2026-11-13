@@ -12,8 +12,9 @@ from fdstoolkit.build.manifest import (
     build_from_manifest,
     load_manifest,
 )
-from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.disk import SIDE_SIZE
 from fdstoolkit.core.diskinfo import DiskInfo
 from fdstoolkit.core.showa import ShowaDateError
 from fdstoolkit.edit.files import extract_files

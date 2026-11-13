@@ -3,9 +3,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from fdstoolkit.codecs import fds
 from fdstoolkit.core.blocks import Block, BlockKind
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
 from fdstoolkit.drive.align import good_block
 from fdstoolkit.drive.captures import Bundle, Capture
 from fdstoolkit.drive.vote import VoteResult, identities, vote_side
@@ -104,7 +103,7 @@ def rebuild(bundle: Bundle) -> Rebuild:
     lines: list[str] = []
     for side in bundle.sides:
         vote = vote_side(bundle.of_side(side))
-        sides.append(Side(blocks=vote.side.blocks, tail=b"", capacity=fds.SIDE_SIZE))
+        sides.append(Side(blocks=vote.side.blocks, tail=b"", capacity=SIDE_SIZE))
         unresolved.extend((side, block) for block in vote.unresolved)
         if vote.recovered:
             lines.append(f"  side {side}: {len(vote.recovered)} block(s) recovered by a pulse vote")

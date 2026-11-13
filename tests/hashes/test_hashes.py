@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import zlib
 
-from fdstoolkit.codecs.fds import SIDE_SIZE
+from fdstoolkit.core.disk import SIDE_SIZE
 from fdstoolkit.identify.hashes import Digests, digests_of, retroachievements_hash, side_digests
 
 

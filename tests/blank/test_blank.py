@@ -9,7 +9,8 @@ from fdstoolkit.build.blank import (
     REFERENCE_BLANK_128_SHA256,
     blank_image,
 )
-from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.disk import SIDE_SIZE
 from fdstoolkit.core.diskinfo import DiskInfo
 from fdstoolkit.identify.provenance import Origin, provenance_of
 

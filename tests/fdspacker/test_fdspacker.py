@@ -10,9 +10,9 @@ import pytest
 
 from fdstoolkit.build.fdspacker import FdsPackerError, FdsPackerManifest
 from fdstoolkit.build.manifest import ManifestShapeError, build_manifest_file
-from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.blocks import FileHeader, FileKind
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.disk import SIDE_SIZE, Disk
 from fdstoolkit.edit.files import extract_files
 
 DEFAULT_INFO = (

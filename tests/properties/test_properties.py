@@ -8,7 +8,7 @@ from fdstoolkit.codecs.raw import RawEncoding, decode_raw03, encode_block_stream
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.canon import canonicalise, restore
 from fdstoolkit.core.crc import block_crc, decode_crc, encode_crc
-from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side
+from fdstoolkit.core.disk import SIDE_SIZE, SIDES_PER_DISK, Disk, Side
 from fdstoolkit.core.diskinfo import CONTENT_PROFILE, VERIFICATION_STRING
 from fdstoolkit.patch.build import build_ips
 from fdstoolkit.patch.formats import apply_ips
@@ -36,7 +36,7 @@ def file_header(number: int, size: int) -> bytes:
 
 
 @st.composite
-def sides(draw: st.DrawFn, *, capacity: int = fds.SIDE_SIZE) -> Side:
+def sides(draw: st.DrawFn, *, capacity: int = SIDE_SIZE) -> Side:
     name = draw(st.binary(min_size=3, max_size=3))
     rewrite_count = draw(st.integers(min_value=0, max_value=9))
     payloads = draw(st.lists(st.binary(min_size=0, max_size=64), min_size=0, max_size=6))
@@ -54,7 +54,7 @@ def sides(draw: st.DrawFn, *, capacity: int = fds.SIDE_SIZE) -> Side:
 
 
 @st.composite
-def disks(draw: st.DrawFn, *, capacity: int = fds.SIDE_SIZE) -> Disk:
+def disks(draw: st.DrawFn, *, capacity: int = SIDE_SIZE) -> Disk:
     count = draw(st.integers(min_value=1, max_value=SIDES_PER_DISK))
     return Disk(sides=tuple(draw(sides(capacity=capacity)) for _ in range(count)))
 

@@ -8,7 +8,6 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import (
-    LEAD_IN_BITS,
     block_pulses,
     block_regions,
     block_starts,
@@ -18,6 +17,7 @@ from fdstoolkit.codecs.raw import (
     unpack_raw03,
 )
 from fdstoolkit.core.bios import REPAIR_HINTS
+from fdstoolkit.core.bitstream import LEAD_IN_BITS
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.monitor import (

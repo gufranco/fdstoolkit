@@ -3,7 +3,8 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Final
 
-from fdstoolkit.codecs.fds import HEADER_SIZE, has_header
+from fdstoolkit.codecs.fds import has_header
+from fdstoolkit.core.disk import HEADER_SIZE, SIDE_SIZE
 from fdstoolkit.patch.build import build_ips, build_ups
 from fdstoolkit.patch.formats import (
     PatchError,
@@ -13,8 +14,6 @@ from fdstoolkit.patch.formats import (
     apply_ups,
     detect_format,
 )
-
-SIDE_SIZE: Final = 65500
 
 
 class SaveFormat(StrEnum):

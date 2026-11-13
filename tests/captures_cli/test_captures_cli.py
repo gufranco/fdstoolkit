@@ -19,7 +19,7 @@ from typer.testing import CliRunner
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.disk import SIDE_SIZE, Disk
 from fdstoolkit.drive.captures import write_bundle
 
 runner = CliRunner()
@@ -239,7 +239,7 @@ def test_grade_cannot_compare_captures_with_an_image_that_holds_no_block(tmp_pat
     # Arrange
     bundle, _ = bundle_of(tmp_path, (None, None, None))
     empty = tmp_path / "empty.fds"
-    empty.write_bytes(bytes(fds.SIDE_SIZE))
+    empty.write_bytes(bytes(SIDE_SIZE))
 
     # Act
     result = runner.invoke(app, ["grade", str(empty), "--captures", str(bundle)])

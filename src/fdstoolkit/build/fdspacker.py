@@ -11,9 +11,9 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, cast
 
-from fdstoolkit.codecs.fds import SIDE_SIZE, encode
+from fdstoolkit.codecs.fds import encode
 from fdstoolkit.core.blocks import FILE_NAME_SIZE, Block, BlockKind
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
 from fdstoolkit.core.diskinfo import SHOWA_EPOCH, VERIFICATION_STRING, to_bcd
 
 TEXT_ENCODING: Final = "latin-1"

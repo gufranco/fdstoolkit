@@ -53,15 +53,6 @@ from fdstoolkit.quality.surface import (
 )
 from fdstoolkit.report import as_json
 
-DEFAULT_SIDES: Final = 1
-
-
-DEFAULT_PASSES: Final = 1
-
-
-DEFAULT_RETRY_COUNT: Final = 3
-
-
 UI_HINT: Final = (
     "this build carries no web interface, which a Homebrew install always does. "
     "Reinstall with: brew install gufranco/tap/fdstoolkit"

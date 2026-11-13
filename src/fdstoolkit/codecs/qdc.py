@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Final
 
-QDC_COUNT_NS: Final = 400
 ESCAPE: Final = 0x00
 WIDE_COUNT: Final = 0x01
 OVERFLOW: Final = 0x02

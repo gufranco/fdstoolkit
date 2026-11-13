@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from enum import StrEnum
 from typing import Final
 
+from fdstoolkit.core.bitstream import BITS_PER_BYTE, GAP_BITS, LEAD_IN_BITS
 from fdstoolkit.core.blocks import (
     DISK_INFO_SIZE,
     FILE_AMOUNT_SIZE,
@@ -26,22 +27,16 @@ GAP_VALUE: Final = 0
 SYNC_VALUE: Final = 1
 SHORTEST_GAP_BITS: Final = 480
 MIN_GAP_VALUES: Final = SHORTEST_GAP_BITS
-LEAD_IN_BITS: Final = 28300
-GAP_BITS: Final = 976
 ADAPTER_BLIND_BITS: Final = 488
-GAP_FILL: Final = 0xAA
 GAP_BYTES: Final = frozenset({0x00, 0xFF})
-BYTE_VALUES: Final = 8
 SYNC_MARK: Final = 0x80
 MARK_GAP_BITS: Final = SYNC_MARK.bit_length() - 1
-CAPTURE_CLOCK_HZ: Final = 6_000_000
 KEY_ONE_ONE: Final = 0x11
 KEY_ZERO_ZERO: Final = 0x00
 KEY_ONE_TWO: Final = 0x12
 KEY_ZERO_ONE: Final = 0x01
 KEY_ONE_ZERO: Final = 0x10
 HEADER_BITS: Final = 16
-BITS_PER_BYTE: Final = 8
 
 NOMINAL_SHORT: Final = 62
 NOMINAL_MEDIUM: Final = 93

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Final
 
-from fdstoolkit.codecs.fds import SIDE_SIZE, build_header
+from fdstoolkit.codecs.fds import build_header
 from fdstoolkit.core.blocks import DISK_INFO_SIZE
-from fdstoolkit.core.disk import SIDES_PER_DISK
+from fdstoolkit.core.disk import SIDE_SIZE, SIDES_PER_DISK
 from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, VERIFICATION_STRING
 
 GAME_NAME_LENGTH: Final = 3

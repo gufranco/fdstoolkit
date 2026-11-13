@@ -5,23 +5,20 @@ from typing import Final
 
 from fdstoolkit.core.blocks import BlockKind, FileHeader
 from fdstoolkit.core.diagnostics import CODES, Diagnostic, Severity
-from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side
+from fdstoolkit.core.disk import HEADER_MAGIC, HEADER_SIZE, SIDE_SIZE, SIDES_PER_DISK, Disk, Side
 from fdstoolkit.core.parse import parse_side
 
-MAGIC: Final = b"FDS\x1a"
-HEADER_SIZE: Final = 16
 LOST_IN_FDS: Final = frozenset({"FDS012", "FDS016"})
 KEEP_AS_QD: Final = (
     "a .fds keeps these bytes but not where the block ends, since it carries no checksums; "
     "write a .qd to keep the boundary"
 )
-SIDE_SIZE: Final = 65500
 
 
 def has_header(data: bytes) -> bool:
     return (
         len(data) > HEADER_SIZE
-        and data[: len(MAGIC)] == MAGIC
+        and data[: len(HEADER_MAGIC)] == HEADER_MAGIC
         and (len(data) - HEADER_SIZE) % SIDE_SIZE == 0
     )
 
@@ -45,7 +42,7 @@ def build_header(side_count: int) -> bytes:
     if not 1 <= side_count <= SIDES_PER_DISK:
         message = f"a side count must be 1 or {SIDES_PER_DISK}, got {side_count}"
         raise ValueError(message)
-    return MAGIC + bytes([side_count]) + bytes(HEADER_SIZE - len(MAGIC) - 1)
+    return HEADER_MAGIC + bytes([side_count]) + bytes(HEADER_SIZE - len(HEADER_MAGIC) - 1)
 
 
 def decode(data: bytes) -> tuple[Disk, tuple[Diagnostic, ...]]:
@@ -53,7 +50,7 @@ def decode(data: bytes) -> tuple[Disk, tuple[Diagnostic, ...]]:
     declared: int | None = None
     body = data
     if has_header(data):
-        declared = data[len(MAGIC)]
+        declared = data[len(HEADER_MAGIC)]
         body = data[HEADER_SIZE:]
 
     if body and len(body) % SIDE_SIZE:

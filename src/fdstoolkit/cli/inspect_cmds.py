@@ -15,11 +15,11 @@ from fdstoolkit.cli.common import (
     load_captures,
     side_summary,
 )
-from fdstoolkit.codecs import fds, qd
+from fdstoolkit.codecs import qd
 from fdstoolkit.core.bios import BootVerdict, predict_boot
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import worst_severity
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.disk import SIDE_SIZE, Disk
 from fdstoolkit.doctor import CheckStatus, diagnose
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.identify.layout import LayoutReading, layouts_for
@@ -135,7 +135,7 @@ def hash_command(
 ) -> None:
     """Hash an image, every side, and its canonical form, which -o also writes out."""
     disk, _, data, container = decode_image(image)
-    side_size = fds.SIDE_SIZE if container is Container.FDS else qd.SIDE_SIZE
+    side_size = SIDE_SIZE if container is Container.FDS else qd.SIDE_SIZE
     try:
         canonical = canonicalise(disk, profile_by_name(profile))
     except ValueError as error:

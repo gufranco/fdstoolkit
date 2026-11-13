@@ -10,11 +10,10 @@ from fdstoolkit.codecs import fds
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side
 from fdstoolkit.drive.align import good_block
-from fdstoolkit.edit.files import FileSpec, insert_file
+from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, insert_file
 
 CALIBRATION_GAME: Final = "CAL"
 FILE_SIZE: Final = 8949
-LOAD_ADDRESS: Final = 0x6000
 FACTORY_P95_SIDE: Final = 53_910
 LARGEST_FACTORY_SIDE: Final = 54_958
 
@@ -112,7 +111,7 @@ def calibration_disk(sides: int = SIDES_PER_DISK) -> Disk:
                 side=side,
                 spec=FileSpec(
                     name=_file_name(pattern, index),
-                    address=LOAD_ADDRESS,
+                    address=DEFAULT_LOAD_ADDRESS,
                     kind=FileKind.PROGRAM,
                     data=pattern_bytes(pattern),
                 ),

@@ -5,7 +5,8 @@ import zlib
 import pytest
 
 from fdstoolkit.build.blank import blank_image
-from fdstoolkit.codecs.fds import HEADER_SIZE, has_header
+from fdstoolkit.codecs.fds import has_header
+from fdstoolkit.core.disk import HEADER_SIZE
 from fdstoolkit.patch.apply import PatchOutcome, apply_patch
 from fdstoolkit.patch.formats import PatchError, PatchFormat, write_varint
 

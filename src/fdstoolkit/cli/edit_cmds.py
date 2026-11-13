@@ -22,7 +22,7 @@ from fdstoolkit.cli.common import (
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
-from fdstoolkit.edit.files import FileSpec, extract_files, insert_file
+from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, extract_files, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 from fdstoolkit.patch.apply import apply_patch
 from fdstoolkit.patch.formats import PatchError
@@ -81,7 +81,9 @@ def insert_command(
     *,
     file: Annotated[Path, typer.Option("--file", help="the file to add")],
     name: Annotated[str, typer.Option("--name", help="eight characters at most")],
-    address: Annotated[str, typer.Option("--address", help="load address, hex")] = "6000",
+    address: Annotated[
+        str, typer.Option("--address", help="load address, hex")
+    ] = f"{DEFAULT_LOAD_ADDRESS:X}",
     kind: Annotated[
         KindChoice, typer.Option("--kind", help="what the BIOS does with the file")
     ] = KindChoice.PROGRAM,

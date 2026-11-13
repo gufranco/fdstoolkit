@@ -9,9 +9,9 @@ from typing import Final
 from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.bios import BIOS_ERRORS, BLOCK_EXPECTED, CRC_FAILED
-from fdstoolkit.core.bitstream import emulated_side_size
+from fdstoolkit.core.bitstream import EMULATION_BUFFER, emulated_side_size
 from fdstoolkit.core.blocks import Block, BlockKind, declared_blocks, expected_kind
-from fdstoolkit.core.disk import SIDES_PER_DISK, Disk, Side, require_readable_sides
+from fdstoolkit.core.disk import SIDE_SIZE, SIDES_PER_DISK, Disk, Side, require_readable_sides
 from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
 from fdstoolkit.hardware.ports import (
     BlockRead,
@@ -25,7 +25,6 @@ DEFAULT_RETRIES = 3
 MAX_RETRIES: Final = 20
 MAX_PASSES: Final = 20
 MIN_PASSES = 2
-EMULATED_CAPACITY = 66560
 DISK_INFO_KIND: Final = bytes([BlockKind.DISK_INFO])
 SIDE_OFFSET: Final = FIELDS_BY_NAME["side"].offset
 SIDE_NAMES: Final = ("A", "B")
@@ -217,7 +216,7 @@ class DumpResult:
                 return candidate
         return Grade.CLEAN
 
-    def as_disk(self, capacity: int = fds.SIDE_SIZE) -> Disk:
+    def as_disk(self, capacity: int = SIDE_SIZE) -> Disk:
         return Disk(sides=tuple(side.as_side(capacity) for side in self.sides))
 
 
@@ -621,13 +620,13 @@ def _require_writable(writer: DiskWriter, disk: Disk) -> None:
     oversized = [
         index
         for index, side in enumerate(disk.sides)
-        if emulated_side_size(side) > EMULATED_CAPACITY
+        if emulated_side_size(side) > EMULATION_BUFFER
     ]
     if oversized:
         message = (
             f"side {oversized[0]} does not fit a disk: its gapped size is "
             f"{emulated_side_size(disk.sides[oversized[0]])} bytes against a capacity of "
-            f"{EMULATED_CAPACITY}"
+            f"{EMULATION_BUFFER}"
         )
         raise WriteRefusedError(message)
 

@@ -8,13 +8,10 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode as decode_fds
 from fdstoolkit.codecs.raw import (
     ADAPTER_BLIND_BITS,
-    BITS_PER_BYTE,
     CLASS0_LIMIT,
     CLASS1_LIMIT,
     CLASS2_LIMIT,
-    GAP_BITS,
     GAP_VALUE,
-    LEAD_IN_BITS,
     MARK_GAP_BITS,
     MIN_GAP_VALUES,
     NOMINAL_LONG,
@@ -39,6 +36,7 @@ from fdstoolkit.codecs.raw import (
     unpack_detected,
     unpack_raw03,
 )
+from fdstoolkit.core.bitstream import BITS_PER_BYTE, GAP_BITS, LEAD_IN_BITS
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.diagnostics import Severity
 

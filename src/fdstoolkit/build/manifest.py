@@ -9,14 +9,13 @@ from typing import Final, cast
 from fdstoolkit.build.blank import GAME_NAME_LENGTH, disk_info_block
 from fdstoolkit.build.fdspacker import FdsPackerManifest
 from fdstoolkit.build.fields import mapping, number, objects, text
-from fdstoolkit.codecs.fds import SIDE_SIZE, encode
+from fdstoolkit.codecs.fds import encode
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
 from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, VERIFICATION_STRING
 from fdstoolkit.core.showa import encode_date, parse_date
-from fdstoolkit.edit.files import FileSpec, insert_file
+from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, insert_file
 
-LOAD_ADDRESS: Final = 0x6000
 WORD_LIMIT: Final = 0xFFFF
 
 LICENCE_LENGTH: Final = len(VERIFICATION_STRING)
@@ -118,7 +117,9 @@ def _file_from(entry: Mapping[str, object], *, root: Path, where: str) -> Manife
     path = Path(text(entry, "path", where=where))
     return ManifestFile(
         name=text(entry, "name", where=where, default=""),
-        address=number(entry, "address", where=where, default=LOAD_ADDRESS, limit=WORD_LIMIT),
+        address=number(
+            entry, "address", where=where, default=DEFAULT_LOAD_ADDRESS, limit=WORD_LIMIT
+        ),
         kind=kind,
         path=path if path.is_absolute() else root / path,
     )

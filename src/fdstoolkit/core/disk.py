@@ -7,6 +7,9 @@ from fdstoolkit.core.blocks import Block, BlockKind, FileHeader
 from fdstoolkit.core.diskinfo import DiskInfo
 
 SIDES_PER_DISK: Final = 2
+SIDE_SIZE: Final = 65500
+HEADER_MAGIC: Final = b"FDS\x1a"
+HEADER_SIZE: Final = 16
 
 
 class TooManySidesError(ValueError):

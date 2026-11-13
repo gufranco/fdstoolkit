@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from fdstoolkit.codecs.fds import HEADER_SIZE, SIDE_SIZE, build_header, decode, has_header
+from fdstoolkit.codecs.fds import build_header, decode, has_header
 from fdstoolkit.core.diagnostics import Severity, worst_severity
+from fdstoolkit.core.disk import HEADER_SIZE, SIDE_SIZE
 from fdstoolkit.patch.formats import (
     PatchError,
     PatchFormat,

@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
-from fdstoolkit.codecs.raw import LEAD_IN_BITS
+from fdstoolkit.core.bitstream import LEAD_IN_BITS
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.monitor import NOT_THIS_DRIVE

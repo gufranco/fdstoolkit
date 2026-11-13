@@ -6,15 +6,12 @@ from typing import Final
 
 from fdstoolkit.core.blocks import BlockKind
 from fdstoolkit.core.crc import encode_crc
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import HEADER_MAGIC, HEADER_SIZE, SIDE_SIZE, Disk, Side
 from fdstoolkit.core.diskinfo import PROFILES, RAW_PROFILE, MaskProfile, mask_disk_info
 from fdstoolkit.core.parse import parse_side
 
 CANON_VERSION: Final = 1
-CANON_SIDE_SIZE: Final = 65500
 DIGEST_PREFIX: Final = "fdstoolkit"
-HEADER_MAGIC: Final = b"FDS\x1a"
-HEADER_SIZE: Final = 16
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,9 +79,9 @@ def _encode_canonical_side(side: Side, profile: MaskProfile) -> bytes:
         if block.kind is BlockKind.DISK_INFO:
             payload = mask_disk_info(payload, profile)
         out += payload
-    if len(out) >= CANON_SIDE_SIZE:
+    if len(out) >= SIDE_SIZE:
         return bytes(out)
-    return bytes(out).ljust(CANON_SIDE_SIZE, b"\0")
+    return bytes(out).ljust(SIDE_SIZE, b"\0")
 
 
 def canonicalise(disk: Disk, profile: MaskProfile) -> CanonResult:
@@ -133,7 +130,7 @@ def profile_by_name(name: str) -> MaskProfile:
 
 
 def _restore_side(data: bytes, sidecar: SideSidecar) -> bytes:
-    side, _ = parse_side(data, has_crc=False, capacity=CANON_SIDE_SIZE)
+    side, _ = parse_side(data, has_crc=False, capacity=SIDE_SIZE)
     out = bytearray()
     for index, block in enumerate(side.blocks):
         payload = block.payload
@@ -158,6 +155,6 @@ def restore(result: CanonResult) -> bytes:
         out += HEADER_MAGIC + bytes([result.sidecar.header_side_count])
         out += bytes(HEADER_SIZE - len(HEADER_MAGIC) - 1)
     for index, side_sidecar in enumerate(result.sidecar.sides):
-        chunk = result.data[index * CANON_SIDE_SIZE : (index + 1) * CANON_SIDE_SIZE]
+        chunk = result.data[index * SIDE_SIZE : (index + 1) * SIDE_SIZE]
         out += _restore_side(chunk, side_sidecar)
     return bytes(out)

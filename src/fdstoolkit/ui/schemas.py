@@ -10,13 +10,13 @@ from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.drive.monitor import DEFAULT_READS, MAX_READS, Calibration
 from fdstoolkit.drive.timing import Timing
+from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS
 from fdstoolkit.hardware.session import MAX_PASSES, MAX_RETRIES
 from fdstoolkit.identify.hashes import Digests
 from fdstoolkit.quality.grade import GradedReport
 from fdstoolkit.quality.reads import ReadStatistics
 
 MAX_ADDRESS: Final = 0xFFFF
-MAX_NAME: Final = 120
 GAME_NAME_LENGTH: Final = 3
 FILE_NAME_LENGTH: Final = 8
 
@@ -355,7 +355,7 @@ class SideSpec(ImageSpec):
 class InsertSpec(ImageSpec):
     file: str
     file_name: str = Field(..., min_length=1, max_length=FILE_NAME_LENGTH)
-    address: int = Field(0x6000, ge=0, le=MAX_ADDRESS)
+    address: int = Field(DEFAULT_LOAD_ADDRESS, ge=0, le=MAX_ADDRESS)
     kind: str = "program"
     side: int = 0
 

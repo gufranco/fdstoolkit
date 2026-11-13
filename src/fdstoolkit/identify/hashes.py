@@ -4,7 +4,8 @@ import hashlib
 import zlib
 from dataclasses import dataclass
 
-from fdstoolkit.codecs.fds import HEADER_SIZE, has_header
+from fdstoolkit.codecs.fds import has_header
+from fdstoolkit.core.disk import HEADER_MAGIC, HEADER_SIZE
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,10 +58,6 @@ def side_digests(data: bytes, side_size: int) -> tuple[Digests, ...]:
     )
 
 
-RETROACHIEVEMENTS_MAGIC = b"FDS\x1a"
-RETROACHIEVEMENTS_HEADER = 16
-
-
 def retroachievements_hash(data: bytes) -> str:
-    body = data[RETROACHIEVEMENTS_HEADER:] if data.startswith(RETROACHIEVEMENTS_MAGIC) else data
+    body = data[HEADER_SIZE:] if data.startswith(HEADER_MAGIC) else data
     return hashlib.md5(body, usedforsecurity=False).hexdigest()

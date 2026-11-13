@@ -7,9 +7,9 @@ from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE, calibration_disk
-from fdstoolkit.codecs.fds import SIDE_SIZE, decode
+from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
-from fdstoolkit.core.disk import Disk, Side
+from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import (

@@ -12,8 +12,8 @@ from fdstoolkit.core.blocks import (
 )
 from fdstoolkit.core.disk import Disk, Side
 
-FILE_AMOUNT_OFFSET: Final = 1
 MAX_FILE_AMOUNT: Final = 0xFF
+DEFAULT_LOAD_ADDRESS: Final = 0x6000
 
 
 @dataclass(frozen=True, slots=True)
