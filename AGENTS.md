@@ -1,9 +1,12 @@
 # Working in this repository
 
-[README.md](README.md) is the document written for a person, and it is the
-source of truth for everything public: what each command does, how to run it,
-and every figure the toolkit reports. [README.ja.md](README.ja.md) is the same
-document in Japanese. Change the English one first, then the Japanese one, then
+The public documentation is two documents written for a person, and together
+they are the source of truth for everything public. [README.md](README.md) is a
+short guide: install, the command index, the procedures, the web page and what
+the toolkit cannot do. [REFERENCE.md](REFERENCE.md) holds what each command
+does, how to run it, and every figure the toolkit reports.
+[README.ja.md](README.ja.md) and [REFERENCE.ja.md](REFERENCE.ja.md) are the same
+documents in Japanese. Change the English one first, then the Japanese one, then
 anything derived from either.
 
 ## What this project is, in one paragraph

@@ -9,6 +9,8 @@ from fdstoolkit.cli.common import Family
 from fdstoolkit.cli.main import app
 
 READMES = ("README.md", "README.ja.md")
+REFERENCES = ("REFERENCE.md", "REFERENCE.ja.md")
+PAGES = READMES + REFERENCES
 
 
 def commands() -> set[str]:
@@ -27,7 +29,7 @@ def documented(text: str) -> set[str]:
     return found
 
 
-@pytest.mark.parametrize("name", READMES)
+@pytest.mark.parametrize("name", REFERENCES)
 def test_every_command_is_documented(name: str) -> None:
     # Arrange
     encoding = "utf-8"
@@ -39,7 +41,7 @@ def test_every_command_is_documented(name: str) -> None:
     assert commands() - documented(text) == set()
 
 
-@pytest.mark.parametrize("name", READMES)
+@pytest.mark.parametrize("name", REFERENCES)
 def test_no_entry_names_a_command_that_does_not_exist(name: str) -> None:
     # Arrange
     encoding = "utf-8"
@@ -53,16 +55,16 @@ def test_no_entry_names_a_command_that_does_not_exist(name: str) -> None:
 
 def test_both_languages_document_the_same_commands() -> None:
     # Arrange
-    english = documented(Path("README.md").read_text(encoding="utf-8"))
+    english = documented(Path("REFERENCE.md").read_text(encoding="utf-8"))
 
     # Act
-    japanese = documented(Path("README.ja.md").read_text(encoding="utf-8"))
+    japanese = documented(Path("REFERENCE.ja.md").read_text(encoding="utf-8"))
 
     # Assert
     assert english == japanese
 
 
-@pytest.mark.parametrize("name", READMES)
+@pytest.mark.parametrize("name", PAGES)
 def test_every_command_block_is_a_bash_block(name: str) -> None:
     # Arrange
     encoding = "utf-8"
@@ -91,7 +93,7 @@ def referenced(name: str) -> set[str]:
     return set(re.findall(r'(?:src|srcset)="(assets/screenshots/[\w-]+\.png)"', text))
 
 
-@pytest.mark.parametrize("name", READMES)
+@pytest.mark.parametrize("name", REFERENCES)
 def test_every_screenshot_it_shows_exists(name: str) -> None:
     # Arrange
     expected: set[str] = set()
@@ -103,7 +105,7 @@ def test_every_screenshot_it_shows_exists(name: str) -> None:
     assert missing == expected
 
 
-@pytest.mark.parametrize("name", READMES)
+@pytest.mark.parametrize("name", REFERENCES)
 def test_every_command_carries_a_screenshot(name: str) -> None:
     # Arrange
     expected: set[str] = set()
@@ -115,7 +117,7 @@ def test_every_command_carries_a_screenshot(name: str) -> None:
     assert commands() - shown - {"web", "doctor"} == expected
 
 
-@pytest.mark.parametrize("name", READMES)
+@pytest.mark.parametrize("name", REFERENCES)
 def test_both_schemes_are_offered_for_every_shot(name: str) -> None:
     # Arrange
     shots = referenced(name)
@@ -137,7 +139,7 @@ def test_no_screenshot_on_disk_goes_unused() -> None:
     }
 
     # Assert
-    assert on_disk - referenced("README.md") == expected
+    assert on_disk - referenced("REFERENCE.md") == expected
 
 
 def readme_opening() -> str:
@@ -177,7 +179,7 @@ def test_the_command_reference_is_grouped_by_the_declared_families() -> None:
     expected = [family.value for family in Family]
 
     # Act
-    headings = reference_headings("README.md", "## Command reference")
+    headings = reference_headings("REFERENCE.md", "## Command reference")
 
     # Assert
     assert headings == expected
@@ -185,10 +187,41 @@ def test_the_command_reference_is_grouped_by_the_declared_families() -> None:
 
 def test_the_japanese_command_reference_uses_the_page_labels() -> None:
     # Arrange
-    headings = reference_headings("README.ja.md", "## コマンドリファレンス")
+    headings = reference_headings("REFERENCE.ja.md", "## コマンドリファレンス")
 
     # Act
     labels = japanese_labels()
 
     # Assert
     assert headings == [labels[family.value.lower()] for family in Family]
+
+
+@pytest.mark.parametrize(
+    ("readme", "reference"), [("README.md", "REFERENCE.md"), ("README.ja.md", "REFERENCE.ja.md")]
+)
+def test_each_readme_and_its_reference_point_at_each_other(readme: str, reference: str) -> None:
+    # Arrange
+    guide, full = Path(readme), Path(reference)
+
+    # Act
+    texts = (guide.read_text(encoding="utf-8"), full.read_text(encoding="utf-8"))
+
+    # Assert
+    assert f"]({reference}" in texts[0]
+    assert f"]({readme})" in texts[1]
+
+
+@pytest.mark.parametrize("name", READMES)
+def test_the_guide_links_every_command_to_its_reference_entry(name: str) -> None:
+    # Arrange
+    reference = "REFERENCE.ja.md" if name.endswith(".ja.md") else "REFERENCE.md"
+
+    # Act
+    linked = set(
+        re.findall(
+            rf"\]\({re.escape(reference)}#([a-z][\w-]*)\)", Path(name).read_text(encoding="utf-8")
+        )
+    )
+
+    # Assert
+    assert commands() - linked == set()
