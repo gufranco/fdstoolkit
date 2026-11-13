@@ -23,7 +23,7 @@ English | [日本語](README.ja.md)
 
 </div>
 
-**26** commands, every one but `doctor` also on the local web page. **1,766** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+**26** commands, every one but `doctor` also on the local web page. **1,771** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
 
 ---
 
@@ -321,6 +321,8 @@ fdstoolkit patch <image> --patch <p> -o <out> [--force]
 ```
 
 Apply IPS, UPS or BPS, whether the patch was made against the headered or headerless image.
+
+A UPS or BPS patch carries three checksums, of the source, of the result and of the patch itself, and all three are checked: a patch damaged in transit, or one that produces anything but its intended result, is refused rather than written. IPS carries no checksum, so an IPS result is accepted only when it still parses as a disk image.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/patch-dark.png">

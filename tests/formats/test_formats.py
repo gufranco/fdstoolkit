@@ -546,3 +546,73 @@ def test_a_bps_source_copy_from_before_the_source_is_refused() -> None:
 
     # Assert
     assert raised.type is PatchError
+
+
+def resealed(patch: bytes, *, target_crc: int) -> bytes:
+    body = patch[: -2 * 4] + target_crc.to_bytes(4, "little")
+    return body + zlib.crc32(body).to_bytes(4, "little")
+
+
+def test_a_ups_patch_with_a_damaged_byte_is_refused_by_its_own_checksum() -> None:
+    # Arrange
+    source = bytes([0x01, 0x02, 0x03, 0x04])
+    patch = bytearray(build_ups(source, bytes([0x01, 0xFF, 0x03, 0x04])))
+    patch[len(b"UPS1") + 2] ^= 0x01
+
+    # Act
+    with pytest.raises(PatchError, match="the patch is damaged") as raised:
+        apply_ups(bytes(patch), source)
+
+    # Assert
+    assert raised.type is PatchError
+
+
+def test_a_ups_patch_whose_result_misses_its_target_checksum_is_refused() -> None:
+    # Arrange
+    source = bytes([0x01, 0x02, 0x03, 0x04])
+    patch = resealed(build_ups(source, bytes([0x01, 0xFF, 0x03, 0x04])), target_crc=0x1234)
+
+    # Act
+    with pytest.raises(PatchError, match="expected CRC32 00001234") as raised:
+        apply_ups(patch, source)
+
+    # Assert
+    assert raised.type is PatchError
+
+
+def test_a_bps_patch_whose_result_misses_its_target_checksum_is_refused() -> None:
+    # Arrange
+    source = bytes([0x10, 0x20, 0x30, 0x40])
+    patch = resealed(build_bps(source, bytes([0x10, 0x20, 0xAA, 0xBB])), target_crc=0x5678)
+
+    # Act
+    with pytest.raises(PatchError, match="expected CRC32 00005678") as raised:
+        apply_bps(patch, source)
+
+    # Assert
+    assert raised.type is PatchError
+
+
+def test_a_patch_too_short_for_its_checksums_is_refused() -> None:
+    # Arrange
+    patch = b"BPS1" + bytes(4)
+
+    # Act
+    with pytest.raises(PatchError, match="too short to carry its three checksums") as raised:
+        apply_bps(patch, b"")
+
+    # Assert
+    assert raised.type is PatchError
+
+
+def test_a_bps_literal_that_runs_into_the_checksums_is_refused() -> None:
+    # Arrange
+    source = bytes([0xAA])
+    patch = bps(source, 4, write_varint(((4 - 1) << 2) | 1) + bytes([0x01]))
+
+    # Act
+    with pytest.raises(PatchError, match="ends inside a record") as raised:
+        apply_bps(patch, source)
+
+    # Assert
+    assert raised.type is PatchError

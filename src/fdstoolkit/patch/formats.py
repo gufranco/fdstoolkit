@@ -136,13 +136,41 @@ def _check_source(expected: int, source: bytes) -> None:
         raise PatchError(message)
 
 
+def _footer(patch: bytes) -> tuple[int, int, int]:
+    body_end = len(patch) - FOOTER_SIZE
+    if body_end < 0:
+        message = f"the patch is {len(patch)} bytes, too short to carry its three checksums"
+        raise PatchError(message)
+    stored = int.from_bytes(patch[-CRC_SIZE:], "little")
+    actual = zlib.crc32(patch[:-CRC_SIZE])
+    if actual != stored:
+        message = (
+            f"the patch is damaged: its own CRC32 is {stored:08x} and its bytes give {actual:08x}"
+        )
+        raise PatchError(message)
+    source = int.from_bytes(patch[body_end : body_end + CRC_SIZE], "little")
+    target = int.from_bytes(patch[body_end + CRC_SIZE : body_end + 2 * CRC_SIZE], "little")
+    return body_end, source, target
+
+
+def _checked_target(expected: int, target: bytes) -> bytes:
+    actual = zlib.crc32(target)
+    if actual != expected:
+        message = (
+            f"the patched image does not match the patch: expected CRC32 {expected:08x}, "
+            f"got {actual:08x}"
+        )
+        raise PatchError(message)
+    return target
+
+
 def apply_ups(patch: bytes, source: bytes) -> bytes:
     if not patch.startswith(UPS_MAGIC):
         message = "not a UPS patch"
         raise PatchError(message)
 
-    body_end = len(patch) - FOOTER_SIZE
-    _check_source(int.from_bytes(patch[body_end : body_end + CRC_SIZE], "little"), source)
+    body_end, source_crc, target_crc = _footer(patch)
+    _check_source(source_crc, source)
 
     cursor = len(UPS_MAGIC)
     _, cursor = read_varint(patch, cursor)
@@ -166,7 +194,7 @@ def apply_ups(patch: bytes, source: bytes) -> bytes:
             position += 1
         position += 1
 
-    return bytes(out[:target_size])
+    return _checked_target(target_crc, bytes(out[:target_size]))
 
 
 def _bps_relative(patch: bytes, cursor: int, offset: int) -> tuple[int, int]:
@@ -200,8 +228,8 @@ def apply_bps(patch: bytes, source: bytes) -> bytes:
         message = "not a BPS patch"
         raise PatchError(message)
 
-    body_end = len(patch) - FOOTER_SIZE
-    _check_source(int.from_bytes(patch[body_end : body_end + CRC_SIZE], "little"), source)
+    body_end, source_crc, target_crc = _footer(patch)
+    _check_source(source_crc, source)
 
     cursor = len(BPS_MAGIC)
     _, cursor = read_varint(patch, cursor)
@@ -225,6 +253,7 @@ def apply_bps(patch: bytes, source: bytes) -> bytes:
             _in_source(source, start, length)
             out += source[start : start + length]
         elif action == TARGET_READ:
+            _cut_short(patch[:body_end], cursor + length, cursor)
             out += patch[cursor : cursor + length]
             cursor += length
         elif action == SOURCE_COPY:
@@ -239,4 +268,4 @@ def apply_bps(patch: bytes, source: bytes) -> bytes:
                 out.append(out[target_offset])
                 target_offset += 1
 
-    return bytes(out[:target_size])
+    return _checked_target(target_crc, bytes(out[:target_size]))
