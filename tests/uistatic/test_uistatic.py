@@ -17,7 +17,19 @@ from fdstoolkit.ui.app import (
 OK = 200
 MARKUP = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
 SCRIPT = "\n".join(path.read_text(encoding="utf-8") for path in sorted(STATIC_DIR.glob("*.js")))
-STYLES = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+STYLES = "\n".join(path.read_text(encoding="utf-8") for path in sorted(STATIC_DIR.glob("*.css")))
+ASSETS = (
+    "app.css",
+    "results.css",
+    "api.js",
+    "app.js",
+    "dom.js",
+    "fields.js",
+    "i18n.js",
+    "jobs.js",
+    "render.js",
+    "state.js",
+)
 TARGET_SIZE_PX = 44
 
 
@@ -28,7 +40,7 @@ def client_fixture() -> TestClient:
 
 def test_every_static_file_is_present() -> None:
     # Arrange
-    names = ("index.html", "app.css", "app.js", "i18n.js")
+    names = ("index.html", *ASSETS)
 
     # Act
     present = [name for name in names if (STATIC_DIR / name).is_file()]
@@ -37,7 +49,7 @@ def test_every_static_file_is_present() -> None:
     assert present == list(names)
 
 
-@pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
+@pytest.mark.parametrize("name", ASSETS)
 def test_the_static_files_are_served(client: TestClient, name: str) -> None:
     # Arrange
     route = f"/static/{name}"
@@ -49,7 +61,7 @@ def test_the_static_files_are_served(client: TestClient, name: str) -> None:
     assert answer.status_code == OK
 
 
-@pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
+@pytest.mark.parametrize("name", ASSETS)
 def test_an_upgraded_asset_is_not_served_from_a_stale_cache(client: TestClient, name: str) -> None:
     # Arrange
     expected = "no-cache"
@@ -97,7 +109,7 @@ def test_the_page_itself_is_never_cached_so_a_new_stamp_always_arrives(
     assert result == expected
 
 
-@pytest.mark.parametrize("name", ["app.css", "app.js", "i18n.js"])
+@pytest.mark.parametrize("name", ASSETS)
 def test_a_stamped_asset_is_served_and_may_be_kept_forever(client: TestClient, name: str) -> None:
     # Arrange
     route = f"{asset_root()}/{name}"
@@ -272,10 +284,10 @@ def test_every_input_carries_a_label() -> None:
 
 def test_every_control_meets_the_target_size() -> None:
     # Arrange
-    path = STATIC_DIR / "app.css"
+    paths = sorted(STATIC_DIR.glob("*.css"))
 
     # Act
-    styles = path.read_text(encoding="utf-8")
+    styles = "\n".join(path.read_text(encoding="utf-8") for path in paths)
 
     # Assert
     assert f"min-height: {TARGET_SIZE_PX}px" in styles
@@ -283,10 +295,10 @@ def test_every_control_meets_the_target_size() -> None:
 
 def test_a_visible_focus_indicator_is_defined() -> None:
     # Arrange
-    path = STATIC_DIR / "app.css"
+    paths = sorted(STATIC_DIR.glob("*.css"))
 
     # Act
-    styles = path.read_text(encoding="utf-8")
+    styles = "\n".join(path.read_text(encoding="utf-8") for path in paths)
 
     # Assert
     assert "focus-visible" in styles
@@ -295,10 +307,10 @@ def test_a_visible_focus_indicator_is_defined() -> None:
 
 def test_reduced_motion_is_honoured() -> None:
     # Arrange
-    path = STATIC_DIR / "app.css"
+    paths = sorted(STATIC_DIR.glob("*.css"))
 
     # Act
-    styles = path.read_text(encoding="utf-8")
+    styles = "\n".join(path.read_text(encoding="utf-8") for path in paths)
 
     # Assert
     assert "prefers-reduced-motion" in styles
@@ -306,10 +318,10 @@ def test_reduced_motion_is_honoured() -> None:
 
 def test_a_dark_scheme_is_defined() -> None:
     # Arrange
-    path = STATIC_DIR / "app.css"
+    paths = sorted(STATIC_DIR.glob("*.css"))
 
     # Act
-    styles = path.read_text(encoding="utf-8")
+    styles = "\n".join(path.read_text(encoding="utf-8") for path in paths)
 
     # Assert
     assert "prefers-color-scheme: dark" in styles

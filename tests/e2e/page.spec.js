@@ -69,6 +69,19 @@ test('every control on the page is at least 44 pixels tall', async ({ page }) =>
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('a result is styled by the result stylesheet', async ({ page }) => {
+  // Arrange
+  await openCommand(page, 'blank');
+
+  // Act
+  await page.locator('#panel .run').click();
+
+  // Assert
+  const banner = page.locator('#panel .output .banner').first();
+  await expect(banner).toHaveCSS('padding', '10px 14px');
+  await expect(page.locator('footer')).toHaveCSS('padding-top', '16px');
+});
+
 test('the erase dialog is modal, labelled and starts on a visible cancel', async ({ page, request }) => {
   // Arrange
   await openCommand(page, 'write');
