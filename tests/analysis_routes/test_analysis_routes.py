@@ -43,6 +43,20 @@ def test_splice_repairs_from_a_donor(client: TestClient) -> None:
     assert body["size"] == expected
 
 
+def test_splice_refuses_a_donor_of_another_shape(client: TestClient) -> None:
+    # Arrange
+    two = base64.b64encode(
+        blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
+    ).decode("ascii")
+
+    # Act
+    answer = client.post("/api/splice", json={"data": ONE, "donors": [two]})
+
+    # Assert
+    assert answer.status_code == UNPROCESSABLE
+    assert answer.json()["detail"] == "a donor has a different shape from the image being repaired"
+
+
 def test_consensus_needs_a_dump(client: TestClient) -> None:
     # Arrange
     route = "/api/consensus"

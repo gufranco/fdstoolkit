@@ -18,7 +18,10 @@ def splice_blocks(spec: SpliceSpec) -> FileResult:
         refuse("splicing needs at least one donor", status=UNPROCESSABLE)
     primary, _, _ = decode_payload(spec.data)
     donors = [decode_payload(entry)[0] for entry in spec.donors]
-    result = splice(primary, donors)
+    try:
+        result = splice(primary, donors)
+    except ValueError as error:
+        refuse(str(error), status=UNPROCESSABLE)
     return encoded_file(spec.name, result.disk)
 
 

@@ -258,7 +258,7 @@ A UPS or BPS patch carries three checksums, of the source, of the result and of 
 fdstoolkit splice <image> --donor <d>... -o <out> [--force]
 ```
 
-Replace blocks whose CRC fails with the same block from a donor dump that has it good. Reports each substitution and every block no donor could supply. Exits 1 if anything is left unrepaired.
+Replace blocks whose CRC fails with the same block from a donor dump that has it good. Only a block of the same kind is taken, and a donor whose disk information differs from the image's under the `content` profile is refused as another disk. Reports each substitution and every block no donor could supply. Exits 1 if anything is left unrepaired.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/splice-dark.png">

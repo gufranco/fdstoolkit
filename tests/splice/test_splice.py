@@ -155,3 +155,61 @@ def test_the_first_good_donor_wins() -> None:
 
     # Assert
     assert result.disk.sides[0].blocks[0].payload == _payload(bytes([0x11]) + bytes(40))
+
+
+def _info(game: bytes) -> Block:
+    payload = bytearray(_payload(GOOD_TAIL))
+    payload[0x10:0x13] = game
+    return Block(kind=BlockKind.DISK_INFO, payload=bytes(payload)).with_computed_crc()
+
+
+def _with(info: Block, second: Block) -> Disk:
+    return Disk(sides=(Side(blocks=(info, second), tail=b"", capacity=65500),))
+
+
+def _amount(count: int) -> Block:
+    payload = bytes([BlockKind.FILE_AMOUNT, count])
+    return Block(kind=BlockKind.FILE_AMOUNT, payload=payload).with_computed_crc()
+
+
+def test_a_donor_holding_another_disk_is_refused() -> None:
+    # Arrange
+    broken = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([2, 1]), stored_crc=0x1234)
+    primary = _with(_info(b"ABC"), broken)
+    donor = _with(_info(b"XYZ"), _amount(1))
+
+    # Act
+    with pytest.raises(ValueError, match="donor 1 holds another disk") as raised:
+        splice(primary, [donor])
+
+    # Assert
+    assert str(raised.value) == (
+        "donor 1 holds another disk: its side 0 disk information differs from the "
+        "image's, so none of its blocks belong here"
+    )
+
+
+def test_a_donor_block_of_another_kind_is_not_taken() -> None:
+    # Arrange
+    broken = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([2, 1]), stored_crc=0x1234)
+    header = Block(kind=BlockKind.FILE_HEADER, payload=bytes([3]) + bytes(15)).with_computed_crc()
+    primary = _with(_info(b"ABC"), broken)
+
+    # Act
+    result = splice(primary, [_with(_info(b"ABC"), header)])
+
+    # Assert
+    assert result.unrepaired == ((0, 1),)
+
+
+def test_a_side_without_disk_information_still_takes_a_donor_block() -> None:
+    # Arrange
+    broken = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([2, 1]), stored_crc=0x1234)
+    primary = Disk(sides=(Side(blocks=(broken,), tail=b"", capacity=65500),))
+    donor = Disk(sides=(Side(blocks=(_amount(1),), tail=b"", capacity=65500),))
+
+    # Act
+    result = splice(primary, [donor])
+
+    # Assert
+    assert result.disk.sides[0].blocks == (_amount(1),)
