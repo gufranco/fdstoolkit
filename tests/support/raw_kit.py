@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode as decode_fds
 from fdstoolkit.codecs.raw import (
@@ -16,11 +18,14 @@ from fdstoolkit.codecs.raw import (
 )
 from fdstoolkit.core.crc import block_crc, encode_crc
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 LOST_PACKET_VALUES = 254 * 4
 
 
 def sample_disk(files: int = 1):  # noqa: ANN201
-    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     raw[56:58] = bytes([0x02, files])
     position = 58
     for index in range(files):

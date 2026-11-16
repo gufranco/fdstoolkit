@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode, encode
@@ -15,9 +16,12 @@ from fdstoolkit.edit.files import (
     set_declared_file_count,
 )
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 
 def disk_with(files: int = 1, *, declared: int | None = None) -> Disk:
-    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     raw[56:58] = bytes([0x02, files if declared is None else declared])
     position = 58
     for index in range(files):

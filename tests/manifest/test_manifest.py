@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.manifest import (
     DiskManifest,
@@ -17,6 +18,9 @@ from fdstoolkit.core.disk import SIDE_SIZE
 from fdstoolkit.core.diskinfo import DiskInfo
 from fdstoolkit.core.files import extract_files
 from fdstoolkit.core.showa import ShowaDateError
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 
 def manifest_file(tmp_path: Path, **fields: object) -> dict[str, object]:
@@ -44,7 +48,7 @@ def manifest_dict(
         "files": [file if file is not None else manifest_file(tmp_path)],
     }
     return {
-        "game_name": "SMB",
+        "game_name": GAME,
         "licensee": 1,
         "game_version": 0,
         "sides": [first, *more_sides],
@@ -72,7 +76,7 @@ def test_the_built_disk_carries_the_declared_identity(tmp_path: Path) -> None:
     info = DiskInfo.parse(disk.sides[0].blocks[0].payload)
 
     # Assert
-    assert info.game_name == "SMB"
+    assert info.game_name == GAME
     assert info.licensee == 1
     assert info.is_verified
 
@@ -138,7 +142,7 @@ def test_a_manifest_loads_from_json(tmp_path: Path) -> None:
     manifest = load_manifest(path)
 
     # Assert
-    assert manifest.game_name == "SMB"
+    assert manifest.game_name == GAME
     assert len(manifest.sides) == 1
 
 
@@ -170,7 +174,7 @@ def test_a_missing_file_is_reported(tmp_path: Path) -> None:
 
 def test_a_manifest_without_sides_is_refused(tmp_path: Path) -> None:
     # Arrange
-    payload: dict[str, object] = {"game_name": "SMB", "sides": []}
+    payload: dict[str, object] = {"game_name": GAME, "sides": []}
 
     # Act
     with pytest.raises(ValueError, match="at least one side") as raised:

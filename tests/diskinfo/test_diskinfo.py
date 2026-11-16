@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.core.diskinfo import (
     CONTENT_PROFILE,
@@ -12,13 +13,17 @@ from fdstoolkit.core.diskinfo import (
     mask_disk_info,
 )
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
+
 
 def build_payload(**overrides: bytes) -> bytes:
     payload = bytearray(56)
     payload[0] = 0x01
     payload[1:15] = b"*NINTENDO-HVC*"
     payload[0x0F] = 0x01
-    payload[0x10:0x13] = b"SMB"
+    payload[0x10:0x13] = GAME.encode("ascii")
     payload[0x13] = 0x20
     payload[0x14] = 0x00
     payload[0x15] = 0x00
@@ -72,7 +77,7 @@ def test_disk_info_parses_identity_fields() -> None:
 
     # Assert
     assert info.licensee == 0x01
-    assert info.game_name == "SMB"
+    assert info.game_name == GAME
     assert info.game_type == 0x20
     assert info.game_version == 0
     assert info.side == 0
@@ -157,7 +162,7 @@ def test_content_profile_erases_provenance_but_keeps_identity() -> None:
 
     # Assert
     assert mask_disk_info(factory, CONTENT_PROFILE) == mask_disk_info(rewritten, CONTENT_PROFILE)
-    assert mask_disk_info(factory, CONTENT_PROFILE)[0x10:0x13] == b"SMB"
+    assert mask_disk_info(factory, CONTENT_PROFILE)[0x10:0x13] == GAME.encode("ascii")
 
 
 def test_content_profile_keeps_a_different_game_distinct() -> None:
@@ -165,7 +170,7 @@ def test_content_profile_keeps_a_different_game_distinct() -> None:
     one = build_payload()
 
     # Act
-    other = build_payload(game_name=b"ZEL")
+    other = build_payload(game_name=OTHER_GAME.encode("ascii"))
 
     # Assert
     assert mask_disk_info(one, CONTENT_PROFILE) != mask_disk_info(other, CONTENT_PROFILE)

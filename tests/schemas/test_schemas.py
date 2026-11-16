@@ -30,8 +30,12 @@ from fdstoolkit.ui.schemas import (
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
+from fakes import game_name, seeded
 
-IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
+IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name=GAME)
 
 
 def sample_disk():  # noqa: ANN201

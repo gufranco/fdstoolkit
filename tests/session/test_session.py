@@ -5,6 +5,7 @@ from collections.abc import Iterator
 import pytest
 from drive_double import FaultPlan, SimulatedDrive
 from session_kit import (
+    GAME,
     DroppingDrive,
     HeaderLockedDrive,
     OverlayDrive,
@@ -219,7 +220,7 @@ def test_a_drive_that_keeps_the_nintendo_header_is_named_as_half_modified() -> N
                     Block(
                         kind=BlockKind.DISK_INFO,
                         payload=decode(
-                            blank_image(sides=1, headered=False, formatted=True, game_name="ZEL")
+                            blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
                         )[0]
                         .sides[0]
                         .blocks[0]

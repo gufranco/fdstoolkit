@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from fakes import game_name, seeded
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
@@ -12,10 +13,13 @@ from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.edit.files import FileSpec, insert_file
 
+FAKE = seeded(__name__)
+CODE = game_name(FAKE).encode("ascii")
+
 runner = CliRunner()
 
 
-def _payload(*, code: bytes = b"ABC", serial: int = 0xFFFF, licensee: int = 0) -> bytes:
+def _payload(*, code: bytes = CODE, serial: int = 0xFFFF, licensee: int = 0) -> bytes:
     payload = bytearray(56)
     payload[0x00] = BlockKind.DISK_INFO
     payload[0x01:0x0F] = b"*NINTENDO-HVC*"
@@ -27,7 +31,7 @@ def _payload(*, code: bytes = b"ABC", serial: int = 0xFFFF, licensee: int = 0) -
 
 def _disk(
     *,
-    code: bytes = b"ABC",
+    code: bytes = CODE,
     serial: int = 0xFFFF,
     licensee: int = 0,
     data_byte: int | None = None,

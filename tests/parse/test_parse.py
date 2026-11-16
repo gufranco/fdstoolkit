@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from fakes import game_name, seeded
+
 from fdstoolkit.core.blocks import CrcStatus
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.parse import parse_side
+
+FAKE = seeded(__name__)
+CODE = game_name(FAKE).encode("ascii")
 
 FDS_SIDE = 65500
 
@@ -11,7 +16,7 @@ def disk_info() -> bytes:
     payload = bytearray(56)
     payload[0] = 0x01
     payload[1:15] = b"*NINTENDO-HVC*"
-    payload[0x10:0x13] = b"SMB"
+    payload[0x10:0x13] = CODE
     return bytes(payload)
 
 

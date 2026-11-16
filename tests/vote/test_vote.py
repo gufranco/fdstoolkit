@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import block_regions, encode_block_stream, pack_raw03, unpack_raw03
@@ -12,6 +14,9 @@ from fdstoolkit.drive.align import good_block
 from fdstoolkit.drive.vote import MIN_VOTERS, vote_side
 from fdstoolkit.edit.files import FileSpec, insert_file
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 FILES = 2
 DAMAGED = 3
 SKIP_SYNC = 40
@@ -19,7 +24,7 @@ TRAILING_GAP = 4000
 
 
 def reference_side() -> Side:
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="VOT"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     for number in range(FILES):
         disk = insert_file(
             disk,

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import block_regions, encode_block_stream, pack_raw03, unpack_raw03
@@ -11,13 +13,17 @@ from fdstoolkit.drive.captures import Bundle, Capture
 from fdstoolkit.drive.weak import bundle_weak_blocks, weak_blocks
 from fdstoolkit.edit.files import FileSpec, insert_file
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 DATA_BLOCK = 3
 TRAILING_GAP = 4000
 INVALID = 3
+LOST_START = 16
 
 
 def reference_side() -> Side:
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="WEK"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     disk = insert_file(
         disk,
         side=0,
@@ -75,7 +81,7 @@ def test_a_block_some_reads_could_not_find_is_listed_first() -> None:
     once = with_invalid_pulse(side, 1)
     values = bytearray(unpack_raw03(with_invalid_pulse(side, DATA_BLOCK)))
     start, _ = block_regions(bytes(values))[DATA_BLOCK]
-    values[start + 50] = INVALID
+    values[start : start + LOST_START] = bytes([INVALID]) * LOST_START
     twice = pack_raw03(bytes(values))
 
     # Act

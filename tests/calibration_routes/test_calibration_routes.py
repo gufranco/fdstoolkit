@@ -15,11 +15,16 @@ from fdstoolkit.ui.app import create_app
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+from fakes import game_name, seeded
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
 
 OK = 200
 UNPROCESSABLE = 422
 SETTLE = 5.0
-OLD_DISK, _ = fds.decode(blank_image(sides=2, headered=False, formatted=True, game_name="OLD"))
+OLD_DISK, _ = fds.decode(blank_image(sides=2, headered=False, formatted=True, game_name=GAME))
 
 
 @pytest.fixture(name="app")
@@ -62,7 +67,7 @@ def test_blank_offers_the_calibration_image(client: TestClient) -> None:
 def test_blank_refuses_settings_the_calibration_image_decides(client: TestClient) -> None:
     # Arrange
     route = "/api/blank"
-    payload = {"calibration": True, "game_name": "ABC"}
+    payload = {"calibration": True, "game_name": OTHER_GAME}
 
     # Act
     answer = client.post(route, json=payload)

@@ -18,6 +18,7 @@ from hardware_routes_kit import (
     ONE,
     ONE_SIDE,
     OTHER,
+    OTHER_GAME,
     SETTLE,
     TWO_SIDE,
     UNPROCESSABLE,
@@ -308,7 +309,9 @@ def test_a_write_the_disk_does_not_take_fails_the_job(
 ) -> None:
     # Arrange
     serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), plan=FaultPlan(writes_do_not_stick=True)))
-    other = base64.b64encode(blank_image(sides=1, headered=False, formatted=True, game_name="ZEL"))
+    other = base64.b64encode(
+        blank_image(sides=1, headered=False, formatted=True, game_name=OTHER_GAME)
+    )
 
     # Act
     job = run(app, client, "/api/jobs/write", {"data": other.decode("ascii"), "confirm": True})

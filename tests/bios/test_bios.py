@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.bios import BIOS_ERRORS, BootVerdict, predict_boot
@@ -9,11 +11,14 @@ from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.files import FileSpec, insert_file
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 KYODAKU_ADDRESS = 0x2800
 
 
 def formatted(*, boot_file: int = 0) -> Disk:
-    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     raw[0x19] = boot_file
     disk, _ = decode(bytes(raw))
     return disk

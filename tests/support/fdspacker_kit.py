@@ -3,12 +3,20 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.fdspacker import FdsPackerManifest
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.disk import Disk
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
+
 DEFAULT_INFO = (
-    b"\x01*NINTENDO-HVC*\x00SMB\x20\x00\x00\x00\x00\x00\x00"
+    b"\x01*NINTENDO-HVC*\x00"
+    + GAME.encode("ascii")
+    + b"\x20\x00\x00\x00\x00\x00\x00"
     + b"\xff" * 5
     + b"\x00\x00\x00\x00\x61\x00\x00\x02"
     + b"\x00" * 5
@@ -36,7 +44,7 @@ def packer_file(tmp_path: Path, number: int, **fields: object) -> dict[str, obje
 
 def packer_side(tmp_path: Path, **fields: object) -> dict[str, object]:
     side: dict[str, object] = {
-        "game_name": "SMB",
+        "game_name": GAME,
         "file_amount": 1,
         "files": [packer_file(tmp_path, 0)],
     }

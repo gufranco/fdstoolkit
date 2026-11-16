@@ -14,6 +14,7 @@ from capture_fixture import (
     qdc_raw,
     short_gapped,
 )
+from fakes import game_name, seeded
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
@@ -21,6 +22,9 @@ from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
 from fdstoolkit.core.disk import SIDE_SIZE, Disk
 from fdstoolkit.drive.captures import write_bundle
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 runner = CliRunner()
 
@@ -224,7 +228,7 @@ def test_consensus_from_captures_reports_json(tmp_path: Path) -> None:
 def test_grade_refuses_captures_of_another_disk(tmp_path: Path) -> None:
     # Arrange
     bundle, _ = bundle_of(tmp_path, (None, None, None))
-    other, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name="OTH"))
+    other, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     image = saved(other, tmp_path / "other.fds")
 
     # Act

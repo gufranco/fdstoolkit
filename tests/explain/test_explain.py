@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.blocks import FileKind
@@ -11,9 +13,13 @@ from fdstoolkit.edit.diskinfo import apply_edits
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.quality.explain import FileChange, explain
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
+
 
 def sample(*, sides: int = 1) -> Disk:
-    disk, _ = decode(blank_image(sides=sides, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=sides, headered=False, formatted=True, game_name=GAME))
     return disk
 
 
@@ -81,7 +87,7 @@ def test_a_rewritten_disk_reads_as_the_same_software() -> None:
 def test_a_different_game_name_is_different_software() -> None:
     # Arrange
     left = sample()
-    right = edited(sample(), {"game_name": "ZEL"})
+    right = edited(sample(), {"game_name": OTHER_GAME})
 
     # Act
     result = explain(left, right)

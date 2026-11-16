@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from capture_fixture import disk_with_a_file, read_of, short_gapped
 from counting_drive import DriveModel, drive_counts
+from fakes import game_name, seeded
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -18,13 +19,16 @@ from fdstoolkit.drive.timing import (
     measure_timing,
 )
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 SETTINGS = settings(max_examples=25, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 RATE_ERROR = 0.01
 LONGEST_LEAD_IN = 30000
 
 
 def blank_side() -> Side:
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="SIM"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     return disk.sides[0]
 
 

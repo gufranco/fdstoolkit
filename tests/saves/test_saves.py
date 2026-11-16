@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -13,9 +14,13 @@ from fdstoolkit.edit.saves import (
     normalise_saves,
 )
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
+
 
 def disk_with(files: list[tuple[str, bytes]]) -> Disk:
-    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     raw[56:58] = bytes([0x02, len(files)])
     position = 58
     for index, (name, payload) in enumerate(files):
@@ -124,7 +129,7 @@ def test_a_heuristic_name_alone_is_not_a_candidate() -> None:
 def test_normalising_replaces_the_declared_file_with_the_fill() -> None:
     # Arrange
     disk = disk_with([("PROGRAM", bytes(8)), ("FC_SAVE", bytes([0x7F]) * 8)])
-    recipe = SaveRecipe(game_name="SMB", game_version=0, side=0, position=1, fill=0x00)
+    recipe = SaveRecipe(game_name=GAME, game_version=0, side=0, position=1, fill=0x00)
 
     # Act
     updated, applied = normalise_saves(disk, [recipe])
@@ -137,7 +142,7 @@ def test_normalising_replaces_the_declared_file_with_the_fill() -> None:
 def test_normalising_leaves_a_disk_alone_when_no_recipe_matches() -> None:
     # Arrange
     disk = disk_with([("PROGRAM", bytes(8))])
-    recipe = SaveRecipe(game_name="ZEL", game_version=0, side=0, position=0, fill=0x00)
+    recipe = SaveRecipe(game_name=OTHER_GAME, game_version=0, side=0, position=0, fill=0x00)
 
     # Act
     updated, applied = normalise_saves(disk, [recipe])
@@ -150,7 +155,7 @@ def test_normalising_leaves_a_disk_alone_when_no_recipe_matches() -> None:
 def test_normalising_can_fill_with_any_byte() -> None:
     # Arrange
     disk = disk_with([("FC_SAVE", bytes(4))])
-    recipe = SaveRecipe(game_name="SMB", game_version=0, side=0, position=0, fill=0xFF)
+    recipe = SaveRecipe(game_name=GAME, game_version=0, side=0, position=0, fill=0xFF)
 
     # Act
     updated, _ = normalise_saves(disk, [recipe])
@@ -162,7 +167,7 @@ def test_normalising_can_fill_with_any_byte() -> None:
 def test_a_recipe_that_names_a_missing_file_is_reported() -> None:
     # Arrange
     disk = disk_with([("PROGRAM", bytes(4))])
-    recipe = SaveRecipe(game_name="SMB", game_version=0, side=0, position=7, fill=0x00)
+    recipe = SaveRecipe(game_name=GAME, game_version=0, side=0, position=7, fill=0x00)
 
     # Act
     with pytest.raises(ValueError, match="no file at position 7") as raised:
@@ -176,7 +181,7 @@ def test_normalising_makes_two_played_copies_agree() -> None:
     # Arrange
     played = disk_with([("PROGRAM", bytes(8)), ("FC_SAVE", bytes([0x01]) * 8)])
     other = disk_with([("PROGRAM", bytes(8)), ("FC_SAVE", bytes([0x02]) * 8)])
-    recipe = SaveRecipe(game_name="SMB", game_version=0, side=0, position=1, fill=0x00)
+    recipe = SaveRecipe(game_name=GAME, game_version=0, side=0, position=1, fill=0x00)
     first, _ = normalise_saves(played, [recipe])
 
     # Act
@@ -189,7 +194,7 @@ def test_normalising_makes_two_played_copies_agree() -> None:
 def test_a_recipe_for_a_side_that_does_not_exist_is_ignored() -> None:
     # Arrange
     disk = disk_with([("PROGRAM", bytes(4))])
-    recipe = SaveRecipe(game_name="SMB", game_version=0, side=4, position=0, fill=0x00)
+    recipe = SaveRecipe(game_name=GAME, game_version=0, side=4, position=0, fill=0x00)
 
     # Act
     _, applied = normalise_saves(disk, [recipe])
@@ -201,7 +206,7 @@ def test_a_recipe_for_a_side_that_does_not_exist_is_ignored() -> None:
 def test_a_recipe_for_an_unformatted_side_is_ignored() -> None:
     # Arrange
     unformatted, _ = decode(blank_image(sides=1, headered=False, formatted=False))
-    recipe = SaveRecipe(game_name="SMB", game_version=0, side=0, position=0, fill=0x00)
+    recipe = SaveRecipe(game_name=GAME, game_version=0, side=0, position=0, fill=0x00)
 
     # Act
     _, applied = normalise_saves(unformatted, [recipe])
@@ -215,7 +220,7 @@ def test_a_recipe_naming_a_header_without_data_is_reported() -> None:
     disk = disk_with([("FC_SAVE", bytes(4))])
     side = disk.sides[0]
     orphaned = side.__class__(blocks=side.blocks[:-1], tail=b"", capacity=side.capacity)
-    recipe = SaveRecipe(game_name="SMB", game_version=0, side=0, position=0, fill=0x00)
+    recipe = SaveRecipe(game_name=GAME, game_version=0, side=0, position=0, fill=0x00)
 
     # Act
     with pytest.raises(ValueError, match="no file at position 0") as raised:

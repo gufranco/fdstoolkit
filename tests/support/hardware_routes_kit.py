@@ -19,6 +19,11 @@ if TYPE_CHECKING:
     import pytest
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
+from fakes import game_name, seeded
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
 
 
 OK = 200
@@ -39,13 +44,13 @@ UNPROCESSABLE = 422
 SETTLE = 5.0
 
 
-ONE_SIDE = blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+ONE_SIDE = blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
 
 
-TWO_SIDE = blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
+TWO_SIDE = blank_image(sides=2, headered=False, formatted=True, game_name=GAME)
 
 
-OTHER_TWO = blank_image(sides=2, headered=False, formatted=True, game_name="ZEL")
+OTHER_TWO = blank_image(sides=2, headered=False, formatted=True, game_name=OTHER_GAME)
 
 
 ONE = base64.b64encode(ONE_SIDE).decode("ascii")

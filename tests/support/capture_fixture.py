@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from typing import Final
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs import fds
@@ -18,6 +20,9 @@ from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.captures import Capture, bundle_zip
 from fdstoolkit.edit.files import FileSpec, insert_file
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 DAMAGED: Final = 3
 TRAILING_GAP: Final = 4000
 SKIP_SYNC: Final = 40
@@ -27,7 +32,7 @@ SHORT_GAP: Final = 482
 
 
 def disk_with_a_file() -> Disk:
-    disk, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name="CAP"))
+    disk, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     return insert_file(
         disk,
         side=0,

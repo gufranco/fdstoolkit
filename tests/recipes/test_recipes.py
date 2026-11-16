@@ -4,10 +4,15 @@ import json
 from pathlib import Path
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.fields import FieldError
 from fdstoolkit.edit.recipes import RECIPE_VERSION, load_recipes, recipes_for
 from fdstoolkit.edit.saves import SaveRecipe
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
 
 
 def recipe_file(tmp_path: Path, **overrides: object) -> Path:
@@ -15,7 +20,7 @@ def recipe_file(tmp_path: Path, **overrides: object) -> Path:
         "version": RECIPE_VERSION,
         "recipes": [
             {
-                "game_name": "SMB",
+                "game_name": GAME,
                 "game_version": 0,
                 "side": 0,
                 "position": 1,
@@ -39,7 +44,7 @@ def test_a_recipe_file_loads_every_entry(tmp_path: Path) -> None:
 
     # Assert
     assert len(recipes) == 1
-    assert recipes[0].game_name == "SMB"
+    assert recipes[0].game_name == GAME
     assert recipes[0].position == 1
 
 
@@ -86,7 +91,7 @@ def test_a_recipe_without_a_source_is_refused(tmp_path: Path) -> None:
             {
                 "version": RECIPE_VERSION,
                 "recipes": [
-                    {"game_name": "SMB", "game_version": 0, "side": 0, "position": 0, "fill": 0}
+                    {"game_name": GAME, "game_version": 0, "side": 0, "position": 0, "fill": 0}
                 ],
             }
         ),
@@ -110,7 +115,7 @@ def test_a_fill_outside_a_byte_is_refused(tmp_path: Path) -> None:
                 "version": RECIPE_VERSION,
                 "recipes": [
                     {
-                        "game_name": "SMB",
+                        "game_name": GAME,
                         "game_version": 0,
                         "side": 0,
                         "position": 0,
@@ -133,16 +138,16 @@ def test_a_fill_outside_a_byte_is_refused(tmp_path: Path) -> None:
 
 def test_recipes_are_selected_by_game_and_version() -> None:
     # Arrange
-    expected = ["SMB"]
+    expected = [GAME]
 
     # Act
     recipes = (
-        SaveRecipe(game_name="SMB", game_version=0, side=0, position=1, fill=0),
-        SaveRecipe(game_name="ZEL", game_version=0, side=0, position=1, fill=0),
+        SaveRecipe(game_name=GAME, game_version=0, side=0, position=1, fill=0),
+        SaveRecipe(game_name=OTHER_GAME, game_version=0, side=0, position=1, fill=0),
     )
 
     # Assert
-    assert [entry.game_name for entry in recipes_for(recipes, game_name="SMB")] == expected
+    assert [entry.game_name for entry in recipes_for(recipes, game_name=GAME)] == expected
 
 
 def test_selecting_a_game_that_is_absent_gives_nothing() -> None:
@@ -150,7 +155,7 @@ def test_selecting_a_game_that_is_absent_gives_nothing() -> None:
     expected = ()
 
     # Act
-    recipes = (SaveRecipe(game_name="SMB", game_version=0, side=0, position=1, fill=0),)
+    recipes = (SaveRecipe(game_name=GAME, game_version=0, side=0, position=1, fill=0),)
 
     # Assert
-    assert recipes_for(recipes, game_name="ZEL") == expected
+    assert recipes_for(recipes, game_name=OTHER_GAME) == expected

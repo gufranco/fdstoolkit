@@ -5,7 +5,7 @@ from importlib import resources
 from pathlib import Path
 
 import pytest
-from fdspacker_kit import DEFAULT_INFO, build, info_of, packer_file, packer_side
+from fdspacker_kit import DEFAULT_INFO, GAME, OTHER_GAME, build, info_of, packer_file, packer_side
 
 from fdstoolkit.build.fdspacker import FdsPackerError, FdsPackerManifest
 from fdstoolkit.core.blocks import FileKind
@@ -37,7 +37,7 @@ def test_a_manifest_with_fdspacker_file_keys_is_recognised(tmp_path: Path) -> No
 def test_a_manifest_in_the_toolkit_schema_is_not_recognised() -> None:
     # Arrange
     payload = {
-        "game_name": "SMB",
+        "game_name": GAME,
         "sides": [{"side": 0, "files": [{"name": "MAIN", "path": "main.prg"}]}],
     }
 
@@ -64,7 +64,7 @@ def test_every_named_field_lands_at_its_offset(tmp_path: Path) -> None:
     side = packer_side(
         tmp_path,
         licensee_code="$A4",
-        game_name="ZEL",
+        game_name=OTHER_GAME,
         game_type="E",
         game_version=2,
         disk_side="B",
@@ -99,7 +99,9 @@ def test_every_named_field_lands_at_its_offset(tmp_path: Path) -> None:
         disk_version="$05",
     )
     expected = (
-        b"\x01*NINTENDO-HVC*\xa4ZELE\x02\x01\x01\x01\x11\x0f\x21\x22\x23\x24\x25"
+        b"\x01*NINTENDO-HVC*\xa4"
+        + OTHER_GAME.encode("ascii")
+        + b"E\x02\x01\x01\x01\x11\x0f\x21\x22\x23\x24\x25"
         b"\x61\x02\x21\x49\x31\x32\x33\x34\x35\x36\x37\x38\x39"
         b"\x63\x12\x01\x41\x42\x34\x12\x43\x12\x01\xff\x05"
     )

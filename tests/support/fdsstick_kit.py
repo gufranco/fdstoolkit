@@ -3,12 +3,17 @@ from __future__ import annotations
 import threading
 from collections import deque
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode as decode_fds
 from fdstoolkit.hardware.fdsstick import (
     CHUNK_PAYLOAD,
     ReportId,
 )
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 
 class FakeTransport:
@@ -63,7 +68,7 @@ class HangingTransport(FakeTransport):
 
 
 def sample_disk():  # noqa: ANN201
-    disk, _ = decode_fds(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode_fds(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     return disk
 
 

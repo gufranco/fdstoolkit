@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.core.blocks import Block, BlockKind, CrcStatus
 from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.master.splice import splice
+
+FAKE = seeded(__name__)
+CODE = game_name(FAKE).encode("ascii")
 
 GOOD_TAIL = bytes(41)
 BAD_TAIL = bytes([0x99]) + bytes(40)
@@ -175,7 +179,7 @@ def _amount(count: int) -> Block:
 def test_a_donor_holding_another_disk_is_refused() -> None:
     # Arrange
     broken = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([2, 1]), stored_crc=0x1234)
-    primary = _with(_info(b"ABC"), broken)
+    primary = _with(_info(CODE), broken)
     donor = _with(_info(b"XYZ"), _amount(1))
 
     # Act
@@ -193,10 +197,10 @@ def test_a_donor_block_of_another_kind_is_not_taken() -> None:
     # Arrange
     broken = Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([2, 1]), stored_crc=0x1234)
     header = Block(kind=BlockKind.FILE_HEADER, payload=bytes([3]) + bytes(15)).with_computed_crc()
-    primary = _with(_info(b"ABC"), broken)
+    primary = _with(_info(CODE), broken)
 
     # Act
-    result = splice(primary, [_with(_info(b"ABC"), header)])
+    result = splice(primary, [_with(_info(CODE), header)])
 
     # Assert
     assert result.unrepaired == ((0, 1),)

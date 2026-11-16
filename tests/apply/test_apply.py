@@ -3,12 +3,17 @@ from __future__ import annotations
 import zlib
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import has_header
 from fdstoolkit.core.disk import HEADER_SIZE
 from fdstoolkit.patch.apply import PatchOutcome, apply_patch
 from fdstoolkit.patch.formats import PatchError, PatchFormat, write_varint
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+CODE = game_name(FAKE).encode("ascii")
 
 
 def ips_setting(offset: int, payload: bytes) -> bytes:
@@ -32,16 +37,16 @@ def bps_replacing(source: bytes, target: bytes) -> bytes:
 
 
 def headerless() -> bytes:
-    return blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+    return blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
 
 
 def headered() -> bytes:
-    return blank_image(sides=1, headered=True, formatted=True, game_name="SMB")
+    return blank_image(sides=1, headered=True, formatted=True, game_name=GAME)
 
 
 def test_an_ips_patch_applies_to_a_headerless_image() -> None:
     # Arrange
-    patch = ips_setting(0x10, b"ZEL")
+    patch = ips_setting(0x10, CODE)
     image = headerless()
 
     # Act
@@ -49,14 +54,14 @@ def test_an_ips_patch_applies_to_a_headerless_image() -> None:
 
     # Assert
     assert outcome.format is PatchFormat.IPS
-    assert outcome.data[0x10:0x13] == b"ZEL"
+    assert outcome.data[0x10:0x13] == CODE
     assert outcome.applied_to == "image"
 
 
 def test_a_bps_patch_made_for_the_headerless_image_still_applies_to_a_headered_one() -> None:
     # Arrange
     target = bytearray(headerless())
-    target[0x10:0x13] = b"ZEL"
+    target[0x10:0x13] = CODE
     patch = bps_replacing(headerless(), bytes(target))
 
     # Act
@@ -66,13 +71,13 @@ def test_a_bps_patch_made_for_the_headerless_image_still_applies_to_a_headered_o
     assert outcome.applied_to == "headerless image"
     assert outcome.header_restored
     assert has_header(outcome.data)
-    assert outcome.data[HEADER_SIZE + 0x10 : HEADER_SIZE + 0x13] == b"ZEL"
+    assert outcome.data[HEADER_SIZE + 0x10 : HEADER_SIZE + 0x13] == CODE
 
 
 def test_a_bps_patch_made_for_the_headered_image_applies_directly() -> None:
     # Arrange
     target = bytearray(headered())
-    target[HEADER_SIZE + 0x10 : HEADER_SIZE + 0x13] = b"ZEL"
+    target[HEADER_SIZE + 0x10 : HEADER_SIZE + 0x13] = CODE
     patch = bps_replacing(headered(), bytes(target))
 
     # Act
@@ -122,19 +127,19 @@ def test_an_ips_patch_that_breaks_the_image_is_reported() -> None:
 
 def test_an_ips_patch_aimed_at_the_headerless_image_is_retried_without_the_header() -> None:
     # Arrange
-    patch = ips_setting(0x11, b"ZEL")
+    patch = ips_setting(0x11, CODE)
 
     # Act
     outcome = apply_patch(patch, headered())
 
     # Assert
     assert outcome.applied_to == "headerless image"
-    assert outcome.data[HEADER_SIZE + 0x11 : HEADER_SIZE + 0x14] == b"ZEL"
+    assert outcome.data[HEADER_SIZE + 0x11 : HEADER_SIZE + 0x14] == CODE
 
 
 def test_the_outcome_names_the_patch_format() -> None:
     # Arrange
-    patch = ips_setting(0x10, b"ZEL")
+    patch = ips_setting(0x10, CODE)
     image = headerless()
 
     # Act
@@ -177,7 +182,7 @@ def ups_replacing(source: bytes, target: bytes) -> bytes:
 def test_a_ups_patch_for_the_headerless_image_is_retried_without_the_header() -> None:
     # Arrange
     target = bytearray(headerless())
-    target[0x11:0x14] = b"ZEL"
+    target[0x11:0x14] = CODE
     patch = ups_replacing(headerless(), bytes(target))
 
     # Act

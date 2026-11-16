@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.identify.layout import LayoutReading
 from fdstoolkit.identify.provenance import Origin, provenance_of
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 STREAMED = LayoutReading(reads=2, endings=40, quiet_endings=40, gap_spread=0)
 DUPLICATED = LayoutReading(reads=2, endings=40, quiet_endings=0, gap_spread=73)
@@ -12,7 +17,7 @@ UNSETTLED = LayoutReading(reads=1, endings=20, quiet_endings=10, gap_spread=0)
 
 
 def disk_with_info(**overrides: bytes) -> Disk:
-    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    raw = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     for offset, value in overrides.items():
         start = int(offset[1:], 16)
         raw[start : start + len(value)] = value

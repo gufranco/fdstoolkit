@@ -16,7 +16,17 @@ from fdstoolkit.core.disk import Disk
 if TYPE_CHECKING:
     from faker import Faker
     from fastapi.testclient import TestClient
-from image_routes_kit import BAD_REQUEST, OK, ONE, ONE_SIDE, UNPROCESSABLE, ips_patch, zipped_folder
+from image_routes_kit import (
+    BAD_REQUEST,
+    GAME,
+    OK,
+    ONE,
+    ONE_SIDE,
+    OTHER_GAME,
+    UNPROCESSABLE,
+    ips_patch,
+    zipped_folder,
+)
 
 
 def test_set_changes_a_disk_information_field(client: TestClient) -> None:
@@ -26,7 +36,7 @@ def test_set_changes_a_disk_information_field(client: TestClient) -> None:
     # Act
     body = client.post(
         "/api/set",
-        json={"data": ONE, "edits": ["game_name=ABC"]},
+        json={"data": ONE, "edits": [f"game_name={OTHER_GAME}"]},
     ).json()
 
     # Assert
@@ -162,7 +172,7 @@ def test_a_recipe_file_that_parses_normalises_the_save(client: TestClient) -> No
                 "version": 1,
                 "recipes": [
                     {
-                        "game_name": "SMB",
+                        "game_name": GAME,
                         "game_version": 0,
                         "side": 0,
                         "position": 0,
@@ -199,7 +209,7 @@ def test_a_recipe_that_names_a_file_that_is_not_there_is_refused(
                 "version": 1,
                 "recipes": [
                     {
-                        "game_name": "SMB",
+                        "game_name": GAME,
                         "game_version": 0,
                         "side": 0,
                         "position": 9,
@@ -220,7 +230,9 @@ def test_a_recipe_that_names_a_file_that_is_not_there_is_refused(
 
 def test_a_manifest_that_parses_builds_an_image(client: TestClient) -> None:
     # Arrange
-    manifest = base64.b64encode(b'{"sides": [{"game_name": "SMB", "files": []}]}').decode("ascii")
+    manifest = base64.b64encode(
+        json.dumps({"sides": [{"game_name": GAME, "files": []}]}).encode()
+    ).decode("ascii")
 
     # Act
     answer = client.post("/api/build", json={"manifest": manifest})

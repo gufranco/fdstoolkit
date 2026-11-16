@@ -28,12 +28,17 @@ from fdstoolkit.ui.app import create_app
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+from fakes import game_name, seeded
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
 
 OK = 200
 UNPROCESSABLE = 422
 SETTLE = 5.0
 VOTED = (10, 90, 170)
-BLANK, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+BLANK, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
 
 
 def b64(data: bytes) -> str:
@@ -265,7 +270,9 @@ def test_calibration_refuses_captures_with_no_read_of_that_side(client: TestClie
 def test_grade_refuses_uploaded_captures_of_another_disk(client: TestClient) -> None:
     # Arrange
     disk = disk_with_a_file()
-    other, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True, game_name="OTH"))
+    other, _ = fds.decode(
+        blank_image(sides=1, headered=False, formatted=True, game_name=OTHER_GAME)
+    )
 
     # Act
     answer = client.post(

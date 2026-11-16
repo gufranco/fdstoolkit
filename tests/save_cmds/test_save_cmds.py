@@ -4,16 +4,21 @@ import json
 from pathlib import Path
 
 import pytest
+from fakes import game_name, seeded
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
+
 runner = CliRunner()
 
 
 def _save_disk(tmp_path: Path, fill: int, name: str) -> Path:
-    content = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    content = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     content[56:58] = bytes([0x02, 0x01])
     header = (
         bytes([0x03, 0x00, 0x00])
@@ -37,7 +42,7 @@ def _recipes(tmp_path: Path) -> Path:
                 "version": 1,
                 "recipes": [
                     {
-                        "game_name": "SMB",
+                        "game_name": GAME,
                         "game_version": 0,
                         "side": 0,
                         "position": 0,
@@ -55,7 +60,7 @@ def _recipes(tmp_path: Path) -> Path:
 @pytest.fixture
 def single_side(tmp_path: Path) -> Path:
     path = tmp_path / "one-side.fds"
-    path.write_bytes(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    path.write_bytes(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     return path
 
 
@@ -301,7 +306,7 @@ def test_save_blank_says_when_nothing_matched(single_side: Path, tmp_path: Path)
                 "version": 1,
                 "recipes": [
                     {
-                        "game_name": "ZEL",
+                        "game_name": OTHER_GAME,
                         "game_version": 0,
                         "side": 0,
                         "position": 0,

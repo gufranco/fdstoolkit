@@ -3,9 +3,13 @@ from __future__ import annotations
 import importlib
 
 import pytest
+from fakes import game_name, seeded
 
 import fdstoolkit
 from fdstoolkit.build.blank import blank_image
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 MEASUREMENT_NAMES = (
     "decode_image",
@@ -83,7 +87,7 @@ def test_everything_all_names_actually_exists() -> None:
 
 def test_the_measurement_path_runs_without_touching_a_cli_module() -> None:
     # Arrange
-    data = blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+    data = blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
     disk, findings = fdstoolkit.decode_image(data)
 
     # Act
@@ -96,7 +100,7 @@ def test_the_measurement_path_runs_without_touching_a_cli_module() -> None:
 
 def test_a_grade_is_reachable_from_the_package_root() -> None:
     # Arrange
-    data = blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+    data = blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
     disk, findings = fdstoolkit.decode_image(data)
     confidence = fdstoolkit.score_disk(disk)
 
@@ -109,7 +113,7 @@ def test_a_grade_is_reachable_from_the_package_root() -> None:
 
 def test_a_canonical_digest_is_reachable_from_the_package_root() -> None:
     # Arrange
-    data = blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+    data = blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
     disk, _ = fdstoolkit.decode_image(data)
 
     # Act

@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Final
 
 import pytest
 from faker import Faker
+from fakes import FAKE_SEED
 from hypothesis import settings
 
 settings.register_profile("fixed", derandomize=True, database=None)
 settings.load_profile("fixed")
-
-FAKE_SEED: Final = 1986
 
 
 @pytest.fixture

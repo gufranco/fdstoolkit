@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 
 from drive_double import FaultPlan, SimulatedDrive
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -19,6 +20,9 @@ from fdstoolkit.quality.surface import (
     SurfaceReport,
     pattern_disk,
 )
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 BLANK_BLOCKS = 2
 
@@ -51,7 +55,7 @@ class FinishRefusingDrive(SimulatedDrive):
 
 
 def scratch_disk():  # noqa: ANN201
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     return disk
 
 
@@ -68,7 +72,7 @@ def data_of(pattern: SurfacePattern, key: bytes = KEY) -> bytes:
 
 
 def two_sided_scratch():  # noqa: ANN201
-    disk, _ = decode(blank_image(sides=2, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=2, headered=False, formatted=True, game_name=GAME))
     return disk
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -16,9 +17,12 @@ from fdstoolkit.core.bitstream import (
     gap_length,
 )
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 
 def sample_side(sides: int = 1):  # noqa: ANN201
-    disk, _ = decode(blank_image(sides=sides, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=sides, headered=False, formatted=True, game_name=GAME))
     return disk.sides[0]
 
 

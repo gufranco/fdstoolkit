@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from device import ID_DISK_START, ID_FINISH_WRITE, UNPLUGGED, FakeFdsStick
+from fakes import game_name, seeded
 from protocol_kit import (
     EMULATOR_REPORTS,
     FINISH,
@@ -32,6 +33,10 @@ from fdstoolkit.hardware.fdsstick import (
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import WriteNotTakenError
 from fdstoolkit.hardware.writing import write_verified
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
 
 
 def test_a_packet_the_device_refuses_once_is_sent_again() -> None:
@@ -179,7 +184,7 @@ def test_a_write_sends_nothing_after_its_data() -> None:
 
 def test_a_side_written_then_read_back_arrives_unchanged() -> None:
     # Arrange
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=OTHER_GAME))
     encoded = encode_block_stream([block.payload for block in disk.sides[0].blocks])
     device = FakeFdsStick()
     stick_over(device).write_raw_side(encoded)
@@ -194,7 +199,7 @@ def test_a_side_written_then_read_back_arrives_unchanged() -> None:
 
 def test_reading_a_side_through_the_driver_yields_its_blocks() -> None:
     # Arrange
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=OTHER_GAME))
     payloads = [block.payload for block in disk.sides[0].blocks]
     device = FakeFdsStick(side=encode_block_stream(payloads))
 
@@ -323,7 +328,7 @@ def test_the_driver_records_the_report_map_the_older_firmware_used() -> None:
 
 def test_a_write_through_the_driver_reads_back_as_written() -> None:
     # Arrange
-    device = FakeFdsStick(side=encode_raw03(formatted("OLD"), side=0), echoes=True)
+    device = FakeFdsStick(side=encode_raw03(formatted(GAME), side=0), echoes=True)
     stick = stick_over(device)
 
     # Act
@@ -337,7 +342,7 @@ def test_a_write_through_the_driver_reads_back_as_written() -> None:
 def test_a_write_reads_back_while_the_stick_settles_after_finishing() -> None:
     # Arrange
     device = FakeFdsStick(
-        side=encode_raw03(formatted("OLD"), side=0), echoes=True, busy_reads_after_finish=1
+        side=encode_raw03(formatted(GAME), side=0), echoes=True, busy_reads_after_finish=1
     )
     stick = stick_over(device)
 
@@ -350,7 +355,7 @@ def test_a_write_reads_back_while_the_stick_settles_after_finishing() -> None:
 
 def test_a_write_the_device_drops_is_caught_by_the_driver_readback() -> None:
     # Arrange
-    device = FakeFdsStick(side=encode_raw03(formatted("OLD"), side=0))
+    device = FakeFdsStick(side=encode_raw03(formatted(GAME), side=0))
     stick = stick_over(device)
 
     # Act

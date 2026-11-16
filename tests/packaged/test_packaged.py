@@ -19,6 +19,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from faker import Faker
+from fakes import game_name, seeded
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 FILE_NAME_LENGTH = 8
 
@@ -33,7 +37,7 @@ def zipped(members: dict[str, bytes]) -> bytes:
 
 def manifest(path: str, name: str) -> bytes:
     side = {"side": 0, "files": [{"name": name, "path": path}]}
-    return json.dumps({"game_name": "ABC", "sides": [side]}).encode()
+    return json.dumps({"game_name": GAME, "sides": [side]}).encode()
 
 
 def disk_name(fake: Faker) -> str:
@@ -59,7 +63,7 @@ def test_an_fdspacker_export_zipped_builds_the_disk_it_came_from(
 ) -> None:
     # Arrange
     (tmp_path / "a.bin").write_bytes(fake.binary(length=fake.pyint(min_value=1, max_value=512)))
-    side = {"game_name": "ABC", "file_amount": 1, "files": [{"file_name": "A", "data": "a.bin"}]}
+    side = {"game_name": GAME, "file_amount": 1, "files": [{"file_name": "A", "data": "a.bin"}]}
     original = FdsPackerManifest.parse({"sides": [side]}, root=tmp_path).build()
     export = FdsPackerExport.of(decode(original)[0])
     upload = zipped({MANIFEST_NAME: export.text().encode(), **dict(export.files)})
@@ -73,7 +77,7 @@ def test_an_fdspacker_export_zipped_builds_the_disk_it_came_from(
 
 def test_a_manifest_alone_builds_a_disk_without_files() -> None:
     # Arrange
-    upload = json.dumps({"game_name": "ABC", "sides": [{"files": []}]}).encode()
+    upload = json.dumps({"game_name": GAME, "sides": [{"files": []}]}).encode()
 
     # Act
     image = build_packaged(upload)
@@ -120,7 +124,7 @@ def test_an_fdspacker_manifest_naming_an_absolute_path_is_refused(
     # Arrange
     outside = tmp_path / fake.file_name()
     outside.write_bytes(fake.binary(length=16))
-    side = {"game_name": "ABC", "file_amount": 1, "files": [{"data": str(outside)}]}
+    side = {"game_name": GAME, "file_amount": 1, "files": [{"data": str(outside)}]}
     upload = json.dumps({"sides": [side]}).encode()
 
     # Act

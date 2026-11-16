@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
+from fakes import game_name, seeded
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
@@ -24,6 +25,10 @@ if TYPE_CHECKING:
 runner = CliRunner()
 
 
+FAKE = seeded("main")
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
+THIRD_GAME = game_name(FAKE)
 STALL_CEILING = 0.05
 
 

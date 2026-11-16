@@ -4,6 +4,7 @@ import base64
 from dataclasses import dataclass
 
 import pytest
+from fakes import game_name, seeded
 from fastapi import HTTPException
 
 from fdstoolkit.build.blank import blank_image
@@ -20,7 +21,10 @@ from fdstoolkit.ui.shared import (
     rows_of,
 )
 
-IMAGE = blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
+IMAGE = blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
 ENCODED = base64.b64encode(IMAGE).decode("ascii")
 
 

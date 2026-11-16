@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from main_kit import runner
+from main_kit import GAME, OTHER_GAME, THIRD_GAME, runner
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
@@ -41,7 +41,11 @@ def test_patch_applies_an_ips(single_side: Path, tmp_path: Path) -> None:
     # Arrange
     patch = tmp_path / "rename.ips"
     patch.write_bytes(
-        b"PATCH" + (0x10).to_bytes(3, "big") + (3).to_bytes(2, "big") + b"ZEL" + b"EOF"
+        b"PATCH"
+        + (0x10).to_bytes(3, "big")
+        + (3).to_bytes(2, "big")
+        + OTHER_GAME.encode("ascii")
+        + b"EOF"
     )
     out = tmp_path / "patched.fds"
 
@@ -56,7 +60,7 @@ def test_patch_applies_an_ips(single_side: Path, tmp_path: Path) -> None:
     assert "applied ips" in result.stdout
     assert (
         json.loads(runner.invoke(app, ["info", str(out), "--json"]).stdout)["sides"][0]["game_name"]
-        == "ZEL"
+        == OTHER_GAME
     )
 
 
@@ -135,7 +139,7 @@ def test_build_writes_a_disk_from_a_manifest(tmp_path: Path) -> None:
     manifest.write_text(
         json.dumps(
             {
-                "game_name": "SMB",
+                "game_name": GAME,
                 "sides": [
                     {
                         "side": 0,
@@ -175,7 +179,7 @@ def test_build_reports_a_missing_manifest(tmp_path: Path) -> None:
 def test_build_reports_a_manifest_that_does_not_parse(tmp_path: Path) -> None:
     # Arrange
     manifest = tmp_path / "bad.json"
-    manifest.write_text(json.dumps({"game_name": "SMB", "sides": []}), encoding="utf-8")
+    manifest.write_text(json.dumps({"game_name": GAME, "sides": []}), encoding="utf-8")
 
     # Act
     result = runner.invoke(app, ["build", str(manifest), "-o", str(tmp_path / "out.fds")])
@@ -266,7 +270,9 @@ def test_rebuild_refuses_two_conflicting_options(image: Path, tmp_path: Path) ->
 def test_build_names_the_field_a_toolkit_manifest_leaves_out(tmp_path: Path) -> None:
     # Arrange
     manifest = tmp_path / "disk.json"
-    manifest.write_text(json.dumps({"game_name": "ABC", "sides": [{"files": [{"name": "X"}]}]}))
+    manifest.write_text(
+        json.dumps({"game_name": THIRD_GAME, "sides": [{"files": [{"name": "X"}]}]})
+    )
     arguments = ["build", str(manifest), "-o", str(tmp_path / "out.fds")]
 
     # Act

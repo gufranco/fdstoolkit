@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -13,9 +14,12 @@ from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 
 def sample(*, files: int = 1) -> Disk:
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     for index in range(files):
         disk = insert_file(
             disk,

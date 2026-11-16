@@ -12,7 +12,7 @@ from fdstoolkit.core.disk import Disk, Side
 
 if TYPE_CHECKING:
     from faker import Faker
-from main_kit import runner
+from main_kit import GAME, OTHER_GAME, runner
 
 
 def test_insert_adds_a_file(single_side: Path, tmp_path: Path) -> None:
@@ -183,16 +183,16 @@ def test_insert_reports_a_finding_from_the_encoder(tmp_path: Path) -> None:
 def test_set_changes_a_field(single_side: Path, tmp_path: Path) -> None:
     # Arrange
     out = tmp_path / "renamed.fds"
-    arguments = ["set", str(single_side), "-o", str(out), "--set", "game_name=ZEL"]
+    arguments = ["set", str(single_side), "-o", str(out), "--set", f"game_name={OTHER_GAME}"]
 
     # Act
     result = runner.invoke(app, arguments)
 
     # Assert
     assert result.exit_code == 0
-    assert "game_name: SMB -> ZEL" in result.stdout
+    assert f"game_name: {GAME} -> {OTHER_GAME}" in result.stdout
     payload = json.loads(runner.invoke(app, ["info", str(out), "--json"]).stdout)
-    assert payload["sides"][0]["game_name"] == "ZEL"
+    assert payload["sides"][0]["game_name"] == OTHER_GAME
 
 
 def test_set_can_write_a_qd(single_side: Path, tmp_path: Path) -> None:

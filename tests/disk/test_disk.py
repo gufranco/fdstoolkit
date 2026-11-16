@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import (
@@ -11,12 +12,15 @@ from fdstoolkit.core.disk import (
     require_readable_sides,
 )
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 
 def disk_info_block() -> Block:
     payload = bytearray(56)
     payload[0] = 0x01
     payload[1:15] = b"*NINTENDO-HVC*"
-    payload[0x10:0x13] = b"SMB"
+    payload[0x10:0x13] = GAME.encode("ascii")
     return Block(kind=BlockKind.DISK_INFO, payload=bytes(payload))
 
 
@@ -71,7 +75,7 @@ def test_a_formatted_side_exposes_its_disk_info() -> None:
     # Assert
     assert side.is_formatted
     assert info is not None
-    assert info.game_name == "SMB"
+    assert info.game_name == GAME
 
 
 def test_a_side_reports_its_declared_and_actual_file_counts() -> None:

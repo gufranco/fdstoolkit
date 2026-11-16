@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from main_kit import runner, written_side_captures
+from main_kit import GAME, runner, written_side_captures
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
@@ -24,7 +24,7 @@ def test_info_reports_each_side(image: Path) -> None:
 
     # Assert
     assert result.exit_code == 0
-    assert "SMB" in result.stdout
+    assert GAME in result.stdout
     assert "side 1" in result.stdout
 
 
@@ -36,7 +36,7 @@ def test_info_as_json_is_machine_readable(image: Path) -> None:
     payload = json.loads(result.stdout)
 
     # Assert
-    assert payload["sides"][0]["game_name"] == "SMB"
+    assert payload["sides"][0]["game_name"] == GAME
     assert payload["side_count"] == 2
 
 

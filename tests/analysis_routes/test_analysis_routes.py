@@ -3,15 +3,19 @@ from __future__ import annotations
 import base64
 
 import pytest
+from fakes import game_name, seeded
 from fastapi.testclient import TestClient
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.ui.app import create_app
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 OK = 200
 BAD_REQUEST = 400
 UNPROCESSABLE = 422
-ONE_SIDE = blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+ONE_SIDE = blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
 ONE = base64.b64encode(ONE_SIDE).decode("ascii")
 
 
@@ -46,7 +50,7 @@ def test_splice_repairs_from_a_donor(client: TestClient) -> None:
 def test_splice_refuses_a_donor_of_another_shape(client: TestClient) -> None:
     # Arrange
     two = base64.b64encode(
-        blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
+        blank_image(sides=2, headered=False, formatted=True, game_name=GAME)
     ).decode("ascii")
 
     # Act

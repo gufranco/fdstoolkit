@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from main_kit import GAME
 
 from fdstoolkit.build.blank import blank_image
 
@@ -10,14 +11,14 @@ from fdstoolkit.build.blank import blank_image
 @pytest.fixture
 def image(tmp_path: Path) -> Path:
     path = tmp_path / "disk.fds"
-    path.write_bytes(blank_image(sides=2, headered=False, formatted=True, game_name="SMB"))
+    path.write_bytes(blank_image(sides=2, headered=False, formatted=True, game_name=GAME))
     return path
 
 
 @pytest.fixture
 def single_side(tmp_path: Path) -> Path:
     path = tmp_path / "one-side.fds"
-    path.write_bytes(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    path.write_bytes(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     return path
 
 
@@ -32,7 +33,7 @@ def damaged(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def hidden_file_image(tmp_path: Path) -> Path:
-    content = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    content = bytearray(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     content[56:58] = bytes([0x02, 0x00])
     header = (
         bytes([0x03, 0x00, 0x00])

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from device import ID_FINISH_WRITE, FakeFdsStick
+from fakes import game_name, seeded
 from protocol_kit import FACTORY_FILL, FILLS_PER_PACKET, raw_side, stick_over
 
 from fdstoolkit.build.blank import blank_image
@@ -23,6 +24,9 @@ from fdstoolkit.hardware.fdsstick import (
     ReportId,
 )
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 
 def test_the_device_is_the_one_both_reference_tools_open() -> None:
@@ -317,7 +321,7 @@ def test_a_device_that_stops_inside_the_image_says_how_much_was_written() -> Non
 
 def test_a_side_written_from_blocks_is_filled_to_the_end_of_the_track() -> None:
     # Arrange
-    disk = decode(blank_image(sides=1, headered=False, formatted=True, game_name="PAD"))[0]
+    disk = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))[0]
     blocks = [block.payload for block in disk.sides[0].blocks]
     stream = encode_write_stream(blocks)
     device = FakeFdsStick()

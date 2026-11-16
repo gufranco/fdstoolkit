@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import (
     REFERENCE_BLANK_64_SHA256,
@@ -13,6 +14,9 @@ from fdstoolkit.codecs.fds import decode
 from fdstoolkit.core.disk import SIDE_SIZE
 from fdstoolkit.core.diskinfo import DiskInfo
 from fdstoolkit.identify.provenance import Origin, provenance_of
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 
 def refusal_of(count: int) -> str:
@@ -139,13 +143,13 @@ def test_two_builds_of_the_same_blank_are_identical() -> None:
 
 def test_a_blank_can_carry_a_game_name() -> None:
     # Arrange
-    data = blank_image(sides=1, headered=False, formatted=True, game_name="ABC")
+    data = blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
 
     # Act
     disk, _ = decode(data)
 
     # Assert
-    assert DiskInfo.parse(disk.sides[0].blocks[0].payload).game_name == "ABC"
+    assert DiskInfo.parse(disk.sides[0].blocks[0].payload).game_name == GAME
 
 
 def test_a_game_name_longer_than_three_characters_is_rejected() -> None:

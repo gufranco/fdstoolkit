@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import typer
+from fakes import game_name, seeded
 from typer.testing import CliRunner
 
 from fdstoolkit.cli.common import decode_image
@@ -14,6 +15,9 @@ from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.quality.confidence import ConfidenceReport
 from fdstoolkit.quality.reads import ReadStatistics
 
+FAKE = seeded(__name__)
+CODE = game_name(FAKE).encode("ascii")
+
 runner = CliRunner()
 
 
@@ -22,7 +26,7 @@ def _payload(*, licensee: int = 0) -> bytes:
     payload[0x00] = BlockKind.DISK_INFO
     payload[0x01:0x0F] = b"*NINTENDO-HVC*"
     payload[0x0F] = licensee
-    payload[0x10:0x13] = b"ABC"
+    payload[0x10:0x13] = CODE
     return bytes(payload)
 
 

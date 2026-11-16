@@ -11,7 +11,7 @@ from fdstoolkit.cli.main import app as cli
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
-from image_routes_kit import BAD_REQUEST, ENCODED, ONE, RENAMED, UNPROCESSABLE, written_side
+from image_routes_kit import BAD_REQUEST, ENCODED, GAME, ONE, RENAMED, UNPROCESSABLE, written_side
 
 
 def test_diff_reports_no_difference_between_one_image_and_itself(
@@ -187,7 +187,7 @@ def test_extract_names_every_file_as_the_command_does(client: TestClient, tmp_pa
     # Arrange
     (tmp_path / "main.prg").write_bytes(bytes([0xEA]) * 32)
     side = {
-        "game_name": "SMB",
+        "game_name": GAME,
         "file_amount": 1,
         "files": [{"file_name": "M/N", "data": "main.prg"}],
     }
@@ -208,7 +208,7 @@ def test_extract_can_add_an_fdspacker_manifest(client: TestClient, tmp_path: Pat
     # Arrange
     (tmp_path / "main.prg").write_bytes(bytes([0xEA]) * 32)
     side = {
-        "game_name": "SMB",
+        "game_name": GAME,
         "file_amount": 1,
         "files": [{"file_name": "MAIN", "data": "main.prg"}],
     }

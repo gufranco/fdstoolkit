@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.codecs.fds import build_header, decode, encode, has_header
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.diagnostics import Severity
 from fdstoolkit.core.disk import HEADER_SIZE, SIDE_SIZE, Disk, Side
 
+FAKE = seeded(__name__)
+CODE = game_name(FAKE).encode("ascii")
+
 
 def disk_info() -> bytes:
     payload = bytearray(56)
     payload[0] = 0x01
     payload[1:15] = b"*NINTENDO-HVC*"
-    payload[0x10:0x13] = b"SMB"
+    payload[0x10:0x13] = CODE
     return bytes(payload)
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Final
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import calibration_disk
@@ -23,6 +24,9 @@ from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.files import FileSpec, insert_file
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
 
 MARKER: Final = 0x80
 FACTORY_LEAD_IN: Final = 18000
@@ -45,7 +49,7 @@ def framed(payload: bytes) -> bytes:
 
 
 def blank_side() -> list[bytes]:
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     return [block.payload for block in disk.sides[0].blocks]
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -9,9 +10,13 @@ from fdstoolkit.core.diskinfo import DiskInfo
 from fdstoolkit.core.showa import ShowaDateError
 from fdstoolkit.edit.diskinfo import EDITABLE_FIELDS, apply_edits, parse_edit
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
+
 
 def sample() -> Disk:
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=OTHER_GAME))
     return disk
 
 
@@ -24,13 +29,13 @@ def test_a_text_field_is_written_padded() -> None:
     # Arrange
     disk = sample()
     side = 0
-    edits = {"game_name": "ZEL"}
+    edits = {"game_name": GAME}
 
     # Act
     updated, changes = apply_edits(disk, side=side, edits=edits)
 
     # Assert
-    assert info_of(updated).game_name == "ZEL"
+    assert info_of(updated).game_name == GAME
     assert changes[0].field == "game_name"
 
 
@@ -64,14 +69,14 @@ def test_a_change_reports_the_old_and_the_new_value() -> None:
     # Arrange
     disk = sample()
     side = 0
-    edits = {"game_name": "ZEL"}
+    edits = {"game_name": GAME}
 
     # Act
     _, changes = apply_edits(disk, side=side, edits=edits)
 
     # Assert
-    assert changes[0].before == "SMB"
-    assert changes[0].after == "ZEL"
+    assert changes[0].before == OTHER_GAME
+    assert changes[0].after == GAME
 
 
 def test_editing_nothing_changes_nothing() -> None:
@@ -90,7 +95,7 @@ def test_editing_keeps_the_rest_of_the_block() -> None:
     # Arrange
     disk = sample()
     side = 0
-    edits = {"game_name": "ZEL"}
+    edits = {"game_name": GAME}
 
     # Act
     updated, _ = apply_edits(disk, side=side, edits=edits)
@@ -132,7 +137,7 @@ def test_a_side_that_does_not_exist_is_refused() -> None:
     # Arrange
     disk = sample()
     side = 3
-    edits = {"game_name": "ZEL"}
+    edits = {"game_name": GAME}
 
     # Act
     with pytest.raises(ValueError, match="no side 3") as raised:
@@ -148,7 +153,7 @@ def test_an_unformatted_side_cannot_be_edited() -> None:
 
     # Act
     with pytest.raises(ValueError, match="no disk information block") as raised:
-        apply_edits(disk, side=0, edits={"game_name": "ZEL"})
+        apply_edits(disk, side=0, edits={"game_name": GAME})
 
     # Assert
     assert raised.type is ValueError
@@ -184,13 +189,13 @@ def test_a_numeric_value_outside_a_byte_is_refused() -> None:
 
 def test_an_edit_string_is_parsed_into_a_pair() -> None:
     # Arrange
-    text = "game_name=ZEL"
+    text = f"game_name={GAME}"
 
     # Act
     result = parse_edit(text)
 
     # Assert
-    assert result == ("game_name", "ZEL")
+    assert result == ("game_name", GAME)
 
 
 def test_an_edit_string_without_an_equals_sign_is_refused() -> None:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import block_regions, encode_block_stream, pack_raw03, unpack_raw03
@@ -13,12 +15,15 @@ from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead
 from fdstoolkit.hardware.session import DumpResult, Grade, SideDump
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+
 DAMAGED = 3
 TRAILING_GAP = 4000
 
 
 def reference_side() -> Side:
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="REC"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     disk = insert_file(
         disk,
         side=0,
@@ -167,7 +172,7 @@ def test_captures_whose_disk_info_never_read_clean_are_judged_by_their_headers()
     # Arrange
     side = reference_side()
     other = insert_file(
-        decode(blank_image(sides=1, headered=False, formatted=True, game_name="REC"))[0],
+        decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))[0],
         side=0,
         spec=FileSpec(name="OTHER", address=0x6000, kind=FileKind.PROGRAM, data=bytes(64)),
     )

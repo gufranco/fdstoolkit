@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 
 from drive_double import FaultPlan, SimulatedDrive
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE
@@ -12,9 +13,13 @@ from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
+
 
 def sample_disk(sides: int = 1) -> Disk:
-    disk, _ = decode(blank_image(sides=sides, headered=False, formatted=True, game_name="SMB"))
+    disk, _ = decode(blank_image(sides=sides, headered=False, formatted=True, game_name=OTHER_GAME))
     return disk
 
 
@@ -89,7 +94,7 @@ class OverlayDrive(SimulatedDrive):
 
 
 def two_sided_game() -> Disk:
-    disk, _ = decode(blank_image(sides=2, headered=False, formatted=True, game_name="ZEL"))
+    disk, _ = decode(blank_image(sides=2, headered=False, formatted=True, game_name=GAME))
     return disk
 
 
@@ -99,7 +104,7 @@ def blank_scratch() -> Disk:
 
 
 def other_game() -> Disk:
-    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name="ZEL"))
+    disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))
     return disk
 
 

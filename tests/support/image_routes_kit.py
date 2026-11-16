@@ -5,10 +5,16 @@ import io
 import zipfile
 from pathlib import Path
 
+from fakes import game_name, seeded
+
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.drive.captures import Capture, bundle_zip
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
 
 OK = 200
 
@@ -19,13 +25,13 @@ BAD_REQUEST = 400
 UNPROCESSABLE = 422
 
 
-IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="SMB")
+IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name=GAME)
 
 
-ONE_SIDE = blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+ONE_SIDE = blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
 
 
-RENAMED_IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name="ZLD")
+RENAMED_IMAGE = blank_image(sides=2, headered=False, formatted=True, game_name=OTHER_GAME)
 
 
 ENCODED = base64.b64encode(IMAGE).decode("ascii")

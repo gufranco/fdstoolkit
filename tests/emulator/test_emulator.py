@@ -3,6 +3,7 @@ from __future__ import annotations
 import zlib
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -11,9 +12,13 @@ from fdstoolkit.edit.emulator import SaveFormat, detect_save_format, extract_sav
 from fdstoolkit.patch.build import build_ips, build_ups
 from fdstoolkit.patch.formats import PatchError, write_varint
 
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
+
 
 def original() -> bytes:
-    return blank_image(sides=1, headered=False, formatted=True, game_name="SMB")
+    return blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
 
 
 def played() -> bytes:
@@ -210,7 +215,7 @@ def test_a_ups_save_merges_into_the_image() -> None:
 
 def test_a_ups_save_against_another_disk_is_refused() -> None:
     # Arrange
-    other = blank_image(sides=1, headered=False, formatted=True, game_name="ZEL")
+    other = blank_image(sides=1, headered=False, formatted=True, game_name=OTHER_GAME)
 
     # Act
     with pytest.raises(PatchError, match="does not match the patch") as raised:

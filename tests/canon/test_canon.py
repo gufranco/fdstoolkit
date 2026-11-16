@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+from fakes import game_name, seeded
 
 from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.qd import decode as decode_qd
@@ -23,12 +24,16 @@ from fdstoolkit.core.diskinfo import (
     RELEASE_PROFILE,
 )
 
+FAKE = seeded(__name__)
+CODE = game_name(FAKE).encode("ascii")
+OTHER_CODE = game_name(FAKE).encode("ascii")
+
 
 def disk_info(
     *,
     rewrite_count: int = 0,
     serial: int = 0,
-    name: bytes = b"SMB",
+    name: bytes = CODE,
     country: int = 0x49,
 ) -> bytes:
     payload = bytearray(56)
@@ -47,7 +52,7 @@ def side_bytes(
     *,
     rewrite_count: int = 0,
     serial: int = 0,
-    name: bytes = b"SMB",
+    name: bytes = CODE,
     tail: bytes = b"",
     country: int = 0x49,
 ) -> bytes:
@@ -95,7 +100,7 @@ def test_content_profile_keeps_two_different_games_apart() -> None:
     one, _ = decode(side_bytes())
 
     # Act
-    other, _ = decode(side_bytes(name=b"ZEL"))
+    other, _ = decode(side_bytes(name=OTHER_CODE))
 
     # Assert
     assert canonicalise(one, CONTENT_PROFILE).data != canonicalise(other, CONTENT_PROFILE).data
@@ -128,10 +133,10 @@ def test_content_profile_drops_the_crc_so_a_qd_and_an_fds_agree() -> None:
 
 def test_data_profile_ignores_the_whole_disk_label() -> None:
     # Arrange
-    one, _ = decode(side_bytes(name=b"SMB"))
+    one, _ = decode(side_bytes(name=CODE))
 
     # Act
-    other, _ = decode(side_bytes(name=b"ZEL"))
+    other, _ = decode(side_bytes(name=OTHER_CODE))
 
     # Assert
     assert canonicalise(one, DATA_PROFILE).data == canonicalise(other, DATA_PROFILE).data
@@ -372,10 +377,10 @@ def test_content_profile_still_separates_them() -> None:
 
 def test_release_profile_keeps_two_different_games_apart() -> None:
     # Arrange
-    one, _ = decode(side_bytes(name=b"SMB"))
+    one, _ = decode(side_bytes(name=CODE))
 
     # Act
-    other, _ = decode(side_bytes(name=b"ZEL"))
+    other, _ = decode(side_bytes(name=OTHER_CODE))
 
     # Assert
     assert canonicalise(one, RELEASE_PROFILE).data != canonicalise(other, RELEASE_PROFILE).data

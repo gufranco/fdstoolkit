@@ -16,12 +16,17 @@ if TYPE_CHECKING:
 
     import pytest
 import typer
+from fakes import game_name, seeded
+
+FAKE = seeded(__name__)
+GAME = game_name(FAKE)
+OTHER_GAME = game_name(FAKE)
 
 runner = CliRunner()
 
 
 def blank_two_sides() -> FacingDrive:
-    disk, _ = fds.decode(blank_image(sides=2, headered=False, formatted=True, game_name="OLD"))
+    disk, _ = fds.decode(blank_image(sides=2, headered=False, formatted=True, game_name=GAME))
     return FacingDrive(disk)
 
 
@@ -68,7 +73,7 @@ def test_blank_can_add_a_header_to_the_calibration_image(tmp_path: Path) -> None
 
 def test_blank_refuses_options_the_calibration_image_decides(tmp_path: Path) -> None:
     # Arrange
-    arguments = ["blank", "--calibration", "--game-name", "ABC", "-o", str(tmp_path / "x.fds")]
+    arguments = ["blank", "--calibration", "--game-name", OTHER_GAME, "-o", str(tmp_path / "x.fds")]
 
     # Act
     result = runner.invoke(app, arguments)
