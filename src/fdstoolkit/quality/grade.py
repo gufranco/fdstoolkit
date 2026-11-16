@@ -42,6 +42,43 @@ class GradedReport:
         return f"{self.grade.value}, confidence {self.confidence:.2f}: {why}"
 
 
+def _reasons(
+    findings: Sequence[Diagnostic],
+    worst: float,
+    reads: ReadStatistics | None,
+    weak_blocks: int | None,
+) -> tuple[Reason, ...]:
+    errors = sum(1 for finding in findings if finding.severity is Severity.ERROR)
+    warnings = sum(1 for finding in findings if finding.severity is Severity.WARNING)
+    stable = () if reads is None else (_reason("read stability", reads.stability, STABLE_READS),)
+    weak = () if weak_blocks is None else (_absent("weak blocks", weak_blocks),)
+    return (
+        _absent("errors", errors),
+        _absent("warnings", warnings),
+        _reason("confidence", worst, LOW_CONFIDENCE),
+        *stable,
+        *weak,
+    )
+
+
+def _reason(metric: str, value: float, threshold: float) -> Reason:
+    return Reason(metric=metric, value=value, threshold=threshold, passed=value >= threshold)
+
+
+def _absent(metric: str, count: int) -> Reason:
+    return Reason(metric=metric, value=count, threshold=NO_FINDINGS, passed=not count)
+
+
+def _grade(reasons: tuple[Reason, ...], worst: float) -> Grade:
+    if not reasons[0].passed:
+        return Grade.FAILED
+    if worst < LOW_CONFIDENCE:
+        return Grade.UNSTABLE
+    if any(not reason.passed for reason in reasons):
+        return Grade.MARGINAL
+    return Grade.CLEAN
+
+
 def grade_disk(
     *,
     confidence: ConfidenceReport,
@@ -49,48 +86,6 @@ def grade_disk(
     reads: ReadStatistics | None = None,
     weak_blocks: int | None = None,
 ) -> GradedReport:
-    errors = sum(1 for finding in findings if finding.severity is Severity.ERROR)
-    warnings = sum(1 for finding in findings if finding.severity is Severity.WARNING)
     worst = confidence.worst if confidence.blocks else 1.0
-
-    reasons = [
-        Reason(metric="errors", value=errors, threshold=NO_FINDINGS, passed=not errors),
-        Reason(metric="warnings", value=warnings, threshold=NO_FINDINGS, passed=not warnings),
-        Reason(
-            metric="confidence",
-            value=worst,
-            threshold=LOW_CONFIDENCE,
-            passed=worst >= LOW_CONFIDENCE,
-        ),
-    ]
-
-    if reads is not None:
-        reasons.append(
-            Reason(
-                metric="read stability",
-                value=reads.stability,
-                threshold=STABLE_READS,
-                passed=reads.stability >= STABLE_READS,
-            )
-        )
-
-    if weak_blocks is not None:
-        reasons.append(
-            Reason(
-                metric="weak blocks",
-                value=weak_blocks,
-                threshold=NO_FINDINGS,
-                passed=not weak_blocks,
-            )
-        )
-
-    if errors:
-        grade = Grade.FAILED
-    elif worst < LOW_CONFIDENCE:
-        grade = Grade.UNSTABLE
-    elif any(not reason.passed for reason in reasons):
-        grade = Grade.MARGINAL
-    else:
-        grade = Grade.CLEAN
-
-    return GradedReport(grade=grade, reasons=tuple(reasons), confidence=worst)
+    reasons = _reasons(findings, worst, reads, weak_blocks)
+    return GradedReport(grade=_grade(reasons, worst), reasons=reasons, confidence=worst)

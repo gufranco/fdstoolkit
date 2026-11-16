@@ -119,47 +119,37 @@ def _file_detail(before: ExtractedFile, after: ExtractedFile) -> str | None:
     return None
 
 
-def _file_differences(left: Disk, right: Disk) -> tuple[FileDifference, ...]:
-    before = {_key(entry): entry for entry in extract_files(left)}
-    after = {_key(entry): entry for entry in extract_files(right)}
+def _difference(
+    key: tuple[int, int], entry: ExtractedFile, change: FileChange, detail: str
+) -> FileDifference:
+    return FileDifference(
+        side=key[0], position=key[1], name=entry.name, change=change, detail=detail
+    )
 
+
+def _before_differences(
+    before: dict[tuple[int, int], ExtractedFile], after: dict[tuple[int, int], ExtractedFile]
+) -> list[FileDifference]:
     found: list[FileDifference] = []
     for key, entry in before.items():
         if key not in after:
-            found.append(
-                FileDifference(
-                    side=key[0],
-                    position=key[1],
-                    name=entry.name,
-                    change=FileChange.REMOVED,
-                    detail=f"{entry.size} bytes",
-                )
-            )
+            found.append(_difference(key, entry, FileChange.REMOVED, f"{entry.size} bytes"))
             continue
         detail = _file_detail(entry, after[key])
         if detail is not None:
-            found.append(
-                FileDifference(
-                    side=key[0],
-                    position=key[1],
-                    name=entry.name,
-                    change=FileChange.CHANGED,
-                    detail=detail,
-                )
-            )
+            found.append(_difference(key, entry, FileChange.CHANGED, detail))
+    return found
 
-    found.extend(
-        FileDifference(
-            side=key[0],
-            position=key[1],
-            name=entry.name,
-            change=FileChange.ADDED,
-            detail=f"{entry.size} bytes",
-        )
+
+def _file_differences(left: Disk, right: Disk) -> tuple[FileDifference, ...]:
+    before = {_key(entry): entry for entry in extract_files(left)}
+    after = {_key(entry): entry for entry in extract_files(right)}
+    added = [
+        _difference(key, entry, FileChange.ADDED, f"{entry.size} bytes")
         for key, entry in after.items()
         if key not in before
-    )
-
+    ]
+    found = [*_before_differences(before, after), *added]
     return tuple(sorted(found, key=lambda entry: (entry.side, entry.position)))
 
 

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
-from fdstoolkit.core.blocks import CrcStatus
+from fdstoolkit.core.blocks import Block, CrcStatus
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.quality.reads import ReadStatistics
 
@@ -75,49 +75,58 @@ def _apply_reads(score: float, share: float, passes: int) -> tuple[float, Basis]
     return score + (1.0 - score) * weight, Basis.READS_AGREE
 
 
+Lookup = dict[tuple[int, int], tuple[float, int]]
+
+
+def _lookup(disk: Disk, reads: ReadStatistics | None) -> Lookup:
+    if reads is None:
+        return {}
+    lookup = {(item.side, item.block): (item.modal_share, reads.passes) for item in reads.blocks}
+    mine = {
+        (side_index, block_index)
+        for side_index, side in enumerate(disk.sides)
+        for block_index in range(len(side.blocks))
+    }
+    if set(lookup) != mine:
+        message = "the read statistics do not describe this image"
+        raise ValueError(message)
+    return lookup
+
+
+def _scored(block: Block, entry: tuple[float, int] | None) -> tuple[float, tuple[Basis, ...]]:
+    score, crc_basis = _PRIORS[block.crc_status]
+    if entry is None:
+        return score, (crc_basis, Basis.SINGLE_READ)
+    share, passes = entry
+    if block.crc_status is CrcStatus.MISMATCH and share >= 1.0:
+        return score, (crc_basis,)
+    read_score, read_basis = _apply_reads(score, share, passes)
+    return read_score, (crc_basis, read_basis)
+
+
+def _block_confidence(
+    side: int, index: int, block: Block, entry: tuple[float, int] | None
+) -> BlockConfidence:
+    score, basis = _scored(block, entry)
+    return BlockConfidence(
+        side=side,
+        block=index,
+        kind=block.kind.name.lower(),
+        confidence=max(0.0, min(1.0, score)),
+        basis=basis,
+    )
+
+
 def score_disk(
     disk: Disk,
     *,
     reads: ReadStatistics | None = None,
 ) -> ConfidenceReport:
-    lookup: dict[tuple[int, int], tuple[float, int]] = {}
-    if reads is not None:
-        lookup = {
-            (item.side, item.block): (item.modal_share, reads.passes) for item in reads.blocks
-        }
-        shape = {(side, block) for side, block in lookup}
-        mine = {
-            (side_index, block_index)
+    lookup = _lookup(disk, reads)
+    return ConfidenceReport(
+        blocks=tuple(
+            _block_confidence(side_index, block_index, block, lookup.get((side_index, block_index)))
             for side_index, side in enumerate(disk.sides)
-            for block_index in range(len(side.blocks))
-        }
-        if shape != mine:
-            message = "the read statistics do not describe this image"
-            raise ValueError(message)
-
-    blocks: list[BlockConfidence] = []
-    for side_index, side in enumerate(disk.sides):
-        for block_index, block in enumerate(side.blocks):
-            score, crc_basis = _PRIORS[block.crc_status]
-            basis = [crc_basis]
-
-            entry = lookup.get((side_index, block_index))
-            if entry is None:
-                basis.append(Basis.SINGLE_READ)
-            else:
-                share, passes = entry
-                if block.crc_status is not CrcStatus.MISMATCH or share < 1.0:
-                    score, read_basis = _apply_reads(score, share, passes)
-                    basis.append(read_basis)
-
-            blocks.append(
-                BlockConfidence(
-                    side=side_index,
-                    block=block_index,
-                    kind=block.kind.name.lower(),
-                    confidence=max(0.0, min(1.0, score)),
-                    basis=tuple(basis),
-                )
-            )
-
-    return ConfidenceReport(blocks=tuple(blocks))
+            for block_index, block in enumerate(side.blocks)
+        )
+    )

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections import Counter
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Final
 
@@ -300,15 +301,7 @@ def erased_disk(*, sides: int) -> Disk:
     )
 
 
-def _no_passes() -> list[PatternPass]:
-    return []
-
-
-def _no_sides() -> list[SideDump]:
-    return []
-
-
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class _Run:
     writer: DiskWriter
     reader: DiskReader
@@ -317,33 +310,35 @@ class _Run:
     backup: Callable[[bytes], None] | None
     flip: Callable[[str], bool] | None
     progress: Progress
-    results: list[PatternPass] = field(default_factory=_no_passes)
-    originals: list[SideDump] = field(default_factory=_no_sides)
+    results: tuple[PatternPass, ...] = ()
+    originals: tuple[SideDump, ...] = ()
     last: SideDump | None = None
 
     def turn_to(self, side: int) -> None:
         ask_for_flip(self.reader, side, self.flip)
 
-    def write(self, index: int, side: Side, *, keep: bool, turned: bool) -> SideWrite:
+    def _kept(self, present: SideDump) -> None:
+        if self.backup is None:
+            return
+        kept = (*self.originals, present)
+        disk = Disk(sides=tuple(item.as_side(SIDE_CAPACITY) for item in kept))
+        data, _ = fds.encode(disk, headered=False)
+        self.backup(data)
+
+    def write(self, index: int, side: Side, *, keep: bool, turned: bool) -> tuple[_Run, SideWrite]:
+        seen: list[SideDump] = []
+
         def check(present: SideDump) -> None:
             refuse_unturned(self.reader, present, self.last if turned else None)
             if keep:
-                self.originals.append(present)
-                if self.backup is not None:
-                    disk = Disk(sides=tuple(item.as_side(SIDE_CAPACITY) for item in self.originals))
-                    data, _ = fds.encode(disk, headered=False)
-                    self.backup(data)
+                self._kept(present)
+                seen.append(present)
 
         result = write_side_verified(
-            self.writer,
-            self.reader,
-            index,
-            side,
-            retries=self.plan.retries,
-            before_write=check,
+            self.writer, self.reader, index, side, retries=self.plan.retries, before_write=check
         )
-        self.last = result.after
-        return result
+        moved = replace(self, originals=(*self.originals, *seen), last=result.after)
+        return moved, result
 
 
 def _misreads(run: _Run, side: int, target: Side, *, failed: bool) -> tuple[int, int, int]:
@@ -354,56 +349,99 @@ def _misreads(run: _Run, side: int, target: Side, *, failed: bool) -> tuple[int,
     return found.short, found.long, found.compared
 
 
-def _run_patterns(run: _Run) -> tuple[StopReason | None, str]:
-    failures: dict[tuple[int, int], int] = {}
-    for side_index in range(run.sides):
-        if side_index:
-            run.turn_to(side_index)
+def _damaged(results: tuple[PatternPass, ...]) -> bool:
+    counts = Counter(block for entry in results for block in entry.mismatched_blocks)
+    return any(count >= HARD_FAILURES for count in counts.values())
+
+
+@dataclass(frozen=True, slots=True)
+class _Pass:
+    side: int
+    round: int
+    position: int
+    pattern: SurfacePattern
+    key: bytes
+
+
+def _pattern_pass(run: _Run, attempt: _Pass, target: Side, result: SideWrite) -> PatternPass:
+    blocks = tuple((attempt.side, block) for block in result.changed)
+    short, long, compared = _misreads(run, attempt.side, target, failed=bool(blocks))
+    return PatternPass(
+        pattern=attempt.pattern,
+        verified=not result.changed,
+        mismatched_blocks=blocks,
+        grade=Grade.FAILED if result.changed else result.after.grade,
+        round=attempt.round + 1,
+        side=attempt.side,
+        short=short,
+        long=long,
+        compared=compared,
+    )
+
+
+Outcome = tuple[StopReason | None, str]
+
+
+def _attempt(run: _Run, attempt: _Pass) -> tuple[_Run, Outcome]:
+    if run.plan.stopped():
+        return run, (StopReason.INTERRUPTED if run.results else StopReason.UNTOUCHED, "")
+    run.progress(f"side {attempt.side} pass {attempt.round + 1} pattern {attempt.pattern}")
+    pattern = pattern_disk(attempt.pattern, sides=run.sides, fill=run.plan.fill, key=attempt.key)
+    target = pattern.sides[attempt.side]
+    keep = not attempt.round and not attempt.position
+    try:
+        moved, result = run.write(attempt.side, target, keep=keep, turned=keep)
+    except (WriteNotTakenError, HalfWriteError) as refused:
+        return run, (StopReason.REFUSED, str(refused))
+    recorded = replace(
+        moved, results=(*moved.results, _pattern_pass(moved, attempt, target, result))
+    )
+    return recorded, ((StopReason.DAMAGED if _damaged(recorded.results) else None), "")
+
+
+def _attempts(run: _Run) -> Iterator[_Pass]:
+    for side in range(run.sides):
+        if side:
+            run.turn_to(side)
         for index in range(run.plan.rounds):
             key = run.plan.key or secrets.token_bytes(KEY_BYTES)
-            for position, pattern in enumerate(PATTERNS):
-                if run.plan.stopped():
-                    return (StopReason.INTERRUPTED if run.results else StopReason.UNTOUCHED), ""
-                run.progress(f"side {side_index} pass {index + 1} pattern {pattern}")
-                target = pattern_disk(pattern, sides=run.sides, fill=run.plan.fill, key=key).sides[
-                    side_index
-                ]
-                keep = not index and not position
-                try:
-                    result = run.write(side_index, target, keep=keep, turned=keep)
-                except (WriteNotTakenError, HalfWriteError) as refused:
-                    return StopReason.REFUSED, str(refused)
-                blocks = tuple((side_index, block) for block in result.changed)
-                short, long, compared = _misreads(run, side_index, target, failed=bool(blocks))
-                run.results.append(
-                    PatternPass(
-                        pattern=pattern,
-                        verified=not result.changed,
-                        mismatched_blocks=blocks,
-                        grade=Grade.FAILED if result.changed else result.after.grade,
-                        round=index + 1,
-                        side=side_index,
-                        short=short,
-                        long=long,
-                        compared=compared,
-                    ),
-                )
-                for block in blocks:
-                    failures[block] = failures.get(block, 0) + 1
-                if any(count >= HARD_FAILURES for count in failures.values()):
-                    return StopReason.DAMAGED, ""
-    return None, ""
+            yield from (
+                _Pass(side, index, position, pattern, key)
+                for position, pattern in enumerate(PATTERNS)
+            )
+
+
+STOPS: Final = (KeyboardInterrupt, HardwareFaultError, WriteRefusedError, SideFlipError)
+
+
+def _stopped_by(error: BaseException) -> Outcome:
+    if isinstance(error, KeyboardInterrupt):
+        return StopReason.INTERRUPTED, ""
+    if isinstance(error, SideFlipError):
+        return StopReason.UNTURNED, str(error)
+    return StopReason.FAULT, str(error)
+
+
+def _run_patterns(run: _Run) -> tuple[_Run, Outcome]:
+    current = run
+    try:
+        for attempt in _attempts(run):
+            current, outcome = _attempt(current, attempt)
+            if outcome[0] is not None:
+                return current, outcome
+    except STOPS as error:
+        return current, _stopped_by(error)
+    return current, (None, "")
 
 
 def _finish(run: _Run, finish: Finish) -> tuple[bool, str]:
     final = blank_disk(sides=run.sides) if finish is Finish.BLANK else erased_disk(sides=run.sides)
-    order = tuple(reversed(range(run.sides)))
     try:
-        for position, side_index in enumerate(order):
+        for position, side_index in enumerate(reversed(range(run.sides))):
             if position:
                 run.turn_to(side_index)
             run.progress(f"finishing side {side_index}")
-            written = run.write(
+            run, written = run.write(
                 side_index, final.sides[side_index], keep=False, turned=bool(position)
             )
             if written.mismatched:
@@ -422,19 +460,14 @@ def _confirmation_message(sides: int) -> str:
     )
 
 
-def surface_test(
+def _refuse_unrunnable(
     writer: DiskWriter,
     reader: DiskReader,
     *,
     sides: int,
-    confirm: Callable[[str], bool],
-    backup: Callable[[bytes], None] | None = None,
-    plan: SurfacePlan | None = None,
-    flip: Callable[[str], bool] | None = None,
-    progress: Progress = lambda _: None,
-) -> SurfaceReport:
-    require_readable_sides(sides)
-    plan = plan or SurfacePlan()
+    plan: SurfacePlan,
+    flip: Callable[[str], bool] | None,
+) -> None:
     if not 1 <= plan.rounds <= MAX_PASSES:
         message = f"a surface test runs at least one round and at most {MAX_PASSES}"
         raise SurfaceTestRefusedError(message)
@@ -449,42 +482,51 @@ def surface_test(
         )
         raise SurfaceTestRefusedError(message)
 
-    if not confirm(_confirmation_message(sides)):
-        message = "the operator declined the surface test"
-        raise SurfaceTestRefusedError(message)
 
-    run = _Run(
-        writer=writer,
-        reader=reader,
-        plan=plan,
-        sides=sides,
-        backup=backup,
-        flip=flip,
-        progress=progress,
-    )
-    written = pattern_disk(PATTERNS[1], sides=sides, fill=plan.fill).sides[0]
-    try:
-        stopped, refusal = _run_patterns(run)
-    except KeyboardInterrupt:
-        stopped, refusal = StopReason.INTERRUPTED, ""
-    except (HardwareFaultError, WriteRefusedError) as fault:
-        stopped, refusal = StopReason.FAULT, str(fault)
-    except SideFlipError as unturned:
-        stopped, refusal = StopReason.UNTURNED, str(unturned)
+def _finished(run: _Run, stopped: StopReason | None) -> tuple[bool, bool, str]:
+    if run.plan.finish is Finish.LEAVE or stopped is not None:
+        return True, False, ""
+    verified, problem = _finish(run, run.plan.finish)
+    return verified, True, problem
 
-    finished, ran, problem = True, False, ""
-    if plan.finish is not Finish.LEAVE and stopped is None:
-        (finished, problem), ran = _finish(run, plan.finish), True
 
+def _report(
+    ran: _Run, written: Side, outcome: Outcome, finish: tuple[bool, bool, str]
+) -> SurfaceReport:
+    stopped, refusal = outcome
+    verified, finish_ran, problem = finish
     return SurfaceReport(
-        passes=tuple(run.results),
+        passes=ran.results,
         coverage=written.content_size / LARGEST_FACTORY_SIDE,
         data_bytes=written.content_size,
-        finish=plan.finish,
-        finish_verified=finished,
-        finish_ran=ran,
+        finish=ran.plan.finish,
+        finish_verified=verified,
+        finish_ran=finish_ran,
         stopped=stopped,
         refusal=refusal,
         finish_problem=problem,
         blocks_per_side=len(written.blocks),
     )
+
+
+def surface_test(
+    writer: DiskWriter,
+    reader: DiskReader,
+    *,
+    sides: int,
+    confirm: Callable[[str], bool],
+    backup: Callable[[bytes], None] | None = None,
+    plan: SurfacePlan | None = None,
+    flip: Callable[[str], bool] | None = None,
+    progress: Progress = lambda _: None,
+) -> SurfaceReport:
+    require_readable_sides(sides)
+    chosen = plan or SurfacePlan()
+    _refuse_unrunnable(writer, reader, sides=sides, plan=chosen, flip=flip)
+    if not confirm(_confirmation_message(sides)):
+        message = "the operator declined the surface test"
+        raise SurfaceTestRefusedError(message)
+    run = _Run(writer, reader, chosen, sides, backup, flip, progress)
+    written = pattern_disk(PATTERNS[1], sides=sides, fill=chosen.fill).sides[0]
+    ran, outcome = _run_patterns(run)
+    return _report(ran, written, outcome, _finished(ran, outcome[0]))

@@ -207,37 +207,32 @@ def _stopped_copy(side_index: int, first: Side, second: Side) -> str | None:
     )
 
 
-def compare_images(first: Disk, second: Disk) -> ComparisonReport:
+def _count_mismatch(first: Disk, second: Disk) -> ComparisonReport | None:
     if first.side_count != second.side_count:
-        return ComparisonReport(
-            identical=False,
-            differing_blocks=(),
-            summary=(f"side count differs: {first.side_count} against {second.side_count}"),
-        )
-
-    differing: list[tuple[int, int]] = []
+        summary = f"side count differs: {first.side_count} against {second.side_count}"
+        return ComparisonReport(identical=False, differing_blocks=(), summary=summary)
     for side_index, (left, right) in enumerate(zip(first.sides, second.sides, strict=True)):
         if len(left.blocks) != len(right.blocks):
-            return ComparisonReport(
-                identical=False,
-                differing_blocks=(),
-                summary=_stopped_copy(side_index, left, right)
-                or (
-                    f"block count differs on side {side_index}: "
-                    f"{len(left.blocks)} against {len(right.blocks)}"
-                ),
+            summary = _stopped_copy(side_index, left, right) or (
+                f"block count differs on side {side_index}: "
+                f"{len(left.blocks)} against {len(right.blocks)}"
             )
-        differing.extend(
-            (side_index, block_index)
-            for block_index, (one, other) in enumerate(zip(left.blocks, right.blocks, strict=True))
-            if one.payload != other.payload
-        )
+            return ComparisonReport(identical=False, differing_blocks=(), summary=summary)
+    return None
 
+
+def compare_images(first: Disk, second: Disk) -> ComparisonReport:
+    mismatch = _count_mismatch(first, second)
+    if mismatch is not None:
+        return mismatch
+    differing = tuple(
+        (side_index, block_index)
+        for side_index, (left, right) in enumerate(zip(first.sides, second.sides, strict=True))
+        for block_index, (one, other) in enumerate(zip(left.blocks, right.blocks, strict=True))
+        if one.payload != other.payload
+    )
     if not differing:
         return ComparisonReport(identical=True, differing_blocks=(), summary="identical")
-
     return ComparisonReport(
-        identical=False,
-        differing_blocks=tuple(differing),
-        summary=f"{len(differing)} block(s) differ",
+        identical=False, differing_blocks=differing, summary=f"{len(differing)} block(s) differ"
     )
