@@ -11,21 +11,22 @@ from fdstoolkit.build.packaged import build_packaged
 from fdstoolkit.cli.common import (
     KIND_FOR_CHOICE,
     Family,
+    ForceOption,
+    ImageArgument,
     KindChoice,
     ManifestChoice,
-    container_of,
+    OutputOption,
     decode_image,
+    encoded_for,
     fail,
     guard_output,
     read_image,
 )
-from fdstoolkit.codecs import fds, qd
-from fdstoolkit.codecs.container import Container
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.core.files import extract_files, extracted_name
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
 from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, insert_file
-from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
+from fdstoolkit.edit.rebuild import RebuildOptions, RebuildReport, rebuild
 from fdstoolkit.patch.apply import apply_patch
 from fdstoolkit.patch.formats import PatchError
 
@@ -33,7 +34,7 @@ ZIP_SUFFIX: Final = ".zip"
 
 
 def extract(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    image: ImageArgument,
     directory: Annotated[Path, typer.Option("-d", "--directory", help="where to write the files")],
     *,
     manifest: Annotated[
@@ -77,44 +78,47 @@ def _extract_fdspacker(disk: Disk, directory: Path, *, force: bool) -> None:
         typer.echo(f"{relative}  {len(data)} bytes")
 
 
-def insert_command(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
-    *,
-    file: Annotated[Path, typer.Option("--file", help="the file to add")],
-    name: Annotated[str, typer.Option("--name", help="eight characters at most")],
-    address: Annotated[
-        str, typer.Option("--address", help="load address, hex")
-    ] = f"{DEFAULT_LOAD_ADDRESS:X}",
-    kind: Annotated[
-        KindChoice, typer.Option("--kind", help="what the BIOS does with the file")
-    ] = KindChoice.PROGRAM,
-    side: Annotated[int, typer.Option("--side", min=0, help="which side")] = 0,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    disk, _, _, _ = decode_image(image)
-    guard_output(output, force=force)
-    if not file.is_file():
-        message = f"file not found: {file}"
-        raise fail(message)
+FileOption = Annotated[Path, typer.Option("--file", help="the file to add")]
+NameOption = Annotated[str, typer.Option("--name", help="eight characters at most")]
+AddressOption = Annotated[str, typer.Option("--address", help="load address, hex")]
+KindOption = Annotated[KindChoice, typer.Option("--kind", help="what the BIOS does with the file")]
+SideOption = Annotated[int, typer.Option("--side", min=0, help="which side")]
 
+
+def _inserted(disk: Disk, side: int, spec: FileSpec) -> Disk:
     try:
-        spec = FileSpec(
-            name=name,
-            address=int(address, 16),
-            kind=KIND_FOR_CHOICE[kind],
-            data=file.read_bytes(),
-        )
-        updated = insert_file(disk, side=side, spec=spec)
+        return insert_file(disk, side=side, spec=spec)
     except ValueError as error:
         raise fail(str(error)) from error
 
-    target = container_of(output)
-    if target is Container.FDS:
-        data, findings = fds.encode(updated, headered=False)
-    else:
-        data, findings = qd.encode(updated)
 
+def _spec(file: Path, name: str, address: str, kind: KindChoice) -> FileSpec:
+    if not file.is_file():
+        message = f"file not found: {file}"
+        raise fail(message)
+    try:
+        return FileSpec(
+            name=name, address=int(address, 16), kind=KIND_FOR_CHOICE[kind], data=file.read_bytes()
+        )
+    except ValueError as error:
+        raise fail(str(error)) from error
+
+
+def insert_command(
+    image: ImageArgument,
+    output: OutputOption,
+    *,
+    file: FileOption,
+    name: NameOption,
+    address: AddressOption = f"{DEFAULT_LOAD_ADDRESS:X}",
+    kind: KindOption = KindChoice.PROGRAM,
+    side: SideOption = 0,
+    force: ForceOption = False,
+) -> None:
+    disk, _, _, _ = decode_image(image)
+    guard_output(output, force=force)
+    updated = _inserted(disk, side, _spec(file, name, address, kind))
+    data, findings = encoded_for(updated, output)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes)")
     for finding in findings:
@@ -122,11 +126,11 @@ def insert_command(
 
 
 def patch_command(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    image: ImageArgument,
     patch_file: Annotated[Path, typer.Option("--patch", help="an IPS, UPS or BPS patch")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
+    output: OutputOption,
     *,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    force: ForceOption = False,
 ) -> None:
     data, _ = read_image(image)
     if not patch_file.is_file():
@@ -146,46 +150,41 @@ def patch_command(
     )
 
 
-def rebuild_command(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
-    *,
-    keep_tail: Annotated[
-        bool, typer.Option("--keep-tail", help="keep data after the last block")
-    ] = False,
-    reveal_hidden: Annotated[
-        bool, typer.Option("--reveal-hidden", help="raise the file count to what the side holds")
-    ] = False,
-    drop_hidden: Annotated[
-        bool, typer.Option("--drop-hidden", help="remove files past the declared count")
-    ] = False,
-    renumber: Annotated[
-        bool, typer.Option("--renumber", help="renumber the files in order")
-    ] = False,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-) -> None:
-    guard_output(output, force=force)
-    disk, _, _, _ = decode_image(image)
+KeepTailOption = Annotated[bool, typer.Option("--keep-tail", help="keep data after the last block")]
+RevealOption = Annotated[
+    bool, typer.Option("--reveal-hidden", help="raise the file count to what the side holds")
+]
+DropOption = Annotated[
+    bool, typer.Option("--drop-hidden", help="remove files past the declared count")
+]
+RenumberOption = Annotated[bool, typer.Option("--renumber", help="renumber the files in order")]
 
+
+def _rebuilt(disk: Disk, options: RebuildOptions) -> tuple[Disk, RebuildReport]:
     try:
-        result, report = rebuild(
-            disk,
-            options=RebuildOptions(
-                keep_tail=keep_tail,
-                reveal_hidden=reveal_hidden,
-                drop_hidden=drop_hidden,
-                renumber=renumber,
-            ),
-        )
+        return rebuild(disk, options=options)
     except ValueError as error:
         raise fail(str(error)) from error
 
-    if container_of(output) is Container.FDS:
-        data, _ = fds.encode(result, headered=False)
-    else:
-        data, _ = qd.encode(result)
-    output.write_bytes(data)
 
+def rebuild_command(
+    image: ImageArgument,
+    output: OutputOption,
+    *,
+    keep_tail: KeepTailOption = False,
+    reveal_hidden: RevealOption = False,
+    drop_hidden: DropOption = False,
+    renumber: RenumberOption = False,
+    force: ForceOption = False,
+) -> None:
+    guard_output(output, force=force)
+    disk, _, _, _ = decode_image(image)
+    options = RebuildOptions(
+        keep_tail=keep_tail, reveal_hidden=reveal_hidden, drop_hidden=drop_hidden, renumber=renumber
+    )
+    result, report = _rebuilt(disk, options)
+    data, _ = encoded_for(result, output)
+    output.write_bytes(data)
     for action in report.actions:
         typer.echo(f"side {action.side}: {action.detail}")
     if not report.changed:
@@ -194,12 +193,12 @@ def rebuild_command(
 
 
 def set_command(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the result")],
+    image: ImageArgument,
+    output: OutputOption,
     *,
     edit: Annotated[list[str], typer.Option("--set", help="field=value, repeatable")],
     side: Annotated[int, typer.Option("--side", min=0, help="which side")] = 0,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    force: ForceOption = False,
 ) -> None:
     disk, _, _, _ = decode_image(image)
     guard_output(output, force=force)
@@ -210,11 +209,7 @@ def set_command(
     except ValueError as error:
         raise fail(str(error)) from error
 
-    target = container_of(output)
-    if target is Container.FDS:
-        data, _ = fds.encode(updated, headered=False)
-    else:
-        data, _ = qd.encode(updated)
+    data, _ = encoded_for(updated, output)
     output.write_bytes(data)
 
     for change in changes:
@@ -228,7 +223,7 @@ def build(
     ],
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the image")],
     *,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    force: ForceOption = False,
 ) -> None:
     if not manifest.is_file():
         message = f"file not found: {manifest}"

@@ -7,6 +7,7 @@ import threading
 import webbrowser
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 import pytest
@@ -43,6 +44,9 @@ from fdstoolkit.quality.surface import (
 runner = CliRunner()
 STALL_CEILING = 0.05
 PUBLISHED_HOST = "0.0.0.0"  # noqa: S104 -- the host this test asserts a warning for
+
+if TYPE_CHECKING:
+    from faker import Faker
 
 
 @pytest.fixture
@@ -714,6 +718,23 @@ def test_insert_adds_a_file(single_side: Path, tmp_path: Path) -> None:
     assert result.exit_code == 0
     listing = runner.invoke(app, ["info", str(out), "--files"])
     assert "NEW" in listing.stdout
+
+
+def test_insert_refuses_an_address_that_is_not_hex(
+    single_side: Path, tmp_path: Path, fake: Faker
+) -> None:
+    # Arrange
+    payload = tmp_path / "payload.bin"
+    payload.write_bytes(fake.binary(length=32))
+    arguments = ["insert", str(single_side), "-o", str(tmp_path / "out.fds")]
+    arguments += ["--file", str(payload), "--name", "NEW", "--address", "zz"]
+
+    # Act
+    result = runner.invoke(app, arguments)
+
+    # Assert
+    assert result.exit_code == 1
+    assert "invalid literal for int() with base 16: 'zz'" in result.stdout
 
 
 def test_insert_reports_a_name_that_is_too_long(single_side: Path, tmp_path: Path) -> None:

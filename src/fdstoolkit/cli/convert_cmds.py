@@ -9,6 +9,9 @@ from fdstoolkit.build.blank import DEFAULT_GAME_NAME, blank_image
 from fdstoolkit.build.calibration import DECIDES_ITSELF, calibration_image
 from fdstoolkit.cli.common import (
     Family,
+    ForceOption,
+    ImageArgument,
+    OutputOption,
     container_of,
     decode_image,
     fail,
@@ -18,22 +21,30 @@ from fdstoolkit.cli.common import (
 )
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.container import Container
-from fdstoolkit.core.diagnostics import Severity, worst_severity
+from fdstoolkit.core.diagnostics import Diagnostic, Severity, worst_severity
+from fdstoolkit.core.disk import Disk
+
+HeaderOption = Annotated[bool, typer.Option("--header/--no-header", help="write an fwNES header")]
+CrcModeOption = Annotated[
+    qd.CrcMode, typer.Option("--crc-mode", help="CRC handling when writing a .qd")
+]
+
+
+def _encoded(
+    disk: Disk, target: Container, *, header: bool, crc_mode: qd.CrcMode
+) -> tuple[bytes, tuple[Diagnostic, ...]]:
+    if target is Container.FDS:
+        return fds.encode(disk, headered=header)
+    return qd.encode(disk, crc_mode=crc_mode)
 
 
 def convert(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write")],
+    image: ImageArgument,
+    output: OutputOption,
     *,
-    header: Annotated[
-        bool,
-        typer.Option("--header/--no-header", help="write an fwNES header"),
-    ] = False,
-    crc_mode: Annotated[
-        qd.CrcMode,
-        typer.Option("--crc-mode", help="CRC handling when writing a .qd"),
-    ] = qd.CrcMode.PRESERVE,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    header: HeaderOption = False,
+    crc_mode: CrcModeOption = qd.CrcMode.PRESERVE,
+    force: ForceOption = False,
 ) -> None:
     disk, _, _, _ = decode_image(image)
     target = container_of(output)
@@ -41,12 +52,7 @@ def convert(
     if header and is_save_file(output):
         message = "an .srm save is headerless, so --header cannot apply to it"
         raise fail(message)
-
-    if target is Container.FDS:
-        data, findings = fds.encode(disk, headered=header)
-    else:
-        data, findings = qd.encode(disk, crc_mode=crc_mode)
-
+    data, findings = _encoded(disk, target, header=header, crc_mode=crc_mode)
     output.write_bytes(data)
     typer.echo(f"wrote {output} ({len(data)} bytes)")
     for finding in findings:
@@ -56,13 +62,13 @@ def convert(
 
 
 def blank(
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write")],
+    output: OutputOption,
     *,
     sides: Annotated[int, typer.Option("--sides", parser=side_count, help="1 or 2 sides")] = 1,
     formatted: Annotated[bool, typer.Option("--formatted", help="write a disk info block")] = False,
     header: Annotated[bool, typer.Option("--header", help="write an fwNES header")] = False,
     game_name: Annotated[str, typer.Option("--game-name", help="three-character code")] = "   ",
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    force: ForceOption = False,
     calibration: Annotated[
         bool,
         typer.Option("--calibration", help="the calibration disk: two sides of known pulses"),

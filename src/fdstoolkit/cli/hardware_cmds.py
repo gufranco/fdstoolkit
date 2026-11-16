@@ -4,6 +4,7 @@ import logging
 import webbrowser
 from collections.abc import Callable
 from contextlib import closing
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Final
 
@@ -17,6 +18,10 @@ from fdstoolkit.build.calibration import (
 )
 from fdstoolkit.cli.common import (
     Family,
+    ForceOption,
+    JsonOption,
+    RetriesOption,
+    YesOption,
     container_of,
     decode_image,
     encode_image,
@@ -25,6 +30,7 @@ from fdstoolkit.cli.common import (
     side_count,
     writer_for,
 )
+from fdstoolkit.codecs.container import Container
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import created_now, write_bundle
@@ -34,15 +40,15 @@ from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick, pri
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
     MAX_PASSES,
-    MAX_RETRIES,
     DumpResult,
     Grade,
     LongSideError,
+    Reading,
     SideFlipError,
     WriteRefusedError,
     read_disk,
 )
-from fdstoolkit.hardware.writing import refuse_long_sides, write_verified
+from fdstoolkit.hardware.writing import WriteReport, refuse_long_sides, write_verified
 from fdstoolkit.quality.surface import (
     Finish,
     SurfacePlan,
@@ -87,7 +93,7 @@ def step(message: str) -> None:
 
 def status(
     *,
-    json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
+    json_output: JsonOption = False,
 ) -> None:
     checks = hardware_checks()
     ready = all(check.status is CheckStatus.OK for check in checks)
@@ -111,63 +117,82 @@ def status(
     raise typer.Exit(code=0 if ready else 1)
 
 
+DumpOutputOption = Annotated[Path, typer.Option("-o", "--output", help="where to write the dump")]
+ReadSidesOption = Annotated[
+    int, typer.Option("--sides", parser=side_count, help="1 or 2 sides to read")
+]
+DumpPassesOption = Annotated[
+    int, typer.Option("--passes", min=1, max=MAX_PASSES, help="read each side this often")
+]
+RawOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--raw", help="also keep every pulse capture the drive returned, with a manifest, here"
+    ),
+]
+TurnedOption = Annotated[
+    bool, typer.Option("--yes", help="assume the disk is turned over when asked")
+]
+
+
+@dataclass(frozen=True, slots=True)
+class _DumpPlan:
+    sides: int
+    passes: int
+    retries: int
+    yes: bool
+    raw: Path | None
+    output: Path
+
+
+def _read(drive: FdsStick, plan: _DumpPlan) -> Reading:
+    try:
+        return read_disk(
+            drive,
+            sides=plan.sides,
+            passes=plan.passes,
+            retries=plan.retries,
+            flip=prompter(yes=plan.yes),
+            progress=step,
+        )
+    except KeyboardInterrupt:
+        message = "stopped on interrupt, nothing was written"
+        raise _stopped(drive, plan.raw, plan.output, message) from None
+    except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
+        raise _stopped(drive, plan.raw, plan.output, str(error)) from error
+
+
+def _kept_dump(drive: FdsStick, reading: Reading, output: Path, container: Container) -> Grade:
+    for line in reading.lines:
+        typer.echo(line)
+    outcome = recover(reading.result, drive.captures)
+    result = outcome.result
+    grade = reading.settled(result, changed=bool(outcome.recovered))
+    data = encode_image(result.as_disk(), container)
+    output.write_bytes(data)
+    typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
+    for line in outcome.lines:
+        typer.echo(line)
+    report_blocks(result)
+    report_link(drive)
+    return grade
+
+
 def dump(
-    output: Annotated[Path, typer.Option("-o", "--output", help="where to write the dump")],
+    output: DumpOutputOption,
     *,
-    sides: Annotated[
-        int, typer.Option("--sides", parser=side_count, help="1 or 2 sides to read")
-    ] = 1,
-    passes: Annotated[
-        int, typer.Option("--passes", min=1, max=MAX_PASSES, help="read each side this often")
-    ] = 1,
-    retries: Annotated[
-        int,
-        typer.Option(
-            "--retries",
-            min=0,
-            max=MAX_RETRIES,
-            help="re-read a side with failed blocks up to this many more times",
-        ),
-    ] = 3,
-    raw: Annotated[
-        Path | None,
-        typer.Option(
-            "--raw", help="also keep every pulse capture the drive returned, with a manifest, here"
-        ),
-    ] = None,
-    yes: Annotated[
-        bool,
-        typer.Option("--yes", help="assume the disk is turned over when asked"),
-    ] = False,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
+    sides: ReadSidesOption = 1,
+    passes: DumpPassesOption = 1,
+    retries: RetriesOption = 3,
+    raw: RawOption = None,
+    yes: TurnedOption = False,
+    force: ForceOption = False,
 ) -> None:
     container = container_of(output)
     guard_output(output, force=force)
+    plan = _DumpPlan(sides=sides, passes=passes, retries=retries, yes=yes, raw=raw, output=output)
     with closing(open_drive()) as drive:
-        flip = prompter(yes=yes)
-
-        try:
-            reading = read_disk(
-                drive, sides=sides, passes=passes, retries=retries, flip=flip, progress=step
-            )
-        except KeyboardInterrupt:
-            message = "stopped on interrupt, nothing was written"
-            raise _stopped(drive, raw, output, message) from None
-        except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
-            raise _stopped(drive, raw, output, str(error)) from error
-
-        for line in reading.lines:
-            typer.echo(line)
-        outcome = recover(reading.result, drive.captures)
-        result = outcome.result
-        grade = reading.settled(result, changed=bool(outcome.recovered))
-        data = encode_image(result.as_disk(), container)
-        output.write_bytes(data)
-        typer.echo(f"wrote {output} ({len(data)} bytes), grade {grade}")
-        for line in outcome.lines:
-            typer.echo(line)
-        report_blocks(result)
-        report_link(drive)
+        grade = _kept_dump(drive, _read(drive, plan), output, container)
         if raw is not None:
             keep_captures(drive, raw, image=output.name)
         raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
@@ -224,141 +249,141 @@ def calibration_target(image: Path | None, *, calibration: bool, trusted_drive: 
     return disk
 
 
+WrittenArgument = Annotated[Path | None, typer.Argument(help="the image to write to a disk")]
+CalibrationOption = Annotated[
+    bool, typer.Option("--calibration", help="write the calibration disk instead of an image")
+]
+TrustedOption = Annotated[
+    bool,
+    typer.Option(
+        "--trusted-drive",
+        help="confirm the drive in use is cleaned, aligned and at speed, as listed",
+    ),
+]
+BackupOption = Annotated[
+    Path | None, typer.Option("--backup", help="where to save the disk's current contents")
+]
+LongSideOption = Annotated[
+    bool,
+    typer.Option(
+        "--long-side",
+        help="write a side longer than any factory side, accepting that it may not fit",
+    ),
+]
+TestedSidesOption = Annotated[
+    int, typer.Option("--sides", parser=side_count, help="1 or 2 sides to test")
+]
+CyclesOption = Annotated[
+    int,
+    typer.Option("--passes", min=1, max=MAX_PASSES, help="how many times to run the pattern cycle"),
+]
+QuickOption = Annotated[
+    bool, typer.Option("--quick", help="write one 4 KiB file per side instead of filling it")
+]
+FinishOption = Annotated[
+    Finish, typer.Option("--finish", help="what to leave on the disk when the test ends")
+]
+
+
+@dataclass(frozen=True, slots=True)
+class _WritePlan:
+    ask: Callable[[str], bool]
+    backup: Path | None
+    retries: int
+    long_side: bool
+
+
+def _written(drive: FdsStick, disk: Disk, plan: _WritePlan) -> WriteReport:
+    try:
+        if not plan.long_side:
+            refuse_long_sides(disk)
+        return write_verified(
+            drive,
+            drive,
+            disk,
+            confirm=plan.ask,
+            flip=plan.ask,
+            progress=step,
+            backup=None if plan.backup is None else writer_for(plan.backup),
+            retries=plan.retries,
+        )
+    except KeyboardInterrupt:
+        message = "stopped on interrupt, the disk may be half written, dump it before using it"
+        raise fail(message) from None
+    except LongSideError as error:
+        message = f"{error}. Pass --long-side to write it anyway"
+        raise fail(message) from error
+    except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
+        raise fail(str(error)) from error
+
+
+def _print_write(report: WriteReport) -> None:
+    for line in report.lines:
+        typer.echo(line)
+    typer.echo(f"verified {report.verified}, grade {report.grade}")
+    for note in report.notes:
+        typer.echo(f"  {note}")
+
+
 def write(
-    image: Annotated[Path | None, typer.Argument(help="the image to write to a disk")] = None,
+    image: WrittenArgument = None,
     *,
-    calibration: Annotated[
-        bool,
-        typer.Option("--calibration", help="write the calibration disk instead of an image"),
-    ] = False,
-    trusted_drive: Annotated[
-        bool,
-        typer.Option(
-            "--trusted-drive",
-            help="confirm the drive in use is cleaned, aligned and at speed, as listed",
-        ),
-    ] = False,
-    backup: Annotated[
-        Path | None,
-        typer.Option("--backup", help="where to save the disk's current contents"),
-    ] = None,
-    yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
-    retries: Annotated[
-        int,
-        typer.Option(
-            "--retries",
-            min=0,
-            max=MAX_RETRIES,
-            help="re-read a side with failed blocks up to this many more times",
-        ),
-    ] = 3,
-    long_side: Annotated[
-        bool,
-        typer.Option(
-            "--long-side",
-            help="write a side longer than any factory side, accepting that it may not fit",
-        ),
-    ] = False,
+    calibration: CalibrationOption = False,
+    trusted_drive: TrustedOption = False,
+    backup: BackupOption = None,
+    yes: YesOption = False,
+    retries: RetriesOption = 3,
+    long_side: LongSideOption = False,
 ) -> None:
     disk = calibration_target(image, calibration=calibration, trusted_drive=trusted_drive)
+    plan = _WritePlan(ask=prompter(yes=yes), backup=backup, retries=retries, long_side=long_side)
     with closing(open_drive()) as drive:
-        ask = prompter(yes=yes)
-
-        try:
-            if not long_side:
-                refuse_long_sides(disk)
-            report = write_verified(
-                drive,
-                drive,
-                disk,
-                confirm=ask,
-                flip=ask,
-                progress=step,
-                backup=None if backup is None else writer_for(backup),
-                retries=retries,
-            )
-        except KeyboardInterrupt:
-            message = "stopped on interrupt, the disk may be half written, dump it before using it"
-            raise fail(message) from None
-        except LongSideError as error:
-            message = f"{error}. Pass --long-side to write it anyway"
-            raise fail(message) from error
-        except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
-            raise fail(str(error)) from error
-
-        for line in report.lines:
-            typer.echo(line)
-        typer.echo(f"verified {report.verified}, grade {report.grade}")
-        for note in report.notes:
-            typer.echo(f"  {note}")
+        report = _written(drive, disk, plan)
+        _print_write(report)
         raise typer.Exit(code=0 if report.verified else 1)
+
+
+def _tested(
+    drive: FdsStick,
+    *,
+    sides: int,
+    ask: Callable[[str], bool],
+    backup: Path | None,
+    plan: SurfacePlan,
+) -> SurfaceReport:
+    try:
+        return surface_test(
+            drive,
+            drive,
+            sides=sides,
+            confirm=ask,
+            flip=ask,
+            progress=step,
+            backup=None if backup is None else writer_for(backup),
+            plan=plan,
+        )
+    except (HardwareFaultError, WriteRefusedError, SideFlipError, SurfaceTestRefusedError) as error:
+        raise fail(str(error)) from error
 
 
 def surface(
     *,
-    sides: Annotated[
-        int, typer.Option("--sides", parser=side_count, help="1 or 2 sides to test")
-    ] = 1,
-    backup: Annotated[
-        Path | None,
-        typer.Option("--backup", help="where to save the disk's current contents"),
-    ] = None,
-    passes: Annotated[
-        int,
-        typer.Option(
-            "--passes", min=1, max=MAX_PASSES, help="how many times to run the pattern cycle"
-        ),
-    ] = 1,
-    quick: Annotated[
-        bool,
-        typer.Option("--quick", help="write one 4 KiB file per side instead of filling it"),
-    ] = False,
-    finish: Annotated[
-        Finish,
-        typer.Option("--finish", help="what to leave on the disk when the test ends"),
-    ] = Finish.LEAVE,
-    yes: Annotated[bool, typer.Option("--yes", help="answer the confirmation")] = False,
+    sides: TestedSidesOption = 1,
+    backup: BackupOption = None,
+    passes: CyclesOption = 1,
+    quick: QuickOption = False,
+    finish: FinishOption = Finish.LEAVE,
+    yes: YesOption = False,
 ) -> None:
+    plan = SurfacePlan(rounds=passes, fill=not quick, finish=finish)
     with closing(open_drive()) as drive:
-        ask = prompter(yes=yes)
-
-        sink = None if backup is None else writer_for(backup)
-
-        try:
-            report = surface_test(
-                drive,
-                drive,
-                sides=sides,
-                confirm=ask,
-                flip=ask,
-                progress=step,
-                backup=sink,
-                plan=SurfacePlan(rounds=passes, fill=not quick, finish=finish),
-            )
-        except (
-            HardwareFaultError,
-            WriteRefusedError,
-            SideFlipError,
-            SurfaceTestRefusedError,
-        ) as error:
-            raise fail(str(error)) from error
-
+        report = _tested(drive, sides=sides, ask=prompter(yes=yes), backup=backup, plan=plan)
         report_surface(report)
         typer.echo(f"grade {report.grade}")
         raise typer.Exit(code=0 if report.passed else 1)
 
 
-def report_surface(report: SurfaceReport) -> None:
-    typer.echo(
-        f"{report.data_bytes} data bytes per side, {report.coverage:.1%} of the most any "
-        f"measured factory side carries, {len(report.passes)} pattern pass(es) run",
-    )
-    for entry in report.passes:
-        state = "held" if entry.verified else "did not hold"
-        typer.echo(f"side {entry.side} pass {entry.round} pattern {entry.pattern}: {state}")
-    if report.pulse_summary:
-        typer.echo(report.pulse_summary)
-
+def _surface_counts(report: SurfaceReport) -> None:
     if report.hard_blocks:
         typer.echo(
             f"{len(report.hard_blocks)} block(s) failed on more than one pattern, "
@@ -374,6 +399,18 @@ def report_surface(report: SurfaceReport) -> None:
             "so rewriting refreshed them",
         )
 
+
+def report_surface(report: SurfaceReport) -> None:
+    typer.echo(
+        f"{report.data_bytes} data bytes per side, {report.coverage:.1%} of the most any "
+        f"measured factory side carries, {len(report.passes)} pattern pass(es) run",
+    )
+    for entry in report.passes:
+        state = "held" if entry.verified else "did not hold"
+        typer.echo(f"side {entry.side} pass {entry.round} pattern {entry.pattern}: {state}")
+    if report.pulse_summary:
+        typer.echo(report.pulse_summary)
+    _surface_counts(report)
     if report.stopped is not None:
         typer.echo(f"stopped early: {report.stopped.value}")
     if report.refusal:

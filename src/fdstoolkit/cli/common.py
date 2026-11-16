@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import Annotated, Final
 
 import typer
 
@@ -15,10 +15,26 @@ from fdstoolkit.core.diagnostics import Diagnostic, Severity, worst_severity
 from fdstoolkit.core.disk import SIDE_SIZE, SIDES_PER_DISK, Disk, Side
 from fdstoolkit.drive.captures import Bundle, BundleError
 from fdstoolkit.drive.imported import bundle_from_path
+from fdstoolkit.hardware.session import MAX_RETRIES
 
 FDS_SUFFIX: Final = ".fds"
 QD_SUFFIX: Final = ".qd"
 SRM_SUFFIX: Final = ".srm"
+
+ImageArgument = Annotated[Path, typer.Argument(help="a .fds or .qd image")]
+OutputOption = Annotated[Path, typer.Option("-o", "--output", help="where to write the result")]
+ForceOption = Annotated[bool, typer.Option("--force", help="overwrite the output")]
+JsonOption = Annotated[bool, typer.Option("--json", help="print JSON")]
+YesOption = Annotated[bool, typer.Option("--yes", help="answer the confirmation")]
+RetriesOption = Annotated[
+    int,
+    typer.Option(
+        "--retries",
+        min=0,
+        max=MAX_RETRIES,
+        help="re-read a side with failed blocks up to this many more times",
+    ),
+]
 
 
 class Family(StrEnum):
@@ -101,6 +117,12 @@ def decode_image(path: Path) -> tuple[Disk, tuple[Diagnostic, ...], bytes, Conta
     except ValueError as error:
         raise fail(str(error)) from error
     return disk, findings, data, container
+
+
+def encoded_for(disk: Disk, output: Path) -> tuple[bytes, tuple[Diagnostic, ...]]:
+    if container_of(output) is Container.FDS:
+        return fds.encode(disk, headered=False)
+    return qd.encode(disk)
 
 
 def encode_image(disk: Disk, container: Container) -> bytes:

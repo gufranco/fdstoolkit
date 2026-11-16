@@ -10,14 +10,13 @@ import typer
 
 from fdstoolkit.cli.common import (
     Family,
-    container_of,
+    ForceOption,
     decode_image,
+    encoded_for,
     fail,
     guard_output,
     read_image,
 )
-from fdstoolkit.codecs import fds, qd
-from fdstoolkit.codecs.container import Container
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstoolkit.edit.recipes import load_recipes
@@ -73,10 +72,7 @@ def _one_image(request: SaveRequest, action: SaveAction) -> Path:
 
 
 def _encoded(disk: Disk, output: Path) -> bytes:
-    if container_of(output) is Container.FDS:
-        data, _ = fds.encode(disk, headered=False)
-    else:
-        data, _ = qd.encode(disk)
+    data, _ = encoded_for(disk, output)
     return data
 
 
@@ -164,46 +160,51 @@ ACTIONS: Final[dict[SaveAction, Callable[[SaveRequest], None]]] = {
 }
 
 
+ActionArgument = Annotated[
+    SaveAction, typer.Argument(help="find the save, apply one, extract one, or blank it out")
+]
+ImagesArgument = Annotated[
+    list[Path], typer.Argument(help="the image, or for find two or more dumps of one release")
+]
+SaveOption = Annotated[
+    Path | None, typer.Option("--save", help="apply: an emulator save, a patch or an image")
+]
+PlayedOption = Annotated[
+    Path | None, typer.Option("--played", help="extract: the image a game wrote to")
+]
+RecipesOption = Annotated[
+    Path | None, typer.Option("--recipes", help="blank: the file naming each save region")
+]
+MaybeOutputOption = Annotated[
+    Path | None, typer.Option("-o", "--output", help="where to write the result")
+]
+FormatOption = Annotated[SaveFormat, typer.Option("--format", help="extract: ips, ups or image")]
+FindJsonOption = Annotated[bool, typer.Option("--json", help="find: emit JSON")]
+
+
 def save(
-    action: Annotated[
-        SaveAction,
-        typer.Argument(help="find the save, apply one, extract one, or blank it out"),
-    ],
-    images: Annotated[
-        list[Path],
-        typer.Argument(help="the image, or for find two or more dumps of one release"),
-    ],
+    action: ActionArgument,
+    images: ImagesArgument,
     *,
-    save_file: Annotated[
-        Path | None, typer.Option("--save", help="apply: an emulator save, a patch or an image")
-    ] = None,
-    played: Annotated[
-        Path | None, typer.Option("--played", help="extract: the image a game wrote to")
-    ] = None,
-    recipes: Annotated[
-        Path | None, typer.Option("--recipes", help="blank: the file naming each save region")
-    ] = None,
-    output: Annotated[
-        Path | None, typer.Option("-o", "--output", help="where to write the result")
-    ] = None,
-    fmt: Annotated[
-        SaveFormat, typer.Option("--format", help="extract: ips, ups or image")
-    ] = SaveFormat.IPS,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-    json_output: Annotated[bool, typer.Option("--json", help="find: emit JSON")] = False,
+    save_file: SaveOption = None,
+    played: PlayedOption = None,
+    recipes: RecipesOption = None,
+    output: MaybeOutputOption = None,
+    fmt: FormatOption = SaveFormat.IPS,
+    force: ForceOption = False,
+    json_output: FindJsonOption = False,
 ) -> None:
-    ACTIONS[action](
-        SaveRequest(
-            images=images,
-            save=save_file,
-            played=played,
-            recipes=recipes,
-            output=output,
-            fmt=fmt,
-            force=force,
-            json_output=json_output,
-        )
+    request = SaveRequest(
+        images=images,
+        save=save_file,
+        played=played,
+        recipes=recipes,
+        output=output,
+        fmt=fmt,
+        force=force,
+        json_output=json_output,
     )
+    ACTIONS[action](request)
 
 
 def register(app: typer.Typer) -> None:

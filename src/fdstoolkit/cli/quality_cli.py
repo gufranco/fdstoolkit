@@ -5,40 +5,40 @@ from typing import Annotated
 
 import typer
 
-from fdstoolkit.cli.common import Family, decode_image, fail, load_captures
+from fdstoolkit.cli.common import Family, JsonOption, decode_image, fail, load_captures
+from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.captures import Bundle
 from fdstoolkit.drive.pulse import bundle_findings
 from fdstoolkit.drive.recovery import captures_of_another_disk
-from fdstoolkit.drive.weak import bundle_weak_blocks
-from fdstoolkit.quality.confidence import score_disk
-from fdstoolkit.quality.grade import grade_disk
-from fdstoolkit.quality.reads import compare_reads
+from fdstoolkit.drive.weak import WeakBlock, bundle_weak_blocks
+from fdstoolkit.hardware.session import Grade
+from fdstoolkit.quality.confidence import ConfidenceReport, score_disk
+from fdstoolkit.quality.grade import GradedReport, grade_disk
+from fdstoolkit.quality.reads import ReadStatistics, compare_reads
 from fdstoolkit.report import as_json
+
+
+def _weak_payload(bundle: Bundle, found: tuple[tuple[int, WeakBlock], ...]) -> dict[str, object]:
+    weak = [
+        {
+            "side": side,
+            "block": entry.block,
+            "kind": entry.kind,
+            "unstable": entry.unstable,
+            "invalid": entry.invalid,
+            "reads": entry.reads,
+            "missing": entry.missing,
+        }
+        for side, entry in found
+    ]
+    return {"reads": len(bundle.captures), "weak": weak}
 
 
 def _weak_report(bundle: Bundle, *, json_output: bool) -> None:
     found = bundle_weak_blocks(bundle)
     if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "reads": len(bundle.captures),
-                    "weak": [
-                        {
-                            "side": side,
-                            "block": entry.block,
-                            "kind": entry.kind,
-                            "unstable": entry.unstable,
-                            "invalid": entry.invalid,
-                            "reads": entry.reads,
-                            "missing": entry.missing,
-                        }
-                        for side, entry in found
-                    ],
-                }
-            )
-        )
+        typer.echo(as_json(_weak_payload(bundle, found)))
         raise typer.Exit(code=0 if not found else 1)
     typer.echo(f"saved reads   {len(bundle.captures)}")
     typer.echo(f"weak blocks   {len(found)}")
@@ -47,50 +47,48 @@ def _weak_report(bundle: Bundle, *, json_output: bool) -> None:
     raise typer.Exit(code=0 if not found else 1)
 
 
-def reads(
-    images: Annotated[
-        list[Path] | None, typer.Argument(help="two or more dumps of one disk")
-    ] = None,
-    *,
-    captures: Annotated[
-        Path | None,
-        typer.Option("--captures", help="map the weak blocks in the captures a dump --raw kept"),
-    ] = None,
-    json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
-) -> None:
-    if captures is not None:
-        _weak_report(load_captures(captures), json_output=json_output)
-    disks = [decode_image(path)[0] for path in images or []]
+DumpsArgument = Annotated[list[Path] | None, typer.Argument(help="two or more dumps of one disk")]
+WeakCapturesOption = Annotated[
+    Path | None,
+    typer.Option("--captures", help="map the weak blocks in the captures a dump --raw kept"),
+]
+GradedArgument = Annotated[Path, typer.Argument(help="the image to grade")]
+ReadOption = Annotated[
+    list[Path] | None, typer.Option("--read", help="another dump of the same disk, repeatable")
+]
+CountedCapturesOption = Annotated[
+    Path | None,
+    typer.Option("--captures", help="count the weak blocks in the captures a dump --raw kept"),
+]
+MapOption = Annotated[bool, typer.Option("--map", help="print the per-block confidence")]
 
+
+def _compared(disks: list[Disk]) -> ReadStatistics:
     try:
-        stats = compare_reads(disks)
+        return compare_reads(disks)
     except ValueError as error:
         raise fail(str(error)) from error
 
-    if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "passes": stats.passes,
-                    "stability": round(stats.stability, 6),
-                    "decay": stats.decay.value,
-                    "ones_lost": stats.ones_lost,
-                    "ones_gained": stats.ones_gained,
-                    "unstable": [list(item) for item in stats.unstable_blocks],
-                    "missing": [list(item) for item in stats.missing],
-                }
-            )
-        )
-        raise typer.Exit(code=0 if not stats.unstable_blocks else 1)
 
+def _reads_payload(stats: ReadStatistics) -> dict[str, object]:
+    return {
+        "passes": stats.passes,
+        "stability": round(stats.stability, 6),
+        "decay": stats.decay.value,
+        "ones_lost": stats.ones_lost,
+        "ones_gained": stats.ones_gained,
+        "unstable": [list(item) for item in stats.unstable_blocks],
+        "missing": [list(item) for item in stats.missing],
+    }
+
+
+def _print_reads(stats: ReadStatistics) -> None:
     typer.echo(f"passes        {stats.passes}")
     typer.echo(f"stability     {stats.stability:.2%}")
     typer.echo(f"decay         {stats.decay.value}")
     typer.echo(f"bits lost     {stats.ones_lost}")
     typer.echo(f"bits gained   {stats.ones_gained}")
-    for item in stats.blocks:
-        if item.stable:
-            continue
+    for item in (entry for entry in stats.blocks if not entry.stable):
         typer.echo(
             f"side {item.side} block {item.block:3d}  {item.kind:<11} "
             f"{item.variants} variants, {item.flip_rate:.1%} flip rate, "
@@ -98,6 +96,21 @@ def reads(
         )
     for side, block, absent in stats.missing:
         typer.echo(f"side {side} block {block:3d}  missing from {absent} read(s)")
+
+
+def reads(
+    images: DumpsArgument = None,
+    *,
+    captures: WeakCapturesOption = None,
+    json_output: JsonOption = False,
+) -> None:
+    if captures is not None:
+        _weak_report(load_captures(captures), json_output=json_output)
+    stats = _compared([decode_image(path)[0] for path in images or []])
+    if json_output:
+        typer.echo(as_json(_reads_payload(stats)))
+    else:
+        _print_reads(stats)
     raise typer.Exit(code=0 if not stats.unstable_blocks else 1)
 
 
@@ -108,74 +121,72 @@ def _weak_count(disk: Disk, bundle: Bundle) -> int:
     return len(bundle_weak_blocks(bundle))
 
 
-def grade(
-    image: Annotated[Path, typer.Argument(help="the image to grade")],
-    read: Annotated[
-        list[Path] | None,
-        typer.Option("--read", help="another dump of the same disk, repeatable"),
-    ] = None,
-    *,
-    captures: Annotated[
-        Path | None,
-        typer.Option("--captures", help="count the weak blocks in the captures a dump --raw kept"),
-    ] = None,
-    block_map: Annotated[
-        bool, typer.Option("--map", help="print the per-block confidence")
-    ] = False,
-    json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
-) -> None:
-    disk, findings, _, _ = decode_image(image)
-
-    stats = None
-    if read:
-        disks = [disk, *[decode_image(path)[0] for path in read]]
-        try:
-            stats = compare_reads(disks)
-        except ValueError as error:
-            raise fail(str(error)) from error
-
+def _graded(
+    disk: Disk, findings: tuple[Diagnostic, ...], read: list[Path] | None, captures: Path | None
+) -> tuple[GradedReport, ConfidenceReport, tuple[Diagnostic, ...]]:
+    stats = _compared([disk, *[decode_image(path)[0] for path in read]]) if read else None
     confidence = score_disk(disk, reads=stats)
-
     bundle = None if captures is None else load_captures(captures)
     weak = None if bundle is None else _weak_count(disk, bundle)
     pulse = () if bundle is None else bundle_findings(bundle.captures)
     report = grade_disk(
         confidence=confidence, findings=(*findings, *pulse), reads=stats, weak_blocks=weak
     )
+    return report, confidence, pulse
 
-    if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "grade": report.grade.value,
-                    "confidence": round(report.confidence, 6),
-                    "reasons": [
-                        {
-                            "metric": reason.metric,
-                            "value": reason.value,
-                            "threshold": reason.threshold,
-                            "passed": reason.passed,
-                        }
-                        for reason in report.reasons
-                    ],
-                }
-            )
-        )
-        raise typer.Exit(code=0 if report.grade.value == "clean" else 1)
 
+def _grade_payload(report: GradedReport) -> dict[str, object]:
+    reasons = [
+        {
+            "metric": reason.metric,
+            "value": reason.value,
+            "threshold": reason.threshold,
+            "passed": reason.passed,
+        }
+        for reason in report.reasons
+    ]
+    return {
+        "grade": report.grade.value,
+        "confidence": round(report.confidence, 6),
+        "reasons": reasons,
+    }
+
+
+def _print_grade(
+    report: GradedReport,
+    confidence: ConfidenceReport,
+    pulse: tuple[Diagnostic, ...],
+    *,
+    block_map: bool,
+) -> None:
     typer.echo(report.render())
     for finding in pulse:
         typer.echo(f"  {finding.render()}")
     for reason in report.reasons:
         mark = "ok " if reason.passed else "bad"
         typer.echo(f"  {mark}  {reason.render()}")
-    if block_map:
-        for item in confidence.blocks:
-            typer.echo(
-                f"side {item.side} block {item.block:3d}  {item.kind:<11} "
-                f"{item.confidence:6.1%}  {', '.join(item.basis)}"
-            )
-    raise typer.Exit(code=0 if report.grade.value == "clean" else 1)
+    for item in confidence.blocks if block_map else ():
+        typer.echo(
+            f"side {item.side} block {item.block:3d}  {item.kind:<11} "
+            f"{item.confidence:6.1%}  {', '.join(item.basis)}"
+        )
+
+
+def grade(
+    image: GradedArgument,
+    read: ReadOption = None,
+    *,
+    captures: CountedCapturesOption = None,
+    block_map: MapOption = False,
+    json_output: JsonOption = False,
+) -> None:
+    disk, findings, _, _ = decode_image(image)
+    report, confidence, pulse = _graded(disk, findings, read, captures)
+    if json_output:
+        typer.echo(as_json(_grade_payload(report)))
+    else:
+        _print_grade(report, confidence, pulse, block_map=block_map)
+    raise typer.Exit(code=0 if report.grade is Grade.CLEAN else 1)
 
 
 def register(app: typer.Typer) -> None:

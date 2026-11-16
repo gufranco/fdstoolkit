@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from fdstoolkit.cli.common import Family, decode_image, fail, load_captures
+from fdstoolkit.cli.common import Family, JsonOption, decode_image, fail, load_captures
 from fdstoolkit.cli.hardware_cmds import open_drive, prompter, step
 from fdstoolkit.core.disk import SIDES_PER_DISK, Side
 from fdstoolkit.drive.monitor import (
@@ -20,6 +20,7 @@ from fdstoolkit.drive.monitor import (
     calibrate,
 )
 from fdstoolkit.drive.timing import Timing, TimingReader
+from fdstoolkit.hardware.fdsstick import FdsStick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.report import as_json
 
@@ -69,64 +70,83 @@ def calibration_json(result: Calibration, timings: Sequence[Timing] = ()) -> dic
     }
 
 
+ModeArgument = Annotated[
+    Mode, typer.Argument(help="speed for the motor, head for the head and hub")
+]
+ReferenceOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--reference", help="an image of the disk in the drive, dumped by a drive you trust"
+    ),
+]
+SideOption = Annotated[
+    int,
+    typer.Option(
+        "--side",
+        min=0,
+        max=SIDES_PER_DISK - 1,
+        help="which side of the reference is in the drive, its label facing up",
+    ),
+]
+PassesOption = Annotated[
+    int, typer.Option("--passes", min=1, max=MAX_READS, help="read the side this many times")
+]
+BracketOption = Annotated[
+    bool,
+    typer.Option(
+        "--bracket",
+        help="ask for one small step between reads and find the middle of the range that reads",
+    ),
+]
+ReplayOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--captures", help="replay the reads a dump --raw kept instead of reading the drive"
+    ),
+]
+
+
+def _timed(
+    drive: FdsStick, *, mode: Mode, passes: int, wanted: Side | None, bracket: bool
+) -> tuple[Calibration, tuple[Timing, ...]]:
+    timed = TimingReader(drive, note=step)
+    try:
+        result = _live(timed, mode=mode, passes=passes, wanted=wanted, bracket=bracket)
+    finally:
+        drive.close()
+    return result, tuple(timed.timings)
+
+
+def _print_calibration(
+    result: Calibration, timings: tuple[Timing, ...], *, json_output: bool
+) -> None:
+    if json_output:
+        typer.echo(as_json(calibration_json(result, timings)))
+    else:
+        typer.echo(result.headline)
+
+
 def calibrate_command(
-    mode: Annotated[Mode, typer.Argument(help="speed for the motor, head for the head and hub")],
+    mode: ModeArgument,
     *,
-    reference: Annotated[
-        Path | None,
-        typer.Option(
-            "--reference",
-            help="an image of the disk in the drive, dumped by a drive you trust",
-        ),
-    ] = None,
-    side: Annotated[
-        int,
-        typer.Option(
-            "--side",
-            min=0,
-            max=SIDES_PER_DISK - 1,
-            help="which side of the reference is in the drive, its label facing up",
-        ),
-    ] = 0,
-    passes: Annotated[
-        int,
-        typer.Option("--passes", min=1, max=MAX_READS, help="read the side this many times"),
-    ] = DEFAULT_READS,
-    bracket: Annotated[
-        bool,
-        typer.Option(
-            "--bracket",
-            help="ask for one small step between reads and find the middle of the range that reads",
-        ),
-    ] = False,
-    captures: Annotated[
-        Path | None,
-        typer.Option(
-            "--captures", help="replay the reads a dump --raw kept instead of reading the drive"
-        ),
-    ] = None,
-    json_output: Annotated[bool, typer.Option("--json", help="print JSON")] = False,
+    reference: ReferenceOption = None,
+    side: SideOption = 0,
+    passes: PassesOption = DEFAULT_READS,
+    bracket: BracketOption = False,
+    captures: ReplayOption = None,
+    json_output: JsonOption = False,
 ) -> None:
     wanted = reference_side(reference, side)
-    timed: TimingReader | None = None
     if captures is not None:
         replay = _replay(captures, side)
-        result = calibrate(
-            replay, mode=mode, reads=len(replay.captures), reference=wanted, progress=step
-        )
+        reads = len(replay.captures)
+        result = calibrate(replay, mode=mode, reads=reads, reference=wanted, progress=step)
+        timings: tuple[Timing, ...] = ()
     else:
         typer.echo(NOT_THIS_DRIVE, err=True)
         drive = open_drive()
-        timed = TimingReader(drive, note=step)
-        try:
-            result = _live(timed, mode=mode, passes=passes, wanted=wanted, bracket=bracket)
-        finally:
-            drive.close()
-
-    if json_output:
-        typer.echo(as_json(calibration_json(result, timed.timings if timed else ())))
-    else:
-        typer.echo(result.headline)
+        result, timings = _timed(drive, mode=mode, passes=passes, wanted=wanted, bracket=bracket)
+    _print_calibration(result, timings, json_output=json_output)
     raise typer.Exit(code=0 if result.clean else 1)
 
 

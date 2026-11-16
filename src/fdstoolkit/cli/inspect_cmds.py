@@ -7,6 +7,9 @@ import typer
 
 from fdstoolkit.cli.common import (
     Family,
+    ForceOption,
+    ImageArgument,
+    JsonOption,
     decode_image,
     exit_code,
     fail,
@@ -16,8 +19,8 @@ from fdstoolkit.cli.common import (
 )
 from fdstoolkit.codecs import qd
 from fdstoolkit.codecs.container import Container
-from fdstoolkit.core.bios import BootVerdict, predict_boot
-from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
+from fdstoolkit.core.bios import BootReport, BootVerdict, SideBoot, predict_boot
+from fdstoolkit.core.canon import CanonResult, canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import worst_severity
 from fdstoolkit.core.disk import SIDE_SIZE, Disk
 from fdstoolkit.core.diskinfo import PROFILES
@@ -50,31 +53,10 @@ def file_rows(disk: Disk) -> list[dict[str, object]]:
     return rows
 
 
-def info(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    *,
-    files: Annotated[
-        bool, typer.Option("--files", help="also list every file on every side")
-    ] = False,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
-) -> None:
-    disk, findings, data, container = decode_image(image)
-    payload: dict[str, object] = {
-        "path": str(image),
-        "container": str(container),
-        "size": len(data),
-        "side_count": disk.side_count,
-        "header_side_count": disk.header_side_count,
-        "sides": [side_summary(index, side) for index, side in enumerate(disk.sides)],
-        "diagnostics": diagnostics_as_data(findings),
-    }
-    if files:
-        payload["files"] = file_rows(disk)
-    if json_output:
-        typer.echo(as_json(payload))
-        return
+FilesOption = Annotated[bool, typer.Option("--files", help="also list every file on every side")]
 
-    typer.echo(f"{image.name}: {container} container, {disk.side_count} side(s), {len(data)} bytes")
+
+def _print_sides(disk: Disk) -> None:
     for index, side in enumerate(disk.sides):
         summary = side_summary(index, side)
         name = summary["game_name"] or "unformatted"
@@ -83,10 +65,9 @@ def info(
             f"files={summary['files']} hidden={summary['hidden_files']} "
             f"rewrites={summary['rewrite_count']}"
         )
-    for finding in findings:
-        typer.echo(f"  {finding.render()}")
-    if not files:
-        return
+
+
+def _print_files(disk: Disk) -> None:
     for row in file_rows(disk):
         marker = " (hidden)" if row["hidden"] else ""
         typer.echo(
@@ -95,11 +76,35 @@ def info(
         )
 
 
+def info(
+    image: ImageArgument, *, files: FilesOption = False, json_output: JsonOption = False
+) -> None:
+    disk, findings, data, container = decode_image(image)
+    if json_output:
+        payload: dict[str, object] = {
+            "path": str(image),
+            "container": str(container),
+            "size": len(data),
+            "side_count": disk.side_count,
+            "header_side_count": disk.header_side_count,
+            "sides": [side_summary(index, side) for index, side in enumerate(disk.sides)],
+            "diagnostics": diagnostics_as_data(findings),
+        }
+        typer.echo(as_json({**payload, **({"files": file_rows(disk)} if files else {})}))
+        return
+    typer.echo(f"{image.name}: {container} container, {disk.side_count} side(s), {len(data)} bytes")
+    _print_sides(disk)
+    for finding in findings:
+        typer.echo(f"  {finding.render()}")
+    if files:
+        _print_files(disk)
+
+
 def verify(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    image: ImageArgument,
     *,
     strict: Annotated[bool, typer.Option("--strict", help="treat warnings as failures")] = False,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+    json_output: JsonOption = False,
 ) -> None:
     _, findings, _, _ = decode_image(image)
     code = exit_code(findings, strict=strict)
@@ -123,29 +128,16 @@ def verify(
     raise typer.Exit(code=code)
 
 
-def hash_command(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    *,
-    profile: Annotated[str, typer.Option("--profile", help=PROFILE_HELP)] = "content",
-    output: Annotated[
-        Path | None,
-        typer.Option("-o", "--output", help="also write the canonical image"),
-    ] = None,
-    force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
-) -> None:
-    disk, _, data, container = decode_image(image)
-    side_size = SIDE_SIZE if container is Container.FDS else qd.SIDE_SIZE
-    try:
-        canonical = canonicalise(disk, profile_by_name(profile))
-    except ValueError as error:
-        raise fail(str(error)) from error
-    if output is not None:
-        guard_output(output, force=force)
-        output.write_bytes(canonical.data)
+CanonicalOption = Annotated[
+    Path | None, typer.Option("-o", "--output", help="also write the canonical image")
+]
 
+
+def _hash_payload(
+    image: Path, data: bytes, side_size: int, canonical: CanonResult
+) -> dict[str, object]:
     whole = digests_of(data)
-    payload: dict[str, object] = {
+    return {
         "path": str(image),
         "image": whole.as_dict(),
         "headerless": whole.headerless.as_dict() if whole.headerless else None,
@@ -154,10 +146,9 @@ def hash_command(
         "retroachievements": retroachievements_hash(data),
     }
 
-    if json_output:
-        typer.echo(as_json(payload))
-        return
 
+def _print_hashes(data: bytes, canonical: CanonResult) -> None:
+    whole = digests_of(data)
     typer.echo(f"size      {whole.size}")
     typer.echo(f"crc32     {whole.crc32}")
     typer.echo(f"md5       {whole.md5}")
@@ -165,6 +156,33 @@ def hash_command(
     typer.echo(f"sha256    {whole.sha256}")
     typer.echo(f"canonical {digest_string(canonical)}")
     typer.echo(f"ra md5    {retroachievements_hash(data)}")
+
+
+def _canonical(disk: Disk, profile: str) -> CanonResult:
+    try:
+        return canonicalise(disk, profile_by_name(profile))
+    except ValueError as error:
+        raise fail(str(error)) from error
+
+
+def hash_command(
+    image: ImageArgument,
+    *,
+    profile: Annotated[str, typer.Option("--profile", help=PROFILE_HELP)] = "content",
+    output: CanonicalOption = None,
+    force: ForceOption = False,
+    json_output: JsonOption = False,
+) -> None:
+    disk, _, data, container = decode_image(image)
+    side_size = SIDE_SIZE if container is Container.FDS else qd.SIDE_SIZE
+    canonical = _canonical(disk, profile)
+    if output is not None:
+        guard_output(output, force=force)
+        output.write_bytes(canonical.data)
+    if json_output:
+        typer.echo(as_json(_hash_payload(image, data, side_size, canonical)))
+        return
+    _print_hashes(data, canonical)
     if output is not None:
         typer.echo(f"wrote {output} ({len(canonical.data)} bytes)")
 
@@ -179,7 +197,7 @@ def _layouts(disk: Disk, captures: Path | None) -> dict[int, LayoutReading] | No
 
 
 def provenance(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
+    image: ImageArgument,
     *,
     captures: Annotated[
         Path | None,
@@ -187,7 +205,7 @@ def provenance(
             "--captures", help="also judge how each side was written, from what a dump --raw kept"
         ),
     ] = None,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+    json_output: JsonOption = False,
 ) -> None:
     disk, _, _, _ = decode_image(image)
     report = provenance_of(disk, layouts=_layouts(disk, captures))
@@ -208,57 +226,50 @@ def provenance(
             typer.echo(f"  {note}")
 
 
-def boot(
-    image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
-    *,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
-) -> None:
+def _boot_side(side: SideBoot) -> dict[str, object]:
+    return {
+        "side": side.side,
+        "verdict": str(side.verdict),
+        "error": side.error,
+        "message": side.message,
+        "boot_files": [
+            {
+                "position": entry.position,
+                "file_id": entry.file_id,
+                "name": entry.name,
+                "address": entry.address,
+                "size": entry.size,
+            }
+            for entry in side.boot_files
+        ],
+    }
+
+
+def _print_boot(report: BootReport) -> None:
+    for side in report.sides:
+        typer.echo(f"side {side.side}: {side.message}")
+        for entry in side.boot_files:
+            typer.echo(
+                f"  loads #{entry.position} id {entry.file_id} {entry.name!r} "
+                f"{entry.size} bytes at ${entry.address:04X}"
+            )
+
+
+def boot(image: ImageArgument, *, json_output: JsonOption = False) -> None:
     disk, _, _, _ = decode_image(image)
     report = predict_boot(disk)
-
     if json_output:
-        typer.echo(
-            as_json(
-                {
-                    "path": str(image),
-                    "sides": [
-                        {
-                            "side": side.side,
-                            "verdict": str(side.verdict),
-                            "error": side.error,
-                            "message": side.message,
-                            "boot_files": [
-                                {
-                                    "position": entry.position,
-                                    "file_id": entry.file_id,
-                                    "name": entry.name,
-                                    "address": entry.address,
-                                    "size": entry.size,
-                                }
-                                for entry in side.boot_files
-                            ],
-                        }
-                        for side in report.sides
-                    ],
-                }
-            )
-        )
+        sides = [_boot_side(side) for side in report.sides]
+        typer.echo(as_json({"path": str(image), "sides": sides}))
     else:
-        for side in report.sides:
-            typer.echo(f"side {side.side}: {side.message}")
-            for entry in side.boot_files:
-                typer.echo(
-                    f"  loads #{entry.position} id {entry.file_id} {entry.name!r} "
-                    f"{entry.size} bytes at ${entry.address:04X}"
-                )
-
+        _print_boot(report)
     failed = any(side.verdict is BootVerdict.FAILS for side in report.sides[:1])
     raise typer.Exit(code=1 if failed else 0)
 
 
 def doctor(
     *,
-    json_output: Annotated[bool, typer.Option("--json", help="emit JSON")] = False,
+    json_output: JsonOption = False,
 ) -> None:
     report = diagnose()
     if json_output:
