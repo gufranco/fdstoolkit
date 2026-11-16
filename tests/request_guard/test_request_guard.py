@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from page_kit import built_page
 
 from fdstoolkit.ui.app import create_app
 
@@ -14,8 +16,8 @@ LOCAL = "http://127.0.0.1:8000"
 
 
 @pytest.fixture(name="client")
-def client_fixture() -> TestClient:
-    return TestClient(create_app(), base_url=LOCAL)
+def client_fixture(tmp_path: Path) -> TestClient:
+    return TestClient(create_app(page_dir=built_page(tmp_path)), base_url=LOCAL)
 
 
 def test_a_request_naming_a_foreign_host_is_refused(client: TestClient) -> None:
@@ -124,7 +126,7 @@ def test_the_page_runs_only_the_script_it_was_sent_with(client: TestClient) -> N
 
     # Assert
     assert nonce is not None
-    assert f'<script type="module" nonce="{nonce.group(1)}">' in answer.text
+    assert f'<script type="module" nonce="{nonce.group(1)}" crossorigin' in answer.text
     assert "'unsafe-inline'" not in policy
     assert "frame-ancestors 'none'" in policy
 

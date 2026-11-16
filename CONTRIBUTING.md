@@ -64,7 +64,7 @@ CI runs the same subject check on every pushed or proposed commit.
 | JSON and YAML format | `pnpm format:check` |
 | YAML lint | `uv run yamllint --strict .` |
 
-The page is moving to React and TypeScript under `web/`. `pnpm build` writes it
+The page is React and TypeScript under `web/`. `pnpm build` writes it
 into `src/fdstoolkit/ui/page/`, which git ignores and the wheel and source
 distribution carry. `web/src/api/schema.d.ts` is generated: after changing a
 route, run `pnpm api:types` and commit the result, or `pnpm api:check` fails.

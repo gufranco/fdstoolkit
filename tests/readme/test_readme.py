@@ -181,8 +181,8 @@ def reference_headings(name: str, start: str) -> list[str]:
 
 
 def japanese_labels() -> dict[str, str]:
-    text = Path("src/fdstoolkit/ui/static/i18n.js").read_text(encoding="utf-8")
-    japanese = text[text.index("  ja: {") :]
+    text = Path("web/src/i18n.ts").read_text(encoding="utf-8")
+    japanese = text[text.index("const JAPANESE: Dictionary = {") :]
     return dict(re.findall(r"'family\.([a-z]+)': '([^']+)'", japanese))
 
 

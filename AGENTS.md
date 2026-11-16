@@ -237,7 +237,7 @@ test, and the name states the behaviour.
 | `quality/` | Reads, confidence, grading, the surface test |
 | `identify/` | Digests and provenance |
 | `master/` | Splicing a good block in from another dump |
-| `ui/` | The web surface: routes, schemas, derived forms, static page |
+| `ui/` | The web surface: routes, schemas, derived forms. The page itself is React and TypeScript in `web/` at the repository root, built into `ui/page/` |
 | `cli/` | One module per command family, each with a `register(app)` |
 
 `cli/common.py` holds what more than one command family needs. A helper used

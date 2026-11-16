@@ -1,22 +1,28 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
-from fdstoolkit.ui.app import STATIC_DIR
 from fdstoolkit.ui.forms import forms
 
-MARKUP = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-SCRIPT = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-DICTIONARIES = (STATIC_DIR / "i18n.js").read_text(encoding="utf-8")
+SOURCE = Path("web")
+MARKUP = (SOURCE / "index.html").read_text(encoding="utf-8")
+SCRIPT = "\n".join(
+    path.read_text(encoding="utf-8")
+    for path in sorted((SOURCE / "src").rglob("*.ts*"))
+    if not path.name.endswith(".d.ts")
+)
+DICTIONARIES = (SOURCE / "src/i18n.ts").read_text(encoding="utf-8")
 THE_SAME_IN_BOTH_LANGUAGES = {"title"}
 LANGUAGES = ("en", "ja")
+OPENINGS = {"en": "const ENGLISH: Dictionary = {", "ja": "const JAPANESE: Dictionary = {"}
 STORAGE_GUARDS = 2
 
 
 def _block(language: str) -> str:
-    start = DICTIONARIES.index(f"  {language}: {{")
+    start = DICTIONARIES.index(OPENINGS[language])
     depth = 0
     for index in range(start, len(DICTIONARIES)):
         if DICTIONARIES[index] == "{":
@@ -43,9 +49,7 @@ def _values(language: str) -> dict[str, str]:
 
 
 def _used_keys() -> set[str]:
-    markup = set(re.findall(r'data-i18n(?:-placeholder|-aria-label)?="([^"]+)"', MARKUP))
-    script = set(re.findall(r"\bt\('([\w.]+)'", SCRIPT))
-    return markup | script
+    return set(re.findall(r"\b(?:t|speak)\('([\w.]+)'", SCRIPT))
 
 
 def test_both_languages_carry_the_same_keys() -> None:
@@ -100,19 +104,19 @@ def test_every_japanese_string_is_japanese() -> None:
 
 def test_the_page_offers_both_languages() -> None:
     # Arrange
-    path = STATIC_DIR / "index.html"
+    script = SCRIPT
 
     # Act
-    markup = path.read_text(encoding="utf-8")
+    offered = re.findall(r"\['(\w+)', '[^']+'\]", script)
 
     # Assert
-    assert 'data-language="en"' in markup
-    assert 'data-language="ja"' in markup
+    assert "en" in offered
+    assert "ja" in offered
 
 
 def test_the_language_choice_survives_storage_being_unavailable() -> None:
     # Arrange
-    path = STATIC_DIR / "i18n.js"
+    path = SOURCE / "src/i18n.ts"
 
     # Act
     dictionaries = path.read_text(encoding="utf-8")
@@ -124,14 +128,14 @@ def test_the_language_choice_survives_storage_being_unavailable() -> None:
 
 def test_the_page_script_pulls_the_dictionaries_in_itself() -> None:
     # Arrange
-    path = STATIC_DIR / "app.js"
+    path = SOURCE / "src/Page.tsx"
 
     # Act
     script = path.read_text(encoding="utf-8")
 
     # Assert
-    assert "from './i18n.js'" in script
-    assert "import { start }" in MARKUP
+    assert "from './i18n'" in script
+    assert '<script type="module" src="/src/main.tsx">' in MARKUP
 
 
 @pytest.mark.parametrize("language", LANGUAGES)

@@ -70,14 +70,18 @@ def test_the_page_tests_run_in_continuous_integration() -> None:
     assert "pnpm e2e" in workflow
 
 
-def test_every_page_script_is_covered_by_a_test_file() -> None:
+def test_every_page_module_is_covered_by_a_test_file() -> None:
     # Arrange
-    scripts = {path.stem for path in (ROOT / "src/fdstoolkit/ui/static").glob("*.js")}
+    modules = {
+        path.name.split(".")[0]
+        for path in (ROOT / "web/src").glob("*.ts*")
+        if not path.name.endswith(".d.ts")
+    }
 
     # Act
     exercised = "".join(
-        path.read_text(encoding="utf-8") for path in (ROOT / "tests/web").glob("*.test.js")
+        path.read_text(encoding="utf-8") for path in (ROOT / "tests/page").glob("*.test.ts*")
     )
 
     # Assert
-    assert {name for name in scripts if f"static/{name}.js" not in exercised} == set()
+    assert {name for name in modules if f"web/src/{name}'" not in exercised} == set()

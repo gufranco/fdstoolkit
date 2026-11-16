@@ -1,13 +1,13 @@
-import type { ReactElement } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type ReactElement, useState } from 'react';
 
-const TITLE = 'Famicom Disk System Toolkit';
+import { Page } from './Page';
 
 export function App(): ReactElement {
+  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   return (
-    <div className="shell">
-      <header>
-        <h1>{TITLE}</h1>
-      </header>
-    </div>
+    <QueryClientProvider client={client}>
+      <Page />
+    </QueryClientProvider>
   );
 }

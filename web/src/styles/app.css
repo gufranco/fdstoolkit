@@ -257,6 +257,10 @@ h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.01em; }
   margin-bottom: 5px;
 }
 
+.fields .field-helps {
+  display: contents;
+}
+
 .fields .field-help {
   display: block;
   color: var(--muted);

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Final
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from fdstoolkit.build.blank import DEFAULT_GAME_NAME, blank_image
@@ -71,11 +71,19 @@ from fdstoolkit.ui.shared import (
 )
 from fdstoolkit.version import VERSION
 
-STATIC_DIR: Final = Path(str(resources.files("fdstoolkit.ui") / "static"))
+PAGE_DIR: Final = Path(str(resources.files("fdstoolkit.ui") / "page"))
 STAMP_LENGTH: Final = 12
+UNBUILT_STAMP: Final = "unbuilt"
+SERVICE_UNAVAILABLE: Final = 503
+UNBUILT: Final = (
+    "the page is not built. Run pnpm build in the repository, or install a release, "
+    "which carries it"
+)
 
 
-def asset_stamp(directory: Path = STATIC_DIR) -> str:
+def asset_stamp(directory: Path = PAGE_DIR) -> str:
+    if not directory.is_dir():
+        return UNBUILT_STAMP
     digest = sha256()
     for path in sorted(directory.iterdir()):
         if path.is_file():
@@ -84,7 +92,7 @@ def asset_stamp(directory: Path = STATIC_DIR) -> str:
     return digest.hexdigest()[:STAMP_LENGTH]
 
 
-def asset_root(directory: Path = STATIC_DIR) -> str:
+def asset_root(directory: Path = PAGE_DIR) -> str:
     return f"/assets/{asset_stamp(directory)}"
 
 
@@ -95,7 +103,7 @@ LEFT_RUNNING: Final = "the server stopped while %s was still running: %s"
 WRITE_LEFT: Final = "the disk may be half written, so dump it before using it"
 READ_LEFT: Final = "nothing was written, but the read did not finish"
 FAULT_REFERENCE_BYTES: Final = 6
-PAGE_SCRIPT: Final = '<script type="module">'
+PAGE_SCRIPT: Final = '<script type="module" crossorigin'
 PAGE_POLICY: Final = (
     "default-src 'self'; script-src 'nonce-{nonce}' 'strict-dynamic'; style-src 'self'; "
     "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
@@ -140,12 +148,18 @@ def _profile(name: str) -> MaskProfile:
         raise HTTPException(status_code=BAD_REQUEST, detail=message) from error
 
 
-def index(request: Request) -> HTMLResponse:
+def index(request: Request) -> Response:
+    page: Path = request.app.state.page_dir
+    entry = page / "index.html"
+    if not entry.is_file():
+        return PlainTextResponse(
+            UNBUILT, status_code=SERVICE_UNAVAILABLE, headers={"cache-control": "no-store"}
+        )
     nonce = secrets.token_urlsafe(NONCE_BYTES)
-    markup = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    markup = entry.read_text(encoding="utf-8")
     root: str = request.app.state.asset_root
     stamped = markup.replace("/static/", f"{root}/").replace(
-        PAGE_SCRIPT, f'<script type="module" nonce="{nonce}">'
+        PAGE_SCRIPT, f'<script type="module" nonce="{nonce}" crossorigin'
     )
     return HTMLResponse(
         stamped,
@@ -392,7 +406,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         logger.warning(LEFT_RUNNING, left.command, WRITE_LEFT if left.writes else READ_LEFT)
 
 
-def create_app(*, allowed_hosts: frozenset[str] = frozenset()) -> FastAPI:
+def create_app(
+    *, allowed_hosts: frozenset[str] = frozenset(), page_dir: Path = PAGE_DIR
+) -> FastAPI:
     app = FastAPI(
         lifespan=_lifespan,
         title="Famicom Disk System Toolkit",
@@ -403,7 +419,8 @@ def create_app(*, allowed_hosts: frozenset[str] = frozenset()) -> FastAPI:
     )
     app.add_exception_handler(Exception, _report_fault)
     app.state.jobs = JobBoard()
-    app.state.asset_root = asset_root()
+    app.state.page_dir = page_dir
+    app.state.asset_root = asset_root(page_dir)
     app.middleware("http")(_label_asset_lifetime)
     app.add_middleware(BodyLimit, limit=MAX_BODY_BYTES)
     app.middleware("http")(request_guard(allowed_hosts))
@@ -411,6 +428,6 @@ def create_app(*, allowed_hosts: frozenset[str] = frozenset()) -> FastAPI:
     _register_image(app)
     _register_analysis(app)
     _register_hardware(app)
-    app.mount(app.state.asset_root, StaticFiles(directory=STATIC_DIR), name="assets")
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.mount(app.state.asset_root, StaticFiles(directory=page_dir, check_dir=False), name="assets")
+    app.mount("/static", StaticFiles(directory=page_dir, check_dir=False), name="static")
     return app

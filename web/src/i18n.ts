@@ -1,7 +1,12 @@
-export const DICTIONARIES = {
-  en: {
+type Dictionary = Readonly<Record<string, string>>;
+
+export const FALLBACK = 'en';
+export const LANGUAGE_KEY = 'fdstoolkit.language';
+
+const ENGLISH: Dictionary = {
     'title': 'Famicom Disk System Toolkit',
     'state.unreadable': 'The server answered {status} with something that is not a result. Its terminal shows what went wrong.',
+    'state.shape': 'The server answered {path} in a shape this page does not read: {problem}',
     'tagline': 'An instrument for Famicom Disk System media. Every command that works on a disk or a drive is here.',
     'page.filter': 'Filter commands',
     'confirm.cancel': 'Cancel',
@@ -132,10 +137,12 @@ export const DICTIONARIES = {
     'bad.missing': 'This one is required.',
     'bad.shape': 'That is not the shape this field expects.',
     'bad.short': 'Needs at least {n} characters.',
-},
-  ja: {
+};
+
+const JAPANESE: Dictionary = {
     'title': 'Famicom Disk System Toolkit',
     'state.unreadable': 'サーバーは {status} を返しましたが、結果として読めない内容でした。原因はサーバーを起動した端末に表示されています。',
+    'state.shape': 'サーバーは {path} に、このページが読めない形で応答しました: {problem}',
     'tagline': 'ファミコン ディスクシステムのディスクカードのための計測器です。ディスクやドライブを扱うコマンドはすべてここにあります。',
     'page.filter': 'コマンドを絞り込む',
     'confirm.cancel': 'キャンセル',
@@ -266,39 +273,47 @@ export const DICTIONARIES = {
     'bad.missing': 'この項目は必須です。',
     'bad.shape': 'この項目が求める形式ではありません。',
     'bad.short': '{n} 文字以上必要です。',
-},
 };
 
-export const FALLBACK = 'en';
+const DICTIONARIES: Readonly<Record<string, Dictionary>> = { en: ENGLISH, ja: JAPANESE };
 
-export function tolerateRefusal(error) {
+export function translate(language: string, key: string): string {
+  const table = DICTIONARIES[language] ?? ENGLISH;
+  return table[key] ?? '';
+}
+
+export function tolerateRefusal(error: unknown): void {
   if (!(error instanceof DOMException)) {
     throw error;
   }
 }
 
-function storedLanguage() {
+function storedLanguage(): string | null {
   try {
-    return window.localStorage.getItem('fdstoolkit.language');
+    return window.localStorage.getItem(LANGUAGE_KEY);
   } catch (error) {
     tolerateRefusal(error);
     return null;
   }
 }
 
-export function rememberLanguage(code) {
+export function rememberLanguage(code: string): void {
   try {
-    window.localStorage.setItem('fdstoolkit.language', code);
+    window.localStorage.setItem(LANGUAGE_KEY, code);
   } catch (error) {
     tolerateRefusal(error);
   }
 }
 
-export function initialLanguage() {
+function carried(code: string | null): code is string {
+  return code !== null && Object.hasOwn(DICTIONARIES, code);
+}
+
+export function initialLanguage(): string {
   const stored = storedLanguage();
-  if (stored && DICTIONARIES[stored]) {
+  if (carried(stored)) {
     return stored;
   }
   const browser = (navigator.language || FALLBACK).slice(0, 2);
-  return DICTIONARIES[browser] ? browser : FALLBACK;
+  return carried(browser) ? browser : FALLBACK;
 }

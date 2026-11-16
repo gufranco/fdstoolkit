@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { fileStems, gameNames, seeded } from '../web/fakes.js';
+import { fileStems, gameNames, seeded } from '../page/fakes';
 
 const FAKE = seeded('page.spec');
 const [GAME] = gameNames(FAKE, 1);
@@ -60,6 +60,23 @@ test.afterEach(async ({ request }) => {
     await request.post(`/api/jobs/${job.id}/answer`, { data: { yes: false } });
   }
   await expect.poll(() => nothingRunning(request)).toBe(true);
+});
+
+test('the page loads only from this machine and reports no error', async ({ page, baseURL }) => {
+  // Arrange
+  const requested = [];
+  const errors = [];
+  page.on('request', (request) => requested.push(request.url()));
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => (message.type() === 'error' ? errors.push(message.text()) : undefined));
+
+  // Act
+  await openCommand(page, 'info');
+
+  // Assert
+  expect(requested.length).toBeGreaterThan(0);
+  expect(requested.filter((url) => !url.startsWith(baseURL))).toEqual([]);
+  expect(errors).toEqual([]);
 });
 
 test('every control on the page is at least 44 pixels tall', async ({ page }) => {
