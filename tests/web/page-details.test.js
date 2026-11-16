@@ -5,6 +5,10 @@ import { problemFor } from '../../src/fdstoolkit/ui/static/fields.js';
 import { initialLanguage, rememberLanguage } from '../../src/fdstoolkit/ui/static/i18n.js';
 import { renderResult } from '../../src/fdstoolkit/ui/static/render.js';
 import { field, useHarness } from './harness.js';
+import { fileStems, seeded } from './fakes.js';
+
+const FAKE = seeded('page-details.test');
+const [STEM, OTHER_STEM] = fileStems(FAKE, 2);
 
 useHarness();
 
@@ -75,10 +79,10 @@ describe('the rest of the result layouts', () => {
     const target = document.createElement('div');
 
     // Act
-    renderResult(target, { name: 'dump.fds', data: 'AQ==', size: 1, notes: ['[FDS016] lost'] });
+    renderResult(target, { name: `${STEM}.fds`, data: 'AQ==', size: 1, notes: ['[FDS016] lost'] });
 
     // Assert
-    expect(target.querySelector('.download').getAttribute('download')).toBe('dump.fds');
+    expect(target.querySelector('.download').getAttribute('download')).toBe(`${STEM}.fds`);
     expect(target.querySelector('.download-notes .banner.warn').textContent).toBe('[FDS016] lost');
   });
 
@@ -98,10 +102,10 @@ describe('the rest of the result layouts', () => {
     const target = document.createElement('div');
 
     // Act
-    renderResult(target, { headline: '', file: { name: 'before.fds', data: 'AA==', size: 1 } });
+    renderResult(target, { headline: '', file: { name: `${OTHER_STEM}.fds`, data: 'AA==', size: 1 } });
 
     // Assert
-    expect(target.querySelector('a').download).toBe('before.fds');
+    expect(target.querySelector('a').download).toBe(`${OTHER_STEM}.fds`);
     expect(target.querySelector('dl')).toBeNull();
   });
 });

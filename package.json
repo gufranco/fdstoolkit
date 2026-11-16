@@ -12,6 +12,7 @@
     "e2e": "playwright test"
   },
   "devDependencies": {
+    "@faker-js/faker": "10.6.0",
     "@playwright/test": "1.65.0",
     "@semantic-release/exec": "7.1.0",
     "@semantic-release/git": "11.0.1",

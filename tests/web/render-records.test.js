@@ -6,6 +6,10 @@ import {
   isProse,
   renderResult,
 } from '../../src/fdstoolkit/ui/static/render.js';
+import { gameNames, seeded } from './fakes.js';
+
+const FAKE = seeded('render-records.test');
+const [GAME, OTHER_GAME] = gameNames(FAKE, 2);
 
 let target;
 
@@ -77,8 +81,8 @@ const CHANGE = {
   field: 'game_name',
   description: 'three-letter game code',
   identity: true,
-  left: 'SMB',
-  right: 'ZLD',
+  left: GAME,
+  right: OTHER_GAME,
 };
 
 describe('change records', () => {
@@ -102,7 +106,7 @@ describe('change records', () => {
     const sides = [...node.querySelectorAll('.side-value')].map((cell) => cell.textContent);
 
     // Assert
-    expect(sides).toEqual(['SMB', 'ZLD']);
+    expect(sides).toEqual([GAME, OTHER_GAME]);
   });
 
   it('keeps prose out of the chips and gives it its own line', () => {

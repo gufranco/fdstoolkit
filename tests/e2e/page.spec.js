@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { fileStems, gameNames, seeded } from '../web/fakes.js';
+
+const FAKE = seeded('page.spec');
+const [GAME] = gameNames(FAKE, 1);
+const [STEM, OTHER_STEM] = fileStems(FAKE, 2);
 
 const TARGET = 44;
 const ERASE_TITLE = 'This erases the disk in the drive';
@@ -6,11 +11,11 @@ const TURNED = 'The disk is turned over';
 
 async function blankImage(request) {
   const answer = await request.post('/api/blank', {
-    data: { sides: 2, formatted: true, game_name: 'E2E' },
+    data: { sides: 2, formatted: true, game_name: GAME },
   });
   expect(answer.ok()).toBe(true);
   const body = await answer.json();
-  return { name: 'game.fds', mimeType: 'application/octet-stream', buffer: Buffer.from(body.data, 'base64') };
+  return { name: `${STEM}.fds`, mimeType: 'application/octet-stream', buffer: Buffer.from(body.data, 'base64') };
 }
 
 async function openCommand(page, command) {
@@ -220,7 +225,7 @@ test('a dump offers its captures, and reads maps them back at phone width', asyn
   const zip = Buffer.from(href.slice(href.indexOf(',') + 1), 'base64');
   await openCommand(page, 'reads');
   await page.locator('input[data-field=captures]').setInputFiles({
-    name: 'dump.captures.zip', mimeType: 'application/zip', buffer: zip,
+    name: `${OTHER_STEM}.captures.zip`, mimeType: 'application/zip', buffer: zip,
   });
   await page.locator('#panel button.run').click();
   await expect(page.locator('#panel .output')).toContainText('weak');

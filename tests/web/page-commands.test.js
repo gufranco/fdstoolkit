@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { choose, field, open, panel, reply, run, sent, settle, useHarness } from './harness.js';
+import { fileStems, gameNames, seeded } from './fakes.js';
+
+const FAKE = seeded('page-commands.test');
+const [GAME] = gameNames(FAKE, 1);
+const [STEM, OTHER_STEM, THIRD_STEM, FOURTH_STEM, FIFTH_STEM] = fileStems(FAKE, 5);
 
 useHarness();
 
@@ -20,7 +25,7 @@ describe('running a command', () => {
   it('refuses to run with a value out of range', async () => {
     // Arrange
     await open('blank');
-    field('game_name').value = 'SMB';
+    field('game_name').value = GAME;
     const node = field('passes');
     node.checkValidity = () => false;
     Object.defineProperty(node, 'validity', { value: { rangeUnderflow: true }, configurable: true });
@@ -35,7 +40,7 @@ describe('running a command', () => {
   it('sends typed values and shows the answer', async () => {
     // Arrange
     await open('blank', { 'POST /api/blank': () => reply(200, { headline: 'made a blank disk', ok: true }) });
-    field('game_name').value = 'SMB';
+    field('game_name').value = GAME;
     field('sides').value = '2';
     field('ratio').value = '';
     await run();
@@ -44,28 +49,28 @@ describe('running a command', () => {
     const call = sent.find((entry) => entry.key === 'POST /api/blank');
 
     // Assert
-    expect(call.body).toEqual({ sides: 2, passes: 1, formatted: true, game_name: 'SMB' });
+    expect(call.body).toEqual({ sides: 2, passes: 1, formatted: true, game_name: GAME });
     expect(panel().querySelector('.output .banner').textContent).toBe('made a blank disk');
     expect(panel().querySelector('button.run').disabled).toBe(false);
   });
 
   it('encodes the chosen file and derives the output name from it', async () => {
     // Arrange
-    await open('info', { 'POST /api/info': () => reply(200, { text: 'Game name: SMB' }) });
-    choose(field('data'), [new File([new Uint8Array([1, 2])], 'smb.qd')]);
+    await open('info', { 'POST /api/info': () => reply(200, { text: `Game name: ${GAME}` }) });
+    choose(field('data'), [new File([new Uint8Array([1, 2])], `${STEM}.qd`)]);
     await run();
 
     // Act
     const call = sent.find((entry) => entry.key === 'POST /api/info');
 
     // Assert
-    expect(call.body).toEqual({ data: 'AQI=', name: 'smb.fds' });
+    expect(call.body).toEqual({ data: 'AQI=', name: `${STEM}.fds` });
   });
 
   it('sends every file of a many-file field', async () => {
     // Arrange
     await open('consensus', { 'POST /api/consensus': () => reply(200, { headline: 'merged' }) });
-    choose(field('images'), [new File([new Uint8Array([1])], 'a.fds'), new File([new Uint8Array([2])], 'b.fds')]);
+    choose(field('images'), [new File([new Uint8Array([1])], `${OTHER_STEM}.fds`), new File([new Uint8Array([2])], `${THIRD_STEM}.fds`)]);
     await run();
 
     // Act
@@ -114,7 +119,7 @@ describe('running a command', () => {
   it('reports a refusal with the reason and a hint', async () => {
     // Arrange
     await open('blank', { 'POST /api/blank': () => reply(422, { detail: [{ loc: ['body', 'game_name'], msg: 'too long' }] }) });
-    field('game_name').value = 'SMB';
+    field('game_name').value = GAME;
 
     // Act
     await run();
@@ -132,7 +137,7 @@ describe('the drive commands', () => {
     state: 'done',
     steps: [],
     prompt: '',
-    result: { name: 'dump.fds', data: 'AA==', size: 1, grade: 'clean' },
+    result: { name: `${FOURTH_STEM}.fds`, data: 'AA==', size: 1, grade: 'clean' },
     error: '',
   };
 
@@ -179,13 +184,13 @@ describe('the drive commands', () => {
 
     // Assert
     expect(document.querySelector('dialog')).toBeNull();
-    expect(panel().querySelector('.output a').download).toBe('dump.fds');
+    expect(panel().querySelector('.output a').download).toBe(`${FOURTH_STEM}.fds`);
   });
 
   it('writes nothing when the erase is cancelled', async () => {
     // Arrange
     await open('write');
-    choose(field('data'), [new File([new Uint8Array([1])], 'game.fds')]);
+    choose(field('data'), [new File([new Uint8Array([1])], `${FIFTH_STEM}.fds`)]);
     panel().querySelector('button.run').click();
     await settle();
     document.querySelector('dialog .plain').click();
@@ -202,7 +207,7 @@ describe('the drive commands', () => {
     // Arrange
     const written = { ...done, command: 'write', writes: true, result: { headline: 'written', ok: true } };
     await open('write', { 'POST /api/jobs/write': () => reply(200, written) });
-    choose(field('data'), [new File([new Uint8Array([1])], 'game.fds')]);
+    choose(field('data'), [new File([new Uint8Array([1])], `${FIFTH_STEM}.fds`)]);
     panel().querySelector('button.run').click();
     await settle();
     document.querySelector('dialog .danger').click();
@@ -279,7 +284,7 @@ describe('the drive commands', () => {
         return reply(200, polls > 1 ? { ...writing, state: 'failed', error: 'stalled' } : writing);
       },
     });
-    choose(field('data'), [new File([new Uint8Array([1])], 'game.fds')]);
+    choose(field('data'), [new File([new Uint8Array([1])], `${FIFTH_STEM}.fds`)]);
     panel().querySelector('button.run').click();
     await settle();
     document.querySelector('dialog .danger').click();
@@ -305,7 +310,7 @@ describe('the drive commands', () => {
 
     // Assert
     expect(panel().querySelector('.command-name').textContent).toBe(expected);
-    expect(panel().querySelector('.output a').download).toBe('dump.fds');
+    expect(panel().querySelector('.output a').download).toBe(`${FOURTH_STEM}.fds`);
   });
 
   it('ignores a running job for a command the page does not offer', async () => {

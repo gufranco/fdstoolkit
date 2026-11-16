@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { confirmErase, follow, isJobRoute, jobView } from "../../src/fdstoolkit/ui/static/jobs.js";
+import { fileStems, seeded } from "./fakes.js";
+
+const FAKE = seeded("jobs.test");
+const [STEM] = fileStems(FAKE, 1);
 
 const running = {
   id: "j1",
@@ -144,13 +148,13 @@ describe("jobView", () => {
 
   it("still offers the disk's contents read before a failed write", () => {
     // Arrange
-    const kept = { name: "before.fds", data: "AQ==", size: 1 };
+    const kept = { name: `${STEM}.fds`, data: "AQ==", size: 1 };
 
     // Act
     const view = jobView({ ...running, state: "failed", error: "refused", kept }, () => {});
 
     // Assert
-    expect(view.querySelector(".download").getAttribute("download")).toBe("before.fds");
+    expect(view.querySelector(".download").getAttribute("download")).toBe(`${STEM}.fds`);
   });
 
   it("offers nothing extra when a failed job kept no file", () => {

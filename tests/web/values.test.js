@@ -4,14 +4,19 @@ import { explain } from "../../src/fdstoolkit/ui/static/api.js";
 import { orderFamilies } from "../../src/fdstoolkit/ui/static/app.js";
 import { describeLimits, helpFor, named, typed } from "../../src/fdstoolkit/ui/static/fields.js";
 import { bytes, isDownload, scalar, words } from "../../src/fdstoolkit/ui/static/render.js";
+import { fileStems, gameNames, seeded } from "./fakes.js";
+
+const FAKE = seeded("values.test");
+const [GAME] = gameNames(FAKE, 1);
+const [STEM, OTHER_STEM, THIRD_STEM, FOURTH_STEM] = fileStems(FAKE, 4);
 
 describe("named", () => {
   it("keeps the chosen name when it already carries the wanted suffix", () => {
     // Arrange
-    const expected = "demo.fds";
+    const expected = `${STEM}.fds`;
 
     // Act
-    const result = named("demo.fds", "disk.fds");
+    const result = named(`${STEM}.fds`, "disk.fds");
 
     // Assert
     expect(result).toBe(expected);
@@ -19,10 +24,10 @@ describe("named", () => {
 
   it("swaps a suffix the command does not produce", () => {
     // Arrange
-    const expected = "recipe.fds";
+    const expected = `${OTHER_STEM}.fds`;
 
     // Act
-    const result = named("recipe.json", "disk.fds");
+    const result = named(`${OTHER_STEM}.json`, "disk.fds");
 
     // Assert
     expect(result).toBe(expected);
@@ -30,10 +35,10 @@ describe("named", () => {
 
   it("adds the suffix when the chosen name carries none", () => {
     // Arrange
-    const expected = "dump.fds";
+    const expected = `${THIRD_STEM}.fds`;
 
     // Act
-    const result = named("dump", "disk.fds");
+    const result = named(THIRD_STEM, "disk.fds");
 
     // Assert
     expect(result).toBe(expected);
@@ -52,10 +57,10 @@ describe("named", () => {
 
   it("keeps the chosen name when the default carries no suffix", () => {
     // Arrange
-    const expected = "demo.fds";
+    const expected = `${STEM}.fds`;
 
     // Act
-    const result = named("demo.fds", "");
+    const result = named(`${STEM}.fds`, "");
 
     // Assert
     expect(result).toBe(expected);
@@ -143,7 +148,7 @@ describe("isDownload", () => {
     const expected = true;
 
     // Act
-    const result = isDownload({ data: "AA==", size: 1, name: "a.fds" });
+    const result = isDownload({ data: "AA==", size: 1, name: `${FOURTH_STEM}.fds` });
 
     // Assert
     expect(result).toBe(expected);
@@ -154,7 +159,7 @@ describe("isDownload", () => {
     const expected = false;
 
     // Act
-    const result = isDownload({ name: "GAME", size: 4096 });
+    const result = isDownload({ name: GAME, size: 4096 });
 
     // Assert
     expect(result).toBe(expected);

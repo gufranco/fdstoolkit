@@ -166,6 +166,9 @@ importers:
 
   .:
     devDependencies:
+      '@faker-js/faker':
+        specifier: 10.6.0
+        version: 10.6.0
       '@playwright/test':
         specifier: 1.65.0
         version: 1.65.0
@@ -245,6 +248,10 @@ packages:
 
   '@emnapi/wasi-threads@2.2.0':
     resolution: {integrity: sha512-JP7OYH38Q7+pyTAe14raZHLQIK7BDKbdwji+Xi3pcd/6QkJYQH3SX4wu6EplGrGJWRepoNzedfm0G3B9Z4e9Rw==}
+
+  '@faker-js/faker@10.6.0':
+    resolution: {integrity: sha512-3RQHgEtvL1Frl/d1cSreo7qhJ3Gk1OdNUai/CtZ8G+wYeRQnJih3s9xJ9/kgYekPQRdwgh0HXRPqMlzWGwivIQ==}
+    engines: {node: ^20.19.0 || ^22.13.0 || ^23.5.0 || >=24.0.0, npm: '>=10'}
 
   '@jridgewell/resolve-uri@3.1.2':
     resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
@@ -1966,6 +1973,8 @@ snapshots:
     dependencies:
       tslib: 2.9.1
     optional: true
+
+  '@faker-js/faker@10.6.0': {}
 
   '@jridgewell/resolve-uri@3.1.2': {}
 

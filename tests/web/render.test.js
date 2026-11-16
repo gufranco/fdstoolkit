@@ -4,6 +4,10 @@ import {
   describe as describeValue,
   renderResult,
 } from '../../src/fdstoolkit/ui/static/render.js';
+import { fileStems, seeded } from './fakes.js';
+
+const FAKE = seeded('render.test');
+const [STEM, OTHER_STEM, THIRD_STEM, FOURTH_STEM, FIFTH_STEM] = fileStems(FAKE, 5);
 
 let target;
 
@@ -19,14 +23,14 @@ describe('renderResult', () => {
     // Act
     renderResult(target, {
       headline: '1 block(s) disagree across the dumps',
-      file: { name: 'consensus.fds', data: 'AA==', size: 10 },
+      file: { name: `${STEM}.fds`, data: 'AA==', size: 10 },
       rows: [{ side: 0, block: 3 }],
       ok: false,
     });
 
     // Assert
     expect(target.querySelector('.banner').textContent).toBe(expected);
-    expect(target.querySelector('a').download).toBe('consensus.fds');
+    expect(target.querySelector('a').download).toBe(`${STEM}.fds`);
     expect(target.textContent).toContain('block');
   });
 
@@ -35,36 +39,36 @@ describe('renderResult', () => {
     const expected = 'good';
 
     // Act
-    renderResult(target, { name: 'demo.fds', data: 'AA==', size: 131000 });
+    renderResult(target, { name: `${OTHER_STEM}.fds`, data: 'AA==', size: 131000 });
 
     // Assert
     expect(target.querySelector('.banner').className).toContain(expected);
-    expect(target.querySelector('a').download).toBe('demo.fds');
+    expect(target.querySelector('a').download).toBe(`${OTHER_STEM}.fds`);
     expect(target.querySelector('.download-size').textContent).toBe('127.9 KiB');
   });
 
   it('offers the capture bundle a dump kept beside the image', () => {
     // Arrange
     renderResult(target, {
-      name: 'dump.fds',
+      name: `${THIRD_STEM}.fds`,
       data: 'AA==',
       size: 10,
       grade: 'clean',
-      captures: { name: 'dump.captures.zip', data: 'AA==', size: 20 },
+      captures: { name: `${THIRD_STEM}.captures.zip`, data: 'AA==', size: 20 },
     });
 
     // Act
     const links = [...target.querySelectorAll('a')].map((link) => link.download);
 
     // Assert
-    expect(links).toEqual(['dump.fds', 'dump.captures.zip']);
+    expect(links).toEqual([`${THIRD_STEM}.fds`, `${THIRD_STEM}.captures.zip`]);
   });
 
   it('offers every file when the payload carries several', () => {
     // Arrange
     const files = [
-      { name: 'a.fds', data: 'AA==', size: 10 },
-      { name: 'b.fds', data: 'AA==', size: 20 },
+      { name: `${FOURTH_STEM}.fds`, data: 'AA==', size: 10 },
+      { name: `${FIFTH_STEM}.fds`, data: 'AA==', size: 20 },
     ];
 
     // Act

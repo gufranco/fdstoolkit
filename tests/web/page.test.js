@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { start } from '../../src/fdstoolkit/ui/static/app.js';
 import { choose, field, open, panel, reply, useHarness } from './harness.js';
+import { fileStems, seeded } from './fakes.js';
+
+const FAKE = seeded('page.test');
+const [STEM] = fileStems(FAKE, 1);
 
 useHarness();
 
@@ -219,10 +223,10 @@ describe('the form', () => {
     const node = field('data');
 
     // Act
-    choose(node, [new File([new Uint8Array([1])], 'game.fds')]);
+    choose(node, [new File([new Uint8Array([1])], `${STEM}.fds`)]);
 
     // Assert
-    expect(panel().querySelector('.file-name').textContent).toBe('game.fds');
+    expect(panel().querySelector('.file-name').textContent).toBe(`${STEM}.fds`);
     expect(panel().textContent).toContain('Expects .fds, .qd');
     choose(node, []);
     expect(panel().querySelector('.file-name').textContent).toBe('No file chosen');
