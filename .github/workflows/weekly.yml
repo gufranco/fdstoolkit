@@ -34,10 +34,15 @@ jobs:
 
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
 
+      - name: Install the USB headers hidapi builds against
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libusb-1.0-0-dev libudev-dev
+
       - name: Install the package and the newest tools
         run: |
           uv pip install --system --upgrade \
-            '.[hardware,ui]' ruff pyright pytest pytest-cov hypothesis httpx2
+            '.[hardware,ui]' ruff pyright pytest pytest-cov hypothesis httpx2 faker
 
       - name: Formatting, as the newest formatter sees it
         run: ruff format --check .
