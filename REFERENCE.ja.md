@@ -468,6 +468,31 @@ fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [-
 <img alt="ローカル Web ページの dump コマンド" src="assets/screenshots/dump-light.png">
 </picture>
 
+#### `rescue`
+
+```bash
+fdstoolkit rescue <folder> -o <out> [--side N] [--passes N] [--force]
+```
+
+読めなくなりつつあるディスクの 1 面を、必要なだけのセッションにわたって読みます。フォルダはキャプチャ一式なので `reads`、`grade`、`consensus --captures` がそのまま読めます。加えて `rescue.json` が、ディスクの識別情報と読んだ各面のディスク情報を記録します。実行のたびに `--side` を最大 `--passes` 回読み、読み取りは届いた時点で保存し、保存したすべての読み取りから `consensus --captures` と同じパルス投票で面を組み立て直し、宣言されたブロックがすべて確定したら早めに止まります。どの読み取りでも正しく読めなかったブロックは次の実行、別の日や別のドライブを待ち、それまでの読み取りもそのまま投票に加わります。フォルダのすべての面が確定した時点で `-o` にイメージを書き出します。それまでは終了コード 1 で終わり、未確定のブロックを示します。
+
+各実行の最初の読み取りは、保存する前にフォルダと照合します。ゲーム、バージョン、ディスク番号が違うディスク、前回からディスク情報が変わった面、反対の面が下を向いている場合は拒否し、その実行からは何も保存しません。フォルダ内のファイルは丸ごと置き換え、直前の `manifest.json` と `rescue.json` は `.bak` として残すので、読み取りの途中で止めても失うのはその読み取りだけです。Web ページは同じフォルダを zip として返し、次の rescue はそれを受け取ります。
+
+```bash
+fdstoolkit rescue rescue-zel/ -o zel.fds --passes 5
+```
+
+```
+side 0: 1 block(s) recovered by a pulse vote
+side 0: every declared block settled after 7 read(s)
+wrote zel.fds (65500 bytes)
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/rescue-dark.png">
+<img alt="ローカル Web ページの rescue コマンド" src="assets/screenshots/rescue-light.png">
+</picture>
+
 #### `write`
 
 ```bash

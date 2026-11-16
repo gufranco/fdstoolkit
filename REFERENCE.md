@@ -468,6 +468,31 @@ Every read and write runs against a deadline. Before anything has been measured 
 <img alt="The dump command on the local web page" src="assets/screenshots/dump-light.png">
 </picture>
 
+#### `rescue`
+
+```bash
+fdstoolkit rescue <folder> -o <out> [--side N] [--passes N] [--force]
+```
+
+Reads one side of a failing disk over as many sessions as it takes. The folder is a capture bundle, so `reads`, `grade` and `consensus --captures` read it as it is, plus `rescue.json`, which records the disk's identity and the disk information of each side read. Every run adds up to `--passes` reads of `--side`, saves each read as soon as it arrives, and rebuilds the side from every read kept with the pulse vote `consensus --captures` runs, stopping early once every declared block settles. A block that no read got right waits for the next run, on another day or another drive, and its earlier reads still vote. The image is written to `-o` once every side in the folder has settled; until then the command exits 1 and names the blocks still open.
+
+The first read of each run is matched against the folder before it is kept. A disk with another game, version or disk number, a side whose disk information changed since the last run, or the other face down is refused, and nothing from that run is kept. Files in the folder are replaced whole, with the previous `manifest.json` and `rescue.json` kept as `.bak`, so a run stopped mid-read loses only that read. The page hands the same folder back as a zip, which the next rescue takes.
+
+```bash
+fdstoolkit rescue rescue-zel/ -o zel.fds --passes 5
+```
+
+```
+side 0: 1 block(s) recovered by a pulse vote
+side 0: every declared block settled after 7 read(s)
+wrote zel.fds (65500 bytes)
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/rescue-dark.png">
+<img alt="The rescue command on the local web page" src="assets/screenshots/rescue-light.png">
+</picture>
+
 #### `write`
 
 ```bash

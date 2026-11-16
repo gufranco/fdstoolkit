@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
+from fdstoolkit.drive.rescue import RescueError
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import SideFlipError, WriteRefusedError
 from fdstoolkit.history.logbook import LogbookError
@@ -24,6 +25,7 @@ FAULTS: Final = (
     SideFlipError,
     SurfaceTestRefusedError,
     LogbookError,
+    RescueError,
 )
 
 logger = logging.getLogger(__name__)

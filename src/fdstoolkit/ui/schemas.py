@@ -443,6 +443,17 @@ class DumpedResult(FileResult):
     captures: FileResult | None = None
 
 
+class RescueSpec(BaseModel):
+    captures: str | None = Field(None, description="the rescue zip an earlier run handed back")
+    side: int = Field(0, ge=0, le=SIDES_PER_DISK - 1)
+    passes: int = Field(3, ge=1, le=MAX_PASSES)
+
+
+class RescueResult(FileResult):
+    settled: bool
+    image: FileResult | None = None
+
+
 class JobView(BaseModel):
     id: str
     command: str
@@ -458,7 +469,7 @@ class JobView(BaseModel):
 
 
 JobResult = Annotated[
-    DumpedResult | CalibrationResult | ReportedFile | SessionResult,
+    DumpedResult | CalibrationResult | ReportedFile | SessionResult | RescueResult,
     Field(union_mode="left_to_right"),
 ]
 

@@ -97,7 +97,7 @@ identity          2 blanks match their published digests
 - **检查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`log`](REFERENCE.md#log)、[`diff`](REFERENCE.md#diff)
 - **修复**：[`rebuild`](REFERENCE.md#rebuild)、[`set`](REFERENCE.md#set)、[`insert`](REFERENCE.md#insert)、[`extract`](REFERENCE.md#extract)、[`patch`](REFERENCE.md#patch)、[`splice`](REFERENCE.md#splice)、[`consensus`](REFERENCE.md#consensus)、[`save`](REFERENCE.md#save)
 - **容器**：[`convert`](REFERENCE.md#convert)、[`blank`](REFERENCE.md#blank)、[`build`](REFERENCE.md#build)
-- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
+- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`rescue`](REFERENCE.md#rescue)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
 
 ## 操作流程
 
@@ -113,7 +113,7 @@ fdstoolkit reads --captures captures/
 fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 ```
 
-三遍读取让采集包里每一面都有三次读取，弱块分布图和脉冲投票需要的正是这些。如果两次转储不一致，`consensus` 按多数合并它们，并列出每个没有定论的块；`consensus pass1.fds pass2.fds --captures captures/` 会把脉冲投票作为又一个投票者加入。如果某次转储里坏掉的块在另一次里是好的，`splice` 会把它取过来。请把采集包和镜像放在一起保存：它是磁盘读取情况的唯一记录，以后不需要磁盘也能重新投票。
+三遍读取让采集包里每一面都有三次读取，弱块分布图和脉冲投票需要的正是这些。如果两次转储不一致，`consensus` 按多数合并它们，并列出每个没有定论的块；`consensus pass1.fds pass2.fds --captures captures/` 会把脉冲投票作为又一个投票者加入。如果某次转储里坏掉的块在另一次里是好的，`splice` 会把它取过来。请把采集包和镜像放在一起保存：它是磁盘读取情况的唯一记录，以后不需要磁盘也能重新投票。一直读取失败的磁盘用 `fdstoolkit rescue rescue-folder/ -o disk.fds`，在之后的日子或其他驱动器上反复运行，直到所有块都确定：每次运行的读取都会保存，并与之前的读取一起投票。
 
 ### 校准驱动器，先粗调后细调
 

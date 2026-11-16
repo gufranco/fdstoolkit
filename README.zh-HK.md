@@ -97,7 +97,7 @@ identity          2 blanks match their published digests
 - **檢查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`log`](REFERENCE.md#log)、[`diff`](REFERENCE.md#diff)
 - **修復**：[`rebuild`](REFERENCE.md#rebuild)、[`set`](REFERENCE.md#set)、[`insert`](REFERENCE.md#insert)、[`extract`](REFERENCE.md#extract)、[`patch`](REFERENCE.md#patch)、[`splice`](REFERENCE.md#splice)、[`consensus`](REFERENCE.md#consensus)、[`save`](REFERENCE.md#save)
 - **容器**：[`convert`](REFERENCE.md#convert)、[`blank`](REFERENCE.md#blank)、[`build`](REFERENCE.md#build)
-- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
+- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`rescue`](REFERENCE.md#rescue)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
 
 ## 操作程序
 
@@ -113,7 +113,7 @@ fdstoolkit reads --captures captures/
 fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 ```
 
-三遍讀取讓擷取包內每一面都有三次讀取，弱區塊分佈圖和脈衝投票需要的正是這些。如果兩次轉存不一致，`consensus` 會按多數合併，並列出每個未有定論的區塊；`consensus pass1.fds pass2.fds --captures captures/` 會把脈衝投票作為另一個投票者加入。如果某次轉存中損壞的區塊在另一次是完好的，`splice` 會把它取過來。請把擷取包和映像檔放在一起保存：它是磁碟讀取情況的唯一紀錄，日後不需要磁碟也能重新投票。
+三遍讀取讓擷取包內每一面都有三次讀取，弱區塊分佈圖和脈衝投票需要的正是這些。如果兩次轉存不一致，`consensus` 會按多數合併，並列出每個未有定論的區塊；`consensus pass1.fds pass2.fds --captures captures/` 會把脈衝投票作為另一個投票者加入。如果某次轉存中損壞的區塊在另一次是完好的，`splice` 會把它取過來。請把擷取包和映像檔放在一起保存：它是磁碟讀取情況的唯一紀錄，日後不需要磁碟也能重新投票。一直讀取失敗的磁碟用 `fdstoolkit rescue rescue-folder/ -o disk.fds`，在之後的日子或其他磁碟機上反覆執行，直到所有區塊都確定：每次執行的讀取都會保存，並與之前的讀取一起投票。
 
 ### 校準磁碟機，先粗調後微調
 

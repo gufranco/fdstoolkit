@@ -27,6 +27,7 @@ from fdstoolkit.ui.schemas import (
     ProfileView,
     ReadsResult,
     ReportedFile,
+    RescueResult,
 )
 
 if TYPE_CHECKING:
@@ -228,6 +229,9 @@ def job_result_samples() -> dict[type[BaseModel], BaseModel]:
             weak=[],
             moved=[],
             since="2026-11-01T10:00:00Z",
+        ),
+        RescueResult: RescueResult(
+            name="rescue.zip", data="AA==", size=1, settled=True, image=file
         ),
     }
 

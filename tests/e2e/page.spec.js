@@ -286,6 +286,21 @@ test('a session check logs a baseline for the drive at phone width', async ({ pa
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('a rescue hands back its reads and the image once the side settles at phone width', async ({ page }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'rescue');
+
+  // Act
+  await page.locator('#panel button.run').click();
+
+  // Assert
+  await expect(page.getByRole('link', { name: 'Download rescue.zip' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Download rescue.fds' })).toBeVisible();
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

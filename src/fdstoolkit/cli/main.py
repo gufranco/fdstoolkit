@@ -15,6 +15,7 @@ from fdstoolkit.cli import (
     log_cmds,
     master_cli,
     quality_cli,
+    rescue_cmds,
     save_cmds,
     session_cmds,
     web_cmds,
@@ -38,6 +39,7 @@ drive_cli.register(app)
 save_cmds.register(app)
 log_cmds.register(app)
 session_cmds.register(app)
+rescue_cmds.register(app)
 
 
 def _version_callback(value: bool) -> None:

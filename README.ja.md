@@ -97,7 +97,7 @@ identity          2 blanks match their published digests
 - **確認**: [`verify`](REFERENCE.ja.md#verify), [`grade`](REFERENCE.ja.md#grade), [`reads`](REFERENCE.ja.md#reads), [`log`](REFERENCE.ja.md#log), [`diff`](REFERENCE.ja.md#diff)
 - **修復**: [`rebuild`](REFERENCE.ja.md#rebuild), [`set`](REFERENCE.ja.md#set), [`insert`](REFERENCE.ja.md#insert), [`extract`](REFERENCE.ja.md#extract), [`patch`](REFERENCE.ja.md#patch), [`splice`](REFERENCE.ja.md#splice), [`consensus`](REFERENCE.ja.md#consensus), [`save`](REFERENCE.ja.md#save)
 - **コンテナ**: [`convert`](REFERENCE.ja.md#convert), [`blank`](REFERENCE.ja.md#blank), [`build`](REFERENCE.ja.md#build)
-- **ハードウェア**: [`status`](REFERENCE.ja.md#status), [`doctor`](REFERENCE.ja.md#doctor), [`dump`](REFERENCE.ja.md#dump), [`write`](REFERENCE.ja.md#write), [`surface`](REFERENCE.ja.md#surface), [`calibrate`](REFERENCE.ja.md#calibrate), [`session`](REFERENCE.ja.md#session), [`web`](REFERENCE.ja.md#web)
+- **ハードウェア**: [`status`](REFERENCE.ja.md#status), [`doctor`](REFERENCE.ja.md#doctor), [`dump`](REFERENCE.ja.md#dump), [`rescue`](REFERENCE.ja.md#rescue), [`write`](REFERENCE.ja.md#write), [`surface`](REFERENCE.ja.md#surface), [`calibrate`](REFERENCE.ja.md#calibrate), [`session`](REFERENCE.ja.md#session), [`web`](REFERENCE.ja.md#web)
 
 ## 手順
 
@@ -113,7 +113,7 @@ fdstoolkit reads --captures captures/
 fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 ```
 
-3 パスにすると、一式には各面の読み取りが 3 回そろいます。弱いブロックの一覧とパルス投票に必要なのはこれです。2 つの吸い出しが食い違う場合、`consensus` が多数決で統合し、決着しなかったブロックをすべて列挙します。`consensus pass1.fds pass2.fds --captures captures/` はパルス投票を投票者の 1 つとして加えます。一方の吸い出しで壊れているブロックが他方で正常なら、`splice` がそれを取り込みます。一式はイメージと一緒に保管してください。ディスクがどう読めたかを記録しているのはこれだけで、あとからディスクなしで投票し直せます。
+3 パスにすると、一式には各面の読み取りが 3 回そろいます。弱いブロックの一覧とパルス投票に必要なのはこれです。2 つの吸い出しが食い違う場合、`consensus` が多数決で統合し、決着しなかったブロックをすべて列挙します。`consensus pass1.fds pass2.fds --captures captures/` はパルス投票を投票者の 1 つとして加えます。一方の吸い出しで壊れているブロックが他方で正常なら、`splice` がそれを取り込みます。一式はイメージと一緒に保管してください。ディスクがどう読めたかを記録しているのはこれだけで、あとからディスクなしで投票し直せます。失敗し続けるディスクには `fdstoolkit rescue rescue-folder/ -o disk.fds` を使い、すべてのブロックが確定するまで別の日や別のドライブで実行し直します。各実行の読み取りは保存され、それまでの読み取りと一緒に投票します。
 
 ### ドライブを調整する。粗調整から微調整へ
 

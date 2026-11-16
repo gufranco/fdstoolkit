@@ -103,7 +103,7 @@ Every command's options, output and the basis for each figure are in [REFERENCE.
 - **Check**: [`verify`](REFERENCE.md#verify), [`grade`](REFERENCE.md#grade), [`reads`](REFERENCE.md#reads), [`log`](REFERENCE.md#log), [`diff`](REFERENCE.md#diff)
 - **Repair**: [`rebuild`](REFERENCE.md#rebuild), [`set`](REFERENCE.md#set), [`insert`](REFERENCE.md#insert), [`extract`](REFERENCE.md#extract), [`patch`](REFERENCE.md#patch), [`splice`](REFERENCE.md#splice), [`consensus`](REFERENCE.md#consensus), [`save`](REFERENCE.md#save)
 - **Container**: [`convert`](REFERENCE.md#convert), [`blank`](REFERENCE.md#blank), [`build`](REFERENCE.md#build)
-- **Hardware**: [`status`](REFERENCE.md#status), [`doctor`](REFERENCE.md#doctor), [`dump`](REFERENCE.md#dump), [`write`](REFERENCE.md#write), [`surface`](REFERENCE.md#surface), [`calibrate`](REFERENCE.md#calibrate), [`session`](REFERENCE.md#session), [`web`](REFERENCE.md#web)
+- **Hardware**: [`status`](REFERENCE.md#status), [`doctor`](REFERENCE.md#doctor), [`dump`](REFERENCE.md#dump), [`rescue`](REFERENCE.md#rescue), [`write`](REFERENCE.md#write), [`surface`](REFERENCE.md#surface), [`calibrate`](REFERENCE.md#calibrate), [`session`](REFERENCE.md#session), [`web`](REFERENCE.md#web)
 
 ## Procedures
 
@@ -119,7 +119,7 @@ fdstoolkit reads --captures captures/
 fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 ```
 
-Three passes give the bundle three reads of every side, which is what the weak-block map and the pulse vote need. If the two dumps disagree, `consensus` merges them by majority and names every block that did not settle, and `consensus pass1.fds pass2.fds --captures captures/` adds the pulse vote as one more voter. If one dump has a block another has good, `splice` takes it. Keep the bundle with the images: it is the only record of how the disk read, and it can be voted again later without the disk.
+Three passes give the bundle three reads of every side, which is what the weak-block map and the pulse vote need. If the two dumps disagree, `consensus` merges them by majority and names every block that did not settle, and `consensus pass1.fds pass2.fds --captures captures/` adds the pulse vote as one more voter. If one dump has a block another has good, `splice` takes it. Keep the bundle with the images: it is the only record of how the disk read, and it can be voted again later without the disk. A disk that keeps failing gets `fdstoolkit rescue rescue-folder/ -o disk.fds`, run again on later days or other drives until every block settles: each run's reads are kept and vote with the earlier ones.
 
 ### Calibrating a drive, coarse then fine
 

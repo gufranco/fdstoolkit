@@ -271,6 +271,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/rescue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rescue_job_api_jobs_rescue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/session": {
         parameters: {
             query?: never;
@@ -741,7 +757,7 @@ export interface components {
             id: string;
             kept?: components["schemas"]["FileResult"] | null;
             prompt: string;
-            result?: components["schemas"]["DumpedResult"] | components["schemas"]["CalibrationResult"] | components["schemas"]["ReportedFile"] | components["schemas"]["SessionResult"] | null;
+            result?: components["schemas"]["DumpedResult"] | components["schemas"]["CalibrationResult"] | components["schemas"]["ReportedFile"] | components["schemas"]["SessionResult"] | components["schemas"]["RescueResult"] | null;
             state: string;
             steps?: string[];
             stoppable: boolean;
@@ -826,6 +842,19 @@ export interface components {
             rows?: {
                 [key: string]: unknown;
             }[];
+        };
+        RescueResult: {
+            data: string;
+            image?: components["schemas"]["FileResult"] | null;
+            name: string;
+            notes?: string[];
+            settled: boolean;
+            size: number;
+        };
+        RescueSpec: {
+            captures?: string | null;
+            passes: number;
+            side: number;
         };
         RowsResult: {
             headline: string;
@@ -1380,6 +1409,37 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DumpSpec"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rescue_job_api_jobs_rescue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RescueSpec"];
             };
         };
         responses: {
