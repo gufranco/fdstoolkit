@@ -4,13 +4,14 @@ from typing import TYPE_CHECKING
 
 from fdstoolkit.drive.recovery import Rebuild, rebuild
 from fdstoolkit.drive.track import track_of, track_payload
+from fdstoolkit.drive.triage import triage, triage_payload
 from fdstoolkit.history.logbook import LogbookError
 from fdstoolkit.history.lookup import log_payload, look_up, subject_for
 from fdstoolkit.history.trend import trend_lines
 from fdstoolkit.master.splice import splice
 from fdstoolkit.quality.consensus import build_consensus
 from fdstoolkit.ui.history_schemas import LogResult, LogSpec
-from fdstoolkit.ui.reads_schemas import TrackResult, TrackSpec
+from fdstoolkit.ui.reads_schemas import TrackResult, TrackSpec, TriageResult, TriageSpec
 from fdstoolkit.ui.schemas import (
     ConsensusSpec,
     FileResult,
@@ -111,3 +112,12 @@ def track(spec: TrackSpec) -> TrackResult:
     except ValueError as error:
         refuse(str(error), status=UNPROCESSABLE)
     return TrackResult.model_validate(track_payload(found))
+
+
+def triaged(spec: TriageSpec) -> TriageResult:
+    bundles = {f"disk {number}": bundle_of(entry) for number, entry in enumerate(spec.bundles, 1)}
+    try:
+        found = triage(bundles)
+    except ValueError as error:
+        refuse(str(error), status=UNPROCESSABLE)
+    return TriageResult.model_validate(triage_payload(found))

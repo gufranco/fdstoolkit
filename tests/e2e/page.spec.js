@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { expect, test } from '@playwright/test';
 import { fileStems, gameNames, seeded } from '../page/fakes';
 
@@ -315,6 +317,27 @@ test('a track draws a side from captures and names its weak block at phone width
   await expect(page.getByRole('list', { name: 'Weak blocks' })).toHaveText(
     'block 3, file data: 1 pulse(s) differ across 3 read(s), 0 invalid',
   );
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
+test('triage of two disks failing in the same place names the drive at phone width', async ({ page }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'triage');
+  const buffer = readFileSync('tests/fixtures/captures/weak-block.zip');
+  await page.locator('input[data-field=bundles]').setInputFiles([
+    { name: `${STEM}.captures.zip`, mimeType: 'application/zip', buffer },
+    { name: `${OTHER_STEM}.captures.zip`, mimeType: 'application/zip', buffer },
+  ]);
+
+  // Act
+  await page.locator('#panel button.run').click();
+
+  // Assert
+  const output = page.locator('#panel .output');
+  await expect(output).toContainText('1 position(s) fail on every disk: the drive');
+  await expect(output).toContainText('fails on every disk (disk 1, disk 2), so it is the drive');
   expect(await shortControls(page, '#panel')).toEqual([]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });

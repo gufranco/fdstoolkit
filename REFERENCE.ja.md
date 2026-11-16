@@ -225,6 +225,29 @@ block 3  file data    31787-33334  1 pulse(s) differ across 3 read(s), 0 invalid
 <img alt="ローカル Web ページの track コマンド" src="assets/screenshots/track-light.png">
 </picture>
 
+#### `triage`
+
+```bash
+fdstoolkit triage <bundle> <bundle>... [--json]
+```
+
+ドライブの不具合とディスクの不具合を切り分けます。一式はそれぞれ 1 枚のディスクを `dump --raw` で保存したキャプチャで、すべて同じドライブで読んだものです。トラックを読み取りの先頭から 16,384 値ずつ、つまり面のおよそ 20 分の 1 ずつの区間に分けます。ドライブが準備完了になる位置は回転ごとに数百ビット動きますが、区間よりずっと小さな幅です。ある区間で始まるブロックが、`reads --captures` の数え方で弱いか、チェックサムで失敗するなら、そのディスクはその区間で失敗しています。すべてのディスクで失敗する区間はドライブ、1 枚だけで失敗する区間はそのディスク、一部のディスクだけで失敗する区間は、さらに多くのディスクを読むまで判断を保留します。一式が 1 つだけなら拒否します。1 枚のディスクでは両者を区別できないからです。すべてのディスクで失敗する区間があれば、終了コード 1 で終わります。
+
+```bash
+fdstoolkit triage zel/ smb/ kid/
+```
+
+```
+3 disks, 1 position(s) fail on every disk: the drive
+side 0 values 16384-32767: fails on every disk (zel/, smb/, kid/), so it is the drive
+side 0 values 49152-65535: fails only on kid/, so it is that disk
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/triage-dark.png">
+<img alt="ローカル Web ページの triage コマンド" src="assets/screenshots/triage-light.png">
+</picture>
+
 #### `diff`
 
 ```bash

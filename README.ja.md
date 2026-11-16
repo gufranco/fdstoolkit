@@ -94,7 +94,7 @@ identity          2 blanks match their published digests
 各コマンドの引数、出力、根拠は [REFERENCE.ja.md](REFERENCE.ja.md) にあります。どのコマンドも `--help` で同じ説明を表示します。
 
 - **検査**: [`info`](REFERENCE.ja.md#info), [`boot`](REFERENCE.ja.md#boot), [`hash`](REFERENCE.ja.md#hash), [`provenance`](REFERENCE.ja.md#provenance)
-- **確認**: [`verify`](REFERENCE.ja.md#verify), [`grade`](REFERENCE.ja.md#grade), [`reads`](REFERENCE.ja.md#reads), [`log`](REFERENCE.ja.md#log), [`track`](REFERENCE.ja.md#track), [`diff`](REFERENCE.ja.md#diff)
+- **確認**: [`verify`](REFERENCE.ja.md#verify), [`grade`](REFERENCE.ja.md#grade), [`reads`](REFERENCE.ja.md#reads), [`log`](REFERENCE.ja.md#log), [`track`](REFERENCE.ja.md#track), [`triage`](REFERENCE.ja.md#triage), [`diff`](REFERENCE.ja.md#diff)
 - **修復**: [`rebuild`](REFERENCE.ja.md#rebuild), [`set`](REFERENCE.ja.md#set), [`insert`](REFERENCE.ja.md#insert), [`extract`](REFERENCE.ja.md#extract), [`patch`](REFERENCE.ja.md#patch), [`splice`](REFERENCE.ja.md#splice), [`consensus`](REFERENCE.ja.md#consensus), [`save`](REFERENCE.ja.md#save)
 - **コンテナ**: [`convert`](REFERENCE.ja.md#convert), [`blank`](REFERENCE.ja.md#blank), [`build`](REFERENCE.ja.md#build)
 - **ハードウェア**: [`status`](REFERENCE.ja.md#status), [`doctor`](REFERENCE.ja.md#doctor), [`dump`](REFERENCE.ja.md#dump), [`rescue`](REFERENCE.ja.md#rescue), [`write`](REFERENCE.ja.md#write), [`surface`](REFERENCE.ja.md#surface), [`calibrate`](REFERENCE.ja.md#calibrate), [`session`](REFERENCE.ja.md#session), [`web`](REFERENCE.ja.md#web)
@@ -127,7 +127,7 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 
 ### ドライブとディスクのどちらが原因かを判断する
 
-1 枚のディスクではこの問いに答えられません。複数枚を読んで、どこで失敗したかを比べてください。どのディスクでも同じ場所で失敗するならドライブ、1 枚だけで起きるならそのディスク、ドライブが応答しなくなるならそのどちらでもありません。最後の場合の正しい対応は、別のディスクを入れて試すことではなく、中止することです。
+1 枚のディスクではこの問いに答えられません。複数枚を読んで、どこで失敗したかを比べてください。どのディスクでも同じ場所で失敗するならドライブ、1 枚だけで起きるならそのディスク、ドライブが応答しなくなるならそのどちらでもありません。最後の場合の正しい対応は、別のディスクを入れて試すことではなく、中止することです。`fdstoolkit triage a/ b/ c/` は、同じドライブで各ディスクを `dump --raw` したキャプチャ一式からこの比較を行います。
 
 ### DupliFDS で作ったコピーの確認
 

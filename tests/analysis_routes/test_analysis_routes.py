@@ -231,3 +231,30 @@ def test_the_track_of_a_side_never_read_is_refused(client: TestClient) -> None:
     # Assert
     assert answer.status_code == UNPROCESSABLE
     assert answer.json()["detail"] == "the captures hold no read of side 1"
+
+
+def test_triage_of_uploaded_bundles_names_the_drive(client: TestClient) -> None:
+    # Arrange
+    bundle = base64.b64encode(zipped(disk_with_a_file(), (None, 10, None))).decode()
+
+    # Act
+    answer = client.post("/api/triage", json={"bundles": [bundle, bundle, bundle]})
+
+    # Assert
+    assert answer.status_code == OK
+    body = answer.json()
+    assert [zone["culprit"] for zone in body["zones"]] == ["drive"]
+    assert body["zones"][0]["failing"] == ["disk 1", "disk 2", "disk 3"]
+    assert body["ok"] is False
+
+
+def test_triage_of_one_bundle_is_refused(client: TestClient) -> None:
+    # Arrange
+    bundle = base64.b64encode(zipped(disk_with_a_file(), (None,))).decode()
+
+    # Act
+    answer = client.post("/api/triage", json={"bundles": [bundle]})
+
+    # Assert
+    assert answer.status_code == UNPROCESSABLE
+    assert answer.json()["detail"].startswith("one disk cannot separate the drive from the disk")

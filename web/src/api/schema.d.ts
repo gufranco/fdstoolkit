@@ -543,6 +543,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/triage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["triaged_api_triage_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/verify": {
         parameters: {
             query?: never;
@@ -946,6 +962,23 @@ export interface components {
         TrackSpec: {
             captures: string;
             side: number;
+        };
+        TriageResult: {
+            disks: string[];
+            headline: string;
+            ok: boolean;
+            zones: components["schemas"]["TriageZoneView"][];
+        };
+        TriageSpec: {
+            bundles?: string[];
+        };
+        TriageZoneView: {
+            culprit: string;
+            end: number;
+            failing: string[];
+            finding: string;
+            side: number;
+            start: number;
         };
         ValidationError: {
             ctx?: Record<string, never>;
@@ -1975,6 +2008,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrackResult"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    triaged_api_triage_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriageSpec"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriageResult"];
                 };
             };
             422: {

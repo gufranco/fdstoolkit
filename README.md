@@ -100,7 +100,7 @@ open without a udev rule; `doctor` fails that check and prints the rule to insta
 Every command's options, output and the basis for each figure are in [REFERENCE.md](REFERENCE.md), and `--help` on any command prints its summary.
 
 - **Inspect**: [`info`](REFERENCE.md#info), [`boot`](REFERENCE.md#boot), [`hash`](REFERENCE.md#hash), [`provenance`](REFERENCE.md#provenance)
-- **Check**: [`verify`](REFERENCE.md#verify), [`grade`](REFERENCE.md#grade), [`reads`](REFERENCE.md#reads), [`log`](REFERENCE.md#log), [`track`](REFERENCE.md#track), [`diff`](REFERENCE.md#diff)
+- **Check**: [`verify`](REFERENCE.md#verify), [`grade`](REFERENCE.md#grade), [`reads`](REFERENCE.md#reads), [`log`](REFERENCE.md#log), [`track`](REFERENCE.md#track), [`triage`](REFERENCE.md#triage), [`diff`](REFERENCE.md#diff)
 - **Repair**: [`rebuild`](REFERENCE.md#rebuild), [`set`](REFERENCE.md#set), [`insert`](REFERENCE.md#insert), [`extract`](REFERENCE.md#extract), [`patch`](REFERENCE.md#patch), [`splice`](REFERENCE.md#splice), [`consensus`](REFERENCE.md#consensus), [`save`](REFERENCE.md#save)
 - **Container**: [`convert`](REFERENCE.md#convert), [`blank`](REFERENCE.md#blank), [`build`](REFERENCE.md#build)
 - **Hardware**: [`status`](REFERENCE.md#status), [`doctor`](REFERENCE.md#doctor), [`dump`](REFERENCE.md#dump), [`rescue`](REFERENCE.md#rescue), [`write`](REFERENCE.md#write), [`surface`](REFERENCE.md#surface), [`calibrate`](REFERENCE.md#calibrate), [`session`](REFERENCE.md#session), [`web`](REFERENCE.md#web)
@@ -133,7 +133,7 @@ Three passes give the bundle three reads of every side, which is what the weak-b
 
 ### Deciding whether it is the drive or the disk
 
-One disk cannot answer this. Read several and compare where they failed: a place that fails on every disk is the drive, failures confined to one disk are that disk, and a drive that stops answering is neither. In the last case the correct response is to stop, not to try another disk in it.
+One disk cannot answer this. Read several and compare where they failed: a place that fails on every disk is the drive, failures confined to one disk are that disk, and a drive that stops answering is neither. In the last case the correct response is to stop, not to try another disk in it. `fdstoolkit triage a/ b/ c/` makes that comparison from the capture bundles that `dump --raw` kept of each disk in the same drive.
 
 ### Checking a DupliFDS copy
 

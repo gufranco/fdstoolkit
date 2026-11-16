@@ -19,6 +19,7 @@ from fdstoolkit.cli import (
     save_cmds,
     session_cmds,
     track_cmds,
+    triage_cmds,
     web_cmds,
 )
 
@@ -42,6 +43,7 @@ log_cmds.register(app)
 session_cmds.register(app)
 rescue_cmds.register(app)
 track_cmds.register(app)
+triage_cmds.register(app)
 
 
 def _version_callback(value: bool) -> None:

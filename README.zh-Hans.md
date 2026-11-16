@@ -94,7 +94,7 @@ identity          2 blanks match their published digests
 每个命令的选项、输出以及各项数据的依据都在 [REFERENCE.md](REFERENCE.md) 中，参考文档提供英文版和日文版。任何命令加上 `--help` 都会打印其简介。
 
 - **查看**：[`info`](REFERENCE.md#info)、[`boot`](REFERENCE.md#boot)、[`hash`](REFERENCE.md#hash)、[`provenance`](REFERENCE.md#provenance)
-- **检查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`log`](REFERENCE.md#log)、[`track`](REFERENCE.md#track)、[`diff`](REFERENCE.md#diff)
+- **检查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`log`](REFERENCE.md#log)、[`track`](REFERENCE.md#track)、[`triage`](REFERENCE.md#triage)、[`diff`](REFERENCE.md#diff)
 - **修复**：[`rebuild`](REFERENCE.md#rebuild)、[`set`](REFERENCE.md#set)、[`insert`](REFERENCE.md#insert)、[`extract`](REFERENCE.md#extract)、[`patch`](REFERENCE.md#patch)、[`splice`](REFERENCE.md#splice)、[`consensus`](REFERENCE.md#consensus)、[`save`](REFERENCE.md#save)
 - **容器**：[`convert`](REFERENCE.md#convert)、[`blank`](REFERENCE.md#blank)、[`build`](REFERENCE.md#build)
 - **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`rescue`](REFERENCE.md#rescue)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
@@ -127,7 +127,7 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 
 ### 判断是驱动器的问题还是磁盘的问题
 
-一张磁盘回答不了这个问题。读取几张磁盘并比较失败的位置：每张磁盘都在同一处失败，是驱动器的问题；失败只出现在一张磁盘上，是那张磁盘的问题；驱动器不再响应，则两者都不是。最后一种情况的正确做法是停下来，而不是再放一张磁盘进去试。
+一张磁盘回答不了这个问题。读取几张磁盘并比较失败的位置：每张磁盘都在同一处失败，是驱动器的问题；失败只出现在一张磁盘上，是那张磁盘的问题；驱动器不再响应，则两者都不是。最后一种情况的正确做法是停下来，而不是再放一张磁盘进去试。`fdstoolkit triage a/ b/ c/` 用同一台驱动器对每张磁盘执行 `dump --raw` 所保存的采集包来做这个比较。
 
 ### 检查 DupliFDS 拷贝的磁盘
 

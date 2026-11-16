@@ -37,7 +37,7 @@ FILE_FIELDS: Final = frozenset(
 UNGROUPED: Final = "other"
 ANSWERED_BY_DIALOG: Final = frozenset({"confirm"})
 FAMILY_ORDER: Final = tuple(family.value.lower() for family in Family)
-FILE_LIST_FIELDS: Final = frozenset({"images", "reads", "donors"})
+FILE_LIST_FIELDS: Final = frozenset({"images", "reads", "donors", "bundles"})
 
 CHOICES: Final[dict[str, tuple[str, ...]]] = {
     "profile": tuple(sorted(PROFILES)),
@@ -66,6 +66,7 @@ ACCEPTS: Final[dict[str, str]] = {
     "recipes": ".json",
     "manifest": ".json,.zip",
     "captures": ".zip",
+    "bundles": ".zip",
 }
 
 

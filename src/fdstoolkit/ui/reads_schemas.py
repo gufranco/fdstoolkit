@@ -74,3 +74,25 @@ class TrackResult(BaseModel):
     length: int
     bins: list[BinView]
     blocks: list[TrackBlockView]
+
+
+class TriageSpec(BaseModel):
+    bundles: list[str] = Field(
+        default_factory=list, description="the capture bundles of two or more disks, as zips"
+    )
+
+
+class TriageZoneView(BaseModel):
+    side: int
+    start: int
+    end: int
+    culprit: str
+    failing: list[str]
+    finding: str
+
+
+class TriageResult(BaseModel):
+    headline: str
+    ok: bool
+    disks: list[str]
+    zones: list[TriageZoneView]

@@ -225,6 +225,29 @@ block 3  file data    31787-33334  1 pulse(s) differ across 3 read(s), 0 invalid
 <img alt="The track command on the local web page" src="assets/screenshots/track-light.png">
 </picture>
 
+#### `triage`
+
+```bash
+fdstoolkit triage <bundle> <bundle>... [--json]
+```
+
+Separates the drive's faults from the disks'. Each bundle is the captures `dump --raw` kept of one disk, every disk read in the same drive. The track is cut into stretches of 16,384 values from the start of the read, about a twentieth of a side; the point where the drive turns ready moves by hundreds of bits between spins, far less than a stretch. A disk fails in a stretch when a block that starts there is weak in its reads, as `reads --captures` counts it, or fails its checksum. A stretch that fails on every disk is the drive, one that fails on a single disk is that disk, and one that fails on some disks but not all is left open until more disks are read. One bundle is refused, because one disk cannot tell the two apart. The command exits 1 when any stretch fails on every disk.
+
+```bash
+fdstoolkit triage zel/ smb/ kid/
+```
+
+```
+3 disks, 1 position(s) fail on every disk: the drive
+side 0 values 16384-32767: fails on every disk (zel/, smb/, kid/), so it is the drive
+side 0 values 49152-65535: fails only on kid/, so it is that disk
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/triage-dark.png">
+<img alt="The triage command on the local web page" src="assets/screenshots/triage-light.png">
+</picture>
+
 #### `diff`
 
 ```bash
