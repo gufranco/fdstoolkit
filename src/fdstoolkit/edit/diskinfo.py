@@ -8,15 +8,19 @@ from typing import Final
 from fdstoolkit.build.fields import as_int
 from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.core.diskinfo import FIELDS_BY_NAME
+from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, bcd_to_int, to_bcd
 from fdstoolkit.core.showa import encode_date, parse_date
 
 BYTE_MAX: Final = 0xFF
 
 
+MAX_COUNT: Final = 99
+
+
 class FieldShape(StrEnum):
     TEXT = "text"
     NUMBER = "number"
+    COUNT = "count"
     DATE = "date"
 
 
@@ -32,7 +36,7 @@ EDITABLE_FIELDS: Final[Mapping[str, FieldShape]] = {
     "country": FieldShape.NUMBER,
     "manufacturing_date": FieldShape.DATE,
     "rewritten_date": FieldShape.DATE,
-    "rewrite_count": FieldShape.NUMBER,
+    "rewrite_count": FieldShape.COUNT,
     "actual_side": FieldShape.NUMBER,
     "disk_type_other": FieldShape.NUMBER,
     "disk_version": FieldShape.NUMBER,
@@ -71,6 +75,14 @@ def _encode_number(name: str, value: object) -> bytes:
     return bytes([number])
 
 
+def _encode_count(name: str, value: object) -> bytes:
+    number = as_int(value, key=name, where="")
+    if not 0 <= number <= MAX_COUNT:
+        message = f"{name} is two BCD digits, so it is between 0 and {MAX_COUNT}, got {number}"
+        raise ValueError(message)
+    return bytes([to_bcd(number)])
+
+
 def _encode_date(name: str, value: object) -> bytes:
     return encode_date(*parse_date(str(value), field=name))
 
@@ -81,6 +93,8 @@ def _encode(name: str, value: object, length: int) -> bytes:
         return _encode_text(name, value, length)
     if shape is FieldShape.DATE:
         return _encode_date(name, value)
+    if shape is FieldShape.COUNT:
+        return _encode_count(name, value)
     return _encode_number(name, value)
 
 
@@ -92,6 +106,9 @@ def _describe(payload: bytes, name: str) -> str:
         return raw.decode("ascii", errors="replace").rstrip(" \0")
     if shape is FieldShape.DATE:
         return raw.hex()
+    if shape is FieldShape.COUNT:
+        counted = bcd_to_int(raw[0])
+        return raw.hex() if counted is None else str(counted)
     return str(raw[0])
 
 

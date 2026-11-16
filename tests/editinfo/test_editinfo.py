@@ -5,7 +5,8 @@ from fakes import game_name, seeded
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
-from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.blocks import Block, BlockKind
+from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.core.diskinfo import DiskInfo
 from fdstoolkit.core.showa import ShowaDateError
 from fdstoolkit.edit.diskinfo import EDITABLE_FIELDS, apply_edits, parse_edit
@@ -18,6 +19,14 @@ OTHER_GAME = game_name(FAKE)
 def sample() -> Disk:
     disk, _ = decode(blank_image(sides=1, headered=False, formatted=True, game_name=OTHER_GAME))
     return disk
+
+
+def disk_with_info(disk: Disk, payload: bytes) -> Disk:
+    first = Block(kind=BlockKind.DISK_INFO, payload=payload)
+    side = disk.sides[0]
+    return Disk(
+        sides=(Side(blocks=(first, *side.blocks[1:]), tail=side.tail, capacity=side.capacity),)
+    )
 
 
 def info_of(disk: Disk, side: int = 0) -> DiskInfo:
@@ -234,3 +243,45 @@ def test_a_date_that_is_not_a_date_is_refused() -> None:
 
     # Assert
     assert raised.type is ShowaDateError
+
+
+def test_the_rewrite_count_is_written_in_bcd() -> None:
+    # Arrange
+    disk = sample()
+    edits = {"rewrite_count": 12}
+
+    # Act
+    updated, changes = apply_edits(disk, side=0, edits=edits)
+
+    # Assert
+    assert info_of(updated).raw("rewrite_count") == bytes([0x12])
+    assert (changes[0].before, changes[0].after) == ("0", "12")
+
+
+def test_a_rewrite_count_past_two_digits_is_refused() -> None:
+    # Arrange
+    disk = sample()
+    edits = {"rewrite_count": 100}
+
+    # Act
+    with pytest.raises(ValueError, match="two BCD digits") as raised:
+        apply_edits(disk, side=0, edits=edits)
+
+    # Assert
+    assert (
+        str(raised.value) == "rewrite_count is two BCD digits, so it is between 0 and 99, got 100"
+    )
+
+
+def test_an_unreadable_rewrite_count_is_shown_as_its_byte() -> None:
+    # Arrange
+    disk, _ = apply_edits(sample(), side=0, edits={"rewrite_count": 5})
+    info = bytearray(info_of(disk).payload)
+    info[0x34] = 0xAB
+    broken = disk_with_info(disk, bytes(info))
+
+    # Act
+    _, changes = apply_edits(broken, side=0, edits={"rewrite_count": 1})
+
+    # Assert
+    assert changes[0].before == "ab"
