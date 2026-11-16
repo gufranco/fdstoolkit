@@ -35,3 +35,4 @@ playwright-report/
 coverage/
 
 /src/fdstoolkit/ui/page/
+!/tests/fixtures/captures/*.zip

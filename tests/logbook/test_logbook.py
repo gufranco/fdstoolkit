@@ -207,6 +207,7 @@ def test_without_a_data_folder_the_logbook_lives_under_home(
     monkeypatch.delenv(LOGBOOK_ENV, raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
 
     # Act
     found = logbook_path()
