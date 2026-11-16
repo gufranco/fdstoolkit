@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import partial
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, Request
@@ -18,9 +19,15 @@ from fdstoolkit.drive.recovery import recover
 from fdstoolkit.drive.timing import TimingReader
 from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
-from fdstoolkit.hardware.session import LongSideError, SideFlipError, WriteRefusedError, read_disk
+from fdstoolkit.hardware.session import (
+    LongSideError,
+    Reading,
+    SideFlipError,
+    WriteRefusedError,
+    read_disk,
+)
 from fdstoolkit.hardware.writing import refuse_long_sides, write_verified
-from fdstoolkit.quality.surface import Finish, SurfacePlan, surface_test
+from fdstoolkit.quality.surface import Finish, SurfacePlan, SurfaceReport, surface_test
 from fdstoolkit.ui.jobs import (
     Controls,
     Job,
@@ -169,45 +176,43 @@ def _keep_failed_captures(spec: DumpSpec, drive: FdsStick, controls: Controls) -
         controls.keep(named_file(CAPTURES_NAME, bundle).model_dump())
 
 
-def dump_job(spec: DumpSpec, request: Request) -> JobView:
-    def work(drive: FdsStick, controls: Controls) -> DumpedResult:
-        try:
-            reading = read_disk(
-                drive,
-                sides=spec.sides,
-                passes=spec.passes,
-                retries=spec.retries,
-                flip=controls.ask,
-                progress=controls.step,
-            )
-        except DUMP_STOPS:
-            _keep_failed_captures(spec, drive, controls)
-            raise
-        outcome = recover(reading.result, drive.captures)
-        report = [
-            *reading.lines,
-            *(line.strip() for line in outcome.lines),
-            *(line for side in outcome.result.sides for line in side.lines),
-        ]
-        for line in (*report, *_drive_lines(drive)):
-            controls.step(line)
-        name = DUMP_QD_NAME if spec.qd else DUMP_NAME
-        image = encoded_file(name, outcome.result.as_disk())
-        kept = (
-            named_file(
-                CAPTURES_NAME,
-                bundle_zip(drive.captures, image=name, created=created_now()),
-            )
-            if spec.keep_captures and drive.captures
-            else None
+def _read_for_dump(spec: DumpSpec, drive: FdsStick, controls: Controls) -> Reading:
+    try:
+        return read_disk(
+            drive,
+            sides=spec.sides,
+            passes=spec.passes,
+            retries=spec.retries,
+            flip=controls.ask,
+            progress=controls.step,
         )
-        return DumpedResult(
-            **image.model_dump(),
-            grade=str(reading.settled(outcome.result, changed=bool(outcome.recovered))),
-            captures=kept,
-        )
+    except DUMP_STOPS:
+        _keep_failed_captures(spec, drive, controls)
+        raise
 
-    return _start(request, "dump", writes=False, work=work)
+
+def _dump(spec: DumpSpec, drive: FdsStick, controls: Controls) -> DumpedResult:
+    reading = _read_for_dump(spec, drive, controls)
+    outcome = recover(reading.result, drive.captures)
+    report = [
+        *reading.lines,
+        *(line.strip() for line in outcome.lines),
+        *(line for side in outcome.result.sides for line in side.lines),
+    ]
+    for line in (*report, *_drive_lines(drive)):
+        controls.step(line)
+    name = DUMP_QD_NAME if spec.qd else DUMP_NAME
+    image = encoded_file(name, outcome.result.as_disk())
+    kept = None
+    if spec.keep_captures and drive.captures:
+        bundle = bundle_zip(drive.captures, image=name, created=created_now())
+        kept = named_file(CAPTURES_NAME, bundle)
+    grade = reading.settled(outcome.result, changed=bool(outcome.recovered))
+    return DumpedResult(**image.model_dump(), grade=str(grade), captures=kept)
+
+
+def dump_job(spec: DumpSpec, request: Request) -> JobView:
+    return _start(request, "dump", writes=False, work=partial(_dump, spec))
 
 
 def _write_target(spec: WriteSpec) -> Disk:
@@ -232,43 +237,80 @@ def _write_target(spec: WriteSpec) -> Disk:
     return disk
 
 
+def _write(spec: WriteSpec, disk: Disk, drive: FdsStick, controls: Controls) -> ReportedFile:
+    for line in TRUSTED_DRIVE if spec.calibration else ():
+        controls.step(line)
+    backup = Backup(controls)
+    report = write_verified(
+        drive,
+        drive,
+        disk,
+        confirm=lambda _: True,
+        backup=backup.keep,
+        retries=spec.retries,
+        flip=controls.ask,
+        progress=controls.step,
+    )
+    for note in report.notes:
+        controls.step(note)
+    headline = (
+        f"the disk reads back as written, on this drive, grade {report.grade}"
+        if report.verified
+        else f"{len(report.mismatched_blocks)} block(s) did not read back as written"
+    )
+    rows: list[dict[str, object]] = [
+        {"side": side, "block": block, "finding": text} for side, block, text in report.findings
+    ]
+    file = named_file(BACKUP_NAME, backup.data)
+    return ReportedFile(headline=headline, file=file, rows=rows, ok=report.verified)
+
+
 def write_job(spec: WriteSpec, request: Request) -> JobView:
     _confirmed("writing a disk", confirm=spec.confirm)
     disk = _write_target(spec)
+    return _start(request, "write", writes=True, work=partial(_write, spec, disk))
 
-    def work(drive: FdsStick, controls: Controls) -> ReportedFile:
-        if spec.calibration:
-            for line in TRUSTED_DRIVE:
-                controls.step(line)
-        backup = Backup(controls)
-        report = write_verified(
-            drive,
-            drive,
-            disk,
-            confirm=lambda _: True,
-            backup=backup.keep,
-            retries=spec.retries,
-            flip=controls.ask,
-            progress=controls.step,
-        )
-        for note in report.notes:
-            controls.step(note)
-        headline = (
-            f"the disk reads back as written, on this drive, grade {report.grade}"
-            if report.verified
-            else f"{len(report.mismatched_blocks)} block(s) did not read back as written"
-        )
-        return ReportedFile(
-            headline=headline,
-            file=named_file(BACKUP_NAME, backup.data),
-            rows=[
-                {"side": side, "block": block, "finding": text}
-                for side, block, text in report.findings
-            ],
-            ok=report.verified,
-        )
 
-    return _start(request, "write", writes=True, work=work)
+def _surface_row(report: SurfaceReport) -> dict[str, object]:
+    return {
+        "grade": str(report.grade),
+        "coverage": report.coverage,
+        "data_bytes": report.data_bytes,
+        "hard_blocks": len(report.hard_blocks),
+        "transient_blocks": len(report.transient_blocks),
+        "recovered_blocks": len(report.recovered_blocks),
+        "finish": str(report.finish),
+        "finish_ran": report.finish_ran,
+        "finish_verified": report.finish_verified,
+        "finish_problem": report.finish_problem or None,
+        "refusal": report.refusal,
+        "pulses": report.pulse_summary or None,
+        "where": report.wear_hint or None,
+        "advice": report.advice or None,
+    }
+
+
+def _surface(
+    spec: SurfaceSpec, finish: Finish, drive: FdsStick, controls: Controls
+) -> ReportedFile:
+    backup = Backup(controls)
+    plan = SurfacePlan(
+        rounds=spec.passes, fill=not spec.quick, finish=finish, stopped=controls.stopped
+    )
+    report = surface_test(
+        drive,
+        drive,
+        sides=spec.sides,
+        confirm=lambda _: True,
+        backup=backup.keep,
+        plan=plan,
+        flip=controls.ask,
+        progress=controls.step,
+    )
+    stopped = report.stopped
+    headline = f"stopped early: {stopped.value}" if stopped is not None else f"grade {report.grade}"
+    file = named_file(BACKUP_NAME, backup.data)
+    return ReportedFile(headline=headline, file=file, rows=[_surface_row(report)], ok=report.passed)
 
 
 def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
@@ -277,54 +319,34 @@ def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
         finish = Finish(spec.finish)
     except ValueError as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-
-    def work(drive: FdsStick, controls: Controls) -> ReportedFile:
-        backup = Backup(controls)
-        report = surface_test(
-            drive,
-            drive,
-            sides=spec.sides,
-            confirm=lambda _: True,
-            backup=backup.keep,
-            plan=SurfacePlan(
-                rounds=spec.passes,
-                fill=not spec.quick,
-                finish=finish,
-                stopped=controls.stopped,
-            ),
-            flip=controls.ask,
-            progress=controls.step,
-        )
-        headline = (
-            f"stopped early: {report.stopped.value}"
-            if report.stopped is not None
-            else f"grade {report.grade}"
-        )
-        return ReportedFile(
-            headline=headline,
-            file=named_file(BACKUP_NAME, backup.data),
-            rows=[
-                {
-                    "grade": str(report.grade),
-                    "coverage": report.coverage,
-                    "data_bytes": report.data_bytes,
-                    "hard_blocks": len(report.hard_blocks),
-                    "transient_blocks": len(report.transient_blocks),
-                    "recovered_blocks": len(report.recovered_blocks),
-                    "finish": str(report.finish),
-                    "finish_ran": report.finish_ran,
-                    "finish_verified": report.finish_verified,
-                    "finish_problem": report.finish_problem or None,
-                    "refusal": report.refusal,
-                    "pulses": report.pulse_summary or None,
-                    "where": report.wear_hint or None,
-                    "advice": report.advice or None,
-                }
-            ],
-            ok=report.passed,
-        )
-
+    work = partial(_surface, spec, finish)
     return _start(request, "surface", writes=True, work=work, stoppable=True)
+
+
+def _reference_side(spec: CalibrateSpec) -> Side | None:
+    if spec.reference is None:
+        return None
+    disk, _, _ = decode_payload(spec.reference)
+    if spec.side >= disk.side_count:
+        message = f"the reference has {disk.side_count} side(s), so it has no side {spec.side}"
+        raise HTTPException(status_code=UNPROCESSABLE, detail=message)
+    return disk.sides[spec.side]
+
+
+def _live_calibration(
+    spec: CalibrateSpec, mode: Mode, wanted: Side | None, drive: FdsStick, controls: Controls
+) -> CalibrationResult:
+    controls.step(NOT_THIS_DRIVE)
+    reader = TimingReader(drive, note=controls.step)
+    return _calibrated(
+        reader, controls, mode=mode, reads=spec.passes, wanted=wanted, bracket=spec.bracket
+    )
+
+
+def _replayed(
+    replay: Replay, mode: Mode, wanted: Side | None, controls: Controls
+) -> CalibrationResult:
+    return _calibrated(replay, controls, mode=mode, reads=len(replay.captures), wanted=wanted)
 
 
 def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
@@ -332,37 +354,13 @@ def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
         mode = Mode(spec.mode)
     except ValueError as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
-    wanted = None
-    if spec.reference is not None:
-        disk, _, _ = decode_payload(spec.reference)
-        if spec.side >= disk.side_count:
-            message = f"the reference has {disk.side_count} side(s), so it has no side {spec.side}"
-            raise HTTPException(status_code=UNPROCESSABLE, detail=message)
-        wanted = disk.sides[spec.side]
-
-    if spec.captures is not None:
-        replay = _replay(spec.captures, spec.side)
-
-        def offline(controls: Controls) -> CalibrationResult:
-            return _calibrated(
-                replay, controls, mode=mode, reads=len(replay.captures), wanted=wanted
-            )
-
-        _idle(request)
-        return _launch(request, "calibrate", writes=False, run=offline, stoppable=True)
-
-    def work(drive: FdsStick, controls: Controls) -> CalibrationResult:
-        controls.step(NOT_THIS_DRIVE)
-        return _calibrated(
-            TimingReader(drive, note=controls.step),
-            controls,
-            mode=mode,
-            reads=spec.passes,
-            wanted=wanted,
-            bracket=spec.bracket,
-        )
-
-    return _start(request, "calibrate", writes=False, work=work, stoppable=True)
+    wanted = _reference_side(spec)
+    if spec.captures is None:
+        work = partial(_live_calibration, spec, mode, wanted)
+        return _start(request, "calibrate", writes=False, work=work, stoppable=True)
+    offline = partial(_replayed, _replay(spec.captures, spec.side), mode, wanted)
+    _idle(request)
+    return _launch(request, "calibrate", writes=False, run=offline, stoppable=True)
 
 
 def _replay(payload: str, side: int) -> Replay:
