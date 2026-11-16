@@ -3,7 +3,9 @@ import { resolve } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { problemFor, renderResult, sentence, start } from '../../src/fdstoolkit/ui/static/app.js';
+import { sentence, start } from '../../src/fdstoolkit/ui/static/app.js';
+import { problemFor } from '../../src/fdstoolkit/ui/static/fields.js';
+import { renderResult } from '../../src/fdstoolkit/ui/static/render.js';
 import { initialLanguage, rememberLanguage } from '../../src/fdstoolkit/ui/static/i18n.js';
 
 const HTML = readFileSync(resolve('src/fdstoolkit/ui/static/index.html'), 'utf8');

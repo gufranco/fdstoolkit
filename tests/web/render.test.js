@@ -5,7 +5,7 @@ import {
   isChange,
   isProse,
   renderResult,
-} from '../../src/fdstoolkit/ui/static/app.js';
+} from '../../src/fdstoolkit/ui/static/render.js';
 
 let target;
 

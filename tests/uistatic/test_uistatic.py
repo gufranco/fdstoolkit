@@ -16,7 +16,7 @@ from fdstoolkit.ui.app import (
 
 OK = 200
 MARKUP = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-SCRIPT = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+SCRIPT = "\n".join(path.read_text(encoding="utf-8") for path in sorted(STATIC_DIR.glob("*.js")))
 STYLES = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
 TARGET_SIZE_PX = 44
 

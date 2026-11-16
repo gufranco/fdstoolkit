@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { confirmErase, follow, isJobRoute, jobView } from "../../src/fdstoolkit/ui/static/app.js";
+import { confirmErase, follow, isJobRoute, jobView } from "../../src/fdstoolkit/ui/static/jobs.js";
 
 const running = {
   id: "j1",

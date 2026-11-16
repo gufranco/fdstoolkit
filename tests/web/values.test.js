@@ -1,17 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  bytes,
-  describeLimits,
-  explain,
-  helpFor,
-  isDownload,
-  named,
-  orderFamilies,
-  scalar,
-  typed,
-  words
-} from "../../src/fdstoolkit/ui/static/app.js";
+import { explain } from "../../src/fdstoolkit/ui/static/api.js";
+import { orderFamilies } from "../../src/fdstoolkit/ui/static/app.js";
+import { describeLimits, helpFor, named, typed } from "../../src/fdstoolkit/ui/static/fields.js";
+import { bytes, isDownload, scalar, words } from "../../src/fdstoolkit/ui/static/render.js";
 
 describe("named", () => {
   it("keeps the chosen name when it already carries the wanted suffix", () => {
