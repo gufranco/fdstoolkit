@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Final
 
@@ -254,43 +255,34 @@ def lead_in_bits(values: bytes) -> int | None:
     return start - len(values[:start].rstrip(bytes([GAP_VALUE])))
 
 
+DECODED: Final[dict[int, tuple[tuple[int, ...], int]]] = {
+    KEY_ONE_ONE: ((0, 0), 0),
+    KEY_ZERO_ZERO: ((0,), 0),
+    KEY_ONE_TWO: ((0, 1), 1),
+    KEY_ZERO_ONE: ((1,), 1),
+    KEY_ONE_ZERO: ((1,), 1),
+}
+UNCLASSED: Final = ((0,), 0)
+
+
+def _kind_of(bits: list[int]) -> int:
+    return sum(bit << position for position, bit in enumerate(bits[BITS_PER_BYTE:HEADER_BITS]))
+
+
 def _decode_region(values: bytes, start: int, pending: int) -> tuple[bytes, int, int | None]:
     bits: list[int] = [0] * MARK_GAP_BITS
     previous = 0
     index = start
     needed: int | None = None
-
-    while index < len(values):
-        value = values[index]
+    while index < len(values) and (needed is None or len(bits) < needed * BITS_PER_BYTE):
+        added, previous = DECODED.get((previous << 4) | values[index], UNCLASSED)
+        bits += added
         index += 1
-        key = (previous << 4) | value
-        if key == KEY_ONE_ONE:
-            bits += [0, 0]
-            previous = 0
-        elif key == KEY_ZERO_ZERO:
-            bits.append(0)
-            previous = 0
-        elif key == KEY_ONE_TWO:
-            bits += [0, 1]
-            previous = 1
-        elif key in (KEY_ZERO_ONE, KEY_ONE_ZERO):
-            bits.append(1)
-            previous = 1
-        else:
-            bits.append(0)
-            previous = 0
-
         if needed is None and len(bits) >= HEADER_BITS:
-            kind = sum(
-                bit << position for position, bit in enumerate(bits[BITS_PER_BYTE:HEADER_BITS])
-            )
-            length = expected_length(kind, pending)
+            length = expected_length(_kind_of(bits), pending)
             if length is None:
                 return _pack_bits(bits), index, None
             needed = 1 + length + CRC_SIZE
-        if needed is not None and len(bits) >= needed * BITS_PER_BYTE:
-            break
-
     return _pack_bits(bits), index, needed
 
 
@@ -407,62 +399,89 @@ def _resume_after_failure(values: bytes, start: int, cursor: int, pending: int) 
     return _gap_start(values, gap)
 
 
+@dataclass(frozen=True, slots=True)
+class _PulseWalk:
+    blocks: tuple[Block, ...]
+    findings: tuple[Diagnostic, ...]
+    regions: tuple[tuple[int, int], ...]
+    cursor: int
+    pending: int
+    done: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _Framing:
+    payload: bytes
+    stored: int
+    cursor: int
+    findings: tuple[Diagnostic, ...]
+
+
+def _noted(walk: _PulseWalk, cursor: int, findings: tuple[Diagnostic, ...]) -> _PulseWalk:
+    return replace(walk, cursor=cursor, findings=(*walk.findings, *findings))
+
+
+def _rebounded(values: bytes, gap: int, framing: _Framing) -> _Framing:
+    payload = framing.payload
+    if payload[0] != BlockKind.FILE_DATA or framing.stored == block_crc(payload):
+        return framing
+    found = _bounded_by_crc(values, gap)
+    if found is None:
+        return framing
+    bounded, stored, cursor = found
+    detail: dict[str, object] = {
+        "offset": gap,
+        "declared": len(payload) - 1,
+        "actual": len(bounded) - 1,
+    }
+    finding = _diagnostic("FDS016", Severity.WARNING, detail)
+    return _Framing(bounded, stored, cursor, (*framing.findings, finding))
+
+
+def _framed(values: bytes, walk: _PulseWalk, gap: int, framing: _Framing) -> _PulseWalk:
+    settled = _rebounded(values, gap, framing)
+    payload, stored, cursor = settled.payload, settled.stored, settled.cursor
+    block = Block(kind=BlockKind(payload[0]), payload=payload, stored_crc=stored)
+    header = block.kind is BlockKind.FILE_HEADER
+    pending = FileHeader.parse(payload).size if header else walk.pending
+    failed = stored != block_crc(payload)
+    detail: dict[str, object] = {"stored": stored, "computed": block.computed_crc}
+    crc = (_diagnostic("FDS002", Severity.ERROR, detail),) if failed else ()
+    return replace(
+        walk,
+        blocks=(*walk.blocks, block),
+        regions=(*walk.regions, (gap, cursor)),
+        findings=(*walk.findings, *settled.findings, *crc),
+        cursor=_resume_after_failure(values, gap, cursor, pending) if failed else cursor,
+        pending=pending,
+    )
+
+
+def _pulse_step(values: bytes, walk: _PulseWalk) -> _PulseWalk:
+    gap = _gap_end(values, walk.cursor)
+    if gap is None:
+        return replace(walk, done=True)
+    short = _short_gap(gap, walk.cursor, block=len(walk.blocks))
+    data, cursor, needed = _decode_region(values, gap, walk.pending)
+    if not data or data[0] != SYNC_MARK or needed is None:
+        return _noted(walk, cursor, (*short, _lost_region(gap, walk.blocks, data)))
+    body = data[1:]
+    length = needed - 1 - CRC_SIZE
+    if len(body) < length + CRC_SIZE:
+        detail: dict[str, object] = {
+            "offset": gap,
+            "recovered": len(body),
+            "block": len(walk.blocks),
+        }
+        return _noted(walk, cursor, (*short, _diagnostic("FDS004", Severity.ERROR, detail)))
+    stored = decode_crc(body[length : length + CRC_SIZE])
+    return _framed(values, walk, gap, _Framing(body[:length], stored, cursor, short))
+
+
 def _walk(values: bytes) -> tuple[Side, tuple[Diagnostic, ...], tuple[tuple[int, int], ...]]:
-    findings: list[Diagnostic] = []
-    blocks: list[Block] = []
-    regions: list[tuple[int, int]] = []
-    cursor = _side_start(values)
-    pending = 0
-
-    while cursor < len(values):
-        gap = _gap_end(values, cursor)
-        if gap is None:
-            break
-        findings.extend(_short_gap(gap, cursor, block=len(blocks)))
-        data, cursor, needed = _decode_region(values, gap, pending)
-        if not data or data[0] != SYNC_MARK or needed is None:
-            findings.append(_lost_region(gap, blocks, data))
-            continue
-        body = data[1:]
-        length = needed - 1 - CRC_SIZE
-        if len(body) < length + CRC_SIZE:
-            findings.append(
-                _diagnostic(
-                    "FDS004",
-                    Severity.ERROR,
-                    {"offset": gap, "recovered": len(body), "block": len(blocks)},
-                ),
-            )
-            continue
-        payload = body[:length]
-        stored = decode_crc(body[length : length + CRC_SIZE])
-        if payload[0] == BlockKind.FILE_DATA and stored != block_crc(payload):
-            found = _bounded_by_crc(values, gap)
-            if found is not None:
-                payload, stored, cursor = found
-                findings.append(
-                    _diagnostic(
-                        "FDS016",
-                        Severity.WARNING,
-                        {"offset": gap, "declared": length - 1, "actual": len(payload) - 1},
-                    ),
-                )
-        block = Block(kind=BlockKind(payload[0]), payload=payload, stored_crc=stored)
-        if block.kind is BlockKind.FILE_HEADER:
-            pending = FileHeader.parse(payload).size
-        blocks.append(block)
-        regions.append((gap, cursor))
-        if stored != block_crc(payload):
-            findings.append(
-                _diagnostic(
-                    "FDS002",
-                    Severity.ERROR,
-                    {"stored": stored, "computed": block.computed_crc},
-                ),
-            )
-            cursor = _resume_after_failure(values, gap, cursor, pending)
-
-    if not blocks:
-        findings.append(_diagnostic("FDS014", Severity.ERROR, {"values": len(values)}))
-
-    return Side(blocks=tuple(blocks), tail=b"", capacity=0), tuple(findings), tuple(regions)
+    walk = _PulseWalk(blocks=(), findings=(), regions=(), cursor=_side_start(values), pending=0)
+    while not walk.done and walk.cursor < len(values):
+        walk = _pulse_step(values, walk)
+    nothing = (_diagnostic("FDS014", Severity.ERROR, {"values": len(values)}),)
+    findings = walk.findings if walk.blocks else (*walk.findings, *nothing)
+    return Side(blocks=walk.blocks, tail=b"", capacity=0), findings, walk.regions

@@ -45,46 +45,41 @@ def build_header(side_count: int) -> bytes:
     return HEADER_MAGIC + bytes([side_count]) + bytes(HEADER_SIZE - len(HEADER_MAGIC) - 1)
 
 
-def decode(data: bytes) -> tuple[Disk, tuple[Diagnostic, ...]]:
-    findings: list[Diagnostic] = []
-    declared: int | None = None
-    body = data
+def _split_header(data: bytes) -> tuple[int | None, bytes]:
     if has_header(data):
-        declared = data[len(HEADER_MAGIC)]
-        body = data[HEADER_SIZE:]
+        return data[len(HEADER_MAGIC)], data[HEADER_SIZE:]
+    return None, data
 
-    if body and len(body) % SIDE_SIZE:
-        findings.append(
-            _diagnostic(
-                "FDS010",
-                Severity.WARNING,
-                detail={"size": len(body), "side_size": SIDE_SIZE},
-            )
-        )
 
-    sides: list[Side] = []
-    for index, start in enumerate(range(0, len(body), SIDE_SIZE)):
-        chunk = body[start : start + SIDE_SIZE]
-        side, side_findings = parse_side(
-            chunk,
+def _size_findings(body: bytes) -> tuple[Diagnostic, ...]:
+    if not body or not len(body) % SIDE_SIZE:
+        return ()
+    detail: dict[str, object] = {"size": len(body), "side_size": SIDE_SIZE}
+    return (_diagnostic("FDS010", Severity.WARNING, detail=detail),)
+
+
+def _parsed_sides(body: bytes) -> tuple[tuple[Side, ...], tuple[Diagnostic, ...]]:
+    parsed = [
+        parse_side(
+            body[start : start + SIDE_SIZE],
             has_crc=False,
             side_index=index,
-            capacity=min(len(chunk), SIDE_SIZE),
+            capacity=min(len(body) - start, SIDE_SIZE),
         )
-        sides.append(side)
-        findings.extend(side_findings)
+        for index, start in enumerate(range(0, len(body), SIDE_SIZE))
+    ]
+    return tuple(side for side, _ in parsed), tuple(item for _, found in parsed for item in found)
 
-    if declared is not None and declared != len(sides):
-        findings.append(
-            _diagnostic(
-                "FDS013",
-                Severity.WARNING,
-                detail={"declared": declared, "found": len(sides)},
-            )
-        )
-        declared = None
 
-    return Disk(sides=tuple(sides), header_side_count=declared), tuple(findings)
+def decode(data: bytes) -> tuple[Disk, tuple[Diagnostic, ...]]:
+    declared, body = _split_header(data)
+    sides, side_findings = _parsed_sides(body)
+    findings = (*_size_findings(body), *side_findings)
+    if declared is None or declared == len(sides):
+        return Disk(sides=sides, header_side_count=declared), findings
+    detail: dict[str, object] = {"declared": declared, "found": len(sides)}
+    mismatch = _diagnostic("FDS013", Severity.WARNING, detail=detail)
+    return Disk(sides=sides, header_side_count=None), (*findings, mismatch)
 
 
 def target_length(side: Side) -> int:
