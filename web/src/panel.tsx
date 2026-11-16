@@ -104,7 +104,7 @@ async function launch(
     const answer = await call(AnyAnswerSchema, { path: chosen.route, method: chosen.method, body }, t);
     return { kind: 'result', payload: answer };
   }
-  const erasing = erases(chosen.command);
+  const erasing = erases(chosen);
   if (erasing && !(await ask())) {
     return { kind: 'cancelled' };
   }

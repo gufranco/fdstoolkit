@@ -541,6 +541,27 @@ wrote zel.fds (65500 bytes)
 <img alt="ローカル Web ページの rescue コマンド" src="assets/screenshots/rescue-light.png">
 </picture>
 
+#### `erase`
+
+```bash
+fdstoolkit erase [--sides N] [--backup <file>] [--yes] [--retries N]
+```
+
+ディスクに工場出荷時のフィルだけを残します。リードインのあと、工場出荷の面が最後のブロックのあとに持つフィルをトラックの終わりまで書きます。各面はまず読み取って `--backup` に残し、確認では消去される内容を示し、書いたあとに各面を読み戻します。ブロックが 1 つも残っていない場合だけ合格です。書き込みは毎回トラックの終わりまで届くので、長い面の上に書いても古いブロックは残りません。すでに空の面は、直前に消去した面と同じに読めるため、両面とも空だった場合の 2 面の消去は、裏返していないディスクとして拒否されます。そのようなディスクは 1 面ずつ消去してください。
+
+```bash
+fdstoolkit erase --sides 2 --backup before.fds
+```
+
+```
+every side reads back with no block
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/erase-dark.png">
+<img alt="ローカル Web ページの erase コマンド" src="assets/screenshots/erase-light.png">
+</picture>
+
 #### `write`
 
 ```bash

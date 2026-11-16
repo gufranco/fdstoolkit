@@ -342,6 +342,22 @@ test('triage of two disks failing in the same place names the drive at phone wid
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('erase asks first, then leaves no block and offers the backup at phone width', async ({ page }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'erase');
+  await page.locator('#panel button.run').click();
+
+  // Act
+  await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
+
+  // Assert
+  await expect(page.locator('#panel .output')).toContainText('every side reads back with no block');
+  await expect(page.getByRole('link', { name: 'Download before.fds' })).toBeVisible();
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

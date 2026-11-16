@@ -4,13 +4,13 @@ import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { call, messageOf } from './api';
 import { useT } from './language';
 import { Banner, DownloadLink, Failure, ResultView } from './result';
-import { AnyAnswerSchema, type Job, JobSchema, type JobState } from './schemas';
+import { AnyAnswerSchema, type CommandForm, type Job, JobSchema, type JobState } from './schemas';
 import { isDownload } from './values';
 
 export const POLL_MS = 500;
 export const POLL_LIMIT = 7200;
 
-const ERASING: ReadonlySet<string> = new Set(['write', 'surface']);
+const CONFIRMED_BY_DIALOG = 'confirm';
 const COMMAND_LANGUAGE = 'en';
 const JOB_BANNER = {
   running: 'busy',
@@ -23,8 +23,8 @@ export function isJobRoute(route: string): boolean {
   return route.startsWith('/api/jobs/');
 }
 
-export function erases(name: string): boolean {
-  return ERASING.has(name);
+export function erases(chosen: CommandForm): boolean {
+  return chosen.fields.some((entry) => entry.hidden && entry.name === CONFIRMED_BY_DIALOG);
 }
 
 function settled(current: Job): boolean {

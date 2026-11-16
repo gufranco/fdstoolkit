@@ -355,3 +355,25 @@ def test_an_end_of_track_other_than_the_fill_breaks_the_factory_layout() -> None
 
     # Assert
     assert problems == ("the end of the track is not the factory fill",)
+
+
+def test_an_erased_side_is_a_lead_in_then_the_factory_fill() -> None:
+    # Arrange
+    payloads: list[bytes] = []
+
+    # Act
+    problems = factory_violations(encode_write_stream(payloads))
+
+    # Assert
+    assert problems == ()
+
+
+def test_an_erased_side_ending_in_anything_but_the_fill_breaks_the_layout() -> None:
+    # Arrange
+    stream = stream_of([0] * 20000 + [0, 1] * 300)
+
+    # Act
+    problems = factory_violations(stream)
+
+    # Assert
+    assert problems == ("the end of the track is not the factory fill",)

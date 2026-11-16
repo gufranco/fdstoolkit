@@ -35,7 +35,13 @@ from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.quality.reads import compare_reads
-from fdstoolkit.ui import analysis_routes, hardware_routes, image_routes, rescue_routes
+from fdstoolkit.ui import (
+    analysis_routes,
+    hardware_routes,
+    image_routes,
+    rescue_routes,
+    rewrite_routes,
+)
 from fdstoolkit.ui.body_limit import BodyLimit
 from fdstoolkit.ui.forms import FAMILY_ORDER, forms
 from fdstoolkit.ui.jobs import JobBoard
@@ -145,6 +151,7 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "surface": "/api/jobs/surface",
     "session": "/api/jobs/session",
     "rescue": "/api/jobs/rescue",
+    "erase": "/api/jobs/erase",
 }
 
 
@@ -370,6 +377,7 @@ def _register_hardware(app: FastAPI) -> None:
     app.add_api_route("/api/jobs/surface", hardware_routes.surface_job, methods=["POST"])
     app.add_api_route("/api/jobs/session", hardware_routes.session_job, methods=["POST"])
     app.add_api_route("/api/jobs/rescue", rescue_routes.rescue_job, methods=["POST"])
+    app.add_api_route("/api/jobs/erase", rewrite_routes.erase_job, methods=["POST"])
     app.add_api_route("/api/jobs/calibrate", hardware_routes.calibrate_job, methods=["POST"])
     app.add_api_route("/api/jobs/current", hardware_routes.current_job, methods=["GET"])
     app.add_api_route("/api/jobs/{job_id}", hardware_routes.job_status, methods=["GET"])

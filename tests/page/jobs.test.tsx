@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EraseDialog, erases, isJobRoute, JobFollower, JobView } from '../../web/src/jobs';
 import type { Job } from '../../web/src/schemas';
 import { fileStems, seeded } from './fakes';
-import { reply, serve, settle, withClient } from './harness';
+import { fieldOf, formOf, reply, serve, settle, withClient } from './harness';
 
 const FAKE = seeded('jobs.test');
 const [STEM = ''] = fileStems(FAKE, 1);
@@ -39,9 +39,13 @@ describe('routes', () => {
   it('tells a job route and an erasing command', () => {
     // Arrange
     const routes = ['/api/jobs/dump', '/api/info'];
+    const confirmField = fieldOf({ name: 'confirm', kind: 'flag', hidden: true });
+    const write = formOf({ command: 'write', family: 'hardware', fields: [confirmField] });
+    const erase = formOf({ command: 'erase', family: 'hardware', fields: [confirmField] });
+    const dump = formOf({ command: 'dump', family: 'hardware', fields: [fieldOf({ name: 'confirm', kind: 'flag' })] });
 
     // Act
-    const result = [...routes.map(isJobRoute), erases('write'), erases('surface'), erases('dump')];
+    const result = [...routes.map(isJobRoute), erases(write), erases(erase), erases(dump)];
 
     // Assert
     expect(result).toEqual([true, false, true, true, false]);

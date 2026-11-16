@@ -180,13 +180,17 @@ def factory_violations(stream: bytes) -> tuple[str, ...]:
         if gap not in FACTORY_GAP_BITS
     ]
     end_gap, rest = _end_run(classes[regions[-1][1] :] if regions else classes)
-    if end_gap not in FACTORY_END_GAP_BITS:
+    if regions and end_gap not in FACTORY_END_GAP_BITS:
         problems.append(_outside("the gap after the last block", end_gap, FACTORY_END_GAP_BITS))
+    return (*problems, *_fill_problems(rest))
+
+
+def _fill_problems(rest: bytes) -> tuple[str, ...]:
     fill = encode_bits([*FILL_START_BITS, *FILL_BITS * len(rest)])
     decided = len(rest) - UNDECIDED_END
     if rest[:decided] != fill[:decided]:
-        problems.append("the end of the track is not the factory fill")
-    return tuple(problems)
+        return ("the end of the track is not the factory fill",)
+    return ()
 
 
 def _end_run(tail: bytes) -> tuple[int, bytes]:
