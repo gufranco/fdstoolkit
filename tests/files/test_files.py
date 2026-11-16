@@ -6,7 +6,7 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode, encode
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.core.files import extract_files
+from fdstoolkit.core.files import ExtractedFile, extract_files, extracted_name
 from fdstoolkit.edit.files import (
     FileSpec,
     declared_file_count,
@@ -281,3 +281,32 @@ def test_removing_a_header_without_its_data_block_drops_only_the_header() -> Non
 
     # Assert
     assert extract_files(updated) == ()
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("HELLO", "side1-03-HELLO.bin"),
+        ("../A B", "side1-03-___A_B.bin"),
+        ("  ", "side1-03-file3.bin"),
+    ],
+)
+def test_an_extracted_file_is_named_safely_from_its_disk_name(name: str, expected: str) -> None:
+    # Arrange
+    entry = ExtractedFile(
+        side=1,
+        position=3,
+        number=3,
+        file_id=3,
+        name=name,
+        address=0x6000,
+        kind=FileKind.PROGRAM,
+        data=b"",
+        hidden=False,
+    )
+
+    # Act
+    named = extracted_name(entry)
+
+    # Assert
+    assert named == expected

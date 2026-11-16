@@ -217,15 +217,25 @@ def test_save_find_needs_two_dumps(client: TestClient) -> None:
     assert answer.status_code == UNPROCESSABLE
 
 
-def test_extract_writes_every_file(client: TestClient) -> None:
+def test_extract_names_every_file_as_the_command_does(client: TestClient, tmp_path: Path) -> None:
     # Arrange
-    payload = {"data": ENCODED}
+    (tmp_path / "main.prg").write_bytes(bytes([0xEA]) * 32)
+    side = {
+        "game_name": "SMB",
+        "file_amount": 1,
+        "files": [{"file_name": "M/N", "data": "main.prg"}],
+    }
+    image = FdsPackerManifest.parse({"sides": [side]}, root=tmp_path).build()
+    (tmp_path / "disk.fds").write_bytes(image)
+    CliRunner().invoke(cli, ["extract", str(tmp_path / "disk.fds"), "-d", str(tmp_path / "out")])
+    written = sorted(path.name for path in (tmp_path / "out").iterdir())
 
     # Act
-    body = client.post("/api/extract", json=payload).json()
+    body = client.post("/api/extract", json={"data": base64.b64encode(image).decode()}).json()
 
     # Assert
-    assert isinstance(body["files"], list)
+    assert [entry["name"] for entry in body["files"]] == written
+    assert written == ["side0-00-M_N.bin"]
 
 
 def test_extract_can_add_an_fdspacker_manifest(client: TestClient, tmp_path: Path) -> None:

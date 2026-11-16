@@ -12,7 +12,7 @@ from fdstoolkit.build.packaged import build_packaged
 from fdstoolkit.core.bios import predict_boot
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.core.files import extract_files
+from fdstoolkit.core.files import extract_files, extracted_name
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
 from fdstoolkit.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstoolkit.edit.files import FileSpec, insert_file
@@ -120,7 +120,7 @@ def extract(spec: ExtractSpec) -> FilesResult:
     disk = _disk(spec)
     if not spec.fdspacker:
         return FilesResult(
-            files=[named_file(entry.name, entry.data) for entry in extract_files(disk)]
+            files=[named_file(extracted_name(entry), entry.data) for entry in extract_files(disk)]
         )
     try:
         export = FdsPackerExport.of(disk)

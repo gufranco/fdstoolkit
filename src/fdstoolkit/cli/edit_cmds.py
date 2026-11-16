@@ -22,7 +22,7 @@ from fdstoolkit.cli.common import (
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.container import Container
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.core.files import extract_files
+from fdstoolkit.core.files import extract_files, extracted_name
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit
 from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
@@ -49,8 +49,7 @@ def extract(
     directory.mkdir(parents=True, exist_ok=True)
 
     for entry in extract_files(disk):
-        stem = entry.name.strip() or f"file{entry.position}"
-        target = directory / f"side{entry.side}-{entry.position:02d}-{stem}.bin"
+        target = directory / extracted_name(entry)
         _refuse_overwrite(target, force=force)
         target.write_bytes(entry.data)
         marker = " (hidden)" if entry.hidden else ""

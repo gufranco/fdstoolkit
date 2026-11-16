@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from typing import Final
 
 from fdstoolkit.core.blocks import Block, BlockKind, FileHeader, FileKind
 from fdstoolkit.core.disk import Disk, Side
+
+UNSAFE_NAME: Final = re.compile(r"[^A-Za-z0-9_-]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,3 +59,8 @@ def extract_files(disk: Disk) -> tuple[ExtractedFile, ...]:
                 )
             )
     return tuple(out)
+
+
+def extracted_name(entry: ExtractedFile) -> str:
+    stem = UNSAFE_NAME.sub("_", entry.name.strip()) or f"file{entry.position}"
+    return f"side{entry.side}-{entry.position:02d}-{stem}.bin"

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -26,9 +25,9 @@ from fdstoolkit.core.diskinfo import (
     serial_of,
     to_bcd,
 )
+from fdstoolkit.core.files import UNSAFE_NAME
 
 MANIFEST_NAME: Final = "diskinfo.json"
-UNSAFE_NAME: Final = re.compile(r"[^A-Za-z0-9_-]")
 PRINTABLE: Final = range(0x20, 0x7F)
 LOST_REWRITE_COUNT: Final = 0xFF
 EXTENSIONS: Final[Mapping[int, str]] = {0: "prg", 1: "chr", 2: "nt"}
