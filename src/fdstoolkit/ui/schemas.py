@@ -399,6 +399,8 @@ class WriteSpec(BaseModel):
     trusted_drive: bool = False
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
     long_side: bool = False
+    as_kiosk: bool = False
+    rewrite_date: str | None = None
     confirm: bool = False
 
 

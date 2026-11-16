@@ -11,6 +11,7 @@ from main_kit import attach, attach_facing, long_side_image, operator, runner
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli import common, surface_cmds
 from fdstoolkit.cli.main import app
+from fdstoolkit.edit.kiosk import KIOSK_SERIAL_ENV
 from fdstoolkit.hardware.session import Grade
 from fdstoolkit.quality.surface import Finish, PatternPass, StopReason, SurfaceReport
 from fdstoolkit.quality.surface_disks import SurfacePattern
@@ -301,3 +302,43 @@ def test_surface_names_every_class_of_failing_block(capsys: pytest.CaptureFixtur
     assert "the failures are spread across the side" in result.out
     assert "clean the disk surface gently" in result.out
     assert not report.passed
+
+
+def test_write_as_kiosk_stamps_the_count_date_and_serial(
+    single_side: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    drive = attach(monkeypatch, single_side)
+    monkeypatch.setenv(KIOSK_SERIAL_ENV, "0123")
+
+    # Act
+    result = runner.invoke(
+        app, ["write", str(single_side), "--as-kiosk", "--rewrite-date", "1989-04-12", "--yes"]
+    )
+
+    # Assert
+    assert result.exit_code == 0, result.output
+    assert drive.disk is not None
+    info = drive.disk.sides[0].disk_info
+    assert info is not None
+    assert (info.rewrite_count, info.rewritten_date, info.writer_serial) == (
+        1,
+        (1989, 4, 12),
+        0x0123,
+    )
+
+
+def test_write_as_kiosk_without_a_serial_refuses_before_writing(
+    single_side: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    drive = attach(monkeypatch, single_side)
+    monkeypatch.delenv(KIOSK_SERIAL_ENV, raising=False)
+
+    # Act
+    result = runner.invoke(app, ["write", str(single_side), "--as-kiosk", "--yes"])
+
+    # Assert
+    assert result.exit_code == 1
+    assert KIOSK_SERIAL_ENV in result.output
+    assert drive.write_count == 0

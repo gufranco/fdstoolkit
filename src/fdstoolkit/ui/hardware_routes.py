@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -26,6 +27,7 @@ from fdstoolkit.drive.pulse import pulse_lines
 from fdstoolkit.drive.recognition import rate_lines
 from fdstoolkit.drive.recovery import recover
 from fdstoolkit.drive.timing import TimingReader
+from fdstoolkit.edit.kiosk import KioskError, kiosk_target
 from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
@@ -280,7 +282,14 @@ def _write_target(spec: WriteSpec) -> Disk:
         except LongSideError as error:
             detail = f"{error}. Tick long side to write it anyway"
             raise HTTPException(status_code=UNPROCESSABLE, detail=detail) from error
-    return disk
+    return _as_kiosk(spec, disk) if spec.as_kiosk else disk
+
+
+def _as_kiosk(spec: WriteSpec, disk: Disk) -> Disk:
+    try:
+        return kiosk_target(disk, rewrite_date=spec.rewrite_date, today=date.today())  # noqa: DTZ011
+    except KioskError as error:
+        raise HTTPException(status_code=UNPROCESSABLE, detail=str(error)) from error
 
 
 def _write(spec: WriteSpec, disk: Disk, drive: FdsStick, controls: Controls) -> ReportedFile:

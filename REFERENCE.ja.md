@@ -565,7 +565,7 @@ every side reads back with no block
 #### `write`
 
 ```bash
-fdstoolkit write <image> [--backup <p>] [--retries N] [--long-side] [--yes]
+fdstoolkit write <image> [--backup <p>] [--retries N] [--long-side] [--as-kiosk [--rewrite-date <date>]] [--yes]
 fdstoolkit write --calibration --trusted-drive [--backup <p>] [--retries N] [--yes]
 ```
 
@@ -621,6 +621,8 @@ verified True, grade clean
 ```
 
 2 文字分字下げされた行は進行状況で、各手順の開始時に表示されます。そのため、時間のかかる面も終わってからではなく、実行中に見えます。
+
+`--as-kiosk` は、ディスクライター店頭機が書き換えたのと同じ形でイメージを書きます。各面の書き換え回数を 1 つ増やし、書き換え日を `--rewrite-date` または今日にし、ディスクライターのシリアルを `FDSTOOLKIT_KIOSK_SERIAL` の 16 進 4 桁にします。シリアルが設定されていなければ、作り出すことはせず、何も読む前に拒否します。ディスクの日付は 1925 年を起点とする 2 桁の年なので、表せるのは 2024 年までです。それ以降は、店頭機が刻印しえた日付を `--rewrite-date` で渡してください。`provenance` は結果を店頭機での書き換えとして読みます。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">

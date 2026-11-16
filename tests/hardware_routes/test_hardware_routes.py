@@ -7,6 +7,7 @@ import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.edit.kiosk import KIOSK_SERIAL_ENV
 from fdstoolkit.history.entries import disk_key
 from fdstoolkit.history.logbook import logbook_path
 from fdstoolkit.ui.jobs import JobState
@@ -346,3 +347,42 @@ def test_a_write_the_disk_does_not_take_fails_the_job(
     # Assert
     assert job["state"] == JobState.FAILED
     assert "did not take the write" in job["error"]
+
+
+def test_a_write_job_as_kiosk_stamps_the_disk(
+    app: FastAPI, client: TestClient, attached: SimulatedDrive, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setenv(KIOSK_SERIAL_ENV, "0123")
+    payload: dict[str, object] = {
+        "data": ONE,
+        "confirm": True,
+        "as_kiosk": True,
+        "rewrite_date": "1989-04-12",
+    }
+
+    # Act
+    job = run(app, client, "/api/jobs/write", payload)
+
+    # Assert
+    assert job["state"] == JobState.DONE
+    assert attached.disk is not None
+    info = attached.disk.sides[0].disk_info
+    assert info is not None
+    assert (info.rewrite_count, info.writer_serial) == (1, 0x0123)
+
+
+@pytest.mark.usefixtures("attached")
+def test_a_write_job_as_kiosk_without_a_serial_is_refused(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.delenv(KIOSK_SERIAL_ENV, raising=False)
+    payload = {"data": ONE, "confirm": True, "as_kiosk": True}
+
+    # Act
+    answer = client.post("/api/jobs/write", json=payload)
+
+    # Assert
+    assert answer.status_code == UNPROCESSABLE
+    assert KIOSK_SERIAL_ENV in answer.json()["detail"]

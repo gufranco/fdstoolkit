@@ -358,6 +358,22 @@ test('erase asks first, then leaves no block and offers the backup at phone widt
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('a kiosk-stamped write with no serial set is refused before anything is written', async ({ page, request }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'write');
+  await page.locator('input[data-field=data]').setInputFiles(await blankImage(request));
+  await page.locator('input[data-field=as_kiosk]').check();
+
+  // Act
+  await page.locator('#panel button.run').click();
+  await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
+
+  // Assert
+  await expect(page.locator('#panel .output')).toContainText('FDSTOOLKIT_KIOSK_SERIAL');
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

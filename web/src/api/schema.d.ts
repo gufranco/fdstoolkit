@@ -1033,11 +1033,13 @@ export interface components {
             unstable: number;
         };
         WriteSpec: {
+            as_kiosk: boolean;
             calibration: boolean;
             confirm: boolean;
             data?: string | null;
             long_side: boolean;
             retries: number;
+            rewrite_date?: string | null;
             trusted_drive: boolean;
         };
     };

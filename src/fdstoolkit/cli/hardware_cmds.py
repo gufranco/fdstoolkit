@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Annotated, Final
 
@@ -36,6 +37,7 @@ from fdstoolkit.drive.captures import created_now, write_bundle
 from fdstoolkit.drive.pulse import pulse_lines
 from fdstoolkit.drive.recognition import rate_lines
 from fdstoolkit.drive.recovery import recover
+from fdstoolkit.edit.kiosk import KioskError, kiosk_target
 from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
@@ -327,6 +329,21 @@ def print_write(report: WriteReport) -> None:
         typer.echo(f"  {note}")
 
 
+AsKioskOption = Annotated[
+    bool, typer.Option("--as-kiosk", help="stamp the count, date and serial a kiosk did")
+]
+RewriteDateOption = Annotated[
+    str | None, typer.Option("--rewrite-date", help="with --as-kiosk, the date, YYYY-MM-DD")
+]
+
+
+def _as_kiosk(disk: Disk, rewrite_date: str | None) -> Disk:
+    try:
+        return kiosk_target(disk, rewrite_date=rewrite_date, today=date.today())  # noqa: DTZ011
+    except KioskError as error:
+        raise fail(str(error)) from error
+
+
 def write(
     image: WrittenArgument = None,
     *,
@@ -336,8 +353,11 @@ def write(
     yes: YesOption = False,
     retries: RetriesOption = 3,
     long_side: LongSideOption = False,
+    as_kiosk: AsKioskOption = False,
+    rewrite_date: RewriteDateOption = None,
 ) -> None:
     disk = calibration_target(image, calibration=calibration, trusted_drive=trusted_drive)
+    disk = _as_kiosk(disk, rewrite_date) if as_kiosk else disk
     plan = WritePlan(ask=prompter(yes=yes), backup=backup, retries=retries, long_side=long_side)
     with closing(open_drive()) as drive:
         report = write_disk(drive, disk, plan)

@@ -565,7 +565,7 @@ every side reads back with no block
 #### `write`
 
 ```bash
-fdstoolkit write <image> [--backup <p>] [--retries N] [--long-side] [--yes]
+fdstoolkit write <image> [--backup <p>] [--retries N] [--long-side] [--as-kiosk [--rewrite-date <date>]] [--yes]
 fdstoolkit write --calibration --trusted-drive [--backup <p>] [--retries N] [--yes]
 ```
 
@@ -621,6 +621,8 @@ verified True, grade clean
 ```
 
 The lines indented by two spaces are progress, printed as each step starts, so a slow side is visible while it runs rather than only at the end.
+
+`--as-kiosk` writes the image as a Disk Writer kiosk rewrote a disk: each side's rewrite count goes up by one, its rewrite date becomes `--rewrite-date` or today, and its Disk Writer serial becomes the four hexadecimal digits in `FDSTOOLKIT_KIOSK_SERIAL`. With no serial configured the write is refused before anything is read, rather than inventing one. A disk date holds two-digit years counted from 1925, so the last year it can carry is 2024; after that, pass `--rewrite-date` with a date a kiosk could have stamped. `provenance` reads the result as a kiosk rewrite.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/write-dark.png">
