@@ -22,6 +22,7 @@ from hardware_routes_kit import (
     SETTLE,
     TWO_SIDE,
     UNPROCESSABLE,
+    FirstWriteHeld,
     disk_of,
     long_image,
     run,
@@ -265,15 +266,18 @@ def test_a_write_job_that_fails_still_offers_the_backup(
 
 
 def test_a_surface_job_can_be_stopped_between_patterns(
-    app: FastAPI, client: TestClient, attached: SimulatedDrive
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
+    attached = serve(monkeypatch, FirstWriteHeld(disk_of(ONE_SIDE)))
     started = client.post("/api/jobs/surface", json={"confirm": True, "passes": 3}).json()
+    attached.writing.wait(SETTLE)
 
     # Act
     client.post(f"/api/jobs/{started['id']}/stop", json={})
 
     # Assert
+    attached.release.set()
     assert app.state.jobs.wait(started["id"], SETTLE)
     job = client.get(f"/api/jobs/{started['id']}").json()
     assert started["stoppable"] is True

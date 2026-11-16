@@ -16,6 +16,8 @@ from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.files import FileSpec, insert_file
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import pytest
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -67,7 +69,7 @@ def disk_of(image: bytes) -> Disk:
     return disk
 
 
-def serve(monkeypatch: pytest.MonkeyPatch, drive: SimulatedDrive) -> SimulatedDrive:
+def serve[D: SimulatedDrive](monkeypatch: pytest.MonkeyPatch, drive: D) -> D:
     monkeypatch.setattr("fdstoolkit.ui.hardware_routes.open_fdsstick", lambda: drive)
     return drive
 
@@ -104,3 +106,17 @@ class SlowReads(SimulatedDrive):
     def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
         self.gate.wait(SETTLE)
         return super().read_raw_side(what=what, mode=mode)
+
+
+class FirstWriteHeld(SimulatedDrive):
+    def __init__(self, disk: Disk) -> None:
+        super().__init__(disk)
+        self.writing = threading.Event()
+        self.release = threading.Event()
+
+    def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+        first = not self.writing.is_set()
+        self.writing.set()
+        if first:
+            self.release.wait(SETTLE)
+        super().write_side(side, blocks)
