@@ -64,7 +64,7 @@ ACCEPTS: Final[dict[str, str]] = {
     "save": ".ips,.ups,.fds",
     "patch": ".ips,.bps,.xdelta",
     "recipes": ".json",
-    "manifest": ".json",
+    "manifest": ".json,.zip",
     "captures": ".zip",
 }
 

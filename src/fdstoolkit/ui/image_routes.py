@@ -8,7 +8,7 @@ from typing import Final
 from fastapi import HTTPException
 
 from fdstoolkit.build.fdspacker_export import MANIFEST_NAME, FdsPackerExport
-from fdstoolkit.build.manifest import build_manifest_file
+from fdstoolkit.build.packaged import build_packaged
 from fdstoolkit.core.bios import predict_boot
 from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
@@ -179,13 +179,10 @@ def patch(spec: PatchSpec) -> FileResult:
 
 
 def build(spec: BuildSpec) -> FileResult:
-    with TemporaryDirectory(prefix="fdstoolkit-ui-") as directory:
-        path = Path(directory) / "manifest.json"
-        path.write_bytes(bytes_of(spec.manifest))
-        try:
-            data = build_manifest_file(path)
-        except (ValueError, KeyError, OSError) as error:
-            raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
+    try:
+        data = build_packaged(bytes_of(spec.manifest))
+    except (ValueError, KeyError, OSError) as error:
+        raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
     return named_file("built.fds", data)
 
 

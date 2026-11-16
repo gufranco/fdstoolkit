@@ -368,6 +368,8 @@ A disk built from a JSON manifest naming the disk fields and the files to place.
 - `licensee_code` takes the code or one of the 142 company names FDSPacker writes, such as `Nintendo` or `Konami`, in any case. A name FDSPacker does not know is refused.
 - A manifest that mixes keys from both schemas is refused.
 
+A `.zip` holding one manifest at its top level and the files it names builds the same way, with every path read inside the zip. A path that leads out of the zip, such as an absolute path or one through `..`, is refused rather than read. The web page takes the manifest this way, so it never reads a file from the machine it runs on.
+
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/build-dark.png">
 <img alt="The build command on the local web page" src="assets/screenshots/build-light.png">

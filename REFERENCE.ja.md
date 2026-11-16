@@ -368,6 +368,8 @@ fdstoolkit build <manifest> -o <out> [--force]
 - `licensee_code` はコードのほか、FDSPacker が書き出す 142 社の会社名も、大文字小文字を問わず受け付けます。たとえば `Nintendo` や `Konami` です。FDSPacker が知らない名前は拒否します。
 - 両方の形式のキーが混ざったマニフェストは拒否します。
 
+最上位に 1 つのマニフェストと、それが指すファイルを収めた `.zip` も同じように組み立てます。パスはすべて zip の中から読みます。絶対パスや `..` を経由するパスのように zip の外へ出るパスは、読まずに拒否します。Web ページはマニフェストをこの形で受け取るので、動いている端末のファイルを読むことはありません。
+
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/build-dark.png">
 <img alt="ローカル Web ページの build コマンド" src="assets/screenshots/build-light.png">

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Final, cast
 
 BYTE_LIMIT: Final = 0xFF
@@ -58,6 +59,17 @@ def number(
         message = f"{where}: {key} is {found}, and it must be between 0 and {limit}"
         raise FieldError(message)
     return found
+
+
+def located(root: Path, name: str, *, confined: bool, where: str) -> Path:
+    candidate = root / name
+    if not confined:
+        return candidate
+    resolved = candidate.resolve()
+    if resolved.is_relative_to(root.resolve()):
+        return resolved
+    message = f"{where}: {name} lies outside the uploaded folder, so it is not read"
+    raise FieldError(message)
 
 
 def as_int(value: object, *, key: str, where: str) -> int:

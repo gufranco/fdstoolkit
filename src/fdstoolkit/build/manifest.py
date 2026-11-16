@@ -8,7 +8,7 @@ from typing import Final, cast
 
 from fdstoolkit.build.blank import GAME_NAME_LENGTH, disk_info_block
 from fdstoolkit.build.fdspacker import FdsPackerManifest
-from fdstoolkit.build.fields import mapping, number, objects, text
+from fdstoolkit.build.fields import located, mapping, number, objects, text
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
@@ -63,7 +63,9 @@ class DiskManifest:
         return self.verification == VERIFICATION_STRING
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object], *, root: Path) -> DiskManifest:
+    def from_dict(
+        cls, payload: Mapping[str, object], *, root: Path, confined: bool = False
+    ) -> DiskManifest:
         where = "the manifest"
         game_name = text(payload, "game_name", where=where, default="   ")
         if len(game_name) != GAME_NAME_LENGTH:
@@ -79,7 +81,7 @@ class DiskManifest:
             game_version=number(payload, "game_version", where=where, default=0),
             manufacturing_date=_parse_date(payload.get("manufacturing_date")),
             sides=tuple(
-                _side_from(entry, root=root, number_of=index)
+                _side_from(entry, root=root, number_of=index, confined=confined)
                 for index, entry in enumerate(raw_sides, start=1)
             ),
             verification=_parse_licence(payload.get("licence", payload.get("license"))),
@@ -107,32 +109,35 @@ def _parse_date(value: object) -> tuple[int, int, int] | None:
     return parse_date(str(value), field="manufacturing_date")
 
 
-def _file_from(entry: Mapping[str, object], *, root: Path, where: str) -> ManifestFile:
+def _file_from(
+    entry: Mapping[str, object], *, root: Path, where: str, confined: bool
+) -> ManifestFile:
     kind_name = text(entry, "kind", where=where, default="program").lower()
     kind = KINDS.get(kind_name)
     if kind is None:
         known = ", ".join(sorted(KINDS))
         message = f"unknown file kind {kind_name}, known kinds are {known}"
         raise ManifestShapeError(message)
-    path = Path(text(entry, "path", where=where))
     return ManifestFile(
         name=text(entry, "name", where=where, default=""),
         address=number(
             entry, "address", where=where, default=DEFAULT_LOAD_ADDRESS, limit=WORD_LIMIT
         ),
         kind=kind,
-        path=path if path.is_absolute() else root / path,
+        path=located(root, text(entry, "path", where=where), confined=confined, where=where),
     )
 
 
-def _side_from(entry: Mapping[str, object], *, root: Path, number_of: int) -> ManifestSide:
+def _side_from(
+    entry: Mapping[str, object], *, root: Path, number_of: int, confined: bool
+) -> ManifestSide:
     where = f"side {number_of}"
     return ManifestSide(
         side=number(entry, "side", where=where, default=0),
         disk_number=number(entry, "disk_number", where=where, default=0),
         boot_file=number(entry, "boot_file", where=where, default=0),
         files=tuple(
-            _file_from(item, root=root, where=f"{where} file {index}")
+            _file_from(item, root=root, where=f"{where} file {index}", confined=confined)
             for index, item in enumerate(objects(entry, "files", where=where), start=1)
         ),
     )
@@ -194,12 +199,13 @@ def build_from_manifest(manifest: DiskManifest) -> bytes:
     return data
 
 
-def build_manifest_file(path: Path) -> bytes:
+def build_manifest_file(path: Path, *, confined: bool = False) -> bytes:
     payload: object = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         message = f"a manifest is a JSON object, and {path.name} holds {type(payload).__name__}"
         raise ManifestShapeError(message)
     fields = cast("dict[str, object]", payload)
+    root = path.parent
     if FdsPackerManifest.recognises(fields):
-        return FdsPackerManifest.parse(fields, root=path.parent).build()
-    return build_from_manifest(DiskManifest.from_dict(fields, root=path.parent))
+        return FdsPackerManifest.parse(fields, root=root, confined=confined).build()
+    return build_from_manifest(DiskManifest.from_dict(fields, root=root, confined=confined))

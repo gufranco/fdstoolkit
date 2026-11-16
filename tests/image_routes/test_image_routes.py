@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
+import zipfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
+from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.build.fdspacker import FdsPackerManifest
+from fdstoolkit.cli.main import app as cli
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.drive.captures import Capture, bundle_zip
 from fdstoolkit.ui.app import create_app
+
+if TYPE_CHECKING:
+    from faker import Faker
 
 OK = 200
 BAD_REQUEST = 400
@@ -493,7 +501,53 @@ def test_a_manifest_that_parses_builds_an_image(client: TestClient) -> None:
     answer = client.post("/api/build", json={"manifest": manifest})
 
     # Assert
-    assert answer.status_code in {OK, BAD_REQUEST}
+    assert answer.status_code == OK
+
+
+def zipped_folder(members: dict[str, bytes]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, data in members.items():
+            archive.writestr(name, data)
+    return buffer.getvalue()
+
+
+def test_a_manifest_naming_a_file_on_this_machine_is_refused(
+    client: TestClient, tmp_path: Path, fake: Faker
+) -> None:
+    # Arrange
+    outside = tmp_path / fake.file_name()
+    outside.write_bytes(fake.binary(length=32))
+    side = {"files": [{"name": "X", "path": str(outside)}]}
+    manifest = base64.b64encode(json.dumps({"sides": [side]}).encode()).decode("ascii")
+
+    # Act
+    answer = client.post("/api/build", json={"manifest": manifest})
+
+    # Assert
+    assert answer.status_code == BAD_REQUEST
+    assert answer.json()["detail"] == (
+        f"side 1 file 1: {outside} lies outside the uploaded folder, so it is not read"
+    )
+
+
+def test_a_zipped_manifest_builds_what_the_command_builds(
+    client: TestClient, tmp_path: Path, fake: Faker
+) -> None:
+    # Arrange
+    side = {"files": [{"name": "X", "path": "x.prg"}]}
+    folder = zipped_folder(
+        {"disk.json": json.dumps({"sides": [side]}).encode(), "x.prg": fake.binary(length=64)}
+    )
+    (tmp_path / "disk.zip").write_bytes(folder)
+    CliRunner().invoke(cli, ["build", str(tmp_path / "disk.zip"), "-o", str(tmp_path / "x.fds")])
+    upload = base64.b64encode(folder).decode("ascii")
+
+    # Act
+    answer = client.post("/api/build", json={"manifest": upload})
+
+    # Assert
+    assert base64.b64decode(answer.json()["data"]) == (tmp_path / "x.fds").read_bytes()
 
 
 @pytest.mark.parametrize(

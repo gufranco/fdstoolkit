@@ -11,6 +11,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, cast
 
+from fdstoolkit.build.fields import located
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.core.blocks import FILE_NAME_SIZE, Block, BlockKind
 from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
@@ -239,21 +240,23 @@ def _file_name(entry: Mapping[str, object], *, where: _Where) -> bytes:
     return _latin(name, field="file_name", where=where, size=FILE_NAME_SIZE)
 
 
-def _file_data(entry: Mapping[str, object], *, root: Path, where: _Where) -> bytes:
+def _file_data(entry: Mapping[str, object], *, root: Path, where: _Where, confined: bool) -> bytes:
     relative = entry.get("data")
     if not isinstance(relative, str) or not relative:
         message = f"{where} has no data; name the file holding its bytes"
         raise FdsPackerError(message)
-    path = root / relative
+    path = located(root, relative, confined=confined, where=str(where))
     if not path.is_file():
         message = f"file not found: {path}"
         raise FdsPackerError(message)
     return path.read_bytes()
 
 
-def _file_from(entry: Mapping[str, object], *, root: Path, where: _Where) -> _PackedFile:
+def _file_from(
+    entry: Mapping[str, object], *, root: Path, where: _Where, confined: bool
+) -> _PackedFile:
     _check_keys(entry, foreign=TOOLKIT_FILE_KEYS, where=where)
-    data = _file_data(entry, root=root, where=where)
+    data = _file_data(entry, root=root, where=where, confined=confined)
     if len(data) > WORD_LIMIT:
         message = f"{where} holds {len(data)} bytes, beyond the {WORD_LIMIT} a header can state"
         raise FdsPackerError(message)
@@ -351,11 +354,13 @@ def _info(entry: Mapping[str, object], *, where: _Where) -> bytes:
     )
 
 
-def _side_from(entry: Mapping[str, object], *, root: Path, number: int) -> _PackedSide:
+def _side_from(
+    entry: Mapping[str, object], *, root: Path, number: int, confined: bool
+) -> _PackedSide:
     where = _Where(side=number)
     _check_keys(entry, foreign=TOOLKIT_SIDE_KEYS, where=where)
     files = tuple(
-        _file_from(item, root=root, where=_Where(side=number, file=index))
+        _file_from(item, root=root, where=_Where(side=number, file=index), confined=confined)
         for index, item in enumerate(_mappings(entry.get("files")), start=1)
     )
     return _PackedSide(
@@ -401,7 +406,9 @@ class FdsPackerManifest:
         )
 
     @classmethod
-    def parse(cls, payload: Mapping[str, object], *, root: Path) -> FdsPackerManifest:
+    def parse(
+        cls, payload: Mapping[str, object], *, root: Path, confined: bool = False
+    ) -> FdsPackerManifest:
         _check_keys(payload, foreign=TOOLKIT_TOP_KEYS, where="the manifest")
         sides = _mappings(payload.get("sides"))
         if not sides:
@@ -409,7 +416,7 @@ class FdsPackerManifest:
             raise FdsPackerError(message)
         return cls(
             sides=tuple(
-                _side_from(entry, root=root, number=number)
+                _side_from(entry, root=root, number=number, confined=confined)
                 for number, entry in enumerate(sides, start=1)
             )
         )

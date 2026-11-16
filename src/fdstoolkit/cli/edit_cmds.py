@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Final
 
 import typer
 
 from fdstoolkit.build.fdspacker_export import MANIFEST_NAME, FdsPackerExport
 from fdstoolkit.build.manifest import build_manifest_file
+from fdstoolkit.build.packaged import build_packaged
 from fdstoolkit.cli.common import (
     KIND_FOR_CHOICE,
     Container,
@@ -27,6 +28,8 @@ from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, insert_file
 from fdstoolkit.edit.rebuild import RebuildOptions, rebuild
 from fdstoolkit.patch.apply import apply_patch
 from fdstoolkit.patch.formats import PatchError
+
+ZIP_SUFFIX: Final = ".zip"
 
 
 def extract(
@@ -221,7 +224,9 @@ def set_command(
 
 
 def build(
-    manifest: Annotated[Path, typer.Argument(help="a JSON manifest describing the disk")],
+    manifest: Annotated[
+        Path, typer.Argument(help="a JSON manifest, or a zip of it with the files it names")
+    ],
     output: Annotated[Path, typer.Option("-o", "--output", help="where to write the image")],
     *,
     force: Annotated[bool, typer.Option("--force", help="overwrite the output")] = False,
@@ -232,7 +237,11 @@ def build(
     guard_output(output, force=force)
 
     try:
-        data = build_manifest_file(manifest)
+        data = (
+            build_packaged(manifest.read_bytes())
+            if manifest.suffix.lower() == ZIP_SUFFIX
+            else build_manifest_file(manifest)
+        )
     except ValueError as error:
         raise fail(str(error)) from error
 
