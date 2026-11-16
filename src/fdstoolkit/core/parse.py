@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 
 from fdstoolkit.core.blocks import (
@@ -29,14 +29,15 @@ RESCAN_SIDES: Final = 2
 PATTERN_REPEATS: Final = 4
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class _Walk:
-    blocks: list[Block]
-    findings: list[Diagnostic]
+    blocks: tuple[Block, ...]
+    findings: tuple[Diagnostic, ...]
     position: int
     expected: BlockKind
     pending_size: int
     rescan_budget: int
+    done: bool = False
 
 
 def _diagnostic(
@@ -94,94 +95,122 @@ def _other_length(data: bytes, offset: int, declared: int) -> int | None:
     return crc_boundary(block, range(2, len(block) - CRC_SIZE + 1), ends)
 
 
-def _true_length(walk: _Walk, data: bytes, offset: int, length: int, side_index: int) -> int:
+def _true_length(
+    walk: _Walk, data: bytes, offset: int, length: int, side_index: int
+) -> tuple[_Walk, int]:
     payload = data[offset : offset + length]
     stored = decode_crc(data[offset + length : offset + length + CRC_SIZE])
     if walk.expected is not BlockKind.FILE_DATA or stored == block_crc(payload):
-        return length
+        return walk, length
     remaining = len(data) - offset
     if remaining > walk.rescan_budget:
-        return length
-    walk.rescan_budget -= remaining
+        return walk, length
+    spent = replace(walk, rescan_budget=walk.rescan_budget - remaining)
     found = _other_length(data, offset, length)
     if found is None:
-        return length
-    walk.findings.append(
-        _diagnostic(
-            "FDS016" if found > length else "FDS012",
-            Severity.WARNING,
-            side_index,
-            offset,
-            {"declared": length - 1, "actual": found - 1},
-        )
+        return spent, length
+    finding = _diagnostic(
+        "FDS016" if found > length else "FDS012",
+        Severity.WARNING,
+        side_index,
+        offset,
+        {"declared": length - 1, "actual": found - 1},
     )
-    return found
+    return replace(spent, findings=(*spent.findings, finding)), found
+
+
+def _stop(walk: _Walk, finding: Diagnostic | None) -> _Walk:
+    found = () if finding is None else (finding,)
+    return replace(walk, findings=(*walk.findings, *found), done=True)
+
+
+def _truncated(side_index: int, offset: int, expected: int, available: int) -> Diagnostic:
+    detail: dict[str, object] = {"expected": expected, "available": available}
+    return _diagnostic("FDS004", Severity.ERROR, side_index, offset, detail)
+
+
+def _unexpected(walk: _Walk, code: int, side_index: int, offset: int) -> Diagnostic | None:
+    if not walk.blocks or code in {0, TEST_BLOCK_CODE}:
+        return None
+    detail: dict[str, object] = {"found": code, "expected": int(walk.expected)}
+    return _diagnostic("FDS005", Severity.WARNING, side_index, offset, detail)
+
+
+def _accepted(walk: _Walk, block: Block, side_index: int, offset: int, end: int) -> _Walk:
+    finding = _check_crc(block, side_index, offset)
+    header = block.kind is BlockKind.FILE_HEADER
+    return replace(
+        walk,
+        blocks=(*walk.blocks, block),
+        findings=(*walk.findings, *(() if finding is None else (finding,))),
+        position=end,
+        expected=NEXT_KIND[walk.expected],
+        pending_size=FileHeader.parse(block.payload).size if header else walk.pending_size,
+    )
+
+
+def _checked(walk: _Walk, data: bytes, side_index: int, offset: int, length: int) -> _Walk:
+    crc_bytes = data[offset + length : offset + length + CRC_SIZE]
+    if len(crc_bytes) != CRC_SIZE:
+        available = length + len(crc_bytes)
+        return _stop(walk, _truncated(side_index, offset, length + CRC_SIZE, available))
+    measured, true_length = _true_length(walk, data, offset, length, side_index)
+    end = offset + true_length
+    stored = decode_crc(data[end : end + CRC_SIZE])
+    block = Block(kind=walk.expected, payload=data[offset:end], stored_crc=stored)
+    return _accepted(measured, block, side_index, offset, end + CRC_SIZE)
+
+
+def _step(walk: _Walk, data: bytes, *, has_crc: bool, side_index: int) -> _Walk:
+    offset = walk.position
+    code = data[offset]
+    if code != int(walk.expected):
+        return _stop(walk, _unexpected(walk, code, side_index, offset))
+    length = _block_length(walk.expected, walk.pending_size)
+    payload = data[offset : offset + length]
+    if len(payload) != length:
+        return _stop(walk, _truncated(side_index, offset, length, len(payload)))
+    if has_crc:
+        return _checked(walk, data, side_index, offset, length)
+    block = Block(kind=walk.expected, payload=payload)
+    return _accepted(walk, block, side_index, offset, offset + length)
 
 
 def _walk(data: bytes, *, has_crc: bool, side_index: int) -> _Walk:
     walk = _Walk(
-        blocks=[],
-        findings=[],
+        blocks=(),
+        findings=(),
         position=0,
         expected=BlockKind.DISK_INFO,
         pending_size=0,
         rescan_budget=RESCAN_SIDES * len(data),
     )
-    while walk.position < len(data):
-        offset = walk.position
-        code = data[offset]
-        if code != int(walk.expected):
-            if walk.blocks and code not in (0, TEST_BLOCK_CODE):
-                walk.findings.append(
-                    _diagnostic(
-                        "FDS005",
-                        Severity.WARNING,
-                        side_index,
-                        offset,
-                        {"found": code, "expected": int(walk.expected)},
-                    )
-                )
-            break
-        length = _block_length(walk.expected, walk.pending_size)
-        payload = data[offset : offset + length]
-        if len(payload) != length:
-            walk.findings.append(
-                _diagnostic(
-                    "FDS004",
-                    Severity.ERROR,
-                    side_index,
-                    offset,
-                    {"expected": length, "available": len(payload)},
-                )
-            )
-            break
-        stored: int | None = None
-        if has_crc:
-            crc_bytes = data[offset + length : offset + length + CRC_SIZE]
-            if len(crc_bytes) != CRC_SIZE:
-                walk.findings.append(
-                    _diagnostic(
-                        "FDS004",
-                        Severity.ERROR,
-                        side_index,
-                        offset,
-                        {"expected": length + CRC_SIZE, "available": len(payload) + len(crc_bytes)},
-                    )
-                )
-                break
-            length = _true_length(walk, data, offset, length, side_index)
-            payload = data[offset : offset + length]
-            stored = decode_crc(data[offset + length : offset + length + CRC_SIZE])
-        block = Block(kind=walk.expected, payload=payload, stored_crc=stored)
-        finding = _check_crc(block, side_index, offset)
-        if finding is not None:
-            walk.findings.append(finding)
-        if walk.expected is BlockKind.FILE_HEADER:
-            walk.pending_size = FileHeader.parse(payload).size
-        walk.blocks.append(block)
-        walk.position = offset + length + (CRC_SIZE if has_crc else 0)
-        walk.expected = NEXT_KIND[walk.expected]
+    while not walk.done and walk.position < len(data):
+        walk = _step(walk, data, has_crc=has_crc, side_index=side_index)
     return walk
+
+
+def _format_findings(
+    side: Side, side_index: int, walked: tuple[Diagnostic, ...]
+) -> tuple[Diagnostic, ...]:
+    if not side.is_formatted:
+        return (_diagnostic("FDS001", Severity.WARNING, side_index, 0), *walked)
+    info = DiskInfo.parse(side.blocks[0].payload)
+    if info.verification == VERIFICATION_STRING:
+        return walked
+    found = info.verification.decode("ascii", errors="replace")
+    detail: dict[str, object] = {"found": found}
+    return (*walked, _diagnostic("FDS008", Severity.ERROR, side_index, 0x01, detail))
+
+
+def _count_findings(side: Side, side_index: int) -> tuple[Diagnostic, ...]:
+    declared = side.declared_file_count
+    if declared is None or side.file_count == declared:
+        return ()
+    detail: dict[str, object] = {"declared": declared, "found": side.file_count}
+    if side.file_count > declared:
+        return (_diagnostic("FDS006", Severity.INFO, side_index, None, detail),)
+    return (_diagnostic("FDS009", Severity.WARNING, side_index, None, detail),)
 
 
 def parse_side(
@@ -193,53 +222,19 @@ def parse_side(
 ) -> tuple[Side, tuple[Diagnostic, ...]]:
     walk = _walk(data, has_crc=has_crc, side_index=side_index)
     side = Side(
-        blocks=tuple(walk.blocks),
+        blocks=walk.blocks,
         tail=data[walk.position :].rstrip(b"\0"),
         capacity=len(data) if capacity is None else capacity,
     )
-    findings = list(walk.findings)
-
-    if not side.is_formatted:
-        findings.insert(0, _diagnostic("FDS001", Severity.WARNING, side_index, 0))
-    else:
-        info = DiskInfo.parse(side.blocks[0].payload)
-        if info.verification != VERIFICATION_STRING:
-            findings.append(
-                _diagnostic(
-                    "FDS008",
-                    Severity.ERROR,
-                    side_index,
-                    0x01,
-                    {"found": info.verification.decode("ascii", errors="replace")},
-                )
-            )
-
-    declared = side.declared_file_count
-    if declared is not None and side.file_count > declared:
-        findings.append(
-            _diagnostic(
-                "FDS006",
-                Severity.INFO,
-                side_index,
-                None,
-                {"declared": declared, "found": side.file_count},
-            )
-        )
-    if declared is not None and side.file_count < declared:
-        findings.append(
-            _diagnostic(
-                "FDS009",
-                Severity.WARNING,
-                side_index,
-                None,
-                {"declared": declared, "found": side.file_count},
-            )
-        )
-
-    if side.has_data_after_last_block:
-        findings.append(_trailing(side, walk.position, side_index))
-
-    return side, tuple(findings)
+    trailing = (
+        (_trailing(side, walk.position, side_index),) if side.has_data_after_last_block else ()
+    )
+    findings = (
+        *_format_findings(side, side_index, walk.findings),
+        *_count_findings(side, side_index),
+        *trailing,
+    )
+    return side, findings
 
 
 def _test_pattern(data: bytes) -> bool:

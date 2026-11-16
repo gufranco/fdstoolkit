@@ -107,45 +107,31 @@ def _boot_files(files: tuple[ExtractedFile, ...], boot_code: int) -> tuple[BootF
     )
 
 
+def _failed(index: int, code: int) -> SideBoot:
+    return SideBoot(
+        side=index, verdict=BootVerdict.FAILS, error=code, message=_describe(code), boot_files=()
+    )
+
+
+NEEDS_BYPASS: Final = (
+    "when booted cold, unless a boot file enables NMI before the check, "
+    "as some unlicensed and Namco titles do, or this is a later disk of a set that the "
+    "first disk loads; neither can be decided without running it"
+)
+
+
 def _side_boot(side: Side, index: int, files: tuple[ExtractedFile, ...]) -> SideBoot:
     info = side.disk_info
     if info is None:
-        return SideBoot(
-            side=index,
-            verdict=BootVerdict.FAILS,
-            error=0x22,
-            message=_describe(0x22),
-            boot_files=(),
-        )
+        return _failed(index, 0x22)
     if info.verification != VERIFICATION_STRING:
-        return SideBoot(
-            side=index,
-            verdict=BootVerdict.FAILS,
-            error=0x21,
-            message=_describe(0x21),
-            boot_files=(),
-        )
-
+        return _failed(index, 0x21)
     boot = _boot_files(files, info.boot_file)
     if any(_is_approval(entry) for entry in boot):
-        return SideBoot(
-            side=index,
-            verdict=BootVerdict.BOOTS,
-            error=None,
-            message="boots: a boot file covers the approval data the BIOS compares at $2800",
-            boot_files=boot,
-        )
-    return SideBoot(
-        side=index,
-        verdict=BootVerdict.NEEDS_BYPASS,
-        error=0x20,
-        message=(
-            f"{_describe(0x20)} when booted cold, unless a boot file enables NMI before the check, "
-            "as some unlicensed and Namco titles do, or this is a later disk of a set that the "
-            "first disk loads; neither can be decided without running it"
-        ),
-        boot_files=boot,
-    )
+        message = "boots: a boot file covers the approval data the BIOS compares at $2800"
+        return SideBoot(index, BootVerdict.BOOTS, None, message, boot)
+    message = f"{_describe(0x20)} {NEEDS_BYPASS}"
+    return SideBoot(index, BootVerdict.NEEDS_BYPASS, 0x20, message, boot)
 
 
 def predict_boot(disk: Disk) -> BootReport:
