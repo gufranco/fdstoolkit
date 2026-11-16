@@ -10,7 +10,6 @@ from fdstoolkit.build.manifest import build_manifest_file
 from fdstoolkit.build.packaged import build_packaged
 from fdstoolkit.cli.common import (
     KIND_FOR_CHOICE,
-    Container,
     Family,
     KindChoice,
     ManifestChoice,
@@ -21,6 +20,7 @@ from fdstoolkit.cli.common import (
     read_image,
 )
 from fdstoolkit.codecs import fds, qd
+from fdstoolkit.codecs.container import Container
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.core.files import extract_files
 from fdstoolkit.edit.diskinfo import apply_edits, parse_edit

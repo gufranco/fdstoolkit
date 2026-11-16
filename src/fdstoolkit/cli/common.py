@@ -8,6 +8,7 @@ from typing import Final
 import typer
 
 from fdstoolkit.codecs import fds, qd
+from fdstoolkit.codecs.container import Container, decode_as
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
 from fdstoolkit.core.blocks import BlockKind, FileKind
 from fdstoolkit.core.diagnostics import Diagnostic, Severity, worst_severity
@@ -26,11 +27,6 @@ class Family(StrEnum):
     REPAIR = "Repair"
     CONTAINER = "Container"
     HARDWARE = "Hardware"
-
-
-class Container(StrEnum):
-    FDS = "fds"
-    QD = "qd"
 
 
 class KindChoice(StrEnum):
@@ -100,9 +96,8 @@ def decode_image(path: Path) -> tuple[Disk, tuple[Diagnostic, ...], bytes, Conta
         reject_foreign(data)
     except ForeignImageError as error:
         raise fail(str(error)) from error
-    decoder = fds.decode if container is Container.FDS else qd.decode
     try:
-        disk, findings = decoder(data)
+        disk, findings = decode_as(data, container)
     except ValueError as error:
         raise fail(str(error)) from error
     return disk, findings, data, container

@@ -745,6 +745,8 @@ The rule the design turns on is that the web layer decides nothing. Every route 
 
 Saved captures travel the same way. A dump with `keep captures` set offers the bundle as a second download beside the image, and `consensus`, `reads`, `grade` and `calibrate` each take that zip in a `captures` field. A calibration that replays captures never opens the drive, so it runs with no stick attached.
 
+An uploaded image carries no file name the page can trust, so the server tells `.fds` from `.qd` by its bytes: an fwNES header or whole 65,500-byte sides is `.fds`, whole 65,536-byte sides or a checksum after the disk information block is `.qd`. The command goes by the file's extension.
+
 | Route | Command it mirrors |
 |---|---|
 | `GET /api/catalogue` | the profile, format and target tables |

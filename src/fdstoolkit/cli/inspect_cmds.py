@@ -6,7 +6,6 @@ from typing import Annotated
 import typer
 
 from fdstoolkit.cli.common import (
-    Container,
     Family,
     decode_image,
     exit_code,
@@ -16,6 +15,7 @@ from fdstoolkit.cli.common import (
     side_summary,
 )
 from fdstoolkit.codecs import qd
+from fdstoolkit.codecs.container import Container
 from fdstoolkit.core.bios import BootVerdict, predict_boot
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import worst_severity

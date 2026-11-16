@@ -9,7 +9,6 @@ from typing import Annotated, Final
 import typer
 
 from fdstoolkit.cli.common import (
-    Container,
     Family,
     container_of,
     decode_image,
@@ -18,6 +17,7 @@ from fdstoolkit.cli.common import (
     read_image,
 )
 from fdstoolkit.codecs import fds, qd
+from fdstoolkit.codecs.container import Container
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.edit.emulator import SaveFormat, extract_save, merge_save
 from fdstoolkit.edit.recipes import load_recipes

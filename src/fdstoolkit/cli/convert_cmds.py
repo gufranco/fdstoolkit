@@ -8,7 +8,6 @@ import typer
 from fdstoolkit.build.blank import DEFAULT_GAME_NAME, blank_image
 from fdstoolkit.build.calibration import DECIDES_ITSELF, calibration_image
 from fdstoolkit.cli.common import (
-    Container,
     Family,
     container_of,
     decode_image,
@@ -18,6 +17,7 @@ from fdstoolkit.cli.common import (
     side_count,
 )
 from fdstoolkit.codecs import fds, qd
+from fdstoolkit.codecs.container import Container
 from fdstoolkit.core.diagnostics import Severity, worst_severity
 
 

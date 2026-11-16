@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 import typer
 
-from fdstoolkit.cli.common import Container, container_of, fail, guard_output, read_image
+from fdstoolkit.cli.common import container_of, fail, guard_output, read_image
+from fdstoolkit.codecs.container import Container
 
 
 def test_a_message_becomes_a_failing_exit() -> None:

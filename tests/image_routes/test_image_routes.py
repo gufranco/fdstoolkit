@@ -15,7 +15,9 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.build.fdspacker import FdsPackerManifest
 from fdstoolkit.cli.main import app as cli
+from fdstoolkit.codecs import qd
 from fdstoolkit.codecs.fds import encode
+from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.captures import Capture, bundle_zip
 from fdstoolkit.ui.app import create_app
 
@@ -583,3 +585,21 @@ def test_a_save_action_it_does_not_know_is_refused(client: TestClient) -> None:
 
     # Assert
     assert answer.status_code == BAD_REQUEST
+
+
+@pytest.mark.parametrize("sides", [1, 2])
+def test_a_qd_upload_reads_as_the_command_reads_it(
+    client: TestClient, tmp_path: Path, sides: int
+) -> None:
+    # Arrange
+    image, _ = qd.encode(Disk(sides=calibration_disk().sides[:sides]))
+    (tmp_path / "disk.qd").write_bytes(image)
+    command = CliRunner().invoke(cli, ["info", str(tmp_path / "disk.qd"), "--files", "--json"])
+    upload = base64.b64encode(image).decode("ascii")
+
+    # Act
+    answer = client.post("/api/info", json={"data": upload, "name": "disk.qd"})
+
+    # Assert
+    files = json.loads(command.output)["files"]
+    assert [entry["name"] for entry in answer.json()["files"]] == [entry["name"] for entry in files]

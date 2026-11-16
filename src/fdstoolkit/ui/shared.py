@@ -10,6 +10,7 @@ from typing import Final, NoReturn
 from fastapi import HTTPException
 
 from fdstoolkit.codecs import fds, qd
+from fdstoolkit.codecs.container import decode_detected
 from fdstoolkit.codecs.foreign import ForeignImageError, reject_foreign
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import Disk
@@ -47,7 +48,7 @@ def decode_payload(payload: str) -> tuple[Disk, bytes, tuple[Diagnostic, ...]]:
     except ForeignImageError as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
     try:
-        disk, findings = fds.decode(data)
+        disk, findings, _ = decode_detected(data)
     except ValueError as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
     return disk, data, findings
