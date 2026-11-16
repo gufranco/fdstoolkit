@@ -1,6 +1,6 @@
 # Changelog
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
+Versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html). Every release after 0.1.0 is published with its notes on the [releases page](https://github.com/gufranco/fdstoolkit/releases), which is the changelog from then on. The entry below is the first release, kept as it was written.
 
 ## 0.1.0
 
