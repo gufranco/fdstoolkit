@@ -210,14 +210,23 @@ def _refuse_repeats(names: Sequence[str]) -> None:
         raise BundleError(message)
 
 
+def _bundled(directory: Path, name: str, limit: int) -> bytes | None:
+    path = (directory / name).resolve()
+    if path.parent != directory.resolve():
+        message = f"{name} is not a file inside {BUNDLE.what}"
+        raise BundleError(message)
+    if not path.is_file():
+        return None
+    if path.stat().st_size > limit:
+        message = f"{name} is larger than {BUNDLE.beyond}"
+        raise BundleError(message)
+    return path.read_bytes()
+
+
 def _directory(directory: Path) -> Bundle:
-    manifest_path = directory / MANIFEST
-    manifest = manifest_path.read_bytes() if manifest_path.is_file() else None
+    manifest = _bundled(directory, MANIFEST, MAX_MANIFEST_BYTES)
     names = [str(entry.get("file", "")) for entry in _listed(manifest)]
-    members = {
-        name: (directory / name).read_bytes() if (directory / name).is_file() else None
-        for name in names
-    }
+    members = {name: _bundled(directory, name, MAX_CAPTURE_BYTES) for name in names}
     return read_files({MANIFEST: manifest, **members})
 
 

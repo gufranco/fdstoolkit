@@ -13,6 +13,7 @@ import pytest
 from fdstoolkit.drive.captures import (
     MANIFEST,
     MAX_CAPTURE_BYTES,
+    MAX_MANIFEST_BYTES,
     BundleError,
     Capture,
     bundle_zip,
@@ -409,3 +410,53 @@ def test_a_manifest_entry_whose_read_is_not_a_count_is_refused(
 
     # Assert
     assert raised.type is BundleError
+
+
+def bundle_naming(directory: Path, name: str) -> Path:
+    folder = directory / "bundle"
+    write_bundle(folder, CAPTURES[:1], image="game.fds", created=CREATED)
+    manifest = json.loads((folder / MANIFEST).read_text("utf-8"))
+    manifest["captures"][0]["file"] = name
+    (folder / MANIFEST).write_text(json.dumps(manifest), "utf-8")
+    return folder
+
+
+@pytest.mark.parametrize("escape", ["../outside.raw03", "inner/side.raw03", "/outside.raw03"])
+def test_a_directory_bundle_naming_a_file_outside_it_is_refused(
+    tmp_path: Path, escape: str
+) -> None:
+    # Arrange
+    (tmp_path / "outside.raw03").write_bytes(CAPTURES[0].data)
+    folder = bundle_naming(tmp_path, escape)
+
+    # Act
+    with pytest.raises(BundleError) as raised:
+        load_bundle(folder)
+
+    # Assert
+    assert str(raised.value) == f"{escape} is not a file inside the capture bundle"
+
+
+def test_a_directory_capture_larger_than_any_capture_is_refused(tmp_path: Path) -> None:
+    # Arrange
+    folder = bundle_naming(tmp_path, "big.raw03")
+    (folder / "big.raw03").write_bytes(bytes(MAX_CAPTURE_BYTES + 1))
+
+    # Act
+    with pytest.raises(BundleError) as raised:
+        load_bundle(folder)
+
+    # Assert
+    assert str(raised.value) == "big.raw03 is larger than any capture a drive returns"
+
+
+def test_a_directory_manifest_larger_than_any_manifest_is_refused(tmp_path: Path) -> None:
+    # Arrange
+    (tmp_path / MANIFEST).write_bytes(b" " * (MAX_MANIFEST_BYTES + 1))
+
+    # Act
+    with pytest.raises(BundleError) as raised:
+        load_bundle(tmp_path)
+
+    # Assert
+    assert str(raised.value) == "manifest.json is larger than any capture a drive returns"
