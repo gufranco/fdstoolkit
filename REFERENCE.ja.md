@@ -646,6 +646,42 @@ fdstoolkit refresh -o refreshed.fds --backup before.fds
 <img alt="ローカル Web ページの refresh コマンド" src="assets/screenshots/refresh-light.png">
 </picture>
 
+#### `save-backup`
+
+```bash
+fdstoolkit save-backup -o <save.json> [--side N] [--file N] [--retries N] [--force]
+```
+
+ディスクの他の部分には触れずに、ゲームのセーブをディスクからこのマシンに保存します。面を読み、すべてのブロックが正しく読めた場合だけ、セーブファイルだけを残します。名前がセーブらしいファイル、または `--file` で番号を指定したファイルを、元のゲーム、バージョン、ディスク番号、面とともに保存します。ディスクには何も書きません。
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-backup-dark.png">
+<img alt="ローカル Web ページの save-backup コマンド" src="assets/screenshots/save-backup-light.png">
+</picture>
+
+#### `save-restore`
+
+```bash
+fdstoolkit save-restore <save.json> [--backup <file>] [--retries N] [--yes]
+```
+
+`save-restore` は同じ面を読み直し、ディスクが別のゲーム、バージョン、ディスク番号のとき、反対の面が下を向いているとき、そこにあるセーブファイルの番号、名前、大きさが違うときは、書く前に拒否します。大きさが違えば別のリリースだからです。それ以外では、そのファイルのデータだけを入れ替えて面を書き直し、元の面を `--backup` に残し、読み戻します。セーブを戻せるのは、取り出した元のディスクか同じリリースの別のコピーだけです。エミュレーターのセーブは、イメージに対して `save apply` を使ってください。
+
+```bash
+fdstoolkit save-backup -o zelda.json
+fdstoolkit save-restore zelda.json --backup before.fds
+```
+
+```
+kept file 4 SAVEDATA, 64 bytes, of ZEL version 0, disk 0 side 0 in zelda.json
+restored file 4 SAVEDATA on side 0, read back as written
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-restore-dark.png">
+<img alt="ローカル Web ページの save-restore コマンド" src="assets/screenshots/save-restore-light.png">
+</picture>
+
 #### `duplicate`
 
 ```bash

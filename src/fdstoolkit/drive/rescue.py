@@ -77,7 +77,7 @@ class RescueState:
 EMPTY: Final = RescueState(identity=None, infos=(), captures=())
 
 
-def _identity(info: DiskInfo) -> Identity:
+def identity_of(info: DiskInfo) -> Identity:
     return Identity(
         licensee=info.licensee,
         game=info.game_name,
@@ -107,7 +107,7 @@ def identity_problem(state: RescueState, side: int, blocks: Sequence[BlockRead])
             f"the disk in the drive shows side {info.side} face down, and this run reads side "
             f"{side}: turn the disk over"
         )
-    found = _identity(info)
+    found = identity_of(info)
     if state.identity is not None and found != state.identity:
         return (
             f"this rescue is of {state.identity.render()}, and the disk in the drive is "
@@ -131,7 +131,7 @@ def with_read(
     infos = (*state.infos, (side, info.payload)) if learned and info is not None else state.infos
     identity = state.identity
     if identity is None and info is not None:
-        identity = _identity(info)
+        identity = identity_of(info)
     return RescueState(identity=identity, infos=infos, captures=(*state.captures, kept))
 
 

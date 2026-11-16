@@ -646,6 +646,42 @@ fdstoolkit refresh -o refreshed.fds --backup before.fds
 <img alt="The refresh command on the local web page" src="assets/screenshots/refresh-light.png">
 </picture>
 
+#### `save-backup`
+
+```bash
+fdstoolkit save-backup -o <save.json> [--side N] [--file N] [--retries N] [--force]
+```
+
+Keeps a game's save from the disk on this machine, without touching the rest of the disk. It reads the side, refuses it unless every block read clean, and keeps only the save file, the one whose name reads like a save or the one `--file` numbers, together with the game, version, disk and side it came from. Nothing is written to the disk.
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-backup-dark.png">
+<img alt="The save-backup command on the local web page" src="assets/screenshots/save-backup-light.png">
+</picture>
+
+#### `save-restore`
+
+```bash
+fdstoolkit save-restore <save.json> [--backup <file>] [--retries N] [--yes]
+```
+
+`save-restore` reads the same side fresh, and refuses before writing when the disk is another game, version or disk number, when the other side is face down, or when the save file there has another number, name or size, since that is another release. Otherwise it rewrites the side with only that file's data swapped, keeping the side as it was in `--backup`, and reads it back. The save goes back only to the disk it came from or another copy of the same release; for an emulator's save, use `save apply` on an image.
+
+```bash
+fdstoolkit save-backup -o zelda.json
+fdstoolkit save-restore zelda.json --backup before.fds
+```
+
+```
+kept file 4 SAVEDATA, 64 bytes, of ZEL version 0, disk 0 side 0 in zelda.json
+restored file 4 SAVEDATA on side 0, read back as written
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/save-restore-dark.png">
+<img alt="The save-restore command on the local web page" src="assets/screenshots/save-restore-light.png">
+</picture>
+
 #### `duplicate`
 
 ```bash

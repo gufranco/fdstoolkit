@@ -8,6 +8,7 @@ from fdstoolkit import __version__
 from fdstoolkit.cli import (
     compare_cmds,
     convert_cmds,
+    disk_save_cmds,
     drive_cli,
     edit_cmds,
     hardware_cmds,
@@ -48,6 +49,7 @@ rescue_cmds.register(app)
 track_cmds.register(app)
 triage_cmds.register(app)
 rewrite_cmds.register(app)
+disk_save_cmds.register(app)
 
 
 def _version_callback(value: bool) -> None:

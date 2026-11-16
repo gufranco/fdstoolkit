@@ -335,6 +335,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/save-backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["save_backup_job_api_jobs_save_backup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/save-restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["save_restore_job_api_jobs_save_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/session": {
         parameters: {
             query?: never;
@@ -975,6 +1007,16 @@ export interface components {
             rows?: {
                 [key: string]: unknown;
             }[];
+        };
+        SaveBackupSpec: {
+            file?: number | null;
+            retries: number;
+            side: number;
+        };
+        SaveRestoreSpec: {
+            confirm: boolean;
+            retries: number;
+            saved: string;
         };
         SaveSpec: {
             action: string;
@@ -1688,6 +1730,68 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RescueSpec"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_backup_job_api_jobs_save_backup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveBackupSpec"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_restore_job_api_jobs_save_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveRestoreSpec"];
             };
         };
         responses: {

@@ -5,16 +5,37 @@ from typing import TYPE_CHECKING, Final
 
 from fastapi import Request  # noqa: TC002
 
+from fdstoolkit.edit.disk_saves import SaveBackup, SaveBackupError, backup_bytes, load_backup
+from fdstoolkit.hardware.disk_save import back_up_save, restore_save
 from fdstoolkit.hardware.duplicate import duplicate, duplicate_lines
 from fdstoolkit.hardware.refresh import RefreshPlan, refresh_disk
 from fdstoolkit.hardware.session import LongSideError
-from fdstoolkit.hardware.writing import refuse_long_sides
+from fdstoolkit.hardware.writing import CHANGED_BLOCK, STALE_BLOCK, refuse_long_sides
 from fdstoolkit.quality.surface_disks import erased_disk
-from fdstoolkit.ui.hardware_routes import Backup, confirmed, start_drive_job, write_reported
+from fdstoolkit.ui.hardware_routes import (
+    BACKUP_NAME,
+    Backup,
+    confirmed,
+    start_drive_job,
+    write_reported,
+)
 from fdstoolkit.ui.history_schemas import CopyView, DuplicateResult
-from fdstoolkit.ui.rewrite_schemas import DuplicateSpec, EraseSpec, RefreshSpec
+from fdstoolkit.ui.rewrite_schemas import (
+    DuplicateSpec,
+    EraseSpec,
+    RefreshSpec,
+    SaveBackupSpec,
+    SaveRestoreSpec,
+)
 from fdstoolkit.ui.schemas import JobView, ReportedFile
-from fdstoolkit.ui.shared import UNPROCESSABLE, decode_payload, encoded_file, refuse
+from fdstoolkit.ui.shared import (
+    UNPROCESSABLE,
+    bytes_of,
+    decode_payload,
+    encoded_file,
+    named_file,
+    refuse,
+)
 
 if TYPE_CHECKING:
     from fdstoolkit.core.disk import Disk
@@ -103,3 +124,60 @@ def _refresh(spec: RefreshSpec, drive: FdsStick, controls: Controls) -> Reported
 def refresh_job(spec: RefreshSpec, request: Request) -> JobView:
     confirmed("refreshing a disk", confirm=spec.confirm)
     return start_drive_job(request, "refresh", writes=True, work=partial(_refresh, spec))
+
+
+SAVE_NAME: Final = "save.json"
+
+
+def _save_backup(spec: SaveBackupSpec, drive: FdsStick, controls: Controls) -> ReportedFile:
+    backup = back_up_save(
+        drive, side=spec.side, number=spec.file, retries=spec.retries, progress=controls.step
+    )
+    headline = (
+        f"kept file {backup.number} {backup.name}, {len(backup.data)} bytes, of "
+        f"{backup.identity.render()} side {backup.side}"
+    )
+    return ReportedFile(headline=headline, file=named_file(SAVE_NAME, backup_bytes(backup)))
+
+
+def save_backup_job(spec: SaveBackupSpec, request: Request) -> JobView:
+    work = partial(_save_backup, spec)
+    return start_drive_job(request, "save-backup", writes=False, work=work)
+
+
+def _save_restore(
+    spec: SaveRestoreSpec, kept: SaveBackup, drive: FdsStick, controls: Controls
+) -> ReportedFile:
+    backup = Backup(controls)
+    written = restore_save(
+        drive,
+        kept,
+        retries=spec.retries,
+        confirm=lambda _: True,
+        keep=backup.keep,
+        progress=controls.step,
+    )
+    rows: list[dict[str, object]] = [
+        {
+            "side": kept.side,
+            "block": block,
+            "finding": STALE_BLOCK if block in written.stale else CHANGED_BLOCK,
+        }
+        for block in written.mismatched
+    ]
+    state = "did not read back as written" if written.mismatched else "read back as written"
+    headline = f"restored file {kept.number} {kept.name} on side {kept.side}, {state}"
+    return ReportedFile(
+        headline=headline, file=named_file(BACKUP_NAME, backup.data), rows=rows, ok=not rows
+    )
+
+
+def save_restore_job(spec: SaveRestoreSpec, request: Request) -> JobView:
+    confirmed("restoring a save", confirm=spec.confirm)
+    try:
+        kept = load_backup(bytes_of(spec.saved))
+    except SaveBackupError as error:
+        refuse(str(error), status=UNPROCESSABLE)
+    return start_drive_job(
+        request, "save-restore", writes=True, work=partial(_save_restore, spec, kept)
+    )

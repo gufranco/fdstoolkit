@@ -14,6 +14,8 @@ from drive_double import SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
+from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.ui.app import create_app
 
 HOST = "127.0.0.1"
@@ -26,7 +28,8 @@ class TurnedByTheOperator(SimulatedDrive):
 
 def two_sided_drive() -> TurnedByTheOperator:
     disk, _ = decode(blank_image(sides=2, headered=False, formatted=True, game_name="E2E"))
-    return TurnedByTheOperator(disk)
+    save = FileSpec(name="SAVEDATA", address=0x6000, kind=FileKind.PROGRAM, data=bytes(64))
+    return TurnedByTheOperator(insert_file(disk, side=0, spec=save))
 
 
 def main() -> None:

@@ -408,6 +408,29 @@ test('refresh asks first, then offers the rebuilt image at phone width', async (
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('a save backed up from the disk is restored onto it at phone width', async ({ page }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'save-backup');
+  await page.locator('#panel button.run').click();
+  const link = page.getByRole('link', { name: 'Download save.json' });
+  await expect(link).toBeVisible();
+  const href = await link.getAttribute('href');
+  const buffer = Buffer.from(href.slice(href.indexOf(',') + 1), 'base64');
+  await openCommand(page, 'save-restore');
+  await page.locator('input[data-field=saved]').setInputFiles({ name: 'save.json', mimeType: 'application/json', buffer });
+
+  // Act
+  await page.locator('#panel button.run').click();
+  await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
+
+  // Assert
+  await expect(page.locator('#panel .output')).toContainText('restored file');
+  await expect(page.locator('#panel .output')).toContainText('read back as written');
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

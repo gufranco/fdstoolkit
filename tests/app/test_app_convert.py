@@ -180,6 +180,8 @@ def test_only_the_commands_that_open_a_drive_are_marked() -> None:
         "erase",
         "duplicate",
         "refresh",
+        "save-backup",
+        "save-restore",
     }
 
     # Act

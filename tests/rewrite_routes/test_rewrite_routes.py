@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Final
 
@@ -8,6 +9,10 @@ from drive_double import FaultPlan, SimulatedDrive
 from fastapi.testclient import TestClient
 from hardware_routes_kit import ONE, ONE_SIDE, SETTLE, disk_of, long_image, run, serve
 
+from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.core.disk import Disk
+from fdstoolkit.core.files import extract_files
+from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.ui.app import create_app
 from fdstoolkit.ui.jobs import JobState
 
@@ -170,3 +175,69 @@ def test_a_refresh_job_that_cannot_settle_fails_and_writes_nothing(
     assert job["state"] == JobState.FAILED
     assert "never read clean" in str(job["error"])
     assert drive.write_count == 0
+
+
+def _saved_game(save: bytes) -> Disk:
+    disk = disk_of(ONE_SIDE)
+    for name in ("MAIN", "SAVEDATA"):
+        data = save if name == "SAVEDATA" else bytes([0xAA]) * 32
+        disk = insert_file(
+            disk, side=0, spec=FileSpec(name=name, address=0x6000, kind=FileKind.PROGRAM, data=data)
+        )
+    return disk
+
+
+def test_a_save_backed_up_by_one_job_is_restored_by_another(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    serve(monkeypatch, SimulatedDrive(_saved_game(bytes(range(64)))))
+    kept = run(app, client, "/api/jobs/save-backup", {})
+    drive = serve(monkeypatch, SimulatedDrive(_saved_game(bytes(64))))
+    payload: dict[str, object] = {
+        "saved": str(kept["result"]["file"]["data"].value),
+        "confirm": True,
+    }
+
+    # Act
+    job = run(app, client, "/api/jobs/save-restore", payload)
+
+    # Assert
+    assert kept["result"]["file"]["name"] == "save.json"
+    assert job["result"]["ok"].value is True
+    assert job["result"]["file"]["name"] == "before.fds"
+    assert drive.disk is not None
+    files = {entry.name: entry.data for entry in extract_files(drive.disk)}
+    assert files["SAVEDATA"] == bytes(range(64))
+
+
+def test_a_restore_that_leaves_a_block_names_it(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    serve(monkeypatch, SimulatedDrive(_saved_game(bytes(range(64)))))
+    kept = run(app, client, "/api/jobs/save-backup", {})
+    serve(monkeypatch, LeavesTheLastBlock(_saved_game(bytes(64))))
+    payload: dict[str, object] = {
+        "saved": str(kept["result"]["file"]["data"].value),
+        "confirm": True,
+    }
+
+    # Act
+    job = run(app, client, "/api/jobs/save-restore", payload)
+
+    # Assert
+    assert job["result"]["ok"].value is False
+    assert str(job["result"]["rows"][0]["finding"]).startswith("is old data past the end")
+
+
+def test_a_restore_of_something_that_is_not_a_save_is_refused(client: TestClient) -> None:
+    # Arrange
+    payload = {"saved": base64.b64encode(b"{}").decode(), "confirm": True}
+
+    # Act
+    answer = client.post("/api/jobs/save-restore", json=payload)
+
+    # Assert
+    assert answer.status_code == UNPROCESSABLE
+    assert answer.json()["detail"] == "this is not a save backup that disk-save wrote"
