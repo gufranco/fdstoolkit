@@ -316,14 +316,14 @@ FinishOption = Annotated[
 
 
 @dataclass(frozen=True, slots=True)
-class _WritePlan:
+class WritePlan:
     ask: Callable[[str], bool]
     backup: Path | None
     retries: int
     long_side: bool
 
 
-def _written(drive: FdsStick, disk: Disk, plan: _WritePlan) -> WriteReport:
+def write_disk(drive: FdsStick, disk: Disk, plan: WritePlan) -> WriteReport:
     try:
         if not plan.long_side:
             refuse_long_sides(disk)
@@ -347,7 +347,7 @@ def _written(drive: FdsStick, disk: Disk, plan: _WritePlan) -> WriteReport:
         raise fail(str(error)) from error
 
 
-def _print_write(report: WriteReport) -> None:
+def print_write(report: WriteReport) -> None:
     for line in report.lines:
         typer.echo(line)
     typer.echo(f"verified {report.verified}, grade {report.grade}")
@@ -366,10 +366,10 @@ def write(
     long_side: LongSideOption = False,
 ) -> None:
     disk = calibration_target(image, calibration=calibration, trusted_drive=trusted_drive)
-    plan = _WritePlan(ask=prompter(yes=yes), backup=backup, retries=retries, long_side=long_side)
+    plan = WritePlan(ask=prompter(yes=yes), backup=backup, retries=retries, long_side=long_side)
     with closing(open_drive()) as drive:
-        report = _written(drive, disk, plan)
-        _print_write(report)
+        report = write_disk(drive, disk, plan)
+        print_write(report)
         raise typer.Exit(code=0 if report.verified else 1)
 
 

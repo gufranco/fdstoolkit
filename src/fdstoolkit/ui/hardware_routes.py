@@ -93,7 +93,7 @@ def _drive() -> FdsStick:
         raise HTTPException(status_code=CONFLICT, detail=str(error)) from error
 
 
-def _confirmed(what: str, *, confirm: bool) -> None:
+def confirmed(what: str, *, confirm: bool) -> None:
     if not confirm:
         message = f"{what} destroys what is on the disk, so it needs an explicit confirm field"
         refuse(message, status=UNPROCESSABLE)
@@ -286,6 +286,10 @@ def _write_target(spec: WriteSpec) -> Disk:
 def _write(spec: WriteSpec, disk: Disk, drive: FdsStick, controls: Controls) -> ReportedFile:
     for line in TRUSTED_DRIVE if spec.calibration else ():
         controls.step(line)
+    return write_reported(disk, spec.retries, drive, controls)
+
+
+def write_reported(disk: Disk, retries: int, drive: FdsStick, controls: Controls) -> ReportedFile:
     backup = Backup(controls)
     report = write_verified(
         drive,
@@ -293,7 +297,7 @@ def _write(spec: WriteSpec, disk: Disk, drive: FdsStick, controls: Controls) -> 
         disk,
         confirm=lambda _: True,
         backup=backup.keep,
-        retries=spec.retries,
+        retries=retries,
         flip=controls.ask,
         progress=controls.step,
     )
@@ -312,7 +316,7 @@ def _write(spec: WriteSpec, disk: Disk, drive: FdsStick, controls: Controls) -> 
 
 
 def write_job(spec: WriteSpec, request: Request) -> JobView:
-    _confirmed("writing a disk", confirm=spec.confirm)
+    confirmed("writing a disk", confirm=spec.confirm)
     disk = _write_target(spec)
     return start_drive_job(request, "write", writes=True, work=partial(_write, spec, disk))
 
@@ -360,7 +364,7 @@ def _surface(
 
 
 def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
-    _confirmed("a surface test", confirm=spec.confirm)
+    confirmed("a surface test", confirm=spec.confirm)
     try:
         finish = Finish(spec.finish)
     except ValueError as error:
