@@ -12,6 +12,7 @@ from fdstoolkit.identify.hashes import digests_of
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.quality.reads import compare_reads
+from fdstoolkit.ui.history_schemas import SessionResult
 from fdstoolkit.ui.schemas import (
     CalibrationResult,
     CalibrationRow,
@@ -220,6 +221,14 @@ def job_result_samples() -> dict[type[BaseModel], BaseModel]:
             headline="h", mode="speed", rows=[row], ok=True, spread={}, timing=[]
         ),
         ReportedFile: ReportedFile(headline="written", file=file),
+        SessionResult: SessionResult(
+            headline="the drive reads as it did",
+            ok=True,
+            grade="clean",
+            weak=[],
+            moved=[],
+            since="2026-11-01T10:00:00Z",
+        ),
     }
 
 

@@ -97,7 +97,7 @@ identity          2 blanks match their published digests
 - **檢查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`log`](REFERENCE.md#log)、[`diff`](REFERENCE.md#diff)
 - **修復**：[`rebuild`](REFERENCE.md#rebuild)、[`set`](REFERENCE.md#set)、[`insert`](REFERENCE.md#insert)、[`extract`](REFERENCE.md#extract)、[`patch`](REFERENCE.md#patch)、[`splice`](REFERENCE.md#splice)、[`consensus`](REFERENCE.md#consensus)、[`save`](REFERENCE.md#save)
 - **容器**：[`convert`](REFERENCE.md#convert)、[`blank`](REFERENCE.md#blank)、[`build`](REFERENCE.md#build)
-- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`web`](REFERENCE.md#web)
+- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
 
 ## 操作程序
 
@@ -123,6 +123,7 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 4. 執行 `calibrate speed`，按它的提示調高或調低馬達轉速，直至讀取正確。
 5. 轉速的最後微調要用主機上的測試或頻閃儀完成，因為 FDSStick 看不到最後那百分之一。
 6. 再用兩張原廠磁碟重複 `calibrate head`。然後用一張公認難讀的磁碟確認：社群慣例使用某個包含 39 個檔案的特定碟面，39 個檔案全部讀出而且沒有校驗和錯誤即為通過。
+7. 磁碟機讀取無誤之後，用那張原廠磁碟執行 `fdstoolkit session --reference factory.fds`，記錄一個基準。以後每次開始工作都執行同一條指令：磁碟機讀這張磁碟比上次檢查時差，它就會發出警告。
 
 ### 判斷是磁碟機還是磁碟的問題
 

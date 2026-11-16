@@ -271,6 +271,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["session_job_api_jobs_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/surface": {
         parameters: {
             query?: never;
@@ -725,7 +741,7 @@ export interface components {
             id: string;
             kept?: components["schemas"]["FileResult"] | null;
             prompt: string;
-            result?: components["schemas"]["DumpedResult"] | components["schemas"]["CalibrationResult"] | components["schemas"]["ReportedFile"] | null;
+            result?: components["schemas"]["DumpedResult"] | components["schemas"]["CalibrationResult"] | components["schemas"]["ReportedFile"] | components["schemas"]["SessionResult"] | null;
             state: string;
             steps?: string[];
             stoppable: boolean;
@@ -826,6 +842,18 @@ export interface components {
             recipes?: string | null;
             save?: string | null;
             save_as: string;
+        };
+        SessionResult: {
+            grade: string;
+            headline: string;
+            moved: number[][];
+            ok: boolean;
+            since: string | null;
+            weak: number[][];
+        };
+        SessionSpec: {
+            reference?: string | null;
+            retries: number;
         };
         SideView: {
             actual_files: number;
@@ -1352,6 +1380,37 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DumpSpec"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    session_job_api_jobs_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionSpec"];
             };
         };
         responses: {

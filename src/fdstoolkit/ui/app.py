@@ -39,6 +39,7 @@ from fdstoolkit.ui import analysis_routes, hardware_routes, image_routes
 from fdstoolkit.ui.body_limit import BodyLimit
 from fdstoolkit.ui.forms import FAMILY_ORDER, forms
 from fdstoolkit.ui.jobs import JobBoard
+from fdstoolkit.ui.reads_schemas import RateView, WeakResult, WeakView
 from fdstoolkit.ui.request_guard import request_guard
 from fdstoolkit.ui.schemas import (
     BlankSpec,
@@ -57,13 +58,10 @@ from fdstoolkit.ui.schemas import (
     HashSpec,
     ImageSpec,
     ProfileView,
-    RateView,
     ReadsResult,
     ReadsSpec,
     VerifyResult,
     VerifySpec,
-    WeakResult,
-    WeakView,
 )
 from fdstoolkit.ui.shared import (
     BAD_REQUEST,
@@ -143,6 +141,7 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "dump": "/api/jobs/dump",
     "write": "/api/jobs/write",
     "surface": "/api/jobs/surface",
+    "session": "/api/jobs/session",
 }
 
 
@@ -364,6 +363,7 @@ def _register_hardware(app: FastAPI) -> None:
     app.add_api_route("/api/jobs/dump", hardware_routes.dump_job, methods=["POST"])
     app.add_api_route("/api/jobs/write", hardware_routes.write_job, methods=["POST"])
     app.add_api_route("/api/jobs/surface", hardware_routes.surface_job, methods=["POST"])
+    app.add_api_route("/api/jobs/session", hardware_routes.session_job, methods=["POST"])
     app.add_api_route("/api/jobs/calibrate", hardware_routes.calibrate_job, methods=["POST"])
     app.add_api_route("/api/jobs/current", hardware_routes.current_job, methods=["GET"])
     app.add_api_route("/api/jobs/{job_id}", hardware_routes.job_status, methods=["GET"])

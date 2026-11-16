@@ -103,7 +103,7 @@ Every command's options, output and the basis for each figure are in [REFERENCE.
 - **Check**: [`verify`](REFERENCE.md#verify), [`grade`](REFERENCE.md#grade), [`reads`](REFERENCE.md#reads), [`log`](REFERENCE.md#log), [`diff`](REFERENCE.md#diff)
 - **Repair**: [`rebuild`](REFERENCE.md#rebuild), [`set`](REFERENCE.md#set), [`insert`](REFERENCE.md#insert), [`extract`](REFERENCE.md#extract), [`patch`](REFERENCE.md#patch), [`splice`](REFERENCE.md#splice), [`consensus`](REFERENCE.md#consensus), [`save`](REFERENCE.md#save)
 - **Container**: [`convert`](REFERENCE.md#convert), [`blank`](REFERENCE.md#blank), [`build`](REFERENCE.md#build)
-- **Hardware**: [`status`](REFERENCE.md#status), [`doctor`](REFERENCE.md#doctor), [`dump`](REFERENCE.md#dump), [`write`](REFERENCE.md#write), [`surface`](REFERENCE.md#surface), [`calibrate`](REFERENCE.md#calibrate), [`web`](REFERENCE.md#web)
+- **Hardware**: [`status`](REFERENCE.md#status), [`doctor`](REFERENCE.md#doctor), [`dump`](REFERENCE.md#dump), [`write`](REFERENCE.md#write), [`surface`](REFERENCE.md#surface), [`calibrate`](REFERENCE.md#calibrate), [`session`](REFERENCE.md#session), [`web`](REFERENCE.md#web)
 
 ## Procedures
 
@@ -129,6 +129,7 @@ Three passes give the bundle three reads of every side, which is what the weak-b
 4. Run `calibrate speed` and raise or lower the motor speed as it says until it reads clean.
 5. Finish the speed with a console test or a strobe, since the stick cannot see the last percent.
 6. Repeat `calibrate head` with two more factory disks. Then confirm with a disk known to be hard to read: community practice uses a specific side with 39 files, and a pass means all 39 with no checksum error.
+7. Once the drive reads clean, run `fdstoolkit session --reference factory.fds` with that factory disk to log a baseline. Start every later session with the same command: it warns when the drive reads that disk worse than at its last check.
 
 ### Deciding whether it is the drive or the disk
 

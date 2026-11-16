@@ -8,11 +8,10 @@ from fdstoolkit.history.lookup import log_payload, look_up, subject_for
 from fdstoolkit.history.trend import trend_lines
 from fdstoolkit.master.splice import splice
 from fdstoolkit.quality.consensus import build_consensus
+from fdstoolkit.ui.history_schemas import LogResult, LogSpec
 from fdstoolkit.ui.schemas import (
     ConsensusSpec,
     FileResult,
-    LogResult,
-    LogSpec,
     ReportedFile,
     SpliceSpec,
 )

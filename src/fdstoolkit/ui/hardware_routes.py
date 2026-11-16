@@ -36,9 +36,11 @@ from fdstoolkit.hardware.session import (
     read_disk,
 )
 from fdstoolkit.hardware.writing import refuse_long_sides, write_verified
+from fdstoolkit.history.checks import check_entry, drift_of, drift_payload
 from fdstoolkit.history.entries import calibration_entry, drive_key, dump_entry, stamp_now
-from fdstoolkit.history.logbook import Entry, LogbookError, logbook_path, record
+from fdstoolkit.history.logbook import Entry, LogbookError, history, logbook_path, record
 from fdstoolkit.quality.surface import Finish, SurfacePlan, SurfaceReport, surface_test
+from fdstoolkit.ui.history_schemas import SessionResult, SessionSpec
 from fdstoolkit.ui.jobs import (
     Controls,
     Job,
@@ -237,6 +239,22 @@ def _logged(entry: Entry, controls: Controls, image: FileResult | None = None) -
             controls.keep(image.model_dump())
         raise
     controls.step(f"logged under {entry.disk or entry.title} in {logbook_path()}")
+
+
+def _session(
+    spec: SessionSpec, wanted: Disk | None, drive: FdsStick, controls: Controls
+) -> SessionResult:
+    key = drive_key()
+    earlier = history(logbook_path(), drive=key.drive)
+    reading = read_disk(drive, sides=1, passes=1, retries=spec.retries, progress=controls.step)
+    entry = check_entry(stamp_now(), reading.result, wanted, key)
+    _logged(entry, controls)
+    return SessionResult.model_validate(drift_payload(drift_of(earlier, entry)))
+
+
+def session_job(spec: SessionSpec, request: Request) -> JobView:
+    wanted = None if spec.reference is None else decode_payload(spec.reference)[0]
+    return _start(request, "session", writes=False, work=partial(_session, spec, wanted))
 
 
 def dump_job(spec: DumpSpec, request: Request) -> JobView:

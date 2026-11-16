@@ -271,6 +271,21 @@ test('a dump lands in the logbook, and log shows it for the drive at phone width
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('a session check logs a baseline for the drive at phone width', async ({ page }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'session');
+
+  // Act
+  await page.locator('#panel button.run').click();
+
+  // Assert
+  const output = page.locator('#panel .output');
+  await expect(output).toContainText(/first check of drive drive logged|the drive reads as it did/);
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

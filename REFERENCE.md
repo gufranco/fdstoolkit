@@ -769,6 +769,27 @@ Exit status is 0 when the last read was clean.
 <img alt="The calibrate command on the local web page" src="assets/screenshots/calibrate-light.png">
 </picture>
 
+#### `session`
+
+```bash
+fdstoolkit session [--reference <image>] [--retries N] [--json]
+```
+
+Reads side 0 of a reference disk, logs what the drive made of it, and compares that with the last check of the same drive. Use a factory disk or a calibration disk written on a drive you trust, the same one every time. A block counts as weak when it only read clean on a re-read, never read clean, or, with `--reference`, read differently from that image. The first check of a drive becomes its baseline. Each later check names every block that is weak now and was not at the previous check, with that check's date, and exits 1, because a drive that moved since yesterday should be adjusted before it reads or writes anything that matters. Checks are kept in the logbook `log` reads, under the drive label `FDSTOOLKIT_DRIVE` gives.
+
+```bash
+fdstoolkit session --reference factory.fds
+```
+
+```
+the drive moved since the check of 2026-11-01 10:00: 3 block(s) now weak, side 0 block 1, side 0 block 4, side 0 block 6
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/session-dark.png">
+<img alt="The session command on the local web page" src="assets/screenshots/session-light.png">
+</picture>
+
 #### `web`
 
 ```bash

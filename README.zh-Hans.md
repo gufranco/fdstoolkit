@@ -97,7 +97,7 @@ identity          2 blanks match their published digests
 - **检查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`log`](REFERENCE.md#log)、[`diff`](REFERENCE.md#diff)
 - **修复**：[`rebuild`](REFERENCE.md#rebuild)、[`set`](REFERENCE.md#set)、[`insert`](REFERENCE.md#insert)、[`extract`](REFERENCE.md#extract)、[`patch`](REFERENCE.md#patch)、[`splice`](REFERENCE.md#splice)、[`consensus`](REFERENCE.md#consensus)、[`save`](REFERENCE.md#save)
 - **容器**：[`convert`](REFERENCE.md#convert)、[`blank`](REFERENCE.md#blank)、[`build`](REFERENCE.md#build)
-- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`web`](REFERENCE.md#web)
+- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
 
 ## 操作流程
 
@@ -123,6 +123,7 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 4. 运行 `calibrate speed`，按它的提示调高或调低电机转速，直到读取正确。
 5. 转速的最后微调要用主机上的测试或频闪仪完成，因为 FDSStick 看不到最后那百分之一。
 6. 再用两张原厂磁盘重复 `calibrate head`。然后用一张公认难读的磁盘确认：社区惯例使用某个包含 39 个文件的特定盘面，39 个文件全部读出且没有校验和错误即为通过。
+7. 驱动器读取无误之后，用那张原厂磁盘运行 `fdstoolkit session --reference factory.fds`，记录一个基准。以后每次开始工作都运行同一条命令：驱动器读这张磁盘比上次检查时差，它就会发出警告。
 
 ### 判断是驱动器的问题还是磁盘的问题
 

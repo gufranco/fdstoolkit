@@ -9,13 +9,13 @@ from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.drive.monitor import DEFAULT_READS, MAX_READS, Calibration
-from fdstoolkit.drive.recognition import ReadRate
 from fdstoolkit.drive.timing import Timing
 from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS
 from fdstoolkit.hardware.session import MAX_PASSES, MAX_RETRIES
 from fdstoolkit.identify.hashes import Digests
 from fdstoolkit.quality.grade import GradedReport
 from fdstoolkit.quality.reads import ReadStatistics
+from fdstoolkit.ui.history_schemas import SessionResult
 
 MAX_ADDRESS: Final = 0xFFFF
 GAME_NAME_LENGTH: Final = 3
@@ -178,42 +178,6 @@ class GradeResult(BaseModel):
         )
 
 
-class WeakView(BaseModel):
-    side: int
-    block: int
-    kind: str
-    unstable: int
-    invalid: int
-    reads: int
-    missing: int
-
-
-class RateView(BaseModel):
-    side: int
-    read: int
-    rate: float
-    counted: int
-    unclassed: int
-    span: str
-
-    @classmethod
-    def of(cls, found: ReadRate) -> Self:
-        return cls(
-            side=found.side,
-            read=found.read,
-            rate=found.recognition.rate,
-            counted=found.recognition.counted,
-            unclassed=found.recognition.unclassed,
-            span=found.recognition.span.value,
-        )
-
-
-class WeakResult(BaseModel):
-    reads: int
-    rates: list[RateView]
-    weak: list[WeakView]
-
-
 class ReadsResult(BaseModel):
     passes: int
     stability: float
@@ -297,33 +261,6 @@ class GradeSpec(ImageSpec):
 class ReadsSpec(BaseModel):
     images: list[str] = Field(default_factory=list)
     captures: str | None = Field(None, description="the capture bundle a dump kept, as a zip")
-
-
-class LogSpec(BaseModel):
-    data: str | None = Field(None, description="an image of the disk whose history to show")
-    drive: str | None = Field(
-        None, max_length=64, description="the label of the drive whose history to show"
-    )
-
-
-class LogEntryView(BaseModel):
-    recorded: str
-    kind: str
-    grade: str
-    title: str
-    drive: str | None
-    weak: list[list[int]]
-
-
-class LogResult(BaseModel):
-    headline: str
-    text: str
-    subject: str
-    entries: list[LogEntryView]
-    weakened: list[list[int]]
-    settled: list[list[int]]
-    since: str | None
-    lines: list[str]
 
 
 class CalibrateSpec(BaseModel):
@@ -521,7 +458,7 @@ class JobView(BaseModel):
 
 
 JobResult = Annotated[
-    DumpedResult | CalibrationResult | ReportedFile,
+    DumpedResult | CalibrationResult | ReportedFile | SessionResult,
     Field(union_mode="left_to_right"),
 ]
 

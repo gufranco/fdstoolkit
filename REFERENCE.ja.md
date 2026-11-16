@@ -764,6 +764,27 @@ fdstoolkit calibrate head --reference smb.fds --bracket --passes 60
 <img alt="ローカル Web ページの calibrate コマンド" src="assets/screenshots/calibrate-light.png">
 </picture>
 
+#### `session`
+
+```bash
+fdstoolkit session [--reference <image>] [--retries N] [--json]
+```
+
+基準ディスクの面 0 を読み、ドライブの読み取り結果を記録し、同じドライブの前回の確認と比べます。工場出荷のディスクか、信頼できるドライブで書いた校正ディスクを使い、毎回同じものにします。読み直しでしか正しく読めなかったブロック、一度も正しく読めなかったブロック、`--reference` を付けた場合はそのイメージと違って読めたブロックを、弱いと数えます。ドライブの最初の確認が基準になります。以後の確認では、前回の確認では弱くなかったのに今は弱いブロックをすべて、前回の日付とともに示し、終了コード 1 で終わります。昨日から変わったドライブは、大切なものを読み書きする前に調整すべきだからです。確認は `log` が読む記録帳に、`FDSTOOLKIT_DRIVE` が付けるドライブのラベルで保存されます。
+
+```bash
+fdstoolkit session --reference factory.fds
+```
+
+```
+the drive moved since the check of 2026-11-01 10:00: 3 block(s) now weak, side 0 block 1, side 0 block 4, side 0 block 6
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/session-dark.png">
+<img alt="ローカル Web ページの session コマンド" src="assets/screenshots/session-light.png">
+</picture>
+
 #### `web`
 
 ```bash

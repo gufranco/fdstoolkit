@@ -45,6 +45,7 @@ class EntryKind(StrEnum):
     DUMP = "dump"
     GRADE = "grade"
     CALIBRATION = "calibration"
+    CHECK = "check"
 
 
 class LogbookError(Exception):
