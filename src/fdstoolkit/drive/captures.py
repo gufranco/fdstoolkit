@@ -5,15 +5,17 @@ import io
 import json
 import zipfile
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final, Protocol, cast, runtime_checkable
 
+from fdstoolkit.core.archive import ArchiveError, ArchiveKind, member_names, read_members
 from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.version import VERSION
 
+BUNDLE: Final = ArchiveKind(what="the capture bundle", beyond="any capture a drive returns")
 MANIFEST: Final = "manifest.json"
 FORMAT: Final = "fdstoolkit-captures"
 FORMAT_VERSION: Final = 1
@@ -164,46 +166,25 @@ def read_files(files: Mapping[str, bytes | None]) -> Bundle:
     )
 
 
-def _member(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
+def _from_archive[T](read: Callable[[], T]) -> T:
     try:
-        info = archive.getinfo(name)
-    except KeyError:
-        return None
-    if info.file_size > limit:
-        message = f"{name} is larger than any capture a drive returns"
-        raise BundleError(message)
-    try:
-        with archive.open(info) as member:
-            return member.read(limit + 1)
-    except zipfile.BadZipFile as error:
-        message = f"{name} is damaged inside the capture bundle: {error}"
-        raise BundleError(message) from error
-
-
-def _archive(data: bytes) -> zipfile.ZipFile:
-    try:
-        return zipfile.ZipFile(io.BytesIO(data))
-    except zipfile.BadZipFile as error:
-        message = "the capture bundle is not a zip archive"
-        raise BundleError(message) from error
+        return read()
+    except ArchiveError as error:
+        raise BundleError(str(error)) from error
 
 
 def zip_names(data: bytes) -> tuple[str, ...]:
-    with _archive(data) as archive:
-        return tuple(info.filename for info in archive.infolist() if not info.is_dir())
+    return _from_archive(lambda: member_names(data, BUNDLE))
 
 
 def zip_files(data: bytes, names: Sequence[str], *, limit: int) -> dict[str, bytes]:
-    with _archive(data) as archive:
-        members = {name: _member(archive, name, limit) for name in names}
-    return {name: member for name, member in members.items() if member is not None}
+    return _from_archive(lambda: read_members(data, names, limit=limit, kind=BUNDLE))
 
 
 def read_zip(data: bytes) -> Bundle:
-    with _archive(data) as archive:
-        manifest = _member(archive, MANIFEST, MAX_MANIFEST_BYTES)
-        names = [str(entry.get("file", "")) for entry in _listed(manifest)]
-        members = {name: _member(archive, name, MAX_CAPTURE_BYTES) for name in names}
+    manifest = zip_files(data, [MANIFEST], limit=MAX_MANIFEST_BYTES).get(MANIFEST)
+    names = [str(entry.get("file", "")) for entry in _listed(manifest)]
+    members = zip_files(data, names, limit=MAX_CAPTURE_BYTES)
     return read_files({MANIFEST: manifest, **members})
 
 
