@@ -374,6 +374,24 @@ test('a kiosk-stamped write with no serial set is refused before anything is wri
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('duplicate asks for each disk and counts the verified copies at phone width', async ({ page, request }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'duplicate');
+  await page.locator('input[data-field=data]').setInputFiles(await blankImage(request));
+  await page.locator('#panel button.run').click();
+  await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
+
+  // Act
+  await page.getByRole('button', { name: 'The disk is in' }).click();
+  await page.getByRole('button', { name: TURNED }).click();
+
+  // Assert
+  await expect(page.locator('#panel .output')).toContainText('1 of 1 copies verified');
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

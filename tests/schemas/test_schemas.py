@@ -12,7 +12,7 @@ from fdstoolkit.identify.hashes import digests_of
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
 from fdstoolkit.quality.reads import compare_reads
-from fdstoolkit.ui.history_schemas import SessionResult
+from fdstoolkit.ui.history_schemas import DuplicateResult, SessionResult
 from fdstoolkit.ui.schemas import (
     CalibrationResult,
     CalibrationRow,
@@ -233,6 +233,7 @@ def job_result_samples() -> dict[type[BaseModel], BaseModel]:
         RescueResult: RescueResult(
             name="rescue.zip", data="AA==", size=1, settled=True, image=file
         ),
+        DuplicateResult: DuplicateResult(headline="1 of 1 copies verified", ok=True, copies=[]),
     }
 
 

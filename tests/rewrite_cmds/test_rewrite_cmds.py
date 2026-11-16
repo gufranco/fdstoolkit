@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import typer
 from drive_double import FaultPlan, SimulatedDrive
-from main_kit import attach, attach_facing, operator, runner
+from main_kit import attach, attach_facing, long_side_image, operator, runner
 
 from fdstoolkit.cli import common
 from fdstoolkit.cli.main import app
@@ -120,3 +120,54 @@ def test_erase_that_leaves_an_old_block_names_it_and_fails(
     assert result.exit_code == 1
     assert "side 0: block 0 is old data past the end of the image" in result.stdout
     assert result.stdout.rstrip().endswith("the erase left blocks behind, listed above")
+
+
+def test_duplicate_writes_each_copy_and_counts_them(
+    single_side: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    drive = attach(monkeypatch, single_side)
+
+    # Act
+    result = runner.invoke(app, ["duplicate", str(single_side), "--count", "2", "--yes"])
+
+    # Assert
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines()[-3:] == [
+        "copy 1 of 2: verified, grade clean",
+        "copy 2 of 2: verified, grade clean",
+        "2 of 2 copies verified",
+    ]
+    assert drive.write_count == 2
+
+
+def test_duplicate_that_fails_a_copy_exits_with_the_count(
+    single_side: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    disk, _, _, _ = common.decode_image(single_side)
+    drive = SimulatedDrive(disk, write_protected=True)
+    monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.open_fdsstick", lambda: drive)
+
+    # Act
+    result = runner.invoke(app, ["duplicate", str(single_side), "--yes"])
+
+    # Assert
+    assert result.exit_code == 1
+    assert "copy 1 of 1: failed, cannot write: disk is write protected" in result.stdout
+    assert result.stdout.splitlines()[-1] == "0 of 1 copies verified"
+
+
+def test_duplicate_refuses_a_side_longer_than_any_factory_side(
+    single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    drive = attach(monkeypatch, single_side)
+
+    # Act
+    result = runner.invoke(app, ["duplicate", str(long_side_image(single_side, tmp_path)), "--yes"])
+
+    # Assert
+    assert result.exit_code == 1
+    assert "longest factory side measured" in result.output
+    assert drive.write_count == 0

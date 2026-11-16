@@ -97,7 +97,7 @@ identity          2 blanks match their published digests
 - **检查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`log`](REFERENCE.md#log)、[`track`](REFERENCE.md#track)、[`triage`](REFERENCE.md#triage)、[`diff`](REFERENCE.md#diff)
 - **修复**：[`rebuild`](REFERENCE.md#rebuild)、[`set`](REFERENCE.md#set)、[`insert`](REFERENCE.md#insert)、[`extract`](REFERENCE.md#extract)、[`patch`](REFERENCE.md#patch)、[`splice`](REFERENCE.md#splice)、[`consensus`](REFERENCE.md#consensus)、[`save`](REFERENCE.md#save)
 - **容器**：[`convert`](REFERENCE.md#convert)、[`blank`](REFERENCE.md#blank)、[`build`](REFERENCE.md#build)
-- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`rescue`](REFERENCE.md#rescue)、[`erase`](REFERENCE.md#erase)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
+- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`rescue`](REFERENCE.md#rescue)、[`erase`](REFERENCE.md#erase)、[`write`](REFERENCE.md#write)、[`duplicate`](REFERENCE.md#duplicate)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
 
 ## 操作流程
 
@@ -137,6 +137,10 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 2. 转储拷贝：`fdstoolkit dump -o copy.fds`。
 3. 比较两者：`fdstoolkit diff source.fds copy.fds --explain`。完全一致说明拷贝包含每一个块。DupliFDS 没有完成的拷贝会被报告为中途停止，并指出它包含原盘中的多少个文件，因为 DupliFDS 写入的文件数只统计到当时为止已复制的文件。
 4. 评估拷贝：配合拷贝的第二次转储运行 `fdstoolkit grade copy.fds --read copy2.fds`，可以知道新磁盘能否稳定读取，这一点仅凭 `diff` 一致是看不出来的。
+
+### 制作多份拷贝
+
+`fdstoolkit duplicate source.fds --count 5` 依次要求放入每张空白磁盘，写入镜像，读回拷贝，并为每份拷贝打印一行。失败的拷贝会连同原因一起计数，然后继续下一张磁盘。分发之前，请在另一台驱动器上读取每份拷贝：驱动器能读回自己写的内容，并不能说明这台驱动器没有问题。
 
 ## 网页界面
 

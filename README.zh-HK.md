@@ -97,7 +97,7 @@ identity          2 blanks match their published digests
 - **檢查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`log`](REFERENCE.md#log)、[`track`](REFERENCE.md#track)、[`triage`](REFERENCE.md#triage)、[`diff`](REFERENCE.md#diff)
 - **修復**：[`rebuild`](REFERENCE.md#rebuild)、[`set`](REFERENCE.md#set)、[`insert`](REFERENCE.md#insert)、[`extract`](REFERENCE.md#extract)、[`patch`](REFERENCE.md#patch)、[`splice`](REFERENCE.md#splice)、[`consensus`](REFERENCE.md#consensus)、[`save`](REFERENCE.md#save)
 - **容器**：[`convert`](REFERENCE.md#convert)、[`blank`](REFERENCE.md#blank)、[`build`](REFERENCE.md#build)
-- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`rescue`](REFERENCE.md#rescue)、[`erase`](REFERENCE.md#erase)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
+- **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`rescue`](REFERENCE.md#rescue)、[`erase`](REFERENCE.md#erase)、[`write`](REFERENCE.md#write)、[`duplicate`](REFERENCE.md#duplicate)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`session`](REFERENCE.md#session)、[`web`](REFERENCE.md#web)
 
 ## 操作程序
 
@@ -137,6 +137,10 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 2. 轉存複本：`fdstoolkit dump -o copy.fds`。
 3. 比較兩者：`fdstoolkit diff source.fds copy.fds --explain`。完全一致表示複本包含每一個區塊。DupliFDS 未完成的複本會被報告為中途停止，並指出它包含原碟中的多少個檔案，因為 DupliFDS 寫入的檔案數目只計算到當時為止已複製的檔案。
 4. 評估複本：配合複本的第二次轉存執行 `fdstoolkit grade copy.fds --read copy2.fds`，可以知道新磁碟能否穩定讀取，這一點單憑 `diff` 一致是看不出來的。
+
+### 製作多份拷貝
+
+`fdstoolkit duplicate source.fds --count 5` 依次要求放入每張空白磁碟，寫入映像檔，讀回拷貝，並為每份拷貝列印一行。失敗的拷貝會連同原因一起計數，然後繼續下一張磁碟。分發之前，請在另一部磁碟機上讀取每份拷貝：磁碟機能讀回自己寫的內容，並不能說明這部磁碟機沒有問題。
 
 ## 網頁介面
 

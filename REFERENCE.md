@@ -629,6 +629,30 @@ The lines indented by two spaces are progress, printed as each step starts, so a
 <img alt="The write command on the local web page" src="assets/screenshots/write-light.png">
 </picture>
 
+#### `duplicate`
+
+```bash
+fdstoolkit duplicate <image> [--count N] [--retries N] [--yes]
+```
+
+Writes one image onto a queue of disks. Before each copy it asks for the next blank disk, then writes the image, reads it back and compares, as `write` does, and prints one line per copy: verified with its grade, or failed with the reason. A copy that fails, from a protected tab, a refused write or blocks that did not read back, is counted and the queue goes on to the next disk; declining the prompt for the next disk stops the queue. The last line counts the copies verified, and the command exits 1 unless every copy was. A side longer than any factory side is refused before the first disk. The page runs the same queue as a job that asks for each disk in turn.
+
+```bash
+fdstoolkit duplicate source.fds --count 3
+```
+
+```
+copy 1 of 3: verified, grade clean
+copy 2 of 3: failed, cannot write: disk is write protected
+copy 3 of 3: verified, grade clean
+2 of 3 copies verified
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/duplicate-dark.png">
+<img alt="The duplicate command on the local web page" src="assets/screenshots/duplicate-light.png">
+</picture>
+
 #### `surface`
 
 ```bash

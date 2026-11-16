@@ -46,3 +46,16 @@ class SessionResult(BaseModel):
     weak: list[list[int]]
     moved: list[list[int]]
     since: str | None
+
+
+class CopyView(BaseModel):
+    number: int
+    verified: bool
+    grade: str
+    reason: str
+
+
+class DuplicateResult(BaseModel):
+    headline: str
+    ok: bool
+    copies: list[CopyView]

@@ -15,7 +15,7 @@ from fdstoolkit.hardware.session import MAX_PASSES, MAX_RETRIES
 from fdstoolkit.identify.hashes import Digests
 from fdstoolkit.quality.grade import GradedReport
 from fdstoolkit.quality.reads import ReadStatistics
-from fdstoolkit.ui.history_schemas import SessionResult
+from fdstoolkit.ui.history_schemas import DuplicateResult, SessionResult
 
 MAX_ADDRESS: Final = 0xFFFF
 GAME_NAME_LENGTH: Final = 3
@@ -471,7 +471,12 @@ class JobView(BaseModel):
 
 
 JobResult = Annotated[
-    DumpedResult | CalibrationResult | ReportedFile | SessionResult | RescueResult,
+    DumpedResult
+    | CalibrationResult
+    | ReportedFile
+    | SessionResult
+    | RescueResult
+    | DuplicateResult,
     Field(union_mode="left_to_right"),
 ]
 

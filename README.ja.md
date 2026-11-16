@@ -97,7 +97,7 @@ identity          2 blanks match their published digests
 - **確認**: [`verify`](REFERENCE.ja.md#verify), [`grade`](REFERENCE.ja.md#grade), [`reads`](REFERENCE.ja.md#reads), [`log`](REFERENCE.ja.md#log), [`track`](REFERENCE.ja.md#track), [`triage`](REFERENCE.ja.md#triage), [`diff`](REFERENCE.ja.md#diff)
 - **修復**: [`rebuild`](REFERENCE.ja.md#rebuild), [`set`](REFERENCE.ja.md#set), [`insert`](REFERENCE.ja.md#insert), [`extract`](REFERENCE.ja.md#extract), [`patch`](REFERENCE.ja.md#patch), [`splice`](REFERENCE.ja.md#splice), [`consensus`](REFERENCE.ja.md#consensus), [`save`](REFERENCE.ja.md#save)
 - **コンテナ**: [`convert`](REFERENCE.ja.md#convert), [`blank`](REFERENCE.ja.md#blank), [`build`](REFERENCE.ja.md#build)
-- **ハードウェア**: [`status`](REFERENCE.ja.md#status), [`doctor`](REFERENCE.ja.md#doctor), [`dump`](REFERENCE.ja.md#dump), [`rescue`](REFERENCE.ja.md#rescue), [`erase`](REFERENCE.ja.md#erase), [`write`](REFERENCE.ja.md#write), [`surface`](REFERENCE.ja.md#surface), [`calibrate`](REFERENCE.ja.md#calibrate), [`session`](REFERENCE.ja.md#session), [`web`](REFERENCE.ja.md#web)
+- **ハードウェア**: [`status`](REFERENCE.ja.md#status), [`doctor`](REFERENCE.ja.md#doctor), [`dump`](REFERENCE.ja.md#dump), [`rescue`](REFERENCE.ja.md#rescue), [`erase`](REFERENCE.ja.md#erase), [`write`](REFERENCE.ja.md#write), [`duplicate`](REFERENCE.ja.md#duplicate), [`surface`](REFERENCE.ja.md#surface), [`calibrate`](REFERENCE.ja.md#calibrate), [`session`](REFERENCE.ja.md#session), [`web`](REFERENCE.ja.md#web)
 
 ## 手順
 
@@ -137,6 +137,10 @@ fdstoolkit grade pass1.fds --read pass2.fds --captures captures/
 2. コピーを吸い出します: `fdstoolkit dump -o copy.fds`。
 3. 両者を比べます: `fdstoolkit diff source.fds copy.fds --explain`。一致すれば、コピーはすべてのブロックを持っています。DupliFDS が途中で止まったコピーは、途中で止まったものとして報告され、元のファイルのうちいくつを持つかが示されます。DupliFDS は、それまでにコピーしたファイルだけを数えたファイル数を書くからです。
 4. コピーを評価します: コピーをもう一度ダンプしたものと合わせて `fdstoolkit grade copy.fds --read copy2.fds` を実行すると、新しいディスクが安定して読めるかがわかります。`diff` が一致しただけでは、そこまではわかりません。
+
+### 複数のコピーを作る
+
+`fdstoolkit duplicate source.fds --count 5` は空のディスクを 1 枚ずつ求め、イメージを書き、コピーを読み戻して、コピーごとに 1 行を表示します。失敗したコピーは理由とともに数え、次のディスクへ進みます。配る前に、各コピーを別のドライブで読んでください。自分が書いたものを読み戻せても、そのドライブについては何も分かりません。
 
 ## ウェブインターフェース
 

@@ -103,7 +103,7 @@ Every command's options, output and the basis for each figure are in [REFERENCE.
 - **Check**: [`verify`](REFERENCE.md#verify), [`grade`](REFERENCE.md#grade), [`reads`](REFERENCE.md#reads), [`log`](REFERENCE.md#log), [`track`](REFERENCE.md#track), [`triage`](REFERENCE.md#triage), [`diff`](REFERENCE.md#diff)
 - **Repair**: [`rebuild`](REFERENCE.md#rebuild), [`set`](REFERENCE.md#set), [`insert`](REFERENCE.md#insert), [`extract`](REFERENCE.md#extract), [`patch`](REFERENCE.md#patch), [`splice`](REFERENCE.md#splice), [`consensus`](REFERENCE.md#consensus), [`save`](REFERENCE.md#save)
 - **Container**: [`convert`](REFERENCE.md#convert), [`blank`](REFERENCE.md#blank), [`build`](REFERENCE.md#build)
-- **Hardware**: [`status`](REFERENCE.md#status), [`doctor`](REFERENCE.md#doctor), [`dump`](REFERENCE.md#dump), [`rescue`](REFERENCE.md#rescue), [`erase`](REFERENCE.md#erase), [`write`](REFERENCE.md#write), [`surface`](REFERENCE.md#surface), [`calibrate`](REFERENCE.md#calibrate), [`session`](REFERENCE.md#session), [`web`](REFERENCE.md#web)
+- **Hardware**: [`status`](REFERENCE.md#status), [`doctor`](REFERENCE.md#doctor), [`dump`](REFERENCE.md#dump), [`rescue`](REFERENCE.md#rescue), [`erase`](REFERENCE.md#erase), [`write`](REFERENCE.md#write), [`duplicate`](REFERENCE.md#duplicate), [`surface`](REFERENCE.md#surface), [`calibrate`](REFERENCE.md#calibrate), [`session`](REFERENCE.md#session), [`web`](REFERENCE.md#web)
 
 ## Procedures
 
@@ -143,6 +143,10 @@ One disk cannot answer this. Read several and compare where they failed: a place
 2. Dump the copy: `fdstoolkit dump -o copy.fds`.
 3. Compare them: `fdstoolkit diff source.fds copy.fds --explain`. Identical means the copy holds every block. A copy DupliFDS did not finish is reported as one that stopped early, naming how many of the source's files it holds, because DupliFDS writes a file amount that counts only the files copied so far.
 4. Grade the copy: `fdstoolkit grade copy.fds --read copy2.fds`, with a second dump of the copy, says whether the new disk reads reliably, which a clean `diff` alone does not.
+
+### Making several copies
+
+`fdstoolkit duplicate source.fds --count 5` asks for each blank disk in turn, writes the image, reads the copy back and prints one line per copy. A copy that fails is counted with its reason and the queue goes on to the next disk. Read each copy on a second drive before handing it out: a drive that reads back its own writes proves nothing about the drive.
 
 ## Web interface
 

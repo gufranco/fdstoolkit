@@ -151,6 +151,20 @@ describe('JobView', () => {
     expect(screen.getByRole('button', { name: 'Turned it, read again' })).toBeDefined();
   });
 
+  it('asks for the next disk of a queue with its own answer', () => {
+    // Arrange
+    const answer = vi.fn();
+    const prompt = 'put blank disk 2 of 3 in the drive, then confirm';
+    const job = { ...RUNNING, command: 'duplicate', state: 'waiting' as const, prompt };
+    render(<JobView job={job} onAnswer={answer} onStop={noAnswer} />);
+
+    // Act
+    fireEvent.click(screen.getByRole('button', { name: 'The disk is in' }));
+
+    // Assert
+    expect(answer).toHaveBeenCalledWith(true);
+  });
+
   it('gives the reason a job failed and the disk read before it', () => {
     // Arrange
     const kept = { name: `${STEM}.fds`, data: 'AQ==', size: 1 };

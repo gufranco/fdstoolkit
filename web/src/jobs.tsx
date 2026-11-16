@@ -11,6 +11,7 @@ export const POLL_MS = 500;
 export const POLL_LIMIT = 7200;
 
 const CONFIRMED_BY_DIALOG = 'confirm';
+const INSERT_PROMPT = 'put blank disk';
 const COMMAND_LANGUAGE = 'en';
 const JOB_BANNER = {
   running: 'busy',
@@ -74,6 +75,13 @@ interface PromptProps {
   readonly onAnswer: (yes: boolean) => void;
 }
 
+function answerKey(asking: Job): string {
+  if (asking.command === 'calibrate') {
+    return 'job.stepped';
+  }
+  return asking.prompt.startsWith(INSERT_PROMPT) ? 'job.inserted' : 'job.turned';
+}
+
 function TurnPrompt(props: PromptProps): ReactElement {
   const t = useT();
   const [sent, setSent] = useState(false);
@@ -81,7 +89,7 @@ function TurnPrompt(props: PromptProps): ReactElement {
     setSent(true);
     props.onAnswer(yes);
   };
-  const done = props.job.command === 'calibrate' ? 'job.stepped' : 'job.turned';
+  const done = answerKey(props.job);
   return (
     <div className="turn" role="alert">
       <p className="prompt" lang={COMMAND_LANGUAGE}>

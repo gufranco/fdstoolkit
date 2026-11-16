@@ -629,6 +629,30 @@ verified True, grade clean
 <img alt="ローカル Web ページの write コマンド" src="assets/screenshots/write-light.png">
 </picture>
 
+#### `duplicate`
+
+```bash
+fdstoolkit duplicate <image> [--count N] [--retries N] [--yes]
+```
+
+1 つのイメージを、順に入れる複数のディスクに書きます。コピーごとに次の空のディスクを求め、`write` と同じようにイメージを書いて読み戻して比較し、コピーごとに 1 行を表示します。検証済みなら評価を、失敗なら理由を示します。書き込み禁止のつめ、拒否された書き込み、読み戻せなかったブロックなどで失敗したコピーは数えたうえで次のディスクへ進み、次のディスクの確認を断ると止まります。最後の行は検証できたコピーの数で、すべて検証できた場合を除き終了コード 1 で終わります。どの工場出荷の面より長い面は、最初のディスクの前に拒否します。Web ページは同じ処理を、ディスクを 1 枚ずつ求めるジョブとして実行します。
+
+```bash
+fdstoolkit duplicate source.fds --count 3
+```
+
+```
+copy 1 of 3: verified, grade clean
+copy 2 of 3: failed, cannot write: disk is write protected
+copy 3 of 3: verified, grade clean
+2 of 3 copies verified
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/duplicate-dark.png">
+<img alt="ローカル Web ページの duplicate コマンド" src="assets/screenshots/duplicate-light.png">
+</picture>
+
 #### `surface`
 
 ```bash

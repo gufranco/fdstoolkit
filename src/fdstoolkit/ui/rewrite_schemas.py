@@ -10,3 +10,10 @@ class EraseSpec(BaseModel):
     sides: SideCount = 1
     retries: int = Field(3, ge=0, le=MAX_RETRIES)
     confirm: bool = False
+
+
+class DuplicateSpec(BaseModel):
+    data: str
+    count: int = Field(1, ge=1, le=100)
+    retries: int = Field(3, ge=0, le=MAX_RETRIES)
+    confirm: bool = False
