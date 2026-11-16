@@ -8,7 +8,7 @@ import pytest
 from fdstoolkit.cli.common import Family
 from fdstoolkit.cli.main import app
 
-READMES = ("README.md", "README.ja.md")
+READMES = ("README.md", "README.ja.md", "README.zh-Hans.md", "README.zh-HK.md")
 REFERENCES = ("REFERENCE.md", "REFERENCE.ja.md")
 PAGES = READMES + REFERENCES
 
@@ -86,6 +86,18 @@ def test_the_two_readmes_point_at_each_other() -> None:
     # Assert
     assert "README.ja.md" in texts[0]
     assert "README.md" in texts[1]
+
+
+@pytest.mark.parametrize("name", READMES)
+def test_every_readme_links_every_other_language(name: str) -> None:
+    # Arrange
+    others = {other for other in READMES if other != name}
+
+    # Act
+    linked = set(re.findall(r"\]\((README[\w.-]*\.md)\)", Path(name).read_text(encoding="utf-8")))
+
+    # Assert
+    assert others - linked == set()
 
 
 def referenced(name: str) -> set[str]:

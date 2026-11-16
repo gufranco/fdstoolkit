@@ -6,8 +6,10 @@ short guide: install, the command index, the procedures, the web page and what
 the toolkit cannot do. [REFERENCE.md](REFERENCE.md) holds what each command
 does, how to run it, and every figure the toolkit reports.
 [README.ja.md](README.ja.md) and [REFERENCE.ja.md](REFERENCE.ja.md) are the same
-documents in Japanese. Change the English one first, then the Japanese one, then
-anything derived from either.
+documents in Japanese. [README.zh-Hans.md](README.zh-Hans.md) and
+[README.zh-HK.md](README.zh-HK.md) translate the README alone, each from the
+English, and link to the English reference. Change the English one first, then
+the Japanese one, then anything derived from either.
 
 ## What this project is, in one paragraph
 

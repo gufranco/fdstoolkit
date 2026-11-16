@@ -4,7 +4,7 @@
 
 <strong>Read a Famicom Disk System disk, judge what came back, reconstruct what Nintendo wrote, and write it again.</strong>
 
-English | [日本語](README.ja.md)
+English | [日本語](README.ja.md) | [简体中文](README.zh-Hans.md) | [繁體中文 (香港)](README.zh-HK.md)
 
 [![ci](https://img.shields.io/github/actions/workflow/status/gufranco/fdstoolkit/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/gufranco/fdstoolkit?style=flat-square&label=release)](https://github.com/gufranco/fdstoolkit/releases/latest)
@@ -13,6 +13,7 @@ English | [日本語](README.ja.md)
 [![license](https://img.shields.io/github/license/gufranco/fdstoolkit?style=flat-square&label=license)](LICENSE)
 
 <p align="center">
+  <a href="#usage">Usage</a> |
   <a href="#install">Install</a> |
   <a href="#commands">Commands</a> |
   <a href="#procedures">Procedures</a> |
@@ -22,13 +23,42 @@ English | [日本語](README.ja.md)
 
 </div>
 
-**26** commands, every one but `doctor` also on the local web page. **1,809** Python tests and **142** page tests. **100%** coverage of lines and branches. Identity measured across a **595**-image corpus, blank-disk values across **1,729** never-rewritten ones.
+26 commands, all but `doctor` also on the local web page, covered by 1,817 Python tests and 142 page tests at 100 percent of lines and branches.
 
 ---
 
 A command-line toolkit for Famicom Disk System media: reading it, judging it, reconstructing it, writing it back, and keeping the drive that does all of that in adjustment.
 
 This is an instrument, not an application. It assumes you know what a disk information block is, that you are willing to open a drive and turn a trimmer, and that you would rather be told a measurement than a verdict. Every command that reports something accepts `--json`. Every command exits 0 when nothing failed and 1 when something did, so they compose in scripts.
+
+## Usage
+
+Everything that works on an image runs without a drive. Build the calibration disk, describe it, check it and identify it:
+
+```bash
+fdstoolkit blank --calibration -o calibration.fds
+fdstoolkit info calibration.fds
+fdstoolkit verify calibration.fds
+fdstoolkit hash calibration.fds --profile release
+```
+
+```
+wrote calibration.fds (131000 bytes)
+write it only on a drive you trust, with write --calibration --trusted-drive, which lists every adjustment that drive needs first
+calibration.fds: fds container, 2 side(s), 131000 bytes
+  side 0: CAL files=6 hidden=0 rewrites=0
+  side 1: CAL files=6 hidden=0 rewrites=0
+ok
+size      131000
+crc32     a53e8978
+md5       4a73ce2d23e89c68b1b09c280d5eaa11
+sha1      9311d8eff476053549e62cff9035bf319998110f
+sha256    e2a0bf3ff01a55ddacdbe4a5f62560dc76f12aac5cbf920f5a6f007275e32c02
+canonical fdstoolkit:v1:release/v1:466fb0140c92458a0d5e48a08d6574fd0912d45263b1b53d985f348eafcbe0ce
+ra md5    4a73ce2d23e89c68b1b09c280d5eaa11
+```
+
+The `canonical` line is the digest two copies of one release share after a Disk Writer kiosk rewrote either. With an FDSStick attached, `dump`, `write` and `calibrate` work on real disks; the [procedures](#procedures) below put them in order.
 
 ## Install
 
@@ -121,6 +151,11 @@ fdstoolkit web
 
 `web` opens a browser on the page. `fdstoolkit web --no-open` starts the server without one, which is what you want over SSH. There is no headless-only command, because the toolkit drives hardware attached to this machine and is never a public service.
 
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/grade-dark.png">
+<img alt="The grade command on the local web page" src="assets/screenshots/grade-light.png" width="700">
+</picture>
+
 The page binds `127.0.0.1:8000` by default. It is not a service: nothing listens on a public interface unless you pass `--host`, and the page loads no remote resource, so no byte leaves the machine.
 
 Every route the page calls, and the command each one mirrors, is listed in [REFERENCE.md](REFERENCE.md#web-interface).
@@ -135,9 +170,18 @@ Every route the page calls, and the command each one mirrors, is listed in [REFE
 
 **Belt and motor faults are not separable** without the pulley ratio, which no trustworthy source states.
 
-## Contributing
+## Versioning
 
-Development setup, the test suite and the release process are in [CONTRIBUTING.md](CONTRIBUTING.md).
+Releases follow [Semantic Versioning](https://semver.org/) and are published from `main` automatically for every fix and feature. A major version removes or changes a command, as 3.0.0 removed `export`. Notes for each version are on the [releases page](https://github.com/gufranco/fdstoolkit/releases).
+
+## Support
+
+| Need | Where |
+|:-----|:------|
+| Something does not work | [Bug report](https://github.com/gufranco/fdstoolkit/issues/new?template=bug.yml) |
+| A result from a real drive | [Hardware report](https://github.com/gufranco/fdstoolkit/issues/new?template=hardware.yml) |
+| A possible security problem | [Security policy](SECURITY.md) |
+| Development setup, tests and releases | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ## Licence
 

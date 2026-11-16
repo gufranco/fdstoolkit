@@ -4,7 +4,7 @@
 
 <strong>ディスクカードを読み取り、読み取れたものを評価し、任天堂が書いた内容を復元し、そしてもう一度書き込む。</strong>
 
-[English](README.md) | 日本語
+[English](README.md) | 日本語 | [简体中文](README.zh-Hans.md) | [繁體中文 (香港)](README.zh-HK.md)
 
 [![ci](https://img.shields.io/github/actions/workflow/status/gufranco/fdstoolkit/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/gufranco/fdstoolkit/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/gufranco/fdstoolkit?style=flat-square&label=release)](https://github.com/gufranco/fdstoolkit/releases/latest)
@@ -13,6 +13,7 @@
 [![license](https://img.shields.io/github/license/gufranco/fdstoolkit?style=flat-square&label=license)](LICENSE)
 
 <p align="center">
+  <a href="#使い方">使い方</a> |
   <a href="#インストール">インストール</a> |
   <a href="#コマンド">コマンド</a> |
   <a href="#手順">手順</a> |
@@ -22,13 +23,42 @@
 
 </div>
 
-コマンドは **26** 個で、`doctor` 以外はローカルの Web ページからも使えます。テストは Python が **1,809** 件、ページが **142** 件、行と分岐の網羅率は **100%**。同一性は **595** 枚のイメージ、空ディスクの値は一度も書き換えられていない **1,729** 面から測定しています。
+コマンドは 26 個で、`doctor` 以外はローカルの Web ページからも使えます。Python のテスト 1,817 件とページのテスト 142 件で、行と分岐の 100 パーセントを網羅しています。
 
 ---
 
 ファミコン ディスクシステムのディスクカードを扱うためのコマンドラインツールです。読み取り、品質の測定、再構成、書き戻し、そしてそれらを行うドライブ自体の調整までを対象とします。
 
 これは製品ではなく計測器です。ディスク情報ブロックが何かを理解しており、ドライブを開けて半固定抵抗を回すことを厭わず、判定だけでなく測定値そのものを見たい人を想定しています。報告を行うコマンドはすべて `--json` を受け付けます。異常がなければ終了コード 0、あれば 1 を返すため、シェルスクリプトに組み込めます。
+
+## 使い方
+
+イメージを扱う処理はすべてドライブなしで動きます。キャリブレーション用ディスクを作り、その内容を表示し、検査し、識別します。
+
+```bash
+fdstoolkit blank --calibration -o calibration.fds
+fdstoolkit info calibration.fds
+fdstoolkit verify calibration.fds
+fdstoolkit hash calibration.fds --profile release
+```
+
+```
+wrote calibration.fds (131000 bytes)
+write it only on a drive you trust, with write --calibration --trusted-drive, which lists every adjustment that drive needs first
+calibration.fds: fds container, 2 side(s), 131000 bytes
+  side 0: CAL files=6 hidden=0 rewrites=0
+  side 1: CAL files=6 hidden=0 rewrites=0
+ok
+size      131000
+crc32     a53e8978
+md5       4a73ce2d23e89c68b1b09c280d5eaa11
+sha1      9311d8eff476053549e62cff9035bf319998110f
+sha256    e2a0bf3ff01a55ddacdbe4a5f62560dc76f12aac5cbf920f5a6f007275e32c02
+canonical fdstoolkit:v1:release/v1:466fb0140c92458a0d5e48a08d6574fd0912d45263b1b53d985f348eafcbe0ce
+ra md5    4a73ce2d23e89c68b1b09c280d5eaa11
+```
+
+`canonical` の行は、ディスクライターでどちらかが書き換えられた後でも、同じ製品の 2 枚が共有するダイジェストです。FDSStick を接続すると、`dump`、`write`、`calibrate` で実際のディスクを扱えます。その順序は下の[手順](#手順)にまとめています。
 
 ## インストール
 
@@ -115,6 +145,11 @@ fdstoolkit web
 
 `web` はブラウザでページを開きます。`fdstoolkit web --no-open` はブラウザを開かずにサーバーだけを起動します。SSH 越しに使う場合はこちらです。ヘッドレス専用のコマンドはありません。本ツールはこの端末に接続されたハードウェアを操作するものであり、公開サービスになることはないからです。
 
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/grade-dark.png">
+<img alt="ローカルの Web ページで開いた grade コマンド" src="assets/screenshots/grade-light.png" width="700">
+</picture>
+
 既定では `127.0.0.1:8000` を待ち受けます。これはサービスではありません。`--host` を指定しない限り公開インターフェースでは待ち受けず、ページは外部リソースを一切読み込まないため、データがこの端末から出ることはありません。
 
 ページが呼び出す経路と、それぞれが対応するコマンドの一覧は [REFERENCE.ja.md](REFERENCE.ja.md#ウェブインターフェース) にあります。
@@ -129,9 +164,18 @@ fdstoolkit web
 
 **ベルトの不良とモーターの不良は切り分けられません。** プーリー比が必要ですが、信頼できる出典がその値を示していません。
 
-## 貢献
+## バージョン
 
-開発環境の構築、テストスイート、リリース手順は [CONTRIBUTING.md](CONTRIBUTING.md) にあります。
+リリースは [セマンティック バージョニング](https://semver.org/)に従い、修正や機能追加のたびに `main` から自動で公開されます。メジャーバージョンが上がるのはコマンドを削除または変更したときで、3.0.0 では `export` を削除しました。各バージョンの変更点は[リリースページ](https://github.com/gufranco/fdstoolkit/releases)にあります。
+
+## サポート
+
+| 用件 | 窓口 |
+|:-----|:------|
+| 正しく動かない | [不具合の報告](https://github.com/gufranco/fdstoolkit/issues/new?template=bug.yml) |
+| 実機のドライブでの結果 | [ハードウェアの報告](https://github.com/gufranco/fdstoolkit/issues/new?template=hardware.yml) |
+| セキュリティ上の問題かもしれないもの | [セキュリティポリシー](SECURITY.md) |
+| 開発環境、テスト、リリース | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ## ライセンス
 
