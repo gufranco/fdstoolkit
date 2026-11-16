@@ -9,7 +9,7 @@ from drive_double import FaultPlan, SimulatedDrive
 from main_kit import attach, attach_facing, long_side_image, operator, runner
 
 from fdstoolkit.build.blank import blank_image
-from fdstoolkit.cli import common, hardware_cmds
+from fdstoolkit.cli import common, surface_cmds
 from fdstoolkit.cli.main import app
 from fdstoolkit.hardware.session import Grade
 from fdstoolkit.quality.surface import Finish, PatternPass, StopReason, SurfaceReport
@@ -282,7 +282,7 @@ def failing_surface_report() -> SurfaceReport:
 def test_surface_names_every_class_of_failing_block(capsys: pytest.CaptureFixture[str]) -> None:
     # Arrange
     report = failing_surface_report()
-    hardware_cmds.report_surface(report)
+    surface_cmds.report_surface(report)
 
     # Act
     result = capsys.readouterr()

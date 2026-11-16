@@ -19,6 +19,7 @@ from fdstoolkit.cli import (
     rewrite_cmds,
     save_cmds,
     session_cmds,
+    surface_cmds,
     track_cmds,
     triage_cmds,
     web_cmds,
@@ -35,6 +36,7 @@ convert_cmds.register(app)
 edit_cmds.register(app)
 inspect_cmds.register(app)
 hardware_cmds.register(app)
+surface_cmds.register(app)
 web_cmds.register(app)
 quality_cli.register(app)
 master_cli.register(app)
