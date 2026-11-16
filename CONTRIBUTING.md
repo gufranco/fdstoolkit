@@ -9,6 +9,13 @@ uv sync --all-extras --dev
 uv run pytest
 ```
 
+On Linux, hidapi publishes no wheel for the newest Python, so `uv sync` builds
+it from source and needs the libusb and udev headers. On Debian or Ubuntu:
+
+```bash
+sudo apt-get install libusb-1.0-0-dev libudev-dev
+```
+
 The suite passes on a clean checkout with no disk images and no BIOS present.
 That is deliberate and CI enforces it: anybody has to be able to work on this
 without owning a collection. The tests that want real images read the directory

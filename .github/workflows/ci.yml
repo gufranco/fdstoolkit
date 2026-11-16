@@ -52,6 +52,12 @@ jobs:
           enable-cache: true
           cache-suffix: lint
 
+      - name: Install the USB headers hidapi builds against
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libusb-1.0-0-dev libudev-dev
+
       - name: Install
         run: uv sync --all-extras --dev
 
@@ -104,6 +110,12 @@ jobs:
           enable-cache: true
           cache-suffix: browser
 
+      - name: Install the USB headers hidapi builds against
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libusb-1.0-0-dev libudev-dev
+
       - name: Install
         run: uv sync --all-extras --dev
 
@@ -147,6 +159,12 @@ jobs:
           enable-cache: true
           cache-suffix: python-${{ matrix.python }}
 
+      - name: Install the USB headers hidapi builds against
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libusb-1.0-0-dev libudev-dev
+
       - name: Install
         run: uv sync --all-extras --dev --python ${{ matrix.python }}
 
@@ -167,6 +185,12 @@ jobs:
         with:
           enable-cache: true
           cache-suffix: determinism
+
+      - name: Install the USB headers hidapi builds against
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libusb-1.0-0-dev libudev-dev
 
       - name: Install
         run: uv sync --all-extras --dev
