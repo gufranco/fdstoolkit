@@ -56,35 +56,34 @@ def _differing(first: bytes, second: bytes) -> int:
     return sum(1 for left, right in zip(padded_first, padded_second, strict=True) if left != right)
 
 
+def _candidate(
+    index: int, entry: ExtractedFile, listings: Sequence[tuple[ExtractedFile, ...]]
+) -> SaveCandidate | None:
+    if len({listing[index].data for listing in listings}) == 1:
+        return None
+    return SaveCandidate(
+        side=entry.side,
+        position=entry.position,
+        name=entry.name,
+        size=entry.size,
+        differing_bytes=max(
+            _differing(entry.data, listing[index].data) for listing in listings[1:]
+        ),
+        name_matches_pattern=name_looks_like_a_save(entry.name),
+    )
+
+
 def find_save_candidates(disks: Sequence[Disk]) -> tuple[SaveCandidate, ...]:
     if len(disks) < MIN_DUMPS:
         message = f"a save candidate needs at least two dumps, got {len(disks)}"
         raise ValueError(message)
-
     listings = [extract_files(disk) for disk in disks]
     reference = listings[0]
     if any(_signature(other) != _signature(reference) for other in listings[1:]):
         message = "the dumps do not hold the same files, so they are not the same release"
         raise ValueError(message)
-
-    differing: list[SaveCandidate] = []
-    for index, entry in enumerate(reference):
-        variants = {listing[index].data for listing in listings}
-        if len(variants) == 1:
-            continue
-        differing.append(
-            SaveCandidate(
-                side=entry.side,
-                position=entry.position,
-                name=entry.name,
-                size=entry.size,
-                differing_bytes=max(
-                    _differing(entry.data, listing[index].data) for listing in listings[1:]
-                ),
-                name_matches_pattern=name_looks_like_a_save(entry.name),
-            )
-        )
-
+    found = [_candidate(index, entry, listings) for index, entry in enumerate(reference)]
+    differing = [candidate for candidate in found if candidate is not None]
     if len(differing) == len(reference) and len(reference) > 1:
         return ()
     return tuple(differing)

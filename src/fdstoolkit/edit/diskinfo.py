@@ -95,47 +95,49 @@ def _describe(payload: bytes, name: str) -> str:
     return str(raw[0])
 
 
+def _edited(payload: bytes, name: str, value: object) -> tuple[bytes, FieldChange]:
+    field = FIELDS_BY_NAME.get(name)
+    if field is None:
+        known = ", ".join(sorted(EDITABLE_FIELDS))
+        message = f"unknown field {name}, editable fields are {known}"
+        raise ValueError(message)
+    if name not in EDITABLE_FIELDS:
+        message = f"{name} is not editable, because changing it would break the disk"
+        raise ValueError(message)
+    end = field.offset + field.length
+    changed = payload[: field.offset] + _encode(name, value, field.length) + payload[end:]
+    change = FieldChange(
+        field=name, before=_describe(payload, name), after=_describe(changed, name)
+    )
+    return changed, change
+
+
+def _editable_side(disk: Disk, side: int) -> Side:
+    if not 0 <= side < disk.side_count:
+        message = f"the image has no side {side}"
+        raise ValueError(message)
+    target = disk.sides[side]
+    if not target.is_formatted:
+        message = f"side {side} carries no disk information block, so there is nothing to edit"
+        raise ValueError(message)
+    return target
+
+
 def apply_edits(
     disk: Disk,
     *,
     side: int,
     edits: Mapping[str, object],
 ) -> tuple[Disk, tuple[FieldChange, ...]]:
-    if not 0 <= side < disk.side_count:
-        message = f"the image has no side {side}"
-        raise ValueError(message)
-
-    target = disk.sides[side]
-    if not target.is_formatted:
-        message = f"side {side} carries no disk information block, so there is nothing to edit"
-        raise ValueError(message)
-
-    payload = bytearray(target.blocks[0].payload)
+    target = _editable_side(disk, side)
+    payload = target.blocks[0].payload
     changes: list[FieldChange] = []
-
     for name, value in edits.items():
-        field = FIELDS_BY_NAME.get(name)
-        if field is None:
-            known = ", ".join(sorted(EDITABLE_FIELDS))
-            message = f"unknown field {name}, editable fields are {known}"
-            raise ValueError(message)
-        if name not in EDITABLE_FIELDS:
-            message = f"{name} is not editable, because changing it would break the disk"
-            raise ValueError(message)
-
-        before = _describe(bytes(payload), name)
-        payload[field.offset : field.offset + field.length] = _encode(name, value, field.length)
-        changes.append(
-            FieldChange(field=name, before=before, after=_describe(bytes(payload), name)),
-        )
-
+        payload, change = _edited(payload, name, value)
+        changes.append(change)
     if not changes:
         return disk, ()
-
-    blocks = (
-        Block(kind=BlockKind.DISK_INFO, payload=bytes(payload)),
-        *target.blocks[1:],
-    )
-    sides = list(disk.sides)
-    sides[side] = Side(blocks=blocks, tail=target.tail, capacity=target.capacity)
-    return Disk(sides=tuple(sides), header_side_count=disk.header_side_count), tuple(changes)
+    blocks = (Block(kind=BlockKind.DISK_INFO, payload=payload), *target.blocks[1:])
+    edited = Side(blocks=blocks, tail=target.tail, capacity=target.capacity)
+    sides = tuple(edited if index == side else entry for index, entry in enumerate(disk.sides))
+    return Disk(sides=sides, header_side_count=disk.header_side_count), tuple(changes)
