@@ -156,6 +156,21 @@ jobs:
         run: gh release upload "${TAG}" sbom.json sbom.json.sigstore.json
         shell: bash
 
+      - name: Build the page into a source distribution
+        if: steps.released.outputs.tag != ''
+        run: |
+          pnpm build
+          uv build --sdist --out-dir release-dist
+        shell: bash
+
+      - name: Attach the source distribution, page included
+        if: steps.released.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.released.outputs.tag }}
+        run: gh release upload "${TAG}" release-dist/fdstoolkit-"${TAG#v}".tar.gz
+        shell: bash
+
       - name: Move the latest tag onto this release
         if: steps.released.outputs.tag != ''
         env:

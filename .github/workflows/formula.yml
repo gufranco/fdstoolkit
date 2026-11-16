@@ -35,6 +35,8 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ inputs.tag || github.event.release.tag_name }}
         run: |
-          jq -nc --arg tag "${TAG}" \
-            '{event_type: "formula-bump", client_payload: {name: "fdstoolkit", tag: $tag}}' \
+          asset="fdstoolkit-${TAG#v}.tar.gz"
+          jq -nc --arg tag "${TAG}" --arg asset "${asset}" \
+            '{event_type: "formula-bump",
+              client_payload: {name: "fdstoolkit", tag: $tag, asset: $asset}}' \
             | gh api --method POST repos/gufranco/homebrew-tap/dispatches --input -
