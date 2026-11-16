@@ -38,6 +38,6 @@ body:
     id: platform
     attributes:
       label: Operating system and Python version
-      placeholder: macOS 15, Python 3.14
+      placeholder: macOS 15, Python 3.15
     validations:
       required: true
