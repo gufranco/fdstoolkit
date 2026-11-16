@@ -406,6 +406,14 @@ fdstoolkit doctor [--json]
 
 Version, Python, platform, whether hardware support is installed, which devices are attached and whether they open, and whether the codec and the identity profiles still pass their self-tests. Run this first when something behaves unexpectedly.
 
+#### Recording a session
+
+```bash
+FDSTOOLKIT_RECORD=recordings/ fdstoolkit dump -o disk.fds
+```
+
+With `FDSTOOLKIT_RECORD` naming a folder, every opening of the FDSStick, from a command or from the web page, writes one `session-<time>.jsonl` file there. It holds each report sent to the stick and each answer, refusal and error, with the milliseconds since the previous one. The test suite can replay a recording exactly, which is what a bug report about a drive needs. A recording also carries every byte read from the disk, so treat it like the dump itself.
+
 
 #### `dump`
 

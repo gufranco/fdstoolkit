@@ -30,6 +30,11 @@ overwrite side A, so set it only with a scratch disk in the drive:
 FDSTOOLKIT_HARDWARE=1 uv run pytest tests/hardware_live -m hardware --no-cov
 ```
 
+Add `FDSTOOLKIT_RECORD=<folder>` to keep a recording of each session with the
+stick. `tests/support/replay.py` answers the driver from a recording, so a
+recording of the calibration disk or of a synthetic side can become a test.
+Never commit a recording of a commercial disk: it carries the disk's bytes.
+
 ## Hooks
 
 The repository carries its own git hooks. Turn them on once per clone:

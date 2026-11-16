@@ -19,6 +19,7 @@ from fdstoolkit.drive.captures import Capture
 from fdstoolkit.drive.pulse import PulseFinding, findings_of
 from fdstoolkit.hardware.device_lock import DriveLock, acquire_drive_lock
 from fdstoolkit.hardware.ports import BlockRead, DriveStatus, FaultKind, HardwareFaultError
+from fdstoolkit.hardware.recording import recorded
 from fdstoolkit.hardware.watchdog import UNMEASURED_CEILING_S, Watchdog
 
 VENDOR_ID: Final = 0x16D0
@@ -360,7 +361,7 @@ def _load_hid() -> HidModule:
 
 
 def _opened(hid: HidModule) -> HidDevice:
-    device = hid.device()
+    device = recorded(hid.device())
     try:
         device.open(VENDOR_ID, PRODUCT_ID)
     except OSError as error:
