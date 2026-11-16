@@ -4,14 +4,13 @@ from pathlib import Path
 
 import click
 import pytest
-from main_kit import game_with_a_file, runner
+from main_kit import game_with_a_file, oversized_qd, runner
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
 from fdstoolkit.codecs.qd import encode as encode_qd
-from fdstoolkit.core.blocks import Block, BlockKind
-from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
+from fdstoolkit.core.disk import SIDE_SIZE
 
 
 def test_convert_writes_a_qd(image: Path, tmp_path: Path) -> None:
@@ -154,28 +153,7 @@ def test_an_unknown_extension_is_reported(tmp_path: Path) -> None:
 
 def test_convert_reports_a_side_that_will_not_fit_the_target(tmp_path: Path) -> None:
     # Arrange
-    info = bytearray(56)
-    info[0] = 0x01
-    info[1:15] = b"*NINTENDO-HVC*"
-    size = 65450
-    header = (
-        bytes([0x03, 0x00, 0x00])
-        + b"BIG     "
-        + (0x6000).to_bytes(2, "little")
-        + size.to_bytes(2, "little")
-        + bytes([0x00])
-    )
-    side = Side(
-        blocks=(
-            Block(kind=BlockKind.DISK_INFO, payload=bytes(info)),
-            Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([0x02, 0x01])),
-            Block(kind=BlockKind.FILE_HEADER, payload=header),
-            Block(kind=BlockKind.FILE_DATA, payload=bytes([0x04]) + bytes(size)),
-        ),
-        tail=b"",
-        capacity=65536,
-    )
-    data, _ = encode_qd(Disk(sides=(side,)))
+    data = oversized_qd(65450)
     source = tmp_path / "big.qd"
     source.write_bytes(data)
     out = tmp_path / "big.fds"

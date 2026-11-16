@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fakes import game_name, seeded
+from recipe_fixture import recipe_text
 from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
@@ -300,24 +301,7 @@ def test_save_blank_makes_two_played_copies_agree(tmp_path: Path) -> None:
 def test_save_blank_says_when_nothing_matched(single_side: Path, tmp_path: Path) -> None:
     # Arrange
     recipes = tmp_path / "other.json"
-    recipes.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "recipes": [
-                    {
-                        "game_name": OTHER_GAME,
-                        "game_version": 0,
-                        "side": 0,
-                        "position": 0,
-                        "fill": 0,
-                        "source": "x",
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
+    recipes.write_text(recipe_text(game_name=OTHER_GAME, source="x"), encoding="utf-8")
 
     # Act
     result = runner.invoke(

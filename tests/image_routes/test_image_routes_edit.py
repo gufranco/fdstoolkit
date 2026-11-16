@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from recipe_fixture import recipe_text
 from typer.testing import CliRunner
 
 from fdstoolkit.build.calibration import calibration_disk
@@ -167,21 +168,7 @@ def test_a_save_that_applies_produces_a_file(client: TestClient) -> None:
 def test_a_recipe_file_that_parses_normalises_the_save(client: TestClient) -> None:
     # Arrange
     recipes = base64.b64encode(
-        json.dumps(
-            {
-                "version": 1,
-                "recipes": [
-                    {
-                        "game_name": GAME,
-                        "game_version": 0,
-                        "side": 0,
-                        "position": 0,
-                        "fill": 0,
-                        "source": "measured against two dumps",
-                    }
-                ],
-            }
-        ).encode()
+        recipe_text(game_name=GAME, source="measured against two dumps").encode()
     ).decode("ascii")
     payload = base64.b64encode(b"\x00" * 64).decode("ascii")
     with_file = client.post(

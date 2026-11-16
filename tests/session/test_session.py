@@ -18,7 +18,6 @@ from session_kit import (
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs.fds import decode
-from fdstoolkit.core.blocks import Block, BlockKind
 from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import (
@@ -209,30 +208,16 @@ def test_a_side_as_long_as_the_calibration_disk_is_accepted() -> None:
     assert outcome is None
 
 
+def with_factory_info(image: Disk) -> Disk:
+    info = decode(blank_image(sides=1, headered=False, formatted=True, game_name=GAME))[0]
+    blocks = (info.sides[0].blocks[0], *image.sides[0].blocks[1:])
+    return Disk(sides=(Side(blocks=blocks, tail=b"", capacity=SIDE_SIZE),))
+
+
 def test_a_drive_that_keeps_the_nintendo_header_is_named_as_half_modified() -> None:
     # Arrange
     drive = HeaderLockedDrive(disk_with_files())
-    image = disk_with_files(2)
-    image = Disk(
-        sides=(
-            Side(
-                blocks=(
-                    Block(
-                        kind=BlockKind.DISK_INFO,
-                        payload=decode(
-                            blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
-                        )[0]
-                        .sides[0]
-                        .blocks[0]
-                        .payload,
-                    ),
-                    *image.sides[0].blocks[1:],
-                ),
-                tail=b"",
-                capacity=SIDE_SIZE,
-            ),
-        )
-    )
+    image = with_factory_info(disk_with_files(2))
 
     # Act
     with pytest.raises(HalfWriteError, match="FMD-POWER") as raised:

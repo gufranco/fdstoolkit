@@ -144,6 +144,23 @@ def test_two_runs_over_the_corpus_produce_the_same_digests(fds_images: list[Path
     assert second == first
 
 
+def stray_offsets(path: Path) -> list[tuple[int, int]]:
+    disk, _ = fds.decode(path.read_bytes())
+    return [
+        (index, offset)
+        for index, side in enumerate(disk.sides)
+        if side.is_formatted
+        for offset, (left, right) in enumerate(
+            zip(
+                side.blocks[0].payload,
+                mask_disk_info(side.blocks[0].payload, CONTENT_PROFILE),
+                strict=True,
+            )
+        )
+        if left != right
+    ]
+
+
 def test_masking_touches_only_the_fields_it_declares(fds_images: list[Path]) -> None:
     # Arrange
     masked_ranges = [
@@ -151,21 +168,14 @@ def test_masking_touches_only_the_fields_it_declares(fds_images: list[Path]) -> 
         for field in DISK_INFO_FIELDS
         if field.provenance
     ]
-    offenders: list[str] = []
 
     # Act
-    for path in fds_images[:200]:
-        disk, _ = fds.decode(path.read_bytes())
-        for index, side in enumerate(disk.sides):
-            if not side.is_formatted:
-                continue
-            original = side.blocks[0].payload
-            masked = mask_disk_info(original, CONTENT_PROFILE)
-            for offset, (left, right) in enumerate(zip(original, masked, strict=True)):
-                if left == right:
-                    continue
-                if not any(start <= offset < stop for start, stop in masked_ranges):
-                    offenders.append(f"{path.name} side {index} offset {offset:#04x}")
+    offenders = [
+        f"{path.name} side {side} offset {offset:#04x}"
+        for path in fds_images[:200]
+        for side, offset in stray_offsets(path)
+        if not any(start <= offset < stop for start, stop in masked_ranges)
+    ]
 
     # Assert
     assert offenders == []

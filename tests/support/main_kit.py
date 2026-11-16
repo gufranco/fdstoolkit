@@ -14,7 +14,9 @@ from fdstoolkit.build.calibration import LARGEST_FACTORY_SIDE, calibration_disk
 from fdstoolkit.cli import common
 from fdstoolkit.cli.main import app
 from fdstoolkit.codecs import fds
-from fdstoolkit.core.blocks import FileKind
+from fdstoolkit.codecs.qd import encode as encode_qd
+from fdstoolkit.core.blocks import Block, BlockKind, FileKind
+from fdstoolkit.core.disk import Disk, Side
 from fdstoolkit.drive.captures import Capture, write_bundle
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
@@ -146,3 +148,28 @@ def written_side_captures(tmp_path: Path) -> tuple[Path, Path]:
     capture = Capture(side=0, read=1, data=(fixture / "calibration-side.raw03").read_bytes())
     write_bundle(captures, [capture], image=image.name, created="2026-11-13T00:00:00Z")
     return image, captures
+
+
+def oversized_qd(size: int) -> bytes:
+    info = bytearray(56)
+    info[0] = 0x01
+    info[1:15] = b"*NINTENDO-HVC*"
+    header = (
+        bytes([0x03, 0x00, 0x00])
+        + b"BIG     "
+        + (0x6000).to_bytes(2, "little")
+        + size.to_bytes(2, "little")
+        + bytes([0x00])
+    )
+    side = Side(
+        blocks=(
+            Block(kind=BlockKind.DISK_INFO, payload=bytes(info)),
+            Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([0x02, 0x01])),
+            Block(kind=BlockKind.FILE_HEADER, payload=header),
+            Block(kind=BlockKind.FILE_DATA, payload=bytes([0x04]) + bytes(size)),
+        ),
+        tail=b"",
+        capacity=65536,
+    )
+    data, _ = encode_qd(Disk(sides=(side,)))
+    return data

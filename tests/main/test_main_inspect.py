@@ -299,30 +299,21 @@ def test_boot_fails_an_unformatted_first_side(tmp_path: Path) -> None:
     assert "block 1 expected" in result.stdout
 
 
-def test_boot_lists_the_files_it_loads(tmp_path: Path) -> None:
-    # Arrange
+def with_approval_screen(tmp_path: Path) -> Path:
     payload = tmp_path / "approval.bin"
     payload.write_bytes(bytes(224))
     source = tmp_path / "one.fds"
     source.write_bytes(blank_image(sides=1, headered=False, formatted=True))
     built = tmp_path / "built.fds"
-    runner.invoke(
-        app,
-        [
-            "insert",
-            str(source),
-            "-o",
-            str(built),
-            "--file",
-            str(payload),
-            "--name",
-            "KYODAKU-",
-            "--address",
-            "2800",
-            "--kind",
-            "nametable",
-        ],
-    )
+    arguments = ["insert", str(source), "-o", str(built), "--file", str(payload)]
+    options = ["--name", "KYODAKU-", "--address", "2800", "--kind", "nametable"]
+    runner.invoke(app, [*arguments, *options])
+    return built
+
+
+def test_boot_lists_the_files_it_loads(tmp_path: Path) -> None:
+    # Arrange
+    built = with_approval_screen(tmp_path)
 
     # Act
     result = runner.invoke(app, ["boot", str(built)])

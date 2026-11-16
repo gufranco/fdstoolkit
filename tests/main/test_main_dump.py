@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,10 +15,67 @@ from fdstoolkit.codecs import fds, qd
 from fdstoolkit.core.blocks import CrcStatus
 from fdstoolkit.core.disk import SIDE_SIZE, Disk
 from fdstoolkit.drive.captures import Capture, load_bundle
+from fdstoolkit.drive.pulse import PulseFinding
 from fdstoolkit.hardware.fdsstick import FdsStick
+from fdstoolkit.hardware.ports import BlockRead, DriveStatus
 
 if TYPE_CHECKING:
     import pytest
+
+
+class CapturingStick(FdsStick):
+    def __init__(self, disk: Disk) -> None:
+        self._drive = SimulatedDrive(disk)
+        self._captures = [Capture(side=0, read=1, data=b"\\x55" * 8)]
+        self._resyncs = []
+        self._pulse = []
+
+    def status(self) -> DriveStatus:
+        return self._drive.status()
+
+    def read_side(self, side: int) -> Iterator[BlockRead]:
+        return self._drive.read_side(side)
+
+
+class OneFace:
+    selects_sides = False
+
+    def __init__(self, disk: Disk) -> None:
+        self._inner = SimulatedDrive(disk)
+        self.facing = 0
+
+    def status(self) -> DriveStatus:
+        return self._inner.status()
+
+    def read_side(self, side: int) -> Iterator[BlockRead]:
+        del side
+        return self._inner.read_side(self.facing)
+
+    def turn_over(self, message: str, *, err: bool) -> bool:
+        del message, err
+        self.facing = 1
+        return True
+
+    @property
+    def captures(self) -> tuple[Capture, ...]:
+        return self._inner.captures
+
+    @property
+    def resyncs(self) -> tuple[tuple[int, int], ...]:
+        return self._inner.resyncs
+
+    @property
+    def pulse_findings(self) -> tuple[PulseFinding, ...]:
+        return self._inner.pulse_findings
+
+    def close(self) -> None:
+        self._inner.close()
+
+
+class TurnedOneFace(OneFace):
+    def read_side(self, side: int) -> Iterator[BlockRead]:
+        self.facing = side
+        return super().read_side(side)
 
 
 def test_dump_reads_the_disk_in_the_drive(
@@ -174,25 +232,8 @@ def test_dump_keeps_the_drives_pulse_classes(
 
 def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
-    class CapturingStick(FdsStick):
-        def __init__(self, disk: Disk) -> None:
-            self._drive = SimulatedDrive(disk)
-            self._captures = [Capture(side=0, read=1, data=b"\\x55" * 8)]
-            self._resyncs = []
-            self._pulse = []
-
-        def status(self):  # noqa: ANN202
-            return self._drive.status()
-
-        def read_side(self, side: int):  # noqa: ANN202
-            return self._drive.read_side(side)
-
     disk, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True))
-
-    def open_capturing() -> CapturingStick:
-        return CapturingStick(disk)
-
-    monkeypatch.setattr(hardware_cmds, "open_fdsstick", open_capturing)
+    monkeypatch.setattr(hardware_cmds, "open_fdsstick", lambda: CapturingStick(disk))
 
     # Act
     result = runner.invoke(
@@ -212,49 +253,10 @@ def test_dump_asks_the_operator_to_turn_the_disk_over(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
-    class OneFace:
-        selects_sides = False
-
-        def __init__(self, disk: Disk) -> None:
-            self._inner = SimulatedDrive(disk)
-            self.facing = 0
-
-        def status(self):  # noqa: ANN202
-            return self._inner.status()
-
-        def read_side(self, side: int):  # noqa: ANN202
-            del side
-            return self._inner.read_side(self.facing)
-
-        @property
-        def captures(self):  # noqa: ANN202
-            return self._inner.captures
-
-        @property
-        def resyncs(self):  # noqa: ANN202
-            return self._inner.resyncs
-
-        @property
-        def pulse_findings(self):  # noqa: ANN202
-            return self._inner.pulse_findings
-
-        def close(self) -> None:
-            self._inner.close()
-
     disk, _, _, _ = common.decode_image(image)
     drive = OneFace(disk)
-
-    def open_one_face(*args: object, **kwargs: object) -> OneFace:
-        del args, kwargs
-        return drive
-
-    def flipped(message: str, *, err: bool) -> bool:
-        del message, err
-        drive.facing = 1
-        return True
-
-    monkeypatch.setattr(hardware_cmds, "open_fdsstick", open_one_face)
-    monkeypatch.setattr(typer, "confirm", flipped)
+    monkeypatch.setattr(hardware_cmds, "open_fdsstick", lambda: drive)
+    monkeypatch.setattr(typer, "confirm", drive.turn_over)
 
     # Act
     result = runner.invoke(
@@ -272,42 +274,8 @@ def test_dump_can_be_told_the_disk_is_already_turned_over(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
-    class OneFace:
-        selects_sides = False
-
-        def __init__(self, disk: Disk) -> None:
-            self._inner = SimulatedDrive(disk)
-            self.facing = 0
-
-        def status(self):  # noqa: ANN202
-            return self._inner.status()
-
-        def read_side(self, side: int):  # noqa: ANN202
-            self.facing = side
-            return self._inner.read_side(self.facing)
-
-        @property
-        def captures(self):  # noqa: ANN202
-            return self._inner.captures
-
-        @property
-        def resyncs(self):  # noqa: ANN202
-            return self._inner.resyncs
-
-        @property
-        def pulse_findings(self):  # noqa: ANN202
-            return self._inner.pulse_findings
-
-        def close(self) -> None:
-            self._inner.close()
-
     disk, _, _, _ = common.decode_image(image)
-
-    def open_one_face(*args: object, **kwargs: object) -> OneFace:
-        del args, kwargs
-        return OneFace(disk)
-
-    monkeypatch.setattr(hardware_cmds, "open_fdsstick", open_one_face)
+    monkeypatch.setattr(hardware_cmds, "open_fdsstick", lambda: TurnedOneFace(disk))
 
     # Act
     result = runner.invoke(

@@ -6,13 +6,10 @@ from typing import TYPE_CHECKING
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app
-from fdstoolkit.codecs.qd import encode as encode_qd
-from fdstoolkit.core.blocks import Block, BlockKind
-from fdstoolkit.core.disk import Disk, Side
 
 if TYPE_CHECKING:
     from faker import Faker
-from main_kit import GAME, OTHER_GAME, runner
+from main_kit import GAME, OTHER_GAME, oversized_qd, runner
 
 
 def test_insert_adds_a_file(single_side: Path, tmp_path: Path) -> None:
@@ -134,28 +131,7 @@ def test_insert_can_write_a_qd(single_side: Path, tmp_path: Path) -> None:
 
 def test_insert_reports_a_finding_from_the_encoder(tmp_path: Path) -> None:
     # Arrange
-    info = bytearray(56)
-    info[0] = 0x01
-    info[1:15] = b"*NINTENDO-HVC*"
-    size = 65028
-    header = (
-        bytes([0x03, 0x00, 0x00])
-        + b"BIG     "
-        + (0x6000).to_bytes(2, "little")
-        + size.to_bytes(2, "little")
-        + bytes([0x00])
-    )
-    side = Side(
-        blocks=(
-            Block(kind=BlockKind.DISK_INFO, payload=bytes(info)),
-            Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([0x02, 0x01])),
-            Block(kind=BlockKind.FILE_HEADER, payload=header),
-            Block(kind=BlockKind.FILE_DATA, payload=bytes([0x04]) + bytes(size)),
-        ),
-        tail=b"",
-        capacity=65536,
-    )
-    data, _ = encode_qd(Disk(sides=(side,)))
+    data = oversized_qd(65028)
     source = tmp_path / "nearly-full.qd"
     source.write_bytes(data)
     payload = tmp_path / "payload.bin"

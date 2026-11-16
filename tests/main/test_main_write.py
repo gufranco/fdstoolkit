@@ -243,32 +243,32 @@ def test_surface_says_why_it_stopped_and_that_the_finish_was_skipped(
     assert "the finish was skipped because the test stopped early" in result.stdout
 
 
-def test_surface_names_every_class_of_failing_block(capsys: pytest.CaptureFixture[str]) -> None:
-    # Arrange
-    report = SurfaceReport(
-        passes=(
-            PatternPass(
-                SurfacePattern.SHORT,
-                verified=False,
-                mismatched_blocks=((0, 4), (0, 9)),
-                grade=Grade.FAILED,
-                short=30,
-                long=1,
-                compared=900,
-            ),
-            PatternPass(
-                SurfacePattern.MEDIUM,
-                verified=False,
-                mismatched_blocks=((0, 4),),
-                grade=Grade.FAILED,
-                short=12,
-                long=0,
-                compared=400,
-            ),
-            PatternPass(
-                SurfacePattern.LONG, verified=True, mismatched_blocks=(), grade=Grade.CLEAN
-            ),
-        ),
+FAILING_PASSES = (
+    PatternPass(
+        SurfacePattern.SHORT,
+        verified=False,
+        mismatched_blocks=((0, 4), (0, 9)),
+        grade=Grade.FAILED,
+        short=30,
+        long=1,
+        compared=900,
+    ),
+    PatternPass(
+        SurfacePattern.MEDIUM,
+        verified=False,
+        mismatched_blocks=((0, 4),),
+        grade=Grade.FAILED,
+        short=12,
+        long=0,
+        compared=400,
+    ),
+    PatternPass(SurfacePattern.LONG, verified=True, mismatched_blocks=(), grade=Grade.CLEAN),
+)
+
+
+def failing_surface_report() -> SurfaceReport:
+    return SurfaceReport(
+        passes=FAILING_PASSES,
         coverage=0.98,
         data_bytes=53854,
         finish=Finish.ERASE,
@@ -277,6 +277,11 @@ def test_surface_names_every_class_of_failing_block(capsys: pytest.CaptureFixtur
         finish_problem="side 0 reads back exactly what was just written to side 1",
         blocks_per_side=14,
     )
+
+
+def test_surface_names_every_class_of_failing_block(capsys: pytest.CaptureFixture[str]) -> None:
+    # Arrange
+    report = failing_surface_report()
     hardware_cmds.report_surface(report)
 
     # Act

@@ -59,52 +59,56 @@ def test_a_side_left_to_defaults_carries_fdspacker_defaults(tmp_path: Path) -> N
     assert info == DEFAULT_INFO
 
 
+EVERY_FIELD: dict[str, object] = {
+    "licensee_code": "$A4",
+    "game_name": OTHER_GAME,
+    "game_type": "E",
+    "game_version": 2,
+    "disk_side": "B",
+    "disk_number": 1,
+    "disk_type": "FSC",
+    "unknown01": "$11",
+    "boot_file": 15,
+    "unknown02": "$21",
+    "unknown03": "$22",
+    "unknown04": "$23",
+    "unknown05": "$24",
+    "unknown06": "$25",
+    "manufacturing_date": "1986-02-21",
+    "country_code": "Japan",
+    "unknown07": "$31",
+    "unknown08": "$32",
+    "unknown09": "$33",
+    "unknown10": "$34",
+    "unknown11": "$35",
+    "unknown12": "$36",
+    "unknown13": "$37",
+    "unknown14": "$38",
+    "unknown15": "$39",
+    "rewritten_date": "1988-12-01",
+    "unknown16": "$41",
+    "unknown17": "$42",
+    "disk_writer_serial_number": "$1234",
+    "unknown18": "$43",
+    "disk_rewrite_count": 12,
+    "actual_disk_side": "B",
+    "disk_type_other": "BlueDisk",
+    "disk_version": "$05",
+}
+
+EVERY_FIELD_INFO = (
+    b"\x01*NINTENDO-HVC*\xa4"
+    + OTHER_GAME.encode("ascii")
+    + b"E\x02\x01\x01\x01\x11\x0f\x21\x22\x23\x24\x25"
+    b"\x61\x02\x21\x49\x31\x32\x33\x34\x35\x36\x37\x38\x39"
+    b"\x63\x12\x01\x41\x42\x34\x12\x43\x12\x01\xff\x05"
+)
+
+
 def test_every_named_field_lands_at_its_offset(tmp_path: Path) -> None:
     # Arrange
-    side = packer_side(
-        tmp_path,
-        licensee_code="$A4",
-        game_name=OTHER_GAME,
-        game_type="E",
-        game_version=2,
-        disk_side="B",
-        disk_number=1,
-        disk_type="FSC",
-        unknown01="$11",
-        boot_file=15,
-        unknown02="$21",
-        unknown03="$22",
-        unknown04="$23",
-        unknown05="$24",
-        unknown06="$25",
-        manufacturing_date="1986-02-21",
-        country_code="Japan",
-        unknown07="$31",
-        unknown08="$32",
-        unknown09="$33",
-        unknown10="$34",
-        unknown11="$35",
-        unknown12="$36",
-        unknown13="$37",
-        unknown14="$38",
-        unknown15="$39",
-        rewritten_date="1988-12-01",
-        unknown16="$41",
-        unknown17="$42",
-        disk_writer_serial_number="$1234",
-        unknown18="$43",
-        disk_rewrite_count=12,
-        actual_disk_side="B",
-        disk_type_other="BlueDisk",
-        disk_version="$05",
-    )
-    expected = (
-        b"\x01*NINTENDO-HVC*\xa4"
-        + OTHER_GAME.encode("ascii")
-        + b"E\x02\x01\x01\x01\x11\x0f\x21\x22\x23\x24\x25"
-        b"\x61\x02\x21\x49\x31\x32\x33\x34\x35\x36\x37\x38\x39"
-        b"\x63\x12\x01\x41\x42\x34\x12\x43\x12\x01\xff\x05"
-    )
+    side = packer_side(tmp_path, **EVERY_FIELD)
+    expected = EVERY_FIELD_INFO
 
     # Act
     info = info_of(build(tmp_path, side))
