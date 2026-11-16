@@ -28,18 +28,6 @@ class DeviceRefusedError(OSError):
 
 @dataclass
 class FakeFdsStick:
-    """A stand-in for the device, modelled on what the two reference tools expect of it.
-
-    It serves a raw side in 254-byte chunks numbered with a wrapping counter, the way
-    the Rust tool's wrapping_add reads them, and it stops accepting write data once the
-    disk has turned, which is the condition that tool treats as a full disk. Like hidapi
-    on a real stick, a refused write packet returns -1 rather than raising, and a read
-    started right after a finished write fails until the stick has settled, after a
-    stale first reply when one is set. A write started while the drive is still
-    scanning takes its first packet and refuses the rest, as a real stick does. A stick
-    pulled from the port raises from then on, on reads and writes alike.
-    """
-
     side: bytes = b""
     stale_first: int | None = None
     drop_after: int | None = None
@@ -51,6 +39,7 @@ class FakeFdsStick:
     unready_sessions: int = 0
     short_reply: bool = False
     echoes: bool = False
+    refused_features: frozenset[int] = frozenset()
 
     opened: tuple[int, int] | None = None
     closed: bool = False
@@ -71,6 +60,8 @@ class FakeFdsStick:
         self.closed = True
 
     def send_feature_report(self, data: bytes) -> int:
+        if data[0] in self.refused_features:
+            return -1
         self.seen.append(data[0])
         if data[0] == ID_FINISH_WRITE:
             self.finishes.append(bytes(data))

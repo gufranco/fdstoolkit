@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from device import ID_FINISH_WRITE, UNPLUGGED, FakeFdsStick
+from device import ID_DISK_START, ID_FINISH_WRITE, UNPLUGGED, FakeFdsStick
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.codecs.fds import decode
@@ -693,3 +693,55 @@ def test_a_write_the_device_drops_is_caught_by_the_driver_readback() -> None:
 
     # Assert
     assert raised.type is WriteNotTakenError
+
+
+def test_a_feature_report_the_device_refuses_raises_rather_than_passing() -> None:
+    # Arrange
+    transport = HidApiTransport(FakeFdsStick(refused_features=frozenset({ID_FINISH_WRITE})))
+
+    # Act
+    with pytest.raises(OSError, match="refused report 0x20") as raised:
+        transport.send_feature(FINISH)
+
+    # Assert
+    assert raised.type is OSError
+
+
+def test_a_read_whose_start_is_refused_is_a_link_fault() -> None:
+    # Arrange
+    device = FakeFdsStick(side=raw_side(), refused_features=frozenset({ID_DISK_START}))
+
+    # Act
+    with pytest.raises(HardwareFaultError) as raised:
+        stick_over(device).read_raw_side()
+
+    # Assert
+    assert raised.type is NothingReadError
+    assert raised.value.kind is FaultKind.LINK
+
+
+def test_a_write_whose_start_is_refused_is_started_again_then_a_link_fault() -> None:
+    # Arrange
+    device = FakeFdsStick(refused_features=frozenset({ID_DISK_START}))
+    pauses: list[float] = []
+
+    # Act
+    with pytest.raises(HardwareFaultError) as raised:
+        stick_over(device, pauses).write_raw_side(bytes(WRITE_PAYLOAD * 30))
+
+    # Assert
+    assert raised.type is DriveNotReadyError
+    assert pauses == [SETTLE_PAUSE_S] * (WRITE_STARTS - 1)
+
+
+def test_a_write_whose_finish_is_refused_is_a_link_fault() -> None:
+    # Arrange
+    device = FakeFdsStick(refused_features=frozenset({ID_FINISH_WRITE}))
+
+    # Act
+    with pytest.raises(HardwareFaultError, match="failed to finish the write") as raised:
+        stick_over(device).write_raw_side(bytes(WRITE_PAYLOAD * 30))
+
+    # Assert
+    assert raised.value.kind is FaultKind.LINK
+    assert device.finishes == []

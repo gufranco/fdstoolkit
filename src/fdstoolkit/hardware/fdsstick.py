@@ -171,7 +171,12 @@ class FdsStick:
         return self._watchdog
 
     def _start(self, mode: int) -> None:
-        self._transport.send_feature(bytes([ReportId.DISK_START, mode]))
+        try:
+            self._transport.send_feature(bytes([ReportId.DISK_START, mode]))
+        except OSError as error:
+            if mode == MODE_WRITE:
+                raise DriveNotReadyError(0) from error
+            raise NothingReadError(error) from error
 
     def _chunk(self, *, opening: bool) -> bytes:
         try:
@@ -255,7 +260,12 @@ class FdsStick:
 
     def _write_and_finish(self, packets: tuple[bytes, ...], blank: tuple[bytes, ...]) -> None:
         self._write_raw(packets, blank)
-        self._transport.send_feature(bytes([ReportId.FINISH_WRITE, 0x00]))
+        try:
+            self._transport.send_feature(bytes([ReportId.FINISH_WRITE, 0x00]))
+        except OSError as error:
+            raise HardwareFaultError(
+                _link_lost("to finish the write", error), kind=FaultKind.LINK
+            ) from error
 
     def _write_raw(self, packets: tuple[bytes, ...], blank: tuple[bytes, ...]) -> None:
         self._start(MODE_WRITE)
@@ -323,7 +333,9 @@ class HidApiTransport:
         self._device = device
 
     def send_feature(self, data: bytes) -> None:
-        self._device.send_feature_report(data)
+        if self._device.send_feature_report(data) < 0:
+            message = f"the device refused report {data[0]:#04x}"
+            raise OSError(message)
 
     def get_feature(self, report_id: int, length: int) -> bytes:
         answer = bytes(self._device.get_feature_report(report_id, length))

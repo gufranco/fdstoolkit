@@ -129,7 +129,9 @@ a factor of two and carry no tolerance.
   such pulse, so the noisiest line still warns.
 - hidapi on macOS answers a write the stick did not take with -1 after five
   seconds instead of raising. A refused packet is sent once more and never
-  skipped past. Every side written from blocks is padded with gap to 700
+  skipped past. A refused feature report also answers -1 without raising, so
+  the transport raises it: a refused start or finish is a link fault, never
+  silence. Every side written from blocks is padded with gap to 700
   packets; the stick stops taking data where the track ends, 568 packets in
   three runs on one drive. Refused twice inside the image is a link fault that
   says how much was written, and refused in the padding means the side ended.
