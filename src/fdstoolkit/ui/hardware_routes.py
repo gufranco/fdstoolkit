@@ -18,14 +18,8 @@ from fdstoolkit.drive.recovery import recover
 from fdstoolkit.drive.timing import TimingReader
 from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
-from fdstoolkit.hardware.session import (
-    LongSideError,
-    SideFlipError,
-    WriteRefusedError,
-    read_disk,
-    refuse_long_sides,
-    write_verified,
-)
+from fdstoolkit.hardware.session import LongSideError, SideFlipError, WriteRefusedError, read_disk
+from fdstoolkit.hardware.writing import refuse_long_sides, write_verified
 from fdstoolkit.quality.surface import Finish, SurfacePlan, surface_test
 from fdstoolkit.ui.jobs import (
     Controls,

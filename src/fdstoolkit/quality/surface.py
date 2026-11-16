@@ -30,13 +30,11 @@ from fdstoolkit.hardware.session import (
     Progress,
     SideDump,
     SideFlipError,
-    SideWrite,
     WriteNotTakenError,
     WriteRefusedError,
     ask_for_flip,
-    refuse_unturned,
-    write_side_verified,
 )
+from fdstoolkit.hardware.writing import SideWrite, refuse_unturned, write_side_verified
 
 QUICK_FILE_SIZE: Final = 4096
 PATTERN_NAME: Final = "SURFACE"

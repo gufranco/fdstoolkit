@@ -202,39 +202,37 @@ class FdsStick:
         with self._watchdog.side(what):
             return self._watchdog.call(lambda: self._read_raw(mode))
 
+    def _packet(self, *, opening: bool) -> tuple[int, bytes]:
+        packet = self._chunk(opening=opening)
+        if len(packet) < HEADER_BYTES:
+            message = "the device stopped answering during the read"
+            raise HardwareFaultError(message, kind=FaultKind.LINK)
+        return packet[1], packet[HEADER_BYTES : HEADER_BYTES + CHUNK_PAYLOAD]
+
+    def _note_resync(self, expected: int, sequence: int) -> None:
+        if sequence != expected:
+            self._resyncs.append((expected, sequence))
+
     def _read_raw(self, mode: int) -> bytes:
         self._start(mode)
         out = bytearray()
         expected = FIRST_SEQUENCE
         opening = True
-
         while len(out) < RAW_SIDE_LIMIT:
-            packet = self._chunk(opening=not out)
-            if len(packet) < HEADER_BYTES:
-                message = "the device stopped answering during the read"
-                raise HardwareFaultError(message, kind=FaultKind.LINK)
-
-            sequence = packet[1]
-            payload = packet[HEADER_BYTES : HEADER_BYTES + CHUNK_PAYLOAD]
+            sequence, payload = self._packet(opening=not out)
+            if not payload and not out:
+                raise HardwareFaultError(OLDER_FIRMWARE_HINT, kind=FaultKind.MEDIA)
             if not payload:
-                if not out:
-                    raise HardwareFaultError(OLDER_FIRMWARE_HINT, kind=FaultKind.MEDIA)
                 break
-
             if opening and sequence != FIRST_SEQUENCE:
-                expected = _after(FIRST_SEQUENCE)
-                opening = False
+                expected, opening = _after(FIRST_SEQUENCE), False
                 continue
             opening = False
-
-            if sequence != expected:
-                self._resyncs.append((expected, sequence))
+            self._note_resync(expected, sequence)
             expected = _after(sequence)
-
             out += payload
             if len(payload) < CHUNK_PAYLOAD:
                 break
-
         return bytes(out)
 
     def write_raw_side(

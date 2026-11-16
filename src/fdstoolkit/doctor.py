@@ -131,39 +131,38 @@ def _python_check(version: tuple[int, int, int]) -> Check:
     return Check("python", CheckStatus.OK, text)
 
 
+NO_HIDAPI: Final = (
+    Check("hardware support", CheckStatus.MISSING, f"hidapi is absent, {HARDWARE_HINT}"),
+    Check("fdsstick", CheckStatus.MISSING, "not looked for, hidapi is absent"),
+)
+SUPPORTED: Final = Check("hardware support", CheckStatus.OK, "hidapi is installed")
+NONE_CONNECTED: Final = Check(
+    "fdsstick",
+    CheckStatus.WARNING,
+    f"none connected at {VENDOR_ID:04X}:{PRODUCT_ID:04X}. "
+    "Connect the FDSStick over USB before dumping or writing",
+)
+
+
 def hardware_checks(
     loader: Callable[[], Enumerator] = load_hid, lock_path: Path = LOCK_PATH
 ) -> tuple[Check, ...]:
     try:
         hid = loader()
     except ImportError:
-        return (
-            Check("hardware support", CheckStatus.MISSING, f"hidapi is absent, {HARDWARE_HINT}"),
-            Check("fdsstick", CheckStatus.MISSING, "not looked for, hidapi is absent"),
-        )
-
-    support = Check("hardware support", CheckStatus.OK, "hidapi is installed")
+        return NO_HIDAPI
     try:
         found = hid.enumerate(VENDOR_ID, PRODUCT_ID)
     except OSError as error:
-        return support, Check(
-            "fdsstick", CheckStatus.WARNING, f"could not list USB devices: {error}"
-        )
+        detail = f"could not list USB devices: {error}"
+        return SUPPORTED, Check("fdsstick", CheckStatus.WARNING, detail)
     if not found:
-        return support, Check(
-            "fdsstick",
-            CheckStatus.WARNING,
-            f"none connected at {VENDOR_ID:04X}:{PRODUCT_ID:04X}. "
-            "Connect the FDSStick over USB before dumping or writing",
-        )
-
+        return SUPPORTED, NONE_CONNECTED
     first = found[0]
     present = Check(
-        "fdsstick",
-        CheckStatus.OK,
-        f"{len(found)} device(s) connected, {_describe(first)}",
+        "fdsstick", CheckStatus.OK, f"{len(found)} device(s) connected, {_describe(first)}"
     )
-    return support, present, _access_check(hid, first, lock_path)
+    return SUPPORTED, present, _access_check(hid, first, lock_path)
 
 
 def codec_check(

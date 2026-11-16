@@ -29,7 +29,8 @@ from fdstoolkit.hardware.fdsstick import (
     ReportId,
 )
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
-from fdstoolkit.hardware.session import WriteNotTakenError, write_verified
+from fdstoolkit.hardware.session import WriteNotTakenError
+from fdstoolkit.hardware.writing import write_verified
 
 FLASH_REPORTS = frozenset({0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09})
 EMULATOR_REPORTS = frozenset({0x21, 0x22, 0x23})

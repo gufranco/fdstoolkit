@@ -13,7 +13,6 @@ from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
 from fdstoolkit.edit.files import FileSpec, insert_file
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import (
-    STALE_BLOCK,
     Grade,
     HalfWriteError,
     LongSideError,
@@ -22,9 +21,8 @@ from fdstoolkit.hardware.session import (
     WriteRefusedError,
     dump,
     dump_repeated,
-    refuse_long_sides,
-    write_verified,
 )
+from fdstoolkit.hardware.writing import STALE_BLOCK, refuse_long_sides, write_verified
 
 
 def sample_disk(sides: int = 1) -> Disk:

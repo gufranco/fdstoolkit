@@ -8,7 +8,8 @@ import pytest
 from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.drive.monitor import Mode, calibrate
 from fdstoolkit.hardware.fdsstick import FdsStick, open_fdsstick
-from fdstoolkit.hardware.session import Grade, dump, write_verified
+from fdstoolkit.hardware.session import Grade, dump
+from fdstoolkit.hardware.writing import write_verified
 from fdstoolkit.quality.surface import SurfacePlan, surface_test
 
 pytestmark = pytest.mark.hardware

@@ -41,9 +41,8 @@ from fdstoolkit.hardware.session import (
     SideFlipError,
     WriteRefusedError,
     read_disk,
-    refuse_long_sides,
-    write_verified,
 )
+from fdstoolkit.hardware.writing import refuse_long_sides, write_verified
 from fdstoolkit.quality.surface import (
     Finish,
     SurfacePlan,
