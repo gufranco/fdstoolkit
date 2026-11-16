@@ -561,3 +561,31 @@ def test_stopping_an_idle_server_warns_of_nothing(caplog: pytest.LogCaptureFixtu
 
     # Assert
     assert not any("still running" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    ("command", "field", "accepts"),
+    [("patch", "patch", ".ips,.ups,.bps"), ("save", "save", ".ips,.ups,.bps,.fds,.srm")],
+)
+def test_a_file_picker_offers_exactly_the_formats_its_command_reads(
+    command: str, field: str, accepts: str
+) -> None:
+    # Arrange
+    form = next(entry for entry in forms() if entry.command == command)
+
+    # Act
+    offered = next(entry.accepts for entry in form.fields if entry.name == field)
+
+    # Assert
+    assert offered == accepts
+
+
+def test_the_profile_help_names_every_profile() -> None:
+    # Arrange
+    runner = CliRunner()
+
+    # Act
+    result = runner.invoke(cli_app, ["hash", "--help"], env={"COLUMNS": "200"})
+
+    # Assert
+    assert ", ".join(sorted(PROFILES)) in result.output

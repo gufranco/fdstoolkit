@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Final
 
 import typer
 
@@ -20,11 +20,14 @@ from fdstoolkit.core.bios import BootVerdict, predict_boot
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import worst_severity
 from fdstoolkit.core.disk import SIDE_SIZE, Disk
+from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.doctor import CheckStatus, diagnose
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.identify.layout import LayoutReading, layouts_for
 from fdstoolkit.identify.provenance import provenance_of
 from fdstoolkit.report import as_json, diagnostics_as_data
+
+PROFILE_HELP: Final = f"one of {', '.join(sorted(PROFILES))}"
 
 
 def file_rows(disk: Disk) -> list[dict[str, object]]:
@@ -123,7 +126,7 @@ def verify(
 def hash_command(
     image: Annotated[Path, typer.Argument(help="a .fds or .qd image")],
     *,
-    profile: Annotated[str, typer.Option("--profile", help="raw, content or data")] = "content",
+    profile: Annotated[str, typer.Option("--profile", help=PROFILE_HELP)] = "content",
     output: Annotated[
         Path | None,
         typer.Option("-o", "--output", help="also write the canonical image"),
