@@ -8,6 +8,7 @@ import typer
 
 from fdstoolkit.cli.common import Family, JsonOption, RetriesOption, decode_image, fail, logged
 from fdstoolkit.cli.hardware_cmds import open_drive, step
+from fdstoolkit.hardware.fdsstick import FdsStick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import DumpResult, SideFlipError, WriteRefusedError, read_disk
 from fdstoolkit.history.checks import check_entry, drift_lines, drift_of, drift_payload
@@ -31,12 +32,11 @@ def _earlier(drive: str) -> tuple[Entry, ...]:
         raise fail(str(error)) from error
 
 
-def _read_reference(retries: int) -> DumpResult:
-    with closing(open_drive()) as drive:
-        try:
-            return read_disk(drive, sides=1, passes=1, retries=retries, progress=step).result
-        except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
-            raise fail(str(error)) from error
+def _read_reference(drive: FdsStick, retries: int) -> DumpResult:
+    try:
+        return read_disk(drive, sides=1, passes=1, retries=retries, progress=step).result
+    except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
+        raise fail(str(error)) from error
 
 
 def session_command(
@@ -48,7 +48,9 @@ def session_command(
     wanted = None if reference is None else decode_image(reference)[0]
     key = drive_key()
     earlier = _earlier(key.drive)
-    entry = check_entry(stamp_now(), _read_reference(retries), wanted, key)
+    with closing(open_drive()) as drive:
+        result = _read_reference(drive, retries)
+    entry = check_entry(stamp_now(), result, wanted, key)
     logged(entry)
     drift = drift_of(earlier, entry)
     if json_output:

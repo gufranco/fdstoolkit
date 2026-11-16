@@ -82,14 +82,15 @@ def _read_passes(
     return current
 
 
-def _gathered(folder: Path, state: RescueState, side: int, passes: int) -> RescueState:
-    with closing(open_drive()) as drive:
-        try:
-            return _read_passes(drive, folder, state, side, passes)
-        except KeyboardInterrupt:
-            raise _stopped(folder, side, "stopped") from None
-        except HardwareFaultError as error:
-            raise _stopped(folder, side, str(error)) from error
+def _gathered(
+    drive: FdsStick, folder: Path, state: RescueState, side: int, passes: int
+) -> RescueState:
+    try:
+        return _read_passes(drive, folder, state, side, passes)
+    except KeyboardInterrupt:
+        raise _stopped(folder, side, "stopped") from None
+    except HardwareFaultError as error:
+        raise _stopped(folder, side, str(error)) from error
 
 
 def rescue(
@@ -102,7 +103,9 @@ def rescue(
 ) -> None:
     container = container_of(output)
     guard_output(output, force=force)
-    state = _gathered(folder, _loaded(folder), side, passes)
+    loaded = _loaded(folder)
+    with closing(open_drive()) as drive:
+        state = _gathered(drive, folder, loaded, side, passes)
     progress = progress_of(state)
     for line in progress.lines:
         typer.echo(line.strip())
