@@ -57,9 +57,19 @@ CI runs the same subject check on every pushed or proposed commit.
 | Types | `uv run pyright` |
 | Tests | `uv run pytest --cov` |
 | Page tests | `pnpm test:coverage` |
+| Page types | `pnpm typecheck` |
+| Page build | `pnpm build` |
+| Page API types match the routes | `pnpm api:check` |
 | Browser | `pnpm e2e` |
 | JSON and YAML format | `pnpm format:check` |
 | YAML lint | `uv run yamllint --strict .` |
+
+The page is moving to React and TypeScript under `web/`. `pnpm build` writes it
+into `src/fdstoolkit/ui/page/`, which git ignores and the wheel and source
+distribution carry. `web/src/api/schema.d.ts` is generated: after changing a
+route, run `pnpm api:types` and commit the result, or `pnpm api:check` fails.
+The generator lives in `tools/api-types/` with its own TypeScript 5, because it
+needs the compiler API that TypeScript 7 does not have.
 
 Coverage is gated at 100%, statements and branches, with no exclusions. A line
 no test can reach is deleted or redesigned until a test reaches it. The

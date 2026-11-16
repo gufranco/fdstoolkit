@@ -9,7 +9,11 @@
     "format:check": "git ls-files -z '*.json' '*.yml' '*.yaml' | xargs -0 prettier --check",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "build": "vite build --config vite.config.mjs",
+    "typecheck": "tsc --project tsconfig.json",
+    "api:types": "uv run python .github/scripts/openapi.py | pnpm --filter fdstoolkit-api-types exec node --input-type=module -e \"import { writeFileSync } from 'node:fs'; import { text } from 'node:stream/consumers'; import { typesFor } from './generate.mjs'; writeFileSync(process.argv[1], await typesFor(JSON.parse(await text(process.stdin))));\" ../../web/src/api/schema.d.ts",
+    "api:check": "pnpm api:types && git diff --exit-code -- web/src/api/schema.d.ts"
   },
   "devDependencies": {
     "@faker-js/faker": "10.6.0",
@@ -17,11 +21,22 @@
     "@semantic-release/exec": "7.1.0",
     "@semantic-release/git": "11.0.1",
     "@semantic-release/github": "12.0.11",
+    "@tanstack/react-query": "5.105.2",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.0",
     "@vitest/coverage-v8": "5.1.0",
     "happy-dom": "21.0.4",
     "prettier": "3.10.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "semantic-release": "25.0.9",
-    "vitest": "5.1.0"
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.1.0",
+    "zod": "4.6.7"
   },
   "packageManager": "pnpm@12.5.1",
   "engines": {

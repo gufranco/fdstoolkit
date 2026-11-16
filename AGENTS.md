@@ -201,6 +201,9 @@ uv run ruff check .
 uv run pyright
 uv run pytest
 pnpm test:coverage
+pnpm typecheck
+pnpm build
+pnpm api:check
 pnpm e2e
 pnpm format:check
 uv run yamllint --strict .

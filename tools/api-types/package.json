@@ -1,0 +1,11 @@
+{
+  "name": "fdstoolkit-api-types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Generates the page's API types from the FastAPI schema. openapi-typescript needs the TypeScript 5 compiler API, so it keeps its own TypeScript.",
+  "license": "MIT",
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

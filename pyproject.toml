@@ -59,6 +59,9 @@ build-backend = "hatchling.build"
 path = "src/fdstoolkit/version.py"
 pattern = "^VERSION = \"(?P<version>[^\"]+)\"$"
 
+[tool.hatch.build]
+artifacts = ["src/fdstoolkit/ui/page/**"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/fdstoolkit"]
 
@@ -81,6 +84,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S603", "PLR2004", "SLF001", "INP001", "ANN401"]
 "src/fdstoolkit/cli/*.py" = ["PLR0913", "FBT001", "FBT002"]
+".github/scripts/*.py" = ["INP001"]
 
 [tool.ruff.lint.pylint]
 max-args = 8

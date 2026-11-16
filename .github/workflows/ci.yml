@@ -83,6 +83,15 @@ jobs:
       - name: Test the page, every line of its script
         run: pnpm test:coverage
 
+      - name: Type check the page
+        run: pnpm typecheck
+
+      - name: Build the page
+        run: pnpm build
+
+      - name: The page's API types match the routes
+        run: pnpm api:check
+
       - name: Lint the workflows
         uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
 
@@ -128,6 +137,9 @@ jobs:
 
       - name: Install the page test tooling
         run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build the page
+        run: pnpm build
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium

@@ -33,3 +33,5 @@ node_modules/
 test-results/
 playwright-report/
 coverage/
+
+/src/fdstoolkit/ui/page/
