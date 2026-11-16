@@ -14,6 +14,7 @@ FOOTER_SIZE: Final = 12
 CRC_SIZE: Final = 4
 CONTINUE_BIT: Final = 0x80
 VALUE_MASK: Final = 0x7F
+VARINT_BITS: Final = 7
 ACTION_MASK: Final = 0b11
 SOURCE_READ: Final = 0
 TARGET_READ: Final = 1
@@ -45,14 +46,10 @@ def detect_format(patch: bytes) -> PatchFormat:
 def write_varint(value: int) -> bytes:
     out = bytearray()
     remaining = value
-    while True:
-        piece = remaining & VALUE_MASK
-        remaining >>= 7
-        if remaining == 0:
-            out.append(CONTINUE_BIT | piece)
-            break
-        out.append(piece)
-        remaining -= 1
+    while remaining > VALUE_MASK:
+        out.append(remaining & VALUE_MASK)
+        remaining = (remaining >> VARINT_BITS) - 1
+    out.append(CONTINUE_BIT | remaining)
     return bytes(out)
 
 
@@ -66,7 +63,7 @@ def read_varint(data: bytes, position: int) -> tuple[int, int]:
         value += (byte & VALUE_MASK) * shift
         if byte & CONTINUE_BIT:
             return value, cursor
-        shift <<= 7
+        shift <<= VARINT_BITS
         value += shift
     message = "the patch ended in the middle of a number"
     raise PatchError(message)
