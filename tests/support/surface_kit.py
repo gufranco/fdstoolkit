@@ -13,13 +13,8 @@ from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.hardware.ports import BlockRead
 from fdstoolkit.hardware.session import Grade
-from fdstoolkit.quality.surface import (
-    PATTERNS,
-    PatternPass,
-    SurfacePattern,
-    SurfaceReport,
-    pattern_disk,
-)
+from fdstoolkit.quality.surface import PatternPass, SurfaceReport
+from fdstoolkit.quality.surface_disks import PATTERNS, SurfacePattern, pattern_disk
 
 FAKE = seeded(__name__)
 GAME = game_name(FAKE)

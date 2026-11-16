@@ -12,13 +12,8 @@ from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli import common, hardware_cmds
 from fdstoolkit.cli.main import app
 from fdstoolkit.hardware.session import Grade
-from fdstoolkit.quality.surface import (
-    Finish,
-    PatternPass,
-    StopReason,
-    SurfacePattern,
-    SurfaceReport,
-)
+from fdstoolkit.quality.surface import Finish, PatternPass, StopReason, SurfaceReport
+from fdstoolkit.quality.surface_disks import SurfacePattern
 
 if TYPE_CHECKING:
     import pytest

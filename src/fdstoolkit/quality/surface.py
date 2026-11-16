@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import secrets
 from collections import Counter
 from collections.abc import Callable, Iterator
@@ -8,20 +7,13 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Final
 
-from fdstoolkit.build.blank import DEFAULT_GAME_NAME, disk_info_block
 from fdstoolkit.build.calibration import (
-    FILE_SIZE,
-    FILES_PER_SIDE,
     LARGEST_FACTORY_SIDE,
-    Pattern,
-    pattern_bytes,
 )
 from fdstoolkit.codecs import fds
-from fdstoolkit.core.blocks import Block, BlockKind, FileKind
-from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side, require_readable_sides
+from fdstoolkit.core.disk import Disk, Side, require_readable_sides
 from fdstoolkit.drive.captures import latest_capture
 from fdstoolkit.drive.sampling import SpeedReading, lean, sample
-from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, insert_file
 from fdstoolkit.hardware.ports import DiskReader, DiskWriter, HardwareFaultError, selects_sides
 from fdstoolkit.hardware.session import (
     MAX_PASSES,
@@ -35,31 +27,27 @@ from fdstoolkit.hardware.session import (
     ask_for_flip,
 )
 from fdstoolkit.hardware.writing import SideWrite, refuse_unturned, write_side_verified
+from fdstoolkit.quality.surface_disks import (
+    PATTERNS,
+    SIDE_CAPACITY,
+    SurfacePattern,
+    blank_disk,
+    erased_disk,
+    pattern_disk,
+)
 
-QUICK_FILE_SIZE: Final = 4096
-PATTERN_NAME: Final = "SURFACE"
-SIDE_CAPACITY: Final = SIDE_SIZE
 HARD_FAILURES: Final = 2
+
+
 KEY_BYTES: Final = 16
+
+
 FINISH_INTERRUPTED: Final = (
     "the finish was interrupted, so the side it was writing may be half written"
 )
+
+
 WEAR_SHARE: Final = 3
-
-
-class SurfacePattern(StrEnum):
-    UNIQUE = "unique data"
-    SHORT = "short pulses"
-    MEDIUM = "medium pulses"
-    LONG = "long pulses"
-
-
-PATTERNS: Final = tuple(SurfacePattern)
-FIXED: Final[dict[SurfacePattern, Pattern]] = {
-    SurfacePattern.SHORT: Pattern.SHORT,
-    SurfacePattern.MEDIUM: Pattern.MEDIUM,
-    SurfacePattern.LONG: Pattern.LONG,
-}
 
 
 class SurfaceTestRefusedError(Exception):
@@ -222,81 +210,6 @@ class SurfaceReport:
         if Grade.MARGINAL in grades:
             return Grade.MARGINAL
         return Grade.CLEAN
-
-
-def _file_sizes(*, fill: bool) -> tuple[int, ...]:
-    return (FILE_SIZE,) * FILES_PER_SIDE if fill else (QUICK_FILE_SIZE,)
-
-
-def _data(pattern: SurfacePattern, *, key: bytes, side: int, number: int, size: int) -> bytes:
-    fixed = FIXED.get(pattern)
-    if fixed is not None:
-        return pattern_bytes(fixed, size)
-    return hashlib.shake_256(key + bytes([side, number])).digest(size)
-
-
-def pattern_disk(
-    pattern: SurfacePattern, *, sides: int, fill: bool = True, key: bytes = b""
-) -> Disk:
-    built: list[Side] = []
-    for index in range(sides):
-        blocks = (
-            Block(
-                kind=BlockKind.DISK_INFO,
-                payload=disk_info_block(
-                    side=index,
-                    disk_number=0,
-                    game_name="TST",
-                ),
-            ),
-            Block(kind=BlockKind.FILE_AMOUNT, payload=bytes([BlockKind.FILE_AMOUNT, 0])),
-        )
-        disk = Disk(sides=(Side(blocks=blocks, tail=b"", capacity=SIDE_CAPACITY),))
-        for number, size in enumerate(_file_sizes(fill=fill)):
-            disk = insert_file(
-                disk,
-                side=0,
-                spec=FileSpec(
-                    name=f"{PATTERN_NAME}{number:02d}"[:8],
-                    address=DEFAULT_LOAD_ADDRESS,
-                    kind=FileKind.PROGRAM,
-                    data=_data(pattern, key=key, side=index, number=number, size=size),
-                ),
-            )
-        built.append(disk.sides[0])
-    return Disk(sides=tuple(built))
-
-
-def blank_disk(*, sides: int, game_name: str = DEFAULT_GAME_NAME) -> Disk:
-    return Disk(
-        sides=tuple(
-            Side(
-                blocks=(
-                    Block(
-                        kind=BlockKind.DISK_INFO,
-                        payload=disk_info_block(
-                            side=index,
-                            disk_number=0,
-                            game_name=game_name,
-                        ),
-                    ),
-                    Block(
-                        kind=BlockKind.FILE_AMOUNT,
-                        payload=bytes([BlockKind.FILE_AMOUNT, 0]),
-                    ),
-                ),
-                tail=b"",
-                capacity=SIDE_CAPACITY,
-            )
-            for index in range(sides)
-        ),
-    )
-
-
-def erased_disk(*, sides: int) -> Disk:
-    return Disk(
-        sides=tuple(Side(blocks=(), tail=b"", capacity=SIDE_CAPACITY) for _ in range(sides)),
-    )
 
 
 @dataclass(frozen=True, slots=True)

@@ -15,6 +15,7 @@ from fdstoolkit.cli import (
     master_cli,
     quality_cli,
     save_cmds,
+    web_cmds,
 )
 
 app = typer.Typer(
@@ -28,6 +29,7 @@ convert_cmds.register(app)
 edit_cmds.register(app)
 inspect_cmds.register(app)
 hardware_cmds.register(app)
+web_cmds.register(app)
 quality_cli.register(app)
 master_cli.register(app)
 drive_cli.register(app)

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-import webbrowser
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass
@@ -36,7 +34,7 @@ from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import created_now, write_bundle
 from fdstoolkit.drive.pulse import pulse_lines
 from fdstoolkit.drive.recovery import recover
-from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick, prime_hid
+from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import (
     MAX_PASSES,
@@ -57,11 +55,6 @@ from fdstoolkit.quality.surface import (
     surface_test,
 )
 from fdstoolkit.report import as_json
-
-UI_HINT: Final = (
-    "this build carries no web interface, which a Homebrew install always does. "
-    "Reinstall with: brew install gufranco/tap/fdstoolkit"
-)
 
 
 def open_drive() -> FdsStick:
@@ -118,18 +111,26 @@ def status(
 
 
 DumpOutputOption = Annotated[Path, typer.Option("-o", "--output", help="where to write the dump")]
+
+
 ReadSidesOption = Annotated[
     int, typer.Option("--sides", parser=side_count, help="1 or 2 sides to read")
 ]
+
+
 DumpPassesOption = Annotated[
     int, typer.Option("--passes", min=1, max=MAX_PASSES, help="read each side this often")
 ]
+
+
 RawOption = Annotated[
     Path | None,
     typer.Option(
         "--raw", help="also keep every pulse capture the drive returned, with a manifest, here"
     ),
 ]
+
+
 TurnedOption = Annotated[
     bool, typer.Option("--yes", help="assume the disk is turned over when asked")
 ]
@@ -250,9 +251,13 @@ def calibration_target(image: Path | None, *, calibration: bool, trusted_drive: 
 
 
 WrittenArgument = Annotated[Path | None, typer.Argument(help="the image to write to a disk")]
+
+
 CalibrationOption = Annotated[
     bool, typer.Option("--calibration", help="write the calibration disk instead of an image")
 ]
+
+
 TrustedOption = Annotated[
     bool,
     typer.Option(
@@ -260,9 +265,13 @@ TrustedOption = Annotated[
         help="confirm the drive in use is cleaned, aligned and at speed, as listed",
     ),
 ]
+
+
 BackupOption = Annotated[
     Path | None, typer.Option("--backup", help="where to save the disk's current contents")
 ]
+
+
 LongSideOption = Annotated[
     bool,
     typer.Option(
@@ -270,16 +279,24 @@ LongSideOption = Annotated[
         help="write a side longer than any factory side, accepting that it may not fit",
     ),
 ]
+
+
 TestedSidesOption = Annotated[
     int, typer.Option("--sides", parser=side_count, help="1 or 2 sides to test")
 ]
+
+
 CyclesOption = Annotated[
     int,
     typer.Option("--passes", min=1, max=MAX_PASSES, help="how many times to run the pattern cycle"),
 ]
+
+
 QuickOption = Annotated[
     bool, typer.Option("--quick", help="write one 4 KiB file per side instead of filling it")
 ]
+
+
 FinishOption = Annotated[
     Finish, typer.Option("--finish", help="what to leave on the disk when the test ends")
 ]
@@ -436,70 +453,6 @@ def _report_finish(report: SurfaceReport) -> None:
         typer.echo(f"  {report.finish_problem}")
 
 
-def web_server() -> tuple[Callable[..., None], Callable[..., object]]:
-    import uvicorn  # noqa: PLC0415
-
-    from fdstoolkit.ui.app import create_app  # noqa: PLC0415
-
-    return uvicorn.run, create_app
-
-
-def _require_web() -> tuple[Callable[..., None], Callable[..., object]]:
-    try:
-        return web_server()
-    except ImportError as error:
-        raise fail(UI_HINT) from error
-
-
-LOOPBACK: Final = frozenset({"127.0.0.1", "::1", "localhost"})
-PACKAGE_LOGGER: Final = "fdstoolkit"
-
-PUBLISHED_HINT: Final = (
-    "anyone who can reach this machine on that port can drive it, and there is no password. "
-    "Bind 127.0.0.1 unless you meant to publish it"
-)
-
-
-def _log_steps() -> None:
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    package = logging.getLogger(PACKAGE_LOGGER)
-    package.setLevel(logging.DEBUG)
-    package.addHandler(handler)
-
-
-def _start_web(*, host: str, port: int, open_browser: bool, verbose: bool = False) -> None:
-    run, build = _require_web()
-    prime_hid()
-    if verbose:
-        _log_steps()
-    address = f"http://{host}:{port}"
-    if host in LOOPBACK:
-        typer.echo(f"serving on {address}, and nothing leaves this machine")
-    else:
-        typer.echo(f"serving on {address}")
-        typer.echo(PUBLISHED_HINT)
-    if open_browser:
-        webbrowser.open(address)
-    run(build(allowed_hosts=frozenset({host})), host=host, port=port)
-
-
-def web(
-    *,
-    host: Annotated[str, typer.Option("--host", help="which interface to bind")] = "127.0.0.1",
-    port: Annotated[int, typer.Option("--port", min=1, max=65535)] = 8000,
-    no_open: Annotated[
-        bool,
-        typer.Option("--no-open", help="start the server without opening a browser"),
-    ] = False,
-    verbose: Annotated[
-        bool,
-        typer.Option("--verbose", help="print every step of every disk job in this terminal"),
-    ] = False,
-) -> None:
-    _start_web(host=host, port=port, open_browser=not no_open, verbose=verbose)
-
-
 def register(app: typer.Typer) -> None:
     app.command(
         rich_help_panel=Family.HARDWARE,
@@ -517,6 +470,3 @@ def register(app: typer.Typer) -> None:
         rich_help_panel=Family.HARDWARE,
         help="Write and read back every pulse length to grade a scratch disk.",
     )(surface)
-    app.command(
-        help="Open the local web interface, which reports exactly what these commands report."
-    )(web)

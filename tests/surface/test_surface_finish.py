@@ -7,14 +7,8 @@ from surface_kit import BLANK_BLOCKS, FinishRefusingDrive, scratch_disk, two_sid
 from fdstoolkit.build.blank import formatted_side
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.hardware.session import MAX_PASSES
-from fdstoolkit.quality.surface import (
-    PATTERNS,
-    Finish,
-    SurfacePlan,
-    SurfaceTestRefusedError,
-    blank_disk,
-    surface_test,
-)
+from fdstoolkit.quality.surface import Finish, SurfacePlan, SurfaceTestRefusedError, surface_test
+from fdstoolkit.quality.surface_disks import PATTERNS, blank_disk
 
 
 def test_the_default_finish_leaves_the_last_pattern_on_the_disk() -> None:

@@ -20,16 +20,15 @@ from fdstoolkit.drive.sampling import SpeedReading
 from fdstoolkit.hardware.ports import FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import Grade
 from fdstoolkit.quality.surface import (
-    PATTERNS,
     Finish,
     PatternPass,
     StopReason,
-    SurfacePattern,
     SurfacePlan,
     SurfaceReport,
     SurfaceTestRefusedError,
     surface_test,
 )
+from fdstoolkit.quality.surface_disks import PATTERNS, SurfacePattern
 
 
 def test_a_second_side_that_was_not_turned_over_stops_the_test_and_keeps_side_a() -> None:
