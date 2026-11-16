@@ -15,6 +15,7 @@ from fdstoolkit.build.calibration import (
 from fdstoolkit.drive.captures import bundle_zip, created_now
 from fdstoolkit.drive.monitor import MAX_READS, NOT_THIS_DRIVE, Mode, RawReader, Replay, calibrate
 from fdstoolkit.drive.pulse import pulse_lines
+from fdstoolkit.drive.recognition import rate_lines
 from fdstoolkit.drive.recovery import recover
 from fdstoolkit.drive.timing import TimingReader
 from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
@@ -165,7 +166,11 @@ class Backup:
 
 def _drive_lines(drive: FdsStick) -> tuple[str, ...]:
     note = link_note(drive.resyncs)
-    return (*pulse_lines(drive.pulse_findings, drive.captures), *((note,) if note else ()))
+    return (
+        *pulse_lines(drive.pulse_findings, drive.captures),
+        *rate_lines(drive.captures),
+        *((note,) if note else ()),
+    )
 
 
 def _keep_failed_captures(spec: DumpSpec, drive: FdsStick, controls: Controls) -> None:

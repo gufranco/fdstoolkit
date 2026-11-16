@@ -194,6 +194,22 @@ def test_reads_maps_weak_blocks_in_uploaded_captures(client: TestClient) -> None
     assert [(row["side"], row["block"]) for row in body["weak"]] == [(0, DAMAGED)]
 
 
+def test_reads_of_uploaded_captures_answers_each_reads_recognition_rate(
+    client: TestClient,
+) -> None:
+    # Arrange
+    payload = {"captures": b64(zipped(disk_with_a_file(), (None, None)))}
+
+    # Act
+    body = client.post("/api/reads", json=payload).json()
+
+    # Assert
+    assert [(row["side"], row["read"], row["rate"]) for row in body["rates"]] == [
+        (0, 1, 1.0),
+        (0, 2, 1.0),
+    ]
+
+
 def test_grade_counts_weak_blocks_from_uploaded_captures(client: TestClient) -> None:
     # Arrange
     disk = disk_with_a_file()

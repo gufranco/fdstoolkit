@@ -9,6 +9,7 @@ from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import SIDES_PER_DISK, Disk
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.drive.monitor import DEFAULT_READS, MAX_READS, Calibration
+from fdstoolkit.drive.recognition import ReadRate
 from fdstoolkit.drive.timing import Timing
 from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS
 from fdstoolkit.hardware.session import MAX_PASSES, MAX_RETRIES
@@ -187,8 +188,29 @@ class WeakView(BaseModel):
     missing: int
 
 
+class RateView(BaseModel):
+    side: int
+    read: int
+    rate: float
+    counted: int
+    unclassed: int
+    span: str
+
+    @classmethod
+    def of(cls, found: ReadRate) -> Self:
+        return cls(
+            side=found.side,
+            read=found.read,
+            rate=found.recognition.rate,
+            counted=found.recognition.counted,
+            unclassed=found.recognition.unclassed,
+            span=found.recognition.span.value,
+        )
+
+
 class WeakResult(BaseModel):
     reads: int
+    rates: list[RateView]
     weak: list[WeakView]
 
 

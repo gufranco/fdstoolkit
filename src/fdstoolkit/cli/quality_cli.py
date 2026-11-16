@@ -10,6 +10,7 @@ from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.captures import Bundle
 from fdstoolkit.drive.pulse import bundle_findings
+from fdstoolkit.drive.recognition import rate_lines, read_rates
 from fdstoolkit.drive.recovery import captures_of_another_disk
 from fdstoolkit.drive.weak import WeakBlock, bundle_weak_blocks
 from fdstoolkit.hardware.session import Grade
@@ -32,7 +33,18 @@ def _weak_payload(bundle: Bundle, found: tuple[tuple[int, WeakBlock], ...]) -> d
         }
         for side, entry in found
     ]
-    return {"reads": len(bundle.captures), "weak": weak}
+    rates = [
+        {
+            "side": rate.side,
+            "read": rate.read,
+            "rate": round(rate.recognition.rate, 6),
+            "counted": rate.recognition.counted,
+            "unclassed": rate.recognition.unclassed,
+            "span": rate.recognition.span.value,
+        }
+        for rate in read_rates(bundle.captures)
+    ]
+    return {"reads": len(bundle.captures), "weak": weak, "rates": rates}
 
 
 def _weak_report(bundle: Bundle, *, json_output: bool) -> None:
@@ -41,6 +53,8 @@ def _weak_report(bundle: Bundle, *, json_output: bool) -> None:
         typer.echo(as_json(_weak_payload(bundle, found)))
         raise typer.Exit(code=0 if not found else 1)
     typer.echo(f"saved reads   {len(bundle.captures)}")
+    for line in rate_lines(bundle.captures):
+        typer.echo(line)
     typer.echo(f"weak blocks   {len(found)}")
     for side, entry in found:
         typer.echo(f"side {side} {entry.render()}")

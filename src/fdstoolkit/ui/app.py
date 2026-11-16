@@ -26,6 +26,7 @@ from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
 from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import Bundle
 from fdstoolkit.drive.pulse import bundle_findings
+from fdstoolkit.drive.recognition import read_rates
 from fdstoolkit.drive.recovery import captures_of_another_disk
 from fdstoolkit.drive.weak import bundle_weak_blocks
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
@@ -54,6 +55,7 @@ from fdstoolkit.ui.schemas import (
     HashSpec,
     ImageSpec,
     ProfileView,
+    RateView,
     ReadsResult,
     ReadsSpec,
     VerifyResult,
@@ -255,6 +257,7 @@ def weak_result(payload: str) -> WeakResult:
     bundle = bundle_of(payload)
     return WeakResult(
         reads=len(bundle.captures),
+        rates=[RateView.of(found) for found in read_rates(bundle.captures)],
         weak=[
             WeakView(
                 side=side,

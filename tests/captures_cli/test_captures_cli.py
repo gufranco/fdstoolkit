@@ -151,6 +151,31 @@ def test_reads_of_steady_captures_finds_no_weak_block(tmp_path: Path) -> None:
     assert json.loads(result.output)["weak"] == []
 
 
+def test_reads_of_saved_captures_states_each_reads_recognition_rate(tmp_path: Path) -> None:
+    # Arrange
+    bundle, _ = bundle_of(tmp_path, (None, None))
+
+    # Act
+    result = runner.invoke(app, ["reads", "--captures", str(bundle), "--json"])
+
+    # Assert
+    rates = json.loads(result.output)["rates"]
+    assert [(row["side"], row["read"], row["rate"]) for row in rates] == [(0, 1, 1.0), (0, 2, 1.0)]
+    assert rates[0]["unclassed"] == 0
+    assert rates[0]["span"] == "from the first block to the end of the last declared one"
+
+
+def test_reads_of_saved_captures_prints_a_rate_line_per_read(tmp_path: Path) -> None:
+    # Arrange
+    bundle, _ = bundle_of(tmp_path, (None,))
+
+    # Act
+    result = runner.invoke(app, ["reads", "--captures", str(bundle)])
+
+    # Assert
+    assert "side 0 read 1: 100.00% of " in result.output
+
+
 def test_reads_still_needs_two_dumps_without_captures(tmp_path: Path) -> None:
     # Arrange
     dump = saved(disk_with_a_file(), tmp_path / "one.fds")

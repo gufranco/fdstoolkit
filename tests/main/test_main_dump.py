@@ -230,6 +230,22 @@ def test_dump_keeps_the_drives_pulse_classes(
     assert list((tmp_path / "raw").glob("*.raw03"))
 
 
+def test_dump_states_how_much_of_each_read_fit_a_pulse_class(
+    single_side: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    attach(monkeypatch, single_side)
+
+    # Act
+    result = runner.invoke(app, ["dump", "-o", str(tmp_path / "dump.fds")])
+
+    # Assert
+    assert "side 0 read 1: 100.00% of " in result.stdout
+    assert "pulses fit a class, counted from the first block" in result.stdout
+
+
 def test_dump_keeps_the_fdsstick_captures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
     disk, _ = fds.decode(blank_image(sides=1, headered=False, formatted=True))

@@ -135,17 +135,82 @@ class SideSample:
         return self.invalid >= NOISY_PULSES and self.invalid > self.short + self.long
 
 
-def _marks(values: bytes, *, declared: int) -> tuple[tuple[int, int], ...]:
-    regions = block_regions(values)
-    pulses = tuple(found.start() for found in INVALID_PULSE.finditer(values))
+class CountedSpan(StrEnum):
+    DECLARED = "from the first block to the end of the last declared one"
+    TO_END = "from the first block to the end of the read"
+    WHOLE = "over the whole read, since no block framed"
+
+
+@dataclass(frozen=True, slots=True)
+class Recognition:
+    counted: int
+    unclassed: int
+    span: CountedSpan
+
+    @property
+    def rate(self) -> float:
+        if not self.counted:
+            return 0.0
+        return (self.counted - self.unclassed) / self.counted
+
+
+@dataclass(frozen=True, slots=True)
+class _Span:
+    first: int
+    last: int
+    kind: CountedSpan
+
+
+def _span(regions: Sequence[tuple[int, int]], length: int, declared: int) -> _Span:
     if not regions:
+        return _Span(0, length, CountedSpan.WHOLE)
+    if 0 < declared <= len(regions):
+        return _Span(regions[0][0], regions[declared - 1][1], CountedSpan.DECLARED)
+    return _Span(regions[0][0], length, CountedSpan.TO_END)
+
+
+def _marks(
+    values: bytes, regions: Sequence[tuple[int, int]], *, declared: int
+) -> tuple[tuple[int, int], ...]:
+    pulses = tuple(found.start() for found in INVALID_PULSE.finditer(values))
+    span = _span(regions, len(values), declared)
+    if span.kind is CountedSpan.WHOLE:
         return tuple((NO_BLOCK, index) for index in pulses)
     starts = [start for start, _ in regions]
-    last = regions[declared - 1][1] if 0 < declared <= len(regions) else len(values)
     return tuple(
         _mark(index, starts)
         for index in pulses
-        if starts[0] <= index < last and not _in_splice(index, regions)
+        if span.first <= index < span.last and not _in_splice(index, regions)
+    )
+
+
+def _covered(intervals: Sequence[tuple[int, int]], span: _Span) -> int:
+    total = 0
+    reach = span.first
+    for low, high in sorted(intervals):
+        start = max(low, reach)
+        end = min(high, span.last)
+        if end > start:
+            total += end - start
+            reach = end
+    return total
+
+
+def _splice_values(regions: Sequence[tuple[int, int]], span: _Span) -> int:
+    if span.kind is CountedSpan.WHOLE:
+        return 0
+    splices = [(end + SPLICE_FIRST, end + SPLICE_VALUES) for _, end in regions]
+    return _covered([*splices, *regions], span) - _covered(regions, span)
+
+
+def recognition(values: bytes, decoded: Sequence[Block]) -> Recognition:
+    declared = _declared_blocks(decoded)
+    regions = block_regions(values)
+    span = _span(regions, len(values), declared)
+    return Recognition(
+        counted=span.last - span.first - _splice_values(regions, span),
+        unclassed=len(_marks(values, regions, declared=declared)),
+        span=span.kind,
     )
 
 
@@ -283,7 +348,7 @@ def _measured(
     reference: Side | None,
     learned: Mapping[Key, bytes],
 ) -> SideSample:
-    marks = _marks(values, declared=_declared_blocks(decoded))
+    marks = _marks(values, block_regions(values), declared=_declared_blocks(decoded))
     if reference is None:
         return _against_what_read(values, decoded, learned, marks)
     return _against_reference(values, decoded, reference, marks)

@@ -33,6 +33,7 @@ from fdstoolkit.core.disk import Disk
 from fdstoolkit.doctor import CheckStatus, hardware_checks
 from fdstoolkit.drive.captures import created_now, write_bundle
 from fdstoolkit.drive.pulse import pulse_lines
+from fdstoolkit.drive.recognition import rate_lines
 from fdstoolkit.drive.recovery import recover
 from fdstoolkit.hardware.fdsstick import FdsStick, link_note, open_fdsstick
 from fdstoolkit.hardware.ports import HardwareFaultError
@@ -200,7 +201,7 @@ def dump(
 
 
 def report_link(drive: FdsStick) -> None:
-    for line in pulse_lines(drive.pulse_findings, drive.captures):
+    for line in (*pulse_lines(drive.pulse_findings, drive.captures), *rate_lines(drive.captures)):
         typer.echo(f"  {line}")
     note = link_note(drive.resyncs)
     if note:

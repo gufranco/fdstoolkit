@@ -139,6 +139,8 @@ Compares repeated dumps of one physical disk block by block. Reports stability, 
 
 With `--captures`, the same question is asked one layer down. Dumps can only disagree once a block has already failed its checksum; saved captures show the pulses that move between reads while every block still reads clean. Each weak block is listed with how many of its pulses differ, how many were invalid, and how many reads lost it altogether, the blocks some read never found first.
 
+Each saved read also gets a recognition rate: the share of its pulses that fit one of the three classes. It is counted over the span the noise count uses, from the first block to the end of the last block the side declares, leaving out 16 to 160 values after each block, where the splice sits. A read that is missing declared blocks is counted to its end, and a read where no block framed is counted whole; each line names the span it used. The real read of the calibration side kept in `tests/fixtures/fdsstick/` fits all 270,131 of its counted pulses. A rate under 100 percent says how much of the read the drive could not place in a class, before any block fails.
+
 Every `--captures` option, here and in `grade`, `consensus` and `calibrate`, also takes captures made by other tools: a directory or zip of FDSStick `.raw` timing files, one byte per pulse as loopy's software saves them, or of QDC RAW files, one count per 400 ns with the escapes the QDC manual describes. Each file holds one side, named by a `-A` or `-B` before the extension, and several files of one side are reads in name order. Pulse lengths are sorted into classes on each file's own measured clock, so both formats go through the same analysis as the stick's captures. A packed capture is read high bits first, the order the stick sends; one that only decodes low bits first, as [NintendulatorNRS](https://github.com/FurblandChannel/Furbtendulator) reads loopy's saved `.raw03` files, is read that way and named `FDS019`.
 
 ```bash
@@ -147,6 +149,9 @@ fdstoolkit reads --captures captures/
 
 ```
 saved reads   3
+side 0 read 1: 100.00% of 4602 pulses fit a class, counted from the first block to the end of the last declared one
+side 0 read 2: 100.00% of 4818 pulses fit a class, counted from the first block to the end of the last declared one
+side 0 read 3: 100.00% of 4602 pulses fit a class, counted from the first block to the end of the last declared one
 weak blocks   1
 side 0 block 3 (file data): 1 pulse(s) differ across 3 read(s), 0 invalid
 ```
@@ -421,7 +426,7 @@ With `FDSTOOLKIT_RECORD` naming a folder, every opening of the FDSStick, from a 
 fdstoolkit dump -o <out> [--sides N] [--passes N] [--retries N] [--raw <dir>] [--yes] [--force]
 ```
 
-Read a disk into a `.fds` or `.qd` file, chosen by the output's suffix. A `.qd` keeps the checksum each block carried on the disk, so a block that never read clean stays visibly bad in it. `--passes` reads each side more than once, `--retries` re-reads a side that has failed blocks up to that many more times, and `--raw` keeps every pulse capture the drive returned as a bundle the other commands read back. The bundle is kept when the dump fails or is interrupted too, since a failing disk is the one whose captures matter. When the USB link skips a packet of pulse data, the dump says so, because the blocks around a lost packet fail for a reason that has nothing to do with the disk.
+Read a disk into a `.fds` or `.qd` file, chosen by the output's suffix. A `.qd` keeps the checksum each block carried on the disk, so a block that never read clean stays visibly bad in it. `--passes` reads each side more than once, `--retries` re-reads a side that has failed blocks up to that many more times, and `--raw` keeps every pulse capture the drive returned as a bundle the other commands read back. The bundle is kept when the dump fails or is interrupted too, since a failing disk is the one whose captures matter. When the USB link skips a packet of pulse data, the dump says so, because the blocks around a lost packet fail for a reason that has nothing to do with the disk. Every read the drive returned also prints its recognition rate, counted as `reads --captures` describes.
 
 A block that failed on every read is not given up on. The captures of those reads go to the same pulse vote `consensus --captures` runs, and a block the vote rebuilds is written into the image, named on its own line, and leaves the grade at marginal rather than clean. A disk read once has a single capture per side, so the vote only has material after `--retries` or `--passes`.
 

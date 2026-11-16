@@ -730,6 +730,14 @@ export interface components {
             data: string;
             name: string;
         };
+        RateView: {
+            counted: number;
+            rate: number;
+            read: number;
+            side: number;
+            span: string;
+            unclassed: number;
+        };
         ReadsResult: {
             bits_gained: number;
             bits_lost: number;
@@ -818,6 +826,7 @@ export interface components {
             strict: boolean;
         };
         WeakResult: {
+            rates: components["schemas"]["RateView"][];
             reads: number;
             weak: components["schemas"]["WeakView"][];
         };

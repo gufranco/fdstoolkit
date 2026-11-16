@@ -29,6 +29,15 @@ from hardware_routes_kit import (
     serve,
 )
 
+ONE_SIDE_COUNTED = 1268
+
+
+def rate_line(read: int) -> str:
+    return (
+        f"side 0 read {read}: 100.00% of {ONE_SIDE_COUNTED} pulses fit a class, counted from "
+        "the first block to the end of the last declared one"
+    )
+
 
 @pytest.mark.usefixtures("absent")
 @pytest.mark.parametrize(
@@ -65,7 +74,7 @@ def test_a_dump_job_reads_the_disk_and_closes_the_drive(
     # Assert
     assert job["state"] == expected
     assert job["result"]["grade"] == "clean"
-    assert job["steps"] == ["reading side 0"]
+    assert job["steps"] == ["reading side 0", rate_line(1)]
     assert attached.closed
 
 
@@ -79,7 +88,7 @@ def test_a_dump_job_honours_repeated_passes(app: FastAPI, client: TestClient) ->
 
     # Assert
     assert job["state"] == expected
-    assert job["steps"] == ["reading side 0", "reading side 0"]
+    assert job["steps"] == ["reading side 0", "reading side 0", rate_line(1), rate_line(2)]
 
 
 def test_a_two_side_dump_job_waits_for_the_disk_to_be_turned(
