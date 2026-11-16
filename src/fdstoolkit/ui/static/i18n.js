@@ -271,10 +271,17 @@ export const DICTIONARIES = {
 
 export const FALLBACK = 'en';
 
+export function tolerateRefusal(error) {
+  if (!(error instanceof DOMException)) {
+    throw error;
+  }
+}
+
 function storedLanguage() {
   try {
     return window.localStorage.getItem('fdstoolkit.language');
   } catch (error) {
+    tolerateRefusal(error);
     return null;
   }
 }
@@ -283,7 +290,7 @@ export function rememberLanguage(code) {
   try {
     window.localStorage.setItem('fdstoolkit.language', code);
   } catch (error) {
-    return;
+    tolerateRefusal(error);
   }
 }
 

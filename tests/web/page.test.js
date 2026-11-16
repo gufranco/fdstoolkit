@@ -270,7 +270,7 @@ describe('the command list', () => {
     // Arrange
     await open('info');
     vi.spyOn(window.history, 'replaceState').mockImplementation(() => {
-      throw new Error('blocked');
+      throw new DOMException('blocked', 'SecurityError');
     });
 
     // Act
@@ -843,10 +843,10 @@ describe('initialLanguage', () => {
   it('works when storage is blocked', () => {
     // Arrange
     vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
-      throw new Error('blocked');
+      throw new DOMException('blocked', 'SecurityError');
     });
     vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
-      throw new Error('blocked');
+      throw new DOMException('blocked', 'QuotaExceededError');
     });
 
     // Act
@@ -854,5 +854,31 @@ describe('initialLanguage', () => {
 
     // Assert
     expect(initialLanguage()).toBe('en');
+  });
+
+  it('lets a fault that is not a browser refusal surface', () => {
+    // Arrange
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new TypeError('broken');
+    });
+
+    // Act
+    const remembering = () => rememberLanguage('ja');
+
+    // Assert
+    expect(remembering).toThrow(TypeError);
+  });
+
+  it('lets a fault reading the stored language surface', () => {
+    // Arrange
+    vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
+      throw new TypeError('broken');
+    });
+
+    // Act
+    const choosing = () => initialLanguage();
+
+    // Assert
+    expect(choosing).toThrow(TypeError);
   });
 });

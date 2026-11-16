@@ -1,4 +1,4 @@
-import { DICTIONARIES, FALLBACK, initialLanguage, rememberLanguage } from './i18n.js';
+import { DICTIONARIES, FALLBACK, initialLanguage, rememberLanguage, tolerateRefusal } from './i18n.js';
 
 let state = {
   language: initialLanguage(),
@@ -965,7 +965,7 @@ function remember() {
   try {
     window.history.replaceState(null, '', '#' + state.command);
   } catch (error) {
-    return;
+    tolerateRefusal(error);
   }
 }
 
