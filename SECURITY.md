@@ -13,13 +13,13 @@ about what a malformed input can make the code do.
 | Class | Example |
 |-------|---------|
 | Supply chain | A pinned action or a release artefact that has been tampered with |
-| Malformed input | A crafted disk image, patch or DAT that makes the tool write outside its output folder, consume unbounded memory, or execute anything |
-| Identification | An image that verifies against a DAT entry it is not, or a BIOS that identifies as a revision it is not |
+| Malformed input | A crafted disk image, patch, build manifest or capture bundle that makes the tool read or write outside the folders it was given, consume unbounded memory, or execute anything |
+| Identification | An image whose canonical digest matches a release it is not, or that `provenance` calls factory when a kiosk or a tool rewrote it |
 | Hardware | Anything that makes the write path touch a disk without the confirmation and the backup it promises |
-| Local page | A website, or anything else that is not the page itself, getting `fdstoolkit web` to act: starting a job, reading a kept backup, or running script in the page |
+| Local page | A website, or anything else that is not the page itself, getting `fdstoolkit web` to act: starting a job, reading a kept backup, reading any file on this machine, or running script in the page |
 | Leakage | Any path where the tool would distribute, fetch, or point at a disk image or a BIOS |
 
-The last two rows are security properties here rather than legal footnotes. A
+The hardware and leakage rows are security properties here rather than legal footnotes. A
 write is irreversible on somebody's only copy of a thirty-year-old disk, and the
 project's whole design is that it identifies files it must never carry.
 
