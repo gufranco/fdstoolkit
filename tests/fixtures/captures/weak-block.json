@@ -1,0 +1,7 @@
+{
+  "capture": "weak-block.zip",
+  "capture_sha256": "189f2a014c65ee773b160bf403f6c6bd4f48cfdb9aebe685384af1af53adee3e",
+  "content": "three synthetic reads of a formatted blank side with one file, from tests/support/capture_fixture.py; the second read has one pulse flipped inside block 3",
+  "made_by": "capture_fixture.zipped(disk_with_a_file(), (None, 10, None))",
+  "holds": "no game bytes"
+}

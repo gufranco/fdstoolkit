@@ -527,6 +527,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/track": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["track_api_track_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/verify": {
         parameters: {
             query?: never;
@@ -549,6 +565,11 @@ export interface components {
     schemas: {
         AnswerSpec: {
             yes: boolean;
+        };
+        BinView: {
+            classes: number[];
+            end: number;
+            start: number;
         };
         BlankSpec: {
             calibration: boolean;
@@ -902,6 +923,29 @@ export interface components {
             passes: number;
             quick: boolean;
             sides: number;
+        };
+        TrackBlockView: {
+            end: number;
+            index: number;
+            invalid: number;
+            kind: string;
+            label: string;
+            missing: number;
+            start: number;
+            unstable: number;
+            weak: boolean;
+        };
+        TrackResult: {
+            bins: components["schemas"]["BinView"][];
+            blocks: components["schemas"]["TrackBlockView"][];
+            headline: string;
+            length: number;
+            reads: number;
+            side: number;
+        };
+        TrackSpec: {
+            captures: string;
+            side: number;
         };
         ValidationError: {
             ctx?: Record<string, never>;
@@ -1908,6 +1952,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DoctorResult"];
+                };
+            };
+        };
+    };
+    track_api_track_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackSpec"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackResult"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

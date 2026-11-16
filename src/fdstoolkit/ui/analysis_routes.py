@@ -3,12 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fdstoolkit.drive.recovery import Rebuild, rebuild
+from fdstoolkit.drive.track import track_of, track_payload
 from fdstoolkit.history.logbook import LogbookError
 from fdstoolkit.history.lookup import log_payload, look_up, subject_for
 from fdstoolkit.history.trend import trend_lines
 from fdstoolkit.master.splice import splice
 from fdstoolkit.quality.consensus import build_consensus
 from fdstoolkit.ui.history_schemas import LogResult, LogSpec
+from fdstoolkit.ui.reads_schemas import TrackResult, TrackSpec
 from fdstoolkit.ui.schemas import (
     ConsensusSpec,
     FileResult,
@@ -100,3 +102,12 @@ def logged(spec: LogSpec) -> LogResult:
     payload = log_payload(subject, trend)
     lines = "\n".join(str(line) for line in trend_lines(trend))
     return LogResult.model_validate({**payload, "headline": subject.title, "text": lines})
+
+
+def track(spec: TrackSpec) -> TrackResult:
+    bundle = bundle_of(spec.captures)
+    try:
+        found = track_of(bundle.of_side(spec.side), spec.side)
+    except ValueError as error:
+        refuse(str(error), status=UNPROCESSABLE)
+    return TrackResult.model_validate(track_payload(found))

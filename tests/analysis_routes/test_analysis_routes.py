@@ -4,6 +4,7 @@ import base64
 from pathlib import Path
 
 import pytest
+from capture_fixture import DAMAGED, disk_with_a_file, zipped
 from fakes import game_name, seeded
 from fastapi.testclient import TestClient
 
@@ -201,3 +202,32 @@ def test_a_grade_that_cannot_be_logged_is_a_server_fault(
     # Assert
     assert answer.status_code == SERVER_ERROR
     assert "could not write the logbook at" in answer.json()["detail"]
+
+
+def test_the_track_of_uploaded_captures_marks_the_weak_block(client: TestClient) -> None:
+    # Arrange
+    payload = {"captures": base64.b64encode(zipped(disk_with_a_file(), (None, 10, None))).decode()}
+
+    # Act
+    answer = client.post("/api/track", json=payload)
+
+    # Assert
+    assert answer.status_code == OK
+    body = answer.json()
+    assert [block["index"] for block in body["blocks"] if block["weak"]] == [DAMAGED]
+    assert body["headline"].endswith(", 1 weak")
+
+
+def test_the_track_of_a_side_never_read_is_refused(client: TestClient) -> None:
+    # Arrange
+    payload = {
+        "captures": base64.b64encode(zipped(disk_with_a_file(), (None,))).decode(),
+        "side": 1,
+    }
+
+    # Act
+    answer = client.post("/api/track", json=payload)
+
+    # Assert
+    assert answer.status_code == UNPROCESSABLE
+    assert answer.json()["detail"] == "the captures hold no read of side 1"

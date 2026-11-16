@@ -137,6 +137,7 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "grade": "/api/grade",
     "reads": "/api/reads",
     "log": "/api/log",
+    "track": "/api/track",
     "calibrate": "/api/jobs/calibrate",
     "dump": "/api/jobs/dump",
     "write": "/api/jobs/write",
@@ -358,6 +359,7 @@ def _register_analysis(app: FastAPI) -> None:
     app.add_api_route("/api/splice", analysis_routes.splice_blocks, methods=["POST"])
     app.add_api_route("/api/consensus", analysis_routes.consensus, methods=["POST"])
     app.add_api_route("/api/log", analysis_routes.logged, methods=["POST"])
+    app.add_api_route("/api/track", analysis_routes.track, methods=["POST"])
 
 
 def _register_hardware(app: FastAPI) -> None:

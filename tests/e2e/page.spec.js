@@ -301,6 +301,24 @@ test('a rescue hands back its reads and the image once the side settles at phone
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('a track draws a side from captures and names its weak block at phone width', async ({ page }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'track');
+  await page.locator('input[data-field=captures]').setInputFiles('tests/fixtures/captures/weak-block.zip');
+
+  // Act
+  await page.locator('#panel button.run').click();
+
+  // Assert
+  await expect(page.getByRole('img', { name: /Pulse classes along side 0 across 3 read/ })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Weak blocks' })).toHaveText(
+    'block 3, file data: 1 pulse(s) differ across 3 read(s), 0 invalid',
+  );
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

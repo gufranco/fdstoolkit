@@ -329,3 +329,68 @@ footer p { margin: 0 auto; max-width: 46rem; }
 .fields input:invalid {
   border-color: var(--accent);
 }
+
+.track {
+  margin: 0 0 12px;
+}
+
+.track svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.track rect {
+  shape-rendering: crispEdges;
+}
+
+.track-short {
+  fill: var(--good);
+}
+
+.track-medium {
+  fill: var(--muted);
+}
+
+.track-long {
+  fill: var(--warn);
+}
+
+.track-invalid {
+  fill: var(--accent);
+}
+
+.track-block:not(.weak) {
+  fill: var(--line);
+}
+
+.track-block.weak {
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+.track-hatch {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.track-label {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.track-caption {
+  margin: 12px 0 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.track-weak {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.875rem;
+}

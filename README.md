@@ -100,7 +100,7 @@ open without a udev rule; `doctor` fails that check and prints the rule to insta
 Every command's options, output and the basis for each figure are in [REFERENCE.md](REFERENCE.md), and `--help` on any command prints its summary.
 
 - **Inspect**: [`info`](REFERENCE.md#info), [`boot`](REFERENCE.md#boot), [`hash`](REFERENCE.md#hash), [`provenance`](REFERENCE.md#provenance)
-- **Check**: [`verify`](REFERENCE.md#verify), [`grade`](REFERENCE.md#grade), [`reads`](REFERENCE.md#reads), [`log`](REFERENCE.md#log), [`diff`](REFERENCE.md#diff)
+- **Check**: [`verify`](REFERENCE.md#verify), [`grade`](REFERENCE.md#grade), [`reads`](REFERENCE.md#reads), [`log`](REFERENCE.md#log), [`track`](REFERENCE.md#track), [`diff`](REFERENCE.md#diff)
 - **Repair**: [`rebuild`](REFERENCE.md#rebuild), [`set`](REFERENCE.md#set), [`insert`](REFERENCE.md#insert), [`extract`](REFERENCE.md#extract), [`patch`](REFERENCE.md#patch), [`splice`](REFERENCE.md#splice), [`consensus`](REFERENCE.md#consensus), [`save`](REFERENCE.md#save)
 - **Container**: [`convert`](REFERENCE.md#convert), [`blank`](REFERENCE.md#blank), [`build`](REFERENCE.md#build)
 - **Hardware**: [`status`](REFERENCE.md#status), [`doctor`](REFERENCE.md#doctor), [`dump`](REFERENCE.md#dump), [`rescue`](REFERENCE.md#rescue), [`write`](REFERENCE.md#write), [`surface`](REFERENCE.md#surface), [`calibrate`](REFERENCE.md#calibrate), [`session`](REFERENCE.md#session), [`web`](REFERENCE.md#web)

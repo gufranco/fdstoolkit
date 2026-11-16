@@ -200,6 +200,31 @@ since the dump of 2026-11-01 10:00, 2 block(s) weakened: side 0 block 3, side 0 
 <img alt="ローカル Web ページの log コマンド" src="assets/screenshots/log-light.png">
 </picture>
 
+#### `track`
+
+```bash
+fdstoolkit track <bundle> [--side N] [--json]
+```
+
+`dump --raw` が保存したキャプチャから、1 面をトラックに沿って並べて示します。面のいちばん長い読み取りを 160 区間に分け、区間ごとにパルスをクラス別に数えます。短、中、長、そしてどのクラスにも収まらないものです。読めたブロックはそれぞれトラック上の位置に置き、読み取りごとにパルスが揺れるブロック、無効なパルスを含むブロック、ある読み取りで見つからなかったブロックは、`reads --captures` と同じ数値とともに弱いと示します。コマンドはブロックを順に表示し、弱いブロックがあれば終了コード 1 で終わります。Web ページは同じ結果を描きます。読み取りに沿ったクラスの構成、その下にブロック、弱いブロックには斜線と番号、そしてすべての弱いブロックを数値付きで挙げる一覧です。色がなくても、スクリーンリーダーでも読めます。
+
+```bash
+fdstoolkit track captures/
+```
+
+```
+side 0, 3 read(s), 37336 values, 4 blocks, 1 weak
+block 0  disk info    28300-28710  steady
+block 1  file amount  29686-29710  steady
+block 2  file header  30686-30811  steady
+block 3  file data    31787-33334  1 pulse(s) differ across 3 read(s), 0 invalid
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/track-dark.png">
+<img alt="ローカル Web ページの track コマンド" src="assets/screenshots/track-light.png">
+</picture>
+
 #### `diff`
 
 ```bash

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.drive.recognition import ReadRate
 
 
@@ -41,3 +42,35 @@ class WeakResult(BaseModel):
     reads: int
     rates: list[RateView]
     weak: list[WeakView]
+
+
+class TrackSpec(BaseModel):
+    captures: str = Field(description="the capture bundle a dump kept, as a zip")
+    side: int = Field(0, ge=0, le=SIDES_PER_DISK - 1)
+
+
+class BinView(BaseModel):
+    start: int
+    end: int
+    classes: list[int]
+
+
+class TrackBlockView(BaseModel):
+    index: int
+    kind: str
+    start: int
+    end: int
+    weak: bool
+    unstable: int
+    invalid: int
+    missing: int
+    label: str
+
+
+class TrackResult(BaseModel):
+    headline: str
+    side: int
+    reads: int
+    length: int
+    bins: list[BinView]
+    blocks: list[TrackBlockView]

@@ -2,6 +2,7 @@ import { Fragment, type ReactElement, type ReactNode } from 'react';
 
 import { useT } from './language';
 import type { Download } from './schemas';
+import { TrackView, trackIn } from './track';
 import { bytes, isChange, isDownload, isProse, isRecord, scalar, type Translate, words } from './values';
 
 type Entry = readonly [string, unknown];
@@ -323,6 +324,15 @@ function RecordView(props: { readonly payload: Row }): ReactElement {
 
 export function ResultView(props: { readonly payload: unknown }): ReactElement {
   const t = useT();
+  const drawn = trackIn(props.payload);
+  if (drawn) {
+    return (
+      <>
+        <Banner kind={drawn.blocks.some((found) => found.weak) ? 'warn' : 'good'}>{drawn.headline}</Banner>
+        <TrackView track={drawn} />
+      </>
+    );
+  }
   if (isDownload(props.payload)) {
     const fields: readonly unknown[] = Object.values(props.payload);
     const extra = fields.filter(isDownload);

@@ -200,6 +200,31 @@ since the dump of 2026-11-01 10:00, 2 block(s) weakened: side 0 block 3, side 0 
 <img alt="The log command on the local web page" src="assets/screenshots/log-light.png">
 </picture>
 
+#### `track`
+
+```bash
+fdstoolkit track <bundle> [--side N] [--json]
+```
+
+Lays one side out along the track from the captures a `dump --raw` kept. The longest read of the side is cut into 160 stretches, and each stretch counts its pulses by class: short, medium, long, and the ones that fit no class. Every block that read is placed where it sits on the track, and a block whose pulses move between the reads, hold invalid pulses, or that some read missed, is marked weak with the same figures `reads --captures` gives. The command prints the blocks in order and exits 1 when any is weak. The web page draws the same answer: the class mix along the read, the blocks below it, each weak block hatched and numbered, and a list that names every weak block with its figures, so the drawing reads without colour and through a screen reader.
+
+```bash
+fdstoolkit track captures/
+```
+
+```
+side 0, 3 read(s), 37336 values, 4 blocks, 1 weak
+block 0  disk info    28300-28710  steady
+block 1  file amount  29686-29710  steady
+block 2  file header  30686-30811  steady
+block 3  file data    31787-33334  1 pulse(s) differ across 3 read(s), 0 invalid
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/track-dark.png">
+<img alt="The track command on the local web page" src="assets/screenshots/track-light.png">
+</picture>
+
 #### `diff`
 
 ```bash

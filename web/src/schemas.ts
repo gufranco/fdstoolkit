@@ -58,6 +58,38 @@ export const CurrentJobSchema = z.object({ job: JobSchema.nullish() });
 
 export const HardwareSchema = z.object({ connected: z.boolean(), detail: z.string() });
 
+export const TrackSchema = z.object({
+  headline: z.string(),
+  side: z.number().int().nonnegative(),
+  reads: z.number().int().nonnegative(),
+  length: z.number().int().nonnegative(),
+  bins: z.array(
+    z.object({
+      start: z.number().int().nonnegative(),
+      end: z.number().int().nonnegative(),
+      classes: z.tuple([
+        z.number().int().nonnegative(),
+        z.number().int().nonnegative(),
+        z.number().int().nonnegative(),
+        z.number().int().nonnegative(),
+      ]),
+    }),
+  ),
+  blocks: z.array(
+    z.object({
+      index: z.number().int().nonnegative(),
+      kind: z.string(),
+      start: z.number().int().nonnegative(),
+      end: z.number().int().nonnegative(),
+      weak: z.boolean(),
+      unstable: z.number().int().nonnegative(),
+      invalid: z.number().int().nonnegative(),
+      missing: z.number().int().nonnegative(),
+      label: z.string(),
+    }),
+  ),
+});
+
 export const AnyAnswerSchema = z.unknown();
 
 export type FormField = z.infer<typeof FormFieldSchema>;
@@ -67,3 +99,4 @@ export type Download = z.infer<typeof DownloadSchema>;
 export type Job = z.infer<typeof JobSchema>;
 export type JobState = Job['state'];
 export type Hardware = z.infer<typeof HardwareSchema>;
+export type Track = z.infer<typeof TrackSchema>;
