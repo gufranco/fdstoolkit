@@ -128,19 +128,15 @@ export function helpFor(command, field) {
   return t(`field.${command}.${field.name}`) || t(`field.${field.name}`);
 }
 
-export function control(field, command) {
+function captionOf(field) {
   const caption = element('span', { className: 'field-name', textContent: words(field.name) });
   if (field.required) {
     caption.append(element('span', { className: 'required', textContent: ` ${t('field.required')}` }));
   }
+  return caption;
+}
 
-  const files = field.kind === 'file' || field.kind === 'files';
-  const chooser = files ? fileControl(field) : null;
-  const node = chooser ? chooser.node : input(field);
-  node.dataset.field = field.name;
-  node.dataset.kind = field.kind;
-  node.dataset.whole = String(field.step === 1);
-
+function wrapped(field, caption, node, chooser) {
   const wrap = element('label', { className: field.kind === 'flag' ? 'field checkbox' : 'field' });
   if (chooser) {
     wrap.append(caption, node, chooser.box);
@@ -151,7 +147,10 @@ export function control(field, command) {
   } else {
     wrap.append(caption, node);
   }
+  return wrap;
+}
 
+function watched(wrap, node, field) {
   const problem = element('span', { className: 'field-problem' });
   node.addEventListener('input', () => {
     const reason = problemFor(node, field);
@@ -159,22 +158,32 @@ export function control(field, command) {
     wrap.classList.toggle('missing', Boolean(reason));
   });
   wrap.append(problem);
+}
 
+function helpLines(field, command, files) {
   const limits = describeLimits(field);
-  if (limits) {
-    wrap.append(element('span', { className: 'field-help quiet', textContent: limits }));
-  }
-
   const help = helpFor(command, field);
-  if (help) {
-    wrap.append(element('span', { className: 'field-help', textContent: help }));
-  }
-  if (files && field.accepts) {
-    wrap.append(element('span', {
-      className: 'field-help quiet',
-      textContent: t('field.accepts').replace('{list}', field.accepts.replace(/,/g, ', ')),
-    }));
-  }
+  const accepts = files && field.accepts
+    ? t('field.accepts').replace('{list}', field.accepts.replace(/,/g, ', '))
+    : '';
+  return [
+    ...(limits ? [element('span', { className: 'field-help quiet', textContent: limits })] : []),
+    ...(help ? [element('span', { className: 'field-help', textContent: help })] : []),
+    ...(accepts ? [element('span', { className: 'field-help quiet', textContent: accepts })] : []),
+  ];
+}
+
+export function control(field, command) {
+  const files = field.kind === 'file' || field.kind === 'files';
+  const chooser = files ? fileControl(field) : null;
+  const node = chooser ? chooser.node : input(field);
+  node.dataset.field = field.name;
+  node.dataset.kind = field.kind;
+  node.dataset.whole = String(field.step === 1);
+
+  const wrap = wrapped(field, captionOf(field), node, chooser);
+  watched(wrap, node, field);
+  wrap.append(...helpLines(field, command, files));
   return wrap;
 }
 

@@ -233,37 +233,54 @@ export function isDownload(entry) {
     && typeof entry.name === 'string';
 }
 
-export function renderResult(target, payload) {
-  if (isDownload(payload)) {
-    const extra = Object.values(payload).filter(isDownload);
-    target.replaceChildren(banner('good', t('state.file')), download(payload), ...extra.map(download));
-    return;
-  }
-  if (payload && isDownload(payload.file)) {
-    const { file, ...rest } = payload;
-    const shown = reported(rest);
-    const middle = Object.keys(shown).length ? [pairs(shown)] : [];
-    target.replaceChildren(verdict(payload), download(file), ...middle);
-    return;
-  }
-  if (payload && Array.isArray(payload.files) && payload.files.length && payload.files.every(isDownload)) {
-    target.replaceChildren(banner('good', t('state.files').replace('{n}', String(payload.files.length))));
-    target.append(...payload.files.map(download));
-    return;
-  }
-  if (payload && typeof payload.text === 'string') {
-    target.replaceChildren(verdict(payload), element('pre', { textContent: payload.text }));
-    return;
-  }
-  if (payload && typeof payload === 'object') {
-    const rest = reported(payload);
-    const middle = Object.keys(rest).length ? [pairs(rest)] : [];
-    target.replaceChildren(verdict(payload), ...middle, raw(payload));
-    return;
-  }
+function downloads(target, payload) {
+  const extra = Object.values(payload).filter(isDownload);
+  target.replaceChildren(banner('good', t('state.file')), download(payload), ...extra.map(download));
+}
+
+function withFile(target, payload) {
+  const { file, ...rest } = payload;
+  const shown = reported(rest);
+  const middle = Object.keys(shown).length ? [pairs(shown)] : [];
+  target.replaceChildren(verdict(payload), download(file), ...middle);
+}
+
+function fileList(target, payload) {
+  target.replaceChildren(banner('good', t('state.files').replace('{n}', String(payload.files.length))));
+  target.append(...payload.files.map(download));
+}
+
+function textReport(target, payload) {
+  target.replaceChildren(verdict(payload), element('pre', { textContent: payload.text }));
+}
+
+function recordReport(target, payload) {
+  const rest = reported(payload);
+  const middle = Object.keys(rest).length ? [pairs(rest)] : [];
+  target.replaceChildren(verdict(payload), ...middle, raw(payload));
+}
+
+function plainValue(target, payload) {
   target.replaceChildren(
     banner('good', t('state.done')),
     element('pre', { textContent: JSON.stringify(payload, null, 2) }),
   );
+}
+
+const LAYOUTS = [
+  [(payload) => isDownload(payload), downloads],
+  [(payload) => payload && isDownload(payload.file), withFile],
+  [
+    (payload) => payload && Array.isArray(payload.files) && payload.files.length
+      && payload.files.every(isDownload),
+    fileList,
+  ],
+  [(payload) => payload && typeof payload.text === 'string', textReport],
+  [(payload) => payload && typeof payload === 'object', recordReport],
+];
+
+export function renderResult(target, payload) {
+  const layout = LAYOUTS.find(([fits]) => fits(payload));
+  (layout ? layout[1] : plainValue)(target, payload);
 }
 

@@ -107,44 +107,74 @@ async function resume() {
   await follow(job, out);
 }
 
+function refusal(host, form) {
+  const empty = missing(host, form);
+  if (empty.length) {
+    return [banner('bad', t('state.missing').replace('{fields}', empty.join(', ')))];
+  }
+  const broken = invalid(host, form);
+  if (broken.length) {
+    return [
+      banner('bad', t('state.invalid')),
+      ...broken.map((reason) => element('p', { className: 'reason', textContent: reason })),
+    ];
+  }
+  return null;
+}
+
+async function execute(host, form, out) {
+  try {
+    const body = await collect(host, form);
+    if (isJobRoute(form.route)) {
+      await startJob(form, out, body);
+    } else {
+      renderResult(out, await call(form.route, form.method, body));
+    }
+  } catch (error) {
+    out.replaceChildren(
+      banner('bad', t('state.failed')),
+      element('p', { className: 'reason', textContent: error.message }),
+      element('p', { className: 'quiet', textContent: t('state.hint') }),
+    );
+  }
+}
+
+function busy(run, running) {
+  run.disabled = running;
+  run.textContent = t(running ? 'state.running' : 'button.run');
+}
+
 function runner(host, form, out) {
   const run = element('button', { type: 'button', className: 'run', textContent: t('button.run') });
   run.addEventListener('click', async () => {
-    const empty = missing(host, form);
-    if (empty.length) {
-      out.replaceChildren(banner('bad', t('state.missing').replace('{fields}', empty.join(', '))));
+    const refused = refusal(host, form);
+    if (refused) {
+      out.replaceChildren(...refused);
       return;
     }
-    const broken = invalid(host, form);
-    if (broken.length) {
-      out.replaceChildren(
-        banner('bad', t('state.invalid')),
-        ...broken.map((reason) => element('p', { className: 'reason', textContent: reason })),
-      );
-      return;
-    }
-    run.disabled = true;
-    run.textContent = t('state.running');
+    busy(run, true);
     out.replaceChildren(banner('busy', t('state.running')));
-    try {
-      const body = await collect(host, form);
-      if (isJobRoute(form.route)) {
-        await startJob(form, out, body);
-      } else {
-        renderResult(out, await call(form.route, form.method, body));
-      }
-    } catch (error) {
-      out.replaceChildren(
-        banner('bad', t('state.failed')),
-        element('p', { className: 'reason', textContent: error.message }),
-        element('p', { className: 'quiet', textContent: t('state.hint') }),
-      );
-    } finally {
-      run.disabled = false;
-      run.textContent = t('button.run');
-    }
+    await execute(host, form, out);
+    busy(run, false);
   });
   return run;
+}
+
+function fieldsColumn(host, form, out) {
+  const left = element('div', { className: 'fields' });
+  left.append(element('p', { className: 'group-label', textContent: t('group.inputs') }));
+  const shownFields = form.fields.filter((field) => field.kind !== 'auto' && !field.hidden);
+  left.append(...(shownFields.length
+    ? shownFields.map((field) => control(field, form.command))
+    : [element('p', { className: 'field-help', textContent: t('group.nothing') })]));
+  left.append(runner(host, form, out));
+  return left;
+}
+
+function resultColumn(out) {
+  const right = element('div', { className: 'result' });
+  right.append(element('p', { className: 'group-label', textContent: t('group.result') }), out);
+  return right;
 }
 
 function renderPanel() {
@@ -159,20 +189,8 @@ function renderPanel() {
 
   const out = element('div', { className: 'output' });
   out.append(emptyResult(form));
-
-  const left = element('div', { className: 'fields' });
-  left.append(element('p', { className: 'group-label', textContent: t('group.inputs') }));
-  const shownFields = form.fields.filter((field) => field.kind !== 'auto' && !field.hidden);
-  left.append(...(shownFields.length
-    ? shownFields.map((field) => control(field, form.command))
-    : [element('p', { className: 'field-help', textContent: t('group.nothing') })]));
-  left.append(runner(host, form, out));
-
-  const right = element('div', { className: 'result' });
-  right.append(element('p', { className: 'group-label', textContent: t('group.result') }), out);
-
   const columns = element('div', { className: 'columns' });
-  columns.append(left, right);
+  columns.append(fieldsColumn(host, form, out), resultColumn(out));
 
   host.append(
     heading(form),
