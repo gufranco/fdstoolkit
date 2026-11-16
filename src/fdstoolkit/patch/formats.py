@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import zlib
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Final
 
@@ -19,6 +20,7 @@ ACTION_MASK: Final = 0b11
 SOURCE_READ: Final = 0
 TARGET_READ: Final = 1
 SOURCE_COPY: Final = 2
+TARGET_COPY: Final = 3
 MAX_TARGET_BYTES: Final = 16 * 1024 * 1024
 
 
@@ -85,42 +87,40 @@ def _target_size(value: int) -> int:
     return value
 
 
-def _grow(out: bytearray, size: int) -> None:
-    if len(out) < size:
-        out.extend(bytes(size - len(out)))
+def _ips_record(patch: bytes, cursor: int) -> tuple[int, bytes, int]:
+    offset = int.from_bytes(patch[cursor : cursor + OFFSET_SIZE], "big")
+    start = cursor + OFFSET_SIZE + LENGTH_SIZE
+    length = int.from_bytes(patch[cursor + OFFSET_SIZE : start], "big")
+    if length:
+        _cut_short(patch, start + length, start)
+        return offset, patch[start : start + length], start + length
+    _cut_short(patch, start + LENGTH_SIZE + 1, start)
+    count = int.from_bytes(patch[start : start + LENGTH_SIZE], "big")
+    return offset, bytes([patch[start + LENGTH_SIZE]]) * count, start + LENGTH_SIZE + 1
+
+
+def _ips_records(patch: bytes) -> tuple[list[tuple[int, bytes]], int]:
+    records: list[tuple[int, bytes]] = []
+    cursor = len(IPS_MAGIC)
+    while cursor + OFFSET_SIZE <= len(patch) and patch[cursor : cursor + len(IPS_END)] != IPS_END:
+        offset, chunk, cursor = _ips_record(patch, cursor)
+        records.append((offset, chunk))
+    ended = patch[cursor : cursor + len(IPS_END)] == IPS_END
+    return records, cursor + (len(IPS_END) if ended else 0)
 
 
 def apply_ips(patch: bytes, source: bytes) -> bytes:
     if not patch.startswith(IPS_MAGIC):
         message = "not an IPS patch"
         raise PatchError(message)
-
+    records, cursor = _ips_records(patch)
     out = bytearray(source)
-    cursor = len(IPS_MAGIC)
-    while cursor + OFFSET_SIZE <= len(patch):
-        marker = patch[cursor : cursor + len(IPS_END)]
-        if marker == IPS_END:
-            cursor += len(IPS_END)
-            break
-        offset = int.from_bytes(patch[cursor : cursor + OFFSET_SIZE], "big")
-        cursor += OFFSET_SIZE
-        length = int.from_bytes(patch[cursor : cursor + LENGTH_SIZE], "big")
-        cursor += LENGTH_SIZE
-        if length:
-            _cut_short(patch, cursor + length, cursor)
-            chunk = patch[cursor : cursor + length]
-            cursor += length
-        else:
-            _cut_short(patch, cursor + LENGTH_SIZE + 1, cursor)
-            count = int.from_bytes(patch[cursor : cursor + LENGTH_SIZE], "big")
-            cursor += LENGTH_SIZE
-            chunk = bytes([patch[cursor]]) * count
-            cursor += 1
-        _grow(out, offset + len(chunk))
-        out[offset : offset + len(chunk)] = chunk
-
+    for offset, chunk in records:
+        end = offset + len(chunk)
+        out.extend(bytes(max(end - len(out), 0)))
+        out[offset:end] = chunk
     if cursor + OFFSET_SIZE <= len(patch):
-        out = out[: int.from_bytes(patch[cursor : cursor + OFFSET_SIZE], "big")]
+        return bytes(out[: int.from_bytes(patch[cursor : cursor + OFFSET_SIZE], "big")])
     return bytes(out)
 
 
@@ -161,37 +161,39 @@ def _checked_target(expected: int, target: bytes) -> bytes:
     return target
 
 
-def apply_ups(patch: bytes, source: bytes) -> bytes:
-    if not patch.startswith(UPS_MAGIC):
-        message = "not a UPS patch"
-        raise PatchError(message)
-
-    body_end, source_crc, target_crc = _footer(patch)
-    _check_source(source_crc, source)
-
-    cursor = len(UPS_MAGIC)
-    _, cursor = read_varint(patch, cursor)
-    declared, cursor = read_varint(patch, cursor)
-    target_size = _target_size(declared)
-
-    out = bytearray(source[:target_size])
-    _grow(out, target_size)
-
+def _ups_hunks(patch: bytes, cursor: int, body_end: int) -> list[tuple[int, bytes]]:
+    hunks: list[tuple[int, bytes]] = []
     position = 0
     while cursor < body_end:
         skip, cursor = read_varint(patch, cursor)
         position += skip
-        while cursor < body_end:
-            value = patch[cursor]
-            cursor += 1
-            if value == 0:
-                break
-            if position < len(out):
-                out[position] ^= value
-            position += 1
-        position += 1
+        found = patch.find(b"\0", cursor, body_end)
+        end = body_end if found < 0 else found
+        hunks.append((position, patch[cursor:end]))
+        position += end - cursor + 1
+        cursor = end + 1
+    return hunks
 
-    return _checked_target(target_crc, bytes(out[:target_size]))
+
+def _xored(base: bytes, hunks: list[tuple[int, bytes]]) -> bytes:
+    out = bytearray(base)
+    for position, data in hunks:
+        for offset, value in enumerate(data[: max(len(out) - position, 0)]):
+            out[position + offset] ^= value
+    return bytes(out)
+
+
+def apply_ups(patch: bytes, source: bytes) -> bytes:
+    if not patch.startswith(UPS_MAGIC):
+        message = "not a UPS patch"
+        raise PatchError(message)
+    body_end, source_crc, target_crc = _footer(patch)
+    _check_source(source_crc, source)
+    _, cursor = read_varint(patch, len(UPS_MAGIC))
+    declared, cursor = read_varint(patch, cursor)
+    target_size = _target_size(declared)
+    base = source[:target_size].ljust(target_size, b"\0")
+    return _checked_target(target_crc, _xored(base, _ups_hunks(patch, cursor, body_end)))
 
 
 def _bps_relative(patch: bytes, cursor: int, offset: int) -> tuple[int, int]:
@@ -214,55 +216,86 @@ def _in_source(source: bytes, offset: int, length: int) -> None:
         raise PatchError(message)
 
 
-def _written(out: bytearray, offset: int) -> None:
+def _written(out: bytes | bytearray, offset: int) -> None:
     if not 0 <= offset < len(out):
         message = f"the patch copies from byte {offset} of a target {len(out)} bytes long"
         raise PatchError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class _BpsStep:
+    patch: bytes
+    body_end: int
+    source: bytes
+    cursor: int
+    length: int
+    source_offset: int
+    target_offset: int
+
+
+def _target_copy(out: bytes | bytearray, offset: int, length: int) -> bytes:
+    produced = bytearray()
+    for index in range(length):
+        at = offset + index
+        produced.append(out[at] if at < len(out) else produced[at - len(out)])
+    return bytes(produced)
+
+
+def _source_read(step: _BpsStep, out: bytes | bytearray) -> tuple[bytes, _BpsStep]:
+    _in_source(step.source, len(out), step.length)
+    return step.source[len(out) : len(out) + step.length], step
+
+
+def _target_read(step: _BpsStep, out: bytes | bytearray) -> tuple[bytes, _BpsStep]:
+    del out
+    _cut_short(step.patch[: step.body_end], step.cursor + step.length, step.cursor)
+    end = step.cursor + step.length
+    return step.patch[step.cursor : end], replace(step, cursor=end)
+
+
+def _source_copy(step: _BpsStep, out: bytes | bytearray) -> tuple[bytes, _BpsStep]:
+    del out
+    offset, cursor = _bps_relative(step.patch, step.cursor, step.source_offset)
+    _in_source(step.source, offset, step.length)
+    moved = replace(step, cursor=cursor, source_offset=offset + step.length)
+    return step.source[offset : offset + step.length], moved
+
+
+def _target_copied(step: _BpsStep, out: bytes | bytearray) -> tuple[bytes, _BpsStep]:
+    offset, cursor = _bps_relative(step.patch, step.cursor, step.target_offset)
+    _written(out, offset)
+    moved = replace(step, cursor=cursor, target_offset=offset + step.length)
+    return _target_copy(out, offset, step.length), moved
+
+
+BPS_ACTIONS: Final = {
+    SOURCE_READ: _source_read,
+    TARGET_READ: _target_read,
+    SOURCE_COPY: _source_copy,
+    TARGET_COPY: _target_copied,
+}
+
+
+def _bps_start(patch: bytes) -> tuple[int, int]:
+    _, cursor = read_varint(patch, len(BPS_MAGIC))
+    declared, cursor = read_varint(patch, cursor)
+    metadata_size, cursor = read_varint(patch, cursor)
+    return cursor + metadata_size, _target_size(declared)
 
 
 def apply_bps(patch: bytes, source: bytes) -> bytes:
     if not patch.startswith(BPS_MAGIC):
         message = "not a BPS patch"
         raise PatchError(message)
-
     body_end, source_crc, target_crc = _footer(patch)
     _check_source(source_crc, source)
-
-    cursor = len(BPS_MAGIC)
-    _, cursor = read_varint(patch, cursor)
-    declared, cursor = read_varint(patch, cursor)
-    target_size = _target_size(declared)
-    metadata_size, cursor = read_varint(patch, cursor)
-    cursor += metadata_size
-
+    cursor, target_size = _bps_start(patch)
     out = bytearray()
-    source_offset = 0
-    target_offset = 0
-
-    while cursor < body_end:
-        data, cursor = read_varint(patch, cursor)
-        action = data & ACTION_MASK
-        length = (data >> 2) + 1
-        _room(out, length, target_size)
-
-        if action == SOURCE_READ:
-            start = len(out)
-            _in_source(source, start, length)
-            out += source[start : start + length]
-        elif action == TARGET_READ:
-            _cut_short(patch[:body_end], cursor + length, cursor)
-            out += patch[cursor : cursor + length]
-            cursor += length
-        elif action == SOURCE_COPY:
-            source_offset, cursor = _bps_relative(patch, cursor, source_offset)
-            _in_source(source, source_offset, length)
-            out += source[source_offset : source_offset + length]
-            source_offset += length
-        else:
-            target_offset, cursor = _bps_relative(patch, cursor, target_offset)
-            _written(out, target_offset)
-            for _ in range(length):
-                out.append(out[target_offset])
-                target_offset += 1
-
+    step = _BpsStep(patch, body_end, source, cursor, 0, 0, 0)
+    while step.cursor < body_end:
+        data, cursor = read_varint(patch, step.cursor)
+        step = replace(step, cursor=cursor, length=(data >> 2) + 1)
+        _room(out, step.length, target_size)
+        produced, step = BPS_ACTIONS[data & ACTION_MASK](step, out)
+        out += produced
     return _checked_target(target_crc, bytes(out[:target_size]))

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Final
 
 from fdstoolkit.codecs.fds import build_header, decode, has_header
 from fdstoolkit.core.diagnostics import Severity, worst_severity
@@ -15,7 +16,7 @@ from fdstoolkit.patch.formats import (
     detect_format,
 )
 
-APPLIERS: dict[PatchFormat, Callable[[bytes, bytes], bytes]] = {
+APPLIERS: Final[dict[PatchFormat, Callable[[bytes, bytes], bytes]]] = {
     PatchFormat.IPS: apply_ips,
     PatchFormat.UPS: apply_ups,
     PatchFormat.BPS: apply_bps,
@@ -40,44 +41,44 @@ def _restore_header(data: bytes) -> bytes:
     return build_header(sides) + data
 
 
+NO_LONGER_PARSES: Final = "the patched image no longer parses as a disk image"
+
+Applier = Callable[[bytes, bytes], bytes]
+
+
+def _direct(
+    applier: Applier, kind: PatchFormat, patch: bytes, image: bytes
+) -> PatchOutcome | PatchError:
+    try:
+        direct = applier(patch, image)
+    except PatchError as error:
+        return error
+    if kind is not PatchFormat.IPS or _parses_cleanly(direct):
+        return PatchOutcome(data=direct, format=kind, applied_to="image", header_restored=False)
+    return PatchError(NO_LONGER_PARSES)
+
+
+def _headerless(applier: Applier, kind: PatchFormat, patch: bytes, body: bytes) -> PatchOutcome:
+    patched = applier(patch, body)
+    if kind is PatchFormat.IPS and not _parses_cleanly(patched):
+        raise PatchError(NO_LONGER_PARSES)
+    return PatchOutcome(
+        data=_restore_header(patched),
+        format=kind,
+        applied_to="headerless image",
+        header_restored=True,
+    )
+
+
 def apply_patch(patch: bytes, image: bytes) -> PatchOutcome:
     kind = detect_format(patch)
     applier = APPLIERS.get(kind)
     if applier is None:
         message = "unknown patch format, expected IPS, UPS or BPS"
         raise PatchError(message)
-
-    headered = has_header(image)
-    body = image[HEADER_SIZE:] if headered else image
-
-    direct_error: PatchError | None = None
-    try:
-        direct = applier(patch, image)
-    except PatchError as error:
-        direct_error = error
-    else:
-        if kind is not PatchFormat.IPS or _parses_cleanly(direct):
-            return PatchOutcome(
-                data=direct,
-                format=kind,
-                applied_to="image",
-                header_restored=False,
-            )
-
-    if not headered:
-        if direct_error is not None:
-            raise direct_error
-        message = "the patched image no longer parses as a disk image"
-        raise PatchError(message)
-
-    patched_body = applier(patch, body)
-    if kind is PatchFormat.IPS and not _parses_cleanly(patched_body):
-        message = "the patched image no longer parses as a disk image"
-        raise PatchError(message)
-
-    return PatchOutcome(
-        data=_restore_header(patched_body),
-        format=kind,
-        applied_to="headerless image",
-        header_restored=True,
-    )
+    attempt = _direct(applier, kind, patch, image)
+    if isinstance(attempt, PatchOutcome):
+        return attempt
+    if not has_header(image):
+        raise attempt
+    return _headerless(applier, kind, patch, image[HEADER_SIZE:])
