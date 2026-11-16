@@ -20,7 +20,7 @@ from fdstoolkit.codecs import fds
 from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side, require_readable_sides
 from fdstoolkit.drive.captures import latest_capture
-from fdstoolkit.drive.monitor import SpeedReading, lean, sample
+from fdstoolkit.drive.sampling import SpeedReading, lean, sample
 from fdstoolkit.edit.files import DEFAULT_LOAD_ADDRESS, FileSpec, insert_file
 from fdstoolkit.hardware.ports import DiskReader, DiskWriter, HardwareFaultError, selects_sides
 from fdstoolkit.hardware.session import (

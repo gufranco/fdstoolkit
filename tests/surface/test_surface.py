@@ -12,7 +12,7 @@ from fdstoolkit.codecs.raw import class_histogram, encode_era_b
 from fdstoolkit.core.blocks import BlockKind
 from fdstoolkit.core.crc import block_crc, encode_crc
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.drive.monitor import SpeedReading
+from fdstoolkit.drive.sampling import SpeedReading
 from fdstoolkit.hardware.ports import BlockRead, FaultKind, HardwareFaultError
 from fdstoolkit.hardware.session import MAX_PASSES, Grade
 from fdstoolkit.quality.surface import (

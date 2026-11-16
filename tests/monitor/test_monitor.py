@@ -23,23 +23,25 @@ from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.monitor import (
     FIXED_SPOT,
     MAX_READS,
-    NOISY_PULSES,
     NOISY_READ,
-    SPLICE_VALUES,
     Calibration,
-    HeadReading,
     Mode,
     Replay,
-    SideSample,
-    SpeedReading,
     Trend,
     advice,
     calibrate,
     describe,
+    trend,
+)
+from fdstoolkit.drive.sampling import (
+    NOISY_PULSES,
+    SPLICE_VALUES,
+    HeadReading,
+    SideSample,
+    SpeedReading,
     lean,
     learn,
     sample,
-    trend,
 )
 from fdstoolkit.edit.files import FileSpec, insert_file
 

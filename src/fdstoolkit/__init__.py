@@ -6,9 +6,10 @@ from fdstoolkit.core.blocks import Block, BlockKind, FileKind
 from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import Diagnostic, Severity
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.drive.monitor import Calibration, SideSample, calibrate
+from fdstoolkit.drive.monitor import Calibration, calibrate
 from fdstoolkit.drive.monitor import Mode as CalibrationMode
-from fdstoolkit.drive.monitor import sample as sample_side
+from fdstoolkit.drive.sampling import SideSample
+from fdstoolkit.drive.sampling import sample as sample_side
 from fdstoolkit.identify.hashes import Digests, digests_of, side_digests
 from fdstoolkit.quality.confidence import ConfidenceReport, score_disk
 from fdstoolkit.quality.grade import GradedReport, grade_disk

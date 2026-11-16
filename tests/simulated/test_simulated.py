@@ -10,8 +10,9 @@ from fdstoolkit.codecs.fds import decode
 from fdstoolkit.codecs.raw import NOMINAL_SHORT, SHORTEST_GAP_BITS, pack_raw03, quantise
 from fdstoolkit.core.disk import Side
 from fdstoolkit.drive.captures import Capture
-from fdstoolkit.drive.monitor import NOISY_READ, Calibration, Mode, sample
+from fdstoolkit.drive.monitor import NOISY_READ, Calibration, Mode
 from fdstoolkit.drive.pulse import captured_findings, settled
+from fdstoolkit.drive.sampling import sample
 from fdstoolkit.drive.timing import (
     CAPTURE_CLOCK_KHZ,
     measure_timing,

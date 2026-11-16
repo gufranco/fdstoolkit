@@ -8,7 +8,7 @@ from typing import Final
 from fdstoolkit.build.calibration import calibration_disk
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.codecs.raw import block_regions, decode_packed, encode_raw03, unpack_detected
-from fdstoolkit.drive.monitor import sample
+from fdstoolkit.drive.sampling import sample
 
 FIXTURE: Final = Path(__file__).resolve().parents[1] / "fixtures" / "fdsstick"
 LOST_OR_BROKEN: Final = frozenset({"FDS002", "FDS004", "FDS014", "FDS015"})
