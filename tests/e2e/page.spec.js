@@ -251,6 +251,26 @@ test('a dump offers its captures, and reads maps them back at phone width', asyn
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('a dump lands in the logbook, and log shows it for the drive at phone width', async ({ page }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'dump');
+  await page.locator('#panel button.run').click();
+  await expect(page.getByRole('link', { name: 'Download dump.fds' })).toBeVisible();
+  await openCommand(page, 'log');
+
+  // Act
+  await page.locator('input[data-field=drive]').fill('drive');
+  await page.locator('#panel button.run').click();
+
+  // Assert
+  const output = page.locator('#panel .output');
+  await expect(output).toContainText('drive drive');
+  await expect(output.locator('pre')).toContainText('  dump  ');
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

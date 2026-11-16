@@ -94,7 +94,7 @@ identity          2 blanks match their published digests
 各コマンドの引数、出力、根拠は [REFERENCE.ja.md](REFERENCE.ja.md) にあります。どのコマンドも `--help` で同じ説明を表示します。
 
 - **検査**: [`info`](REFERENCE.ja.md#info), [`boot`](REFERENCE.ja.md#boot), [`hash`](REFERENCE.ja.md#hash), [`provenance`](REFERENCE.ja.md#provenance)
-- **確認**: [`verify`](REFERENCE.ja.md#verify), [`grade`](REFERENCE.ja.md#grade), [`reads`](REFERENCE.ja.md#reads), [`diff`](REFERENCE.ja.md#diff)
+- **確認**: [`verify`](REFERENCE.ja.md#verify), [`grade`](REFERENCE.ja.md#grade), [`reads`](REFERENCE.ja.md#reads), [`log`](REFERENCE.ja.md#log), [`diff`](REFERENCE.ja.md#diff)
 - **修復**: [`rebuild`](REFERENCE.ja.md#rebuild), [`set`](REFERENCE.ja.md#set), [`insert`](REFERENCE.ja.md#insert), [`extract`](REFERENCE.ja.md#extract), [`patch`](REFERENCE.ja.md#patch), [`splice`](REFERENCE.ja.md#splice), [`consensus`](REFERENCE.ja.md#consensus), [`save`](REFERENCE.ja.md#save)
 - **コンテナ**: [`convert`](REFERENCE.ja.md#convert), [`blank`](REFERENCE.ja.md#blank), [`build`](REFERENCE.ja.md#build)
 - **ハードウェア**: [`status`](REFERENCE.ja.md#status), [`doctor`](REFERENCE.ja.md#doctor), [`dump`](REFERENCE.ja.md#dump), [`write`](REFERENCE.ja.md#write), [`surface`](REFERENCE.ja.md#surface), [`calibrate`](REFERENCE.ja.md#calibrate), [`web`](REFERENCE.ja.md#web)

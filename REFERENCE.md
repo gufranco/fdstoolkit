@@ -173,6 +173,33 @@ bits gained   0
 <img alt="The reads command on the local web page" src="assets/screenshots/reads-light.png">
 </picture>
 
+#### `log`
+
+```bash
+fdstoolkit log <image> [--json]
+fdstoolkit log --drive <label> [--json]
+```
+
+Every `dump`, `grade` and live `calibrate` adds one entry to a logbook on this machine: when it ran, what ran, the grade, and the blocks it found weak. A dump counts a block weak when it only read clean on a re-read, never read clean, or moved between the reads its captures kept. A grade counts the blocks failing their checksum and the weak blocks of `--captures`. A calibration counts the blocks a read missed. `log <image>` lists the entries of the disk that image holds, and `log --drive <label>` those of one drive, oldest first. The last line compares the newest entry with the previous one of the same kind and names the blocks that weakened or read clean again, so a disk losing blocks shows before it fails.
+
+A disk is known by a digest of its disk information block, so the dumps of one disk land together, and a disk rewritten with new stamps starts a history of its own. A drive is known by the label in `FDSTOOLKIT_DRIVE`, `drive` when it is unset, together with the serial number of the stick when the stick reports one. The logbook is an SQLite file at `$XDG_DATA_HOME/fdstoolkit/logbook.sqlite3`, or `$HOME/.local/share/fdstoolkit/logbook.sqlite3` without that setting, and `FDSTOOLKIT_LOGBOOK` names another file. Nothing in it leaves the machine. A command that cannot write the logbook still writes its image, then fails naming the logbook's path.
+
+```bash
+fdstoolkit log game.fds
+```
+
+```
+disk-3f2a9c1b0d4e5f60 ZEL
+2026-11-01 10:00  dump         clean      ZEL  no weak block
+2026-11-16 17:00  dump         marginal   ZEL  2 weak: side 0 block 3, side 0 block 7
+since the dump of 2026-11-01 10:00, 2 block(s) weakened: side 0 block 3, side 0 block 7
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/log-dark.png">
+<img alt="The log command on the local web page" src="assets/screenshots/log-light.png">
+</picture>
+
 #### `diff`
 
 ```bash

@@ -25,6 +25,7 @@ from fdstoolkit.cli.common import (
     encode_image,
     fail,
     guard_output,
+    logged,
     side_count,
     writer_for,
 )
@@ -48,6 +49,7 @@ from fdstoolkit.hardware.session import (
     read_disk,
 )
 from fdstoolkit.hardware.writing import WriteReport, refuse_long_sides, write_verified
+from fdstoolkit.history.entries import drive_key, dump_entry, stamp_now
 from fdstoolkit.quality.surface import (
     Finish,
     SurfacePlan,
@@ -164,7 +166,13 @@ def _read(drive: FdsStick, plan: _DumpPlan) -> Reading:
         raise _stopped(drive, plan.raw, plan.output, str(error)) from error
 
 
-def _kept_dump(drive: FdsStick, reading: Reading, output: Path, container: Container) -> Grade:
+@dataclass(frozen=True, slots=True)
+class _Kept:
+    grade: Grade
+    result: DumpResult
+
+
+def _kept_dump(drive: FdsStick, reading: Reading, output: Path, container: Container) -> _Kept:
     for line in reading.lines:
         typer.echo(line)
     outcome = recover(reading.result, drive.captures)
@@ -177,7 +185,7 @@ def _kept_dump(drive: FdsStick, reading: Reading, output: Path, container: Conta
         typer.echo(line)
     report_blocks(result)
     report_link(drive)
-    return grade
+    return _Kept(grade=grade, result=result)
 
 
 def dump(
@@ -194,10 +202,14 @@ def dump(
     guard_output(output, force=force)
     plan = _DumpPlan(sides=sides, passes=passes, retries=retries, yes=yes, raw=raw, output=output)
     with closing(open_drive()) as drive:
-        grade = _kept_dump(drive, _read(drive, plan), output, container)
+        kept = _kept_dump(drive, _read(drive, plan), output, container)
         if raw is not None:
             keep_captures(drive, raw, image=output.name)
-        raise typer.Exit(code=0 if grade is Grade.CLEAN else 1)
+        entry = dump_entry(
+            stamp_now(), kept.result, drive.captures, grade=kept.grade, drive=drive_key()
+        )
+        logged(entry)
+        raise typer.Exit(code=0 if kept.grade is Grade.CLEAN else 1)
 
 
 def report_link(drive: FdsStick) -> None:

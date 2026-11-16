@@ -94,7 +94,7 @@ identity          2 blanks match their published digests
 每個指令的選項、輸出以及各項數據的依據都在 [REFERENCE.md](REFERENCE.md) 之中，參考文件提供英文版和日文版。任何指令加上 `--help` 都會列印其簡介。
 
 - **查看**：[`info`](REFERENCE.md#info)、[`boot`](REFERENCE.md#boot)、[`hash`](REFERENCE.md#hash)、[`provenance`](REFERENCE.md#provenance)
-- **檢查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`diff`](REFERENCE.md#diff)
+- **檢查**：[`verify`](REFERENCE.md#verify)、[`grade`](REFERENCE.md#grade)、[`reads`](REFERENCE.md#reads)、[`log`](REFERENCE.md#log)、[`diff`](REFERENCE.md#diff)
 - **修復**：[`rebuild`](REFERENCE.md#rebuild)、[`set`](REFERENCE.md#set)、[`insert`](REFERENCE.md#insert)、[`extract`](REFERENCE.md#extract)、[`patch`](REFERENCE.md#patch)、[`splice`](REFERENCE.md#splice)、[`consensus`](REFERENCE.md#consensus)、[`save`](REFERENCE.md#save)
 - **容器**：[`convert`](REFERENCE.md#convert)、[`blank`](REFERENCE.md#blank)、[`build`](REFERENCE.md#build)
 - **硬件**：[`status`](REFERENCE.md#status)、[`doctor`](REFERENCE.md#doctor)、[`dump`](REFERENCE.md#dump)、[`write`](REFERENCE.md#write)、[`surface`](REFERENCE.md#surface)、[`calibrate`](REFERENCE.md#calibrate)、[`web`](REFERENCE.md#web)

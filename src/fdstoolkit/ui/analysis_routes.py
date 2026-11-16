@@ -3,14 +3,25 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fdstoolkit.drive.recovery import Rebuild, rebuild
+from fdstoolkit.history.logbook import LogbookError
+from fdstoolkit.history.lookup import log_payload, look_up, subject_for
+from fdstoolkit.history.trend import trend_lines
 from fdstoolkit.master.splice import splice
 from fdstoolkit.quality.consensus import build_consensus
-from fdstoolkit.ui.schemas import ConsensusSpec, FileResult, ReportedFile, SpliceSpec
+from fdstoolkit.ui.schemas import (
+    ConsensusSpec,
+    FileResult,
+    LogResult,
+    LogSpec,
+    ReportedFile,
+    SpliceSpec,
+)
 
 if TYPE_CHECKING:
     from fdstoolkit.core.disk import Disk
 
 from fdstoolkit.ui.shared import (
+    SERVER_ERROR,
     UNPROCESSABLE,
     bundle_of,
     decode_payload,
@@ -75,3 +86,18 @@ def consensus(spec: ConsensusSpec) -> ReportedFile:
     if not disks:
         return _captured_only(rebuilt)
     return _merged([*disks, rebuilt.disk])
+
+
+def logged(spec: LogSpec) -> LogResult:
+    disk = None if spec.data is None else decode_payload(spec.data)[0]
+    try:
+        subject = subject_for(disk, spec.drive)
+    except ValueError as error:
+        refuse(str(error), status=UNPROCESSABLE)
+    try:
+        trend = look_up(subject)
+    except LogbookError as error:
+        refuse(str(error), status=SERVER_ERROR)
+    payload = log_payload(subject, trend)
+    lines = "\n".join(str(line) for line in trend_lines(trend))
+    return LogResult.model_validate({**payload, "headline": subject.title, "text": lines})

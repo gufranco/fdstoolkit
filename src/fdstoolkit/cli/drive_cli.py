@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from fdstoolkit.cli.common import Family, JsonOption, decode_image, fail, load_captures
+from fdstoolkit.cli.common import Family, JsonOption, decode_image, fail, load_captures, logged
 from fdstoolkit.cli.hardware_cmds import open_drive, prompter, step
 from fdstoolkit.core.disk import SIDES_PER_DISK, Side
 from fdstoolkit.drive.monitor import (
@@ -22,6 +22,7 @@ from fdstoolkit.drive.monitor import (
 from fdstoolkit.drive.timing import Timing, TimingReader
 from fdstoolkit.hardware.fdsstick import FdsStick
 from fdstoolkit.hardware.ports import HardwareFaultError
+from fdstoolkit.history.entries import calibration_entry, drive_key, stamp_now
 from fdstoolkit.report import as_json
 
 
@@ -147,7 +148,15 @@ def calibrate_command(
         drive = open_drive()
         result, timings = _timed(drive, mode=mode, passes=passes, wanted=wanted, bracket=bracket)
     _print_calibration(result, timings, json_output=json_output)
+    if captures is None:
+        _log_calibration(result, reference, side)
     raise typer.Exit(code=0 if result.clean else 1)
+
+
+def _log_calibration(result: Calibration, reference: Path | None, side: int) -> None:
+    disk = None if reference is None else decode_image(reference)[0]
+    entry = calibration_entry(stamp_now(), result, side=side, reference=disk, drive=drive_key())
+    logged(entry)
 
 
 def register(app: typer.Typer) -> None:

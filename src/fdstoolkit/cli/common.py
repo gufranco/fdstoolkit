@@ -16,6 +16,7 @@ from fdstoolkit.core.disk import SIDE_SIZE, SIDES_PER_DISK, Disk, Side
 from fdstoolkit.drive.captures import Bundle, BundleError
 from fdstoolkit.drive.imported import bundle_from_path
 from fdstoolkit.hardware.session import MAX_RETRIES
+from fdstoolkit.history.logbook import Entry, LogbookError, logbook_path, record
 
 FDS_SUFFIX: Final = ".fds"
 QD_SUFFIX: Final = ".qd"
@@ -192,3 +193,11 @@ def side_count(value: object) -> int:
         message = f"a disk has 1 or {SIDES_PER_DISK} sides, got {text}"
         raise typer.BadParameter(message)
     return int(text)
+
+
+def logged(entry: Entry) -> None:
+    try:
+        record(entry)
+    except LogbookError as error:
+        raise fail(str(error)) from error
+    typer.echo(f"logged under {entry.disk or entry.title} in {logbook_path()}", err=True)

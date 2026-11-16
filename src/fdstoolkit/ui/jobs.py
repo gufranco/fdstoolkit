@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Final
 
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import SideFlipError, WriteRefusedError
+from fdstoolkit.history.logbook import LogbookError
 from fdstoolkit.quality.surface import SurfaceTestRefusedError
 
 if TYPE_CHECKING:
@@ -17,7 +18,13 @@ if TYPE_CHECKING:
 
 ANSWER_LIMIT_S: Final = 600.0
 HISTORY: Final = 20
-FAULTS: Final = (HardwareFaultError, WriteRefusedError, SideFlipError, SurfaceTestRefusedError)
+FAULTS: Final = (
+    HardwareFaultError,
+    WriteRefusedError,
+    SideFlipError,
+    SurfaceTestRefusedError,
+    LogbookError,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -1,19 +1,21 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from fdstoolkit.cli.common import Family, JsonOption, decode_image, fail, load_captures
+from fdstoolkit.cli.common import Family, JsonOption, decode_image, fail, load_captures, logged
 from fdstoolkit.core.diagnostics import Diagnostic
 from fdstoolkit.core.disk import Disk
-from fdstoolkit.drive.captures import Bundle
+from fdstoolkit.drive.captures import Bundle, Capture
 from fdstoolkit.drive.pulse import bundle_findings
 from fdstoolkit.drive.recognition import rate_lines, read_rates
 from fdstoolkit.drive.recovery import captures_of_another_disk
 from fdstoolkit.drive.weak import WeakBlock, bundle_weak_blocks
 from fdstoolkit.hardware.session import Grade
+from fdstoolkit.history.entries import grade_entry, stamp_now
 from fdstoolkit.quality.confidence import ConfidenceReport, score_disk
 from fdstoolkit.quality.grade import GradedReport, grade_disk
 from fdstoolkit.quality.reads import ReadStatistics, compare_reads
@@ -135,9 +137,17 @@ def _weak_count(disk: Disk, bundle: Bundle) -> int:
     return len(bundle_weak_blocks(bundle))
 
 
+@dataclass(frozen=True, slots=True)
+class _Graded:
+    report: GradedReport
+    confidence: ConfidenceReport
+    pulse: tuple[Diagnostic, ...]
+    captures: tuple[Capture, ...]
+
+
 def _graded(
     disk: Disk, findings: tuple[Diagnostic, ...], read: list[Path] | None, captures: Path | None
-) -> tuple[GradedReport, ConfidenceReport, tuple[Diagnostic, ...]]:
+) -> _Graded:
     stats = _compared([disk, *[decode_image(path)[0] for path in read]]) if read else None
     confidence = score_disk(disk, reads=stats)
     bundle = None if captures is None else load_captures(captures)
@@ -146,7 +156,8 @@ def _graded(
     report = grade_disk(
         confidence=confidence, findings=(*findings, *pulse), reads=stats, weak_blocks=weak
     )
-    return report, confidence, pulse
+    kept = () if bundle is None else bundle.captures
+    return _Graded(report=report, confidence=confidence, pulse=pulse, captures=kept)
 
 
 def _grade_payload(report: GradedReport) -> dict[str, object]:
@@ -195,11 +206,13 @@ def grade(
     json_output: JsonOption = False,
 ) -> None:
     disk, findings, _, _ = decode_image(image)
-    report, confidence, pulse = _graded(disk, findings, read, captures)
+    graded = _graded(disk, findings, read, captures)
+    report = graded.report
     if json_output:
         typer.echo(as_json(_grade_payload(report)))
     else:
-        _print_grade(report, confidence, pulse, block_map=block_map)
+        _print_grade(report, graded.confidence, graded.pulse, block_map=block_map)
+    logged(grade_entry(stamp_now(), disk, report.grade, graded.captures))
     raise typer.Exit(code=0 if report.grade is Grade.CLEAN else 1)
 
 

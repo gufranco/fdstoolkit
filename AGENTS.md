@@ -237,6 +237,7 @@ test, and the name states the behaviour.
 | `quality/` | Reads, confidence, grading, the surface test |
 | `identify/` | Digests and provenance |
 | `master/` | Splicing a good block in from another dump |
+| `history/` | The local logbook of dumps, grades and calibrations, and the trend `log` reports |
 | `ui/` | The web surface: routes, schemas, derived forms. The page itself is React and TypeScript in `web/` at the repository root, built into `ui/page/` |
 | `cli/` | One module per command family, each with a `register(app)` |
 

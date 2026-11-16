@@ -29,6 +29,8 @@ from fdstoolkit.drive.pulse import bundle_findings
 from fdstoolkit.drive.recognition import read_rates
 from fdstoolkit.drive.recovery import captures_of_another_disk
 from fdstoolkit.drive.weak import bundle_weak_blocks
+from fdstoolkit.history.entries import grade_entry, stamp_now
+from fdstoolkit.history.logbook import LogbookError, record
 from fdstoolkit.identify.hashes import digests_of, retroachievements_hash, side_digests
 from fdstoolkit.quality.confidence import score_disk
 from fdstoolkit.quality.grade import grade_disk
@@ -65,6 +67,7 @@ from fdstoolkit.ui.schemas import (
 )
 from fdstoolkit.ui.shared import (
     BAD_REQUEST,
+    SERVER_ERROR,
     UNPROCESSABLE,
     bundle_of,
     decode_payload,
@@ -135,6 +138,7 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "consensus": "/api/consensus",
     "grade": "/api/grade",
     "reads": "/api/reads",
+    "log": "/api/log",
     "calibrate": "/api/jobs/calibrate",
     "dump": "/api/jobs/dump",
     "write": "/api/jobs/write",
@@ -246,11 +250,15 @@ def grade(spec: GradeSpec) -> GradeResult:
     bundle = None if spec.captures is None else bundle_of(spec.captures)
     weak = None if bundle is None else _weak_count(disk, bundle)
     pulse = () if bundle is None else bundle_findings(bundle.captures)
-    return GradeResult.of(
-        grade_disk(
-            confidence=confidence, findings=(*findings, *pulse), reads=stats, weak_blocks=weak
-        )
+    report = grade_disk(
+        confidence=confidence, findings=(*findings, *pulse), reads=stats, weak_blocks=weak
     )
+    captures = () if bundle is None else bundle.captures
+    try:
+        record(grade_entry(stamp_now(), disk, report.grade, captures))
+    except LogbookError as error:
+        refuse(str(error), status=SERVER_ERROR)
+    return GradeResult.of(report)
 
 
 def weak_result(payload: str) -> WeakResult:
@@ -349,6 +357,7 @@ def _register_image(app: FastAPI) -> None:
 def _register_analysis(app: FastAPI) -> None:
     app.add_api_route("/api/splice", analysis_routes.splice_blocks, methods=["POST"])
     app.add_api_route("/api/consensus", analysis_routes.consensus, methods=["POST"])
+    app.add_api_route("/api/log", analysis_routes.logged, methods=["POST"])
 
 
 def _register_hardware(app: FastAPI) -> None:

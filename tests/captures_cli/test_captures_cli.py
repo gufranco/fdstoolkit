@@ -194,7 +194,7 @@ def test_grade_counts_weak_blocks_from_saved_captures(tmp_path: Path) -> None:
     result = runner.invoke(app, ["grade", str(image), "--captures", str(bundle), "--json"])
 
     # Act
-    payload = json.loads(result.output)
+    payload = json.loads(result.stdout)
 
     # Assert
     assert payload["grade"] == "marginal"

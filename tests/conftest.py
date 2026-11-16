@@ -28,6 +28,15 @@ def isolated_cache(
 
 
 @pytest.fixture(autouse=True)
+def isolated_logbook(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root: Path = tmp_path_factory.mktemp("logbook")
+    monkeypatch.setenv("FDSTOOLKIT_LOGBOOK", str(root / "logbook.sqlite3"))
+    monkeypatch.delenv("FDSTOOLKIT_DRIVE", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def hid_out_of_reach(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
     if request.node.get_closest_marker("hardware") is None:
         monkeypatch.setitem(sys.modules, "hid", None)

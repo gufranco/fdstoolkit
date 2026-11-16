@@ -75,7 +75,7 @@ def test_a_drive_that_reads_the_reference_clean_passes(
     assert first in result.output
     assert "  read 2:" in result.output
     assert "the same as the last read" in result.output
-    assert result.output.rstrip().splitlines()[-1].startswith("reads clean")
+    assert result.stdout.rstrip().splitlines()[-1].startswith("reads clean")
 
 
 def test_a_disk_that_differs_from_the_reference_fails_and_names_the_blocks(

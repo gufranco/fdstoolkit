@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 
 import pytest
 from fakes import game_name, seeded
@@ -15,6 +16,7 @@ GAME = game_name(FAKE)
 OK = 200
 BAD_REQUEST = 400
 UNPROCESSABLE = 422
+SERVER_ERROR = 500
 ONE_SIDE = blank_image(sides=1, headered=False, formatted=True, game_name=GAME)
 ONE = base64.b64encode(ONE_SIDE).decode("ascii")
 
@@ -127,3 +129,75 @@ def test_consensus_across_an_empty_corpus_is_refused(client: TestClient) -> None
 
     # Assert
     assert answer.status_code == UNPROCESSABLE
+
+
+def test_a_graded_image_is_logged_and_its_history_shown(client: TestClient) -> None:
+    # Arrange
+    client.post("/api/grade", json={"data": ONE})
+    client.post("/api/grade", json={"data": ONE})
+
+    # Act
+    answer = client.post("/api/log", json={"data": ONE})
+
+    # Assert
+    assert answer.status_code == OK
+    body = answer.json()
+    assert [entry["kind"] for entry in body["entries"]] == ["grade", "grade"]
+    assert body["headline"] == body["subject"]
+    assert body["text"].splitlines()[-1].endswith(", no block changed")
+
+
+def test_the_log_of_a_drive_with_no_entries_says_so(client: TestClient) -> None:
+    # Arrange
+    payload = {"drive": "nobody"}
+
+    # Act
+    answer = client.post("/api/log", json=payload)
+
+    # Assert
+    assert answer.json()["text"] == "nothing is logged for this yet"
+    assert answer.json()["subject"] == "drive nobody"
+
+
+def test_the_log_needs_a_disk_or_a_drive(client: TestClient) -> None:
+    # Arrange
+    payload: dict[str, object] = {}
+
+    # Act
+    answer = client.post("/api/log", json=payload)
+
+    # Assert
+    assert answer.status_code == UNPROCESSABLE
+    assert answer.json()["detail"] == "name a disk image or a drive label to show its history"
+
+
+def test_a_logbook_that_cannot_be_read_is_a_server_fault(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange
+    store = tmp_path / "broken.sqlite3"
+    store.write_bytes(b"not a database, only text that sqlite refuses to open " * 64)
+    monkeypatch.setenv("FDSTOOLKIT_LOGBOOK", str(store))
+
+    # Act
+    answer = client.post("/api/log", json={"drive": "twin"})
+
+    # Assert
+    assert answer.status_code == SERVER_ERROR
+    assert answer.json()["detail"].startswith(f"could not read the logbook at {store}: ")
+
+
+def test_a_grade_that_cannot_be_logged_is_a_server_fault(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange
+    blocker = tmp_path / "blocker"
+    blocker.write_bytes(b"")
+    monkeypatch.setenv("FDSTOOLKIT_LOGBOOK", str(blocker / "logbook.sqlite3"))
+
+    # Act
+    answer = client.post("/api/grade", json={"data": ONE})
+
+    # Assert
+    assert answer.status_code == SERVER_ERROR
+    assert "could not write the logbook at" in answer.json()["detail"]

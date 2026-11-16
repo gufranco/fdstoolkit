@@ -173,6 +173,33 @@ bits gained   0
 <img alt="ローカル Web ページの reads コマンド" src="assets/screenshots/reads-light.png">
 </picture>
 
+#### `log`
+
+```bash
+fdstoolkit log <image> [--json]
+fdstoolkit log --drive <label> [--json]
+```
+
+`dump`、`grade`、実機での `calibrate` は、実行するたびにこのマシン上の記録帳へ 1 件を追加します。いつ実行したか、何を実行したか、評価、そして弱いと判断したブロックです。吸い出しは、読み直しでしか正しく読めなかったブロック、一度も正しく読めなかったブロック、保存したキャプチャの読み取りごとに揺れたブロックを弱いと数えます。評価はチェックサムが合わないブロックと `--captures` の弱いブロックを、校正はある読み取りで見つからなかったブロックを数えます。`log <image>` はそのイメージが表すディスクの記録を、`log --drive <label>` は 1 台のドライブの記録を、古い順に並べます。最後の行は最新の記録を同じ種類の 1 つ前の記録と比べ、弱くなったブロックと再び正しく読めたブロックを示します。ブロックを失いつつあるディスクは、読めなくなる前にそれと分かります。
+
+ディスクはディスク情報ブロックのダイジェストで識別します。同じディスクの吸い出しは同じ記録にまとまり、新しい刻印で書き換えたディスクは別の記録として始まります。ドライブは `FDSTOOLKIT_DRIVE` のラベル、未設定なら `drive` と、スティックが報告する場合はそのシリアル番号で識別します。記録帳は SQLite ファイルで、場所は `$XDG_DATA_HOME/fdstoolkit/logbook.sqlite3`、その設定がなければ `$HOME/.local/share/fdstoolkit/logbook.sqlite3` です。`FDSTOOLKIT_LOGBOOK` で別のファイルを指定できます。中身がこのマシンの外に出ることはありません。記録帳に書き込めなかったコマンドも、イメージは書き出したうえで、記録帳のパスを示して失敗します。
+
+```bash
+fdstoolkit log game.fds
+```
+
+```
+disk-3f2a9c1b0d4e5f60 ZEL
+2026-11-01 10:00  dump         clean      ZEL  no weak block
+2026-11-16 17:00  dump         marginal   ZEL  2 weak: side 0 block 3, side 0 block 7
+since the dump of 2026-11-01 10:00, 2 block(s) weakened: side 0 block 3, side 0 block 7
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/log-dark.png">
+<img alt="ローカル Web ページの log コマンド" src="assets/screenshots/log-light.png">
+</picture>
+
 #### `diff`
 
 ```bash

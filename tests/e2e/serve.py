@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -29,7 +30,8 @@ def two_sided_drive() -> TurnedByTheOperator:
 
 
 def main() -> None:
-    with pytest.MonkeyPatch.context() as patch:
+    with pytest.MonkeyPatch.context() as patch, tempfile.TemporaryDirectory() as logs:
+        patch.setenv("FDSTOOLKIT_LOGBOOK", str(Path(logs) / "logbook.sqlite3"))
         patch.setattr("fdstoolkit.ui.hardware_routes.open_fdsstick", two_sided_drive)
         uvicorn.run(create_app(), host=HOST, port=PORT, log_level="warning")
 

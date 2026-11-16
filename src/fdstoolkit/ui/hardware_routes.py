@@ -13,7 +13,15 @@ from fdstoolkit.build.calibration import (
     check_write_choice,
 )
 from fdstoolkit.drive.captures import bundle_zip, created_now
-from fdstoolkit.drive.monitor import MAX_READS, NOT_THIS_DRIVE, Mode, RawReader, Replay, calibrate
+from fdstoolkit.drive.monitor import (
+    MAX_READS,
+    NOT_THIS_DRIVE,
+    Calibration,
+    Mode,
+    RawReader,
+    Replay,
+    calibrate,
+)
 from fdstoolkit.drive.pulse import pulse_lines
 from fdstoolkit.drive.recognition import rate_lines
 from fdstoolkit.drive.recovery import recover
@@ -28,6 +36,8 @@ from fdstoolkit.hardware.session import (
     read_disk,
 )
 from fdstoolkit.hardware.writing import refuse_long_sides, write_verified
+from fdstoolkit.history.entries import calibration_entry, drive_key, dump_entry, stamp_now
+from fdstoolkit.history.logbook import Entry, LogbookError, logbook_path, record
 from fdstoolkit.quality.surface import Finish, SurfacePlan, SurfaceReport, surface_test
 from fdstoolkit.ui.jobs import (
     Controls,
@@ -44,6 +54,7 @@ from fdstoolkit.ui.schemas import (
     CurrentJob,
     DumpedResult,
     DumpSpec,
+    FileResult,
     JobView,
     ReportedFile,
     SurfaceSpec,
@@ -213,7 +224,19 @@ def _dump(spec: DumpSpec, drive: FdsStick, controls: Controls) -> DumpedResult:
         bundle = bundle_zip(drive.captures, image=name, created=created_now())
         kept = named_file(CAPTURES_NAME, bundle)
     grade = reading.settled(outcome.result, changed=bool(outcome.recovered))
+    entry = dump_entry(stamp_now(), outcome.result, drive.captures, grade=grade, drive=drive_key())
+    _logged(entry, controls, image)
     return DumpedResult(**image.model_dump(), grade=str(grade), captures=kept)
+
+
+def _logged(entry: Entry, controls: Controls, image: FileResult | None = None) -> None:
+    try:
+        record(entry)
+    except LogbookError:
+        if image is not None:
+            controls.keep(image.model_dump())
+        raise
+    controls.step(f"logged under {entry.disk or entry.title} in {logbook_path()}")
 
 
 def dump_job(spec: DumpSpec, request: Request) -> JobView:
@@ -343,15 +366,22 @@ def _live_calibration(
 ) -> CalibrationResult:
     controls.step(NOT_THIS_DRIVE)
     reader = TimingReader(drive, note=controls.step)
-    return _calibrated(
+    result = _calibrated(
         reader, controls, mode=mode, reads=spec.passes, wanted=wanted, bracket=spec.bracket
     )
+    reference = None if spec.reference is None else decode_payload(spec.reference)[0]
+    entry = calibration_entry(
+        stamp_now(), result, side=spec.side, reference=reference, drive=drive_key()
+    )
+    _logged(entry, controls)
+    return CalibrationResult.of(result, reader.timings)
 
 
 def _replayed(
     replay: Replay, mode: Mode, wanted: Side | None, controls: Controls
 ) -> CalibrationResult:
-    return _calibrated(replay, controls, mode=mode, reads=len(replay.captures), wanted=wanted)
+    result = _calibrated(replay, controls, mode=mode, reads=len(replay.captures), wanted=wanted)
+    return CalibrationResult.of(result)
 
 
 def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
@@ -384,8 +414,8 @@ def _calibrated(
     reads: int,
     wanted: Side | None,
     bracket: bool = False,
-) -> CalibrationResult:
-    result = calibrate(
+) -> Calibration:
+    return calibrate(
         reader,
         mode=mode,
         reads=reads,
@@ -394,8 +424,6 @@ def _calibrated(
         stopped=controls.stopped,
         bracket=controls.ask if bracket else None,
     )
-    timings = reader.timings if isinstance(reader, TimingReader) else ()
-    return CalibrationResult.of(result, timings)
 
 
 def current_job(request: Request) -> CurrentJob:

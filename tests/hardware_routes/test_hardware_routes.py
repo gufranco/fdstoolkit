@@ -7,6 +7,8 @@ import pytest
 from drive_double import FacingDrive, FaultPlan, SimulatedDrive
 
 from fdstoolkit.build.blank import blank_image
+from fdstoolkit.history.entries import disk_key
+from fdstoolkit.history.logbook import logbook_path
 from fdstoolkit.ui.jobs import JobState
 
 if TYPE_CHECKING:
@@ -37,6 +39,12 @@ def rate_line(read: int) -> str:
         f"side 0 read {read}: 100.00% of {ONE_SIDE_COUNTED} pulses fit a class, counted from "
         "the first block to the end of the last declared one"
     )
+
+
+def logged_line() -> str:
+    key = disk_key(disk_of(ONE_SIDE))
+    assert key is not None
+    return f"logged under {key.id} in {logbook_path()}"
 
 
 @pytest.mark.usefixtures("absent")
@@ -74,7 +82,7 @@ def test_a_dump_job_reads_the_disk_and_closes_the_drive(
     # Assert
     assert job["state"] == expected
     assert job["result"]["grade"] == "clean"
-    assert job["steps"] == ["reading side 0", rate_line(1)]
+    assert job["steps"] == ["reading side 0", rate_line(1), logged_line()]
     assert attached.closed
 
 
@@ -88,7 +96,13 @@ def test_a_dump_job_honours_repeated_passes(app: FastAPI, client: TestClient) ->
 
     # Assert
     assert job["state"] == expected
-    assert job["steps"] == ["reading side 0", "reading side 0", rate_line(1), rate_line(2)]
+    assert job["steps"] == [
+        "reading side 0",
+        "reading side 0",
+        rate_line(1),
+        rate_line(2),
+        logged_line(),
+    ]
 
 
 def test_a_two_side_dump_job_waits_for_the_disk_to_be_turned(

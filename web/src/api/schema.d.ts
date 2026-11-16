@@ -351,6 +351,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["logged_api_log_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/patch": {
         parameters: {
             query?: never;
@@ -715,6 +731,28 @@ export interface components {
             stoppable: boolean;
             stopping: boolean;
             writes: boolean;
+        };
+        LogEntryView: {
+            drive: string | null;
+            grade: string;
+            kind: string;
+            recorded: string;
+            title: string;
+            weak: number[][];
+        };
+        LogResult: {
+            entries: components["schemas"]["LogEntryView"][];
+            headline: string;
+            lines: string[];
+            settled: number[][];
+            since: string | null;
+            subject: string;
+            text: string;
+            weakened: number[][];
+        };
+        LogSpec: {
+            data?: string | null;
+            drive?: string | null;
         };
         PatchSpec: {
             data: string;
@@ -1476,6 +1514,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobView"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logged_api_log_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogSpec"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogResult"];
                 };
             };
             422: {
