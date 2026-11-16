@@ -122,7 +122,7 @@ def _view(job: Job) -> JobView:
     )
 
 
-def _start(
+def start_drive_job(
     request: Request,
     command: str,
     *,
@@ -254,11 +254,11 @@ def _session(
 
 def session_job(spec: SessionSpec, request: Request) -> JobView:
     wanted = None if spec.reference is None else decode_payload(spec.reference)[0]
-    return _start(request, "session", writes=False, work=partial(_session, spec, wanted))
+    return start_drive_job(request, "session", writes=False, work=partial(_session, spec, wanted))
 
 
 def dump_job(spec: DumpSpec, request: Request) -> JobView:
-    return _start(request, "dump", writes=False, work=partial(_dump, spec))
+    return start_drive_job(request, "dump", writes=False, work=partial(_dump, spec))
 
 
 def _write_target(spec: WriteSpec) -> Disk:
@@ -314,7 +314,7 @@ def _write(spec: WriteSpec, disk: Disk, drive: FdsStick, controls: Controls) -> 
 def write_job(spec: WriteSpec, request: Request) -> JobView:
     _confirmed("writing a disk", confirm=spec.confirm)
     disk = _write_target(spec)
-    return _start(request, "write", writes=True, work=partial(_write, spec, disk))
+    return start_drive_job(request, "write", writes=True, work=partial(_write, spec, disk))
 
 
 def _surface_row(report: SurfaceReport) -> dict[str, object]:
@@ -366,7 +366,7 @@ def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
     except ValueError as error:
         raise HTTPException(status_code=BAD_REQUEST, detail=str(error)) from error
     work = partial(_surface, spec, finish)
-    return _start(request, "surface", writes=True, work=work, stoppable=True)
+    return start_drive_job(request, "surface", writes=True, work=work, stoppable=True)
 
 
 def _reference_side(spec: CalibrateSpec) -> Side | None:
@@ -410,7 +410,7 @@ def calibrate_job(spec: CalibrateSpec, request: Request) -> JobView:
     wanted = _reference_side(spec)
     if spec.captures is None:
         work = partial(_live_calibration, spec, mode, wanted)
-        return _start(request, "calibrate", writes=False, work=work, stoppable=True)
+        return start_drive_job(request, "calibrate", writes=False, work=work, stoppable=True)
     offline = partial(_replayed, _replay(spec.captures, spec.side), mode, wanted)
     _idle(request)
     return _launch(request, "calibrate", writes=False, run=offline, stoppable=True)
