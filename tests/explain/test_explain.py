@@ -74,7 +74,7 @@ def test_a_rewritten_disk_reads_as_the_same_software() -> None:
     # Assert
     assert result.same_software
     assert result.headline == (
-        "same software, rewritten 1988-02-13, writer serial 0x1234, rewrite count 3"
+        "same software, rewritten 1988-02-13, writer serial 0x3412, rewrite count 3"
     )
 
 
@@ -281,3 +281,19 @@ def test_an_unreadable_rewritten_date_stays_out_of_the_headline() -> None:
 
     # Assert
     assert result.headline == "same software, 1 provenance field(s) differ"
+
+
+def test_the_writer_serial_reads_the_same_as_the_disk_information_reads_it() -> None:
+    # Arrange
+    payload = bytearray(sample().sides[0].blocks[0].payload)
+    payload[0x31:0x33] = b"\x12\x34"
+    changed = replace_info(sample(), bytes(payload))
+    info = changed.sides[0].disk_info
+
+    # Act
+    result = explain(sample(), changed)
+
+    # Assert
+    serial = next(entry for entry in result.fields if entry.field == "writer_serial")
+    assert info is not None
+    assert serial.right == f"0x{info.writer_serial:04x}"

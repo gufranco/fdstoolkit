@@ -11,6 +11,7 @@ from fdstoolkit.core.diskinfo import (
     SHOWA_EPOCH,
     Field,
     bcd_to_int,
+    serial_of,
 )
 from fdstoolkit.core.files import ExtractedFile, extract_files
 
@@ -72,7 +73,7 @@ def render_field(field: Field, payload: bytes) -> str:
         count = bcd_to_int(payload[0])
         return str(count) if count is not None else payload.hex()
     if field.name == "writer_serial":
-        return f"0x{int.from_bytes(payload, 'big'):04x}"
+        return f"0x{serial_of(payload):04x}"
     if field.length == 1:
         return f"0x{payload[0]:02x}"
     return payload.hex()

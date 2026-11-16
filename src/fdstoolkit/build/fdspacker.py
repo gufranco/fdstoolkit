@@ -15,7 +15,7 @@ from fdstoolkit.build.fields import located
 from fdstoolkit.codecs.fds import encode
 from fdstoolkit.core.blocks import FILE_NAME_SIZE, Block, BlockKind
 from fdstoolkit.core.disk import SIDE_SIZE, Disk, Side
-from fdstoolkit.core.diskinfo import SHOWA_EPOCH, VERIFICATION_STRING, to_bcd
+from fdstoolkit.core.diskinfo import SERIAL_ORDER, SHOWA_EPOCH, VERIFICATION_STRING, to_bcd
 
 TEXT_ENCODING: Final = "latin-1"
 GAME_NAME_SIZE: Final = 3
@@ -334,7 +334,7 @@ def _provenance(entry: Mapping[str, object], *, where: _Where) -> bytes:
         _date(entry.get("rewritten_date"), field="rewritten_date", where=where)
         + _byte(entry, "unknown16", 0x00, where=where)
         + _byte(entry, "unknown17", 0x80, where=where)
-        + serial.to_bytes(2, "little")
+        + serial.to_bytes(2, SERIAL_ORDER)
         + _byte(entry, "unknown18", 0x00, where=where)
         + bytes([to_bcd(rewrites)])
         + _enum(entry, "actual_disk_side", SIDES, where=where)

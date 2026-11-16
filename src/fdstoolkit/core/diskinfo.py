@@ -8,6 +8,7 @@ from fdstoolkit.core.blocks import DISK_INFO_SIZE
 VERIFICATION_STRING: Final = b"*NINTENDO-HVC*"
 SHOWA_EPOCH: Final = 1925
 MAX_BCD_DIGIT: Final = 9
+SERIAL_ORDER: Final = "little"
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +98,10 @@ PROFILES: Final[dict[str, MaskProfile]] = {
     RELEASE_PROFILE.name: RELEASE_PROFILE,
     DATA_PROFILE.name: DATA_PROFILE,
 }
+
+
+def serial_of(raw: bytes) -> int:
+    return int.from_bytes(raw, SERIAL_ORDER)
 
 
 def to_bcd(value: int) -> int:
@@ -198,7 +203,7 @@ class DiskInfo:
 
     @property
     def writer_serial(self) -> int:
-        return int.from_bytes(self.raw("writer_serial"), "little")
+        return serial_of(self.raw("writer_serial"))
 
     @property
     def rewrite_count(self) -> int | None:

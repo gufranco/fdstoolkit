@@ -19,7 +19,13 @@ from fdstoolkit.build.fdspacker import (
 )
 from fdstoolkit.core.blocks import Block, BlockKind, FileHeader
 from fdstoolkit.core.disk import Disk, Side
-from fdstoolkit.core.diskinfo import FIELDS_BY_NAME, SHOWA_EPOCH, VERIFICATION_STRING, to_bcd
+from fdstoolkit.core.diskinfo import (
+    FIELDS_BY_NAME,
+    SHOWA_EPOCH,
+    VERIFICATION_STRING,
+    serial_of,
+    to_bcd,
+)
 
 MANIFEST_NAME: Final = "diskinfo.json"
 UNSAFE_NAME: Final = re.compile(r"[^A-Za-z0-9_-]")
@@ -110,7 +116,7 @@ def _unknowns(info: bytes, names: tuple[tuple[str, int], ...], start: int) -> di
 
 
 def _provenance(info: bytes, *, side: int) -> dict[str, object]:
-    serial = int.from_bytes(_field(info, "writer_serial"), "little")
+    serial = serial_of(_field(info, "writer_serial"))
     return {
         "rewritten_date": _date(_field(info, "rewritten_date"), field="rewritten_date", side=side),
         "unknown16": _hex(info[0x2F]),
