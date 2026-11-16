@@ -19,7 +19,7 @@ from fdstoolkit.build.blank import DEFAULT_GAME_NAME, blank_image
 from fdstoolkit.build.calibration import DECIDES_ITSELF, calibration_image
 from fdstoolkit.codecs import fds, qd
 from fdstoolkit.codecs.qd import CrcMode
-from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name, restore
+from fdstoolkit.core.canon import canonicalise, digest_string, profile_by_name
 from fdstoolkit.core.diagnostics import worst_severity
 from fdstoolkit.core.disk import SIDE_SIZE, Disk
 from fdstoolkit.core.diskinfo import PROFILES, MaskProfile
@@ -202,7 +202,7 @@ def hashes(spec: HashSpec) -> HashResult:
     disk, data, _ = decode_payload(spec.data)
     canonical = canonicalise(disk, _profile(spec.profile))
     image = (
-        named_file(f"{Path(spec.name).stem}.{spec.profile}.fds", restore(canonical))
+        named_file(f"{Path(spec.name).stem}.{spec.profile}.fds", canonical.data)
         if spec.canonical_image
         else None
     )

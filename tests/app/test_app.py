@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
+from typer.testing import CliRunner
 
 from fdstoolkit.build.blank import blank_image
 from fdstoolkit.cli.main import app as cli_app
@@ -246,16 +247,24 @@ def test_a_two_side_blank_is_built(client: TestClient) -> None:
     assert body["size"] == expected
 
 
-def test_hash_offers_the_canonical_image_when_asked(client: TestClient) -> None:
+def test_hash_offers_the_canonical_image_the_command_writes(
+    client: TestClient, tmp_path: Path
+) -> None:
     # Arrange
-    payload = {"data": ENCODED, "profile": "release", "canonical_image": True}
+    stamped = bytearray(IMAGE)
+    stamped[0x31:0x33] = b"\x12\x34"
+    (tmp_path / "disk.fds").write_bytes(stamped)
+    command = ["hash", str(tmp_path / "disk.fds"), "--profile", "release", "-o"]
+    CliRunner().invoke(cli_app, [*command, str(tmp_path / "canonical.fds")])
+    encoded = base64.b64encode(bytes(stamped)).decode("ascii")
+    payload = {"data": encoded, "profile": "release", "canonical_image": True}
 
     # Act
     body = client.post("/api/hash", json=payload).json()
 
     # Assert
-    assert body["file"]["name"]
-    assert base64.b64decode(body["file"]["data"])
+    assert base64.b64decode(body["file"]["data"]) == (tmp_path / "canonical.fds").read_bytes()
+    assert body["file"]["name"] == "disk.release.fds"
 
 
 def test_hash_offers_no_image_unless_asked(client: TestClient) -> None:
