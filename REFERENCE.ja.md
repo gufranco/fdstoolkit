@@ -629,6 +629,23 @@ verified True, grade clean
 <img alt="ローカル Web ページの write コマンド" src="assets/screenshots/write-light.png">
 </picture>
 
+#### `refresh`
+
+```bash
+fdstoolkit refresh -o <out> [--sides N] [--passes N] [--retries N] [--backup <file>] [--yes] [--force]
+```
+
+弱くなったディスクを、同じディスクの上で工場出荷時の内容に戻します。各面を `--passes` 回読み、どの読み取りでも失敗したブロックは `dump` と同じパルス投票にかけます。宣言されたブロックがひとつでも確定しなければ何も書かず、そのブロックをすべて示します。そのディスクには `rescue` を使ってください。確定すれば、読んだ内容から `rebuild` と同じくチェックサムとサイズを計算し直してディスクを組み立て、ディスクに触れる前にそのイメージを `-o` に残します。1 面ずつしか読めないドライブで 2 面を扱う場合は、ディスクを面 A に裏返し直し、ディスク情報をもう一度読んで正しい面が下を向いていることを確かめます。そのうえで `write` と同じくイメージをディスクに上書きし、読み戻して比較し、元の内容は `--backup` に残します。書き直すと各ブロックの磁気の強さが新しくなります。読み直しが必要になったディスクが失いつつあるのはこれです。傷は直りません。
+
+```bash
+fdstoolkit refresh -o refreshed.fds --backup before.fds
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/refresh-dark.png">
+<img alt="ローカル Web ページの refresh コマンド" src="assets/screenshots/refresh-light.png">
+</picture>
+
 #### `duplicate`
 
 ```bash

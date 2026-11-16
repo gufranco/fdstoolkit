@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import typer
+from capture_fixture import disk_with_a_file
 from drive_double import FaultPlan, SimulatedDrive
 from main_kit import attach, attach_facing, long_side_image, operator, runner
 
@@ -171,3 +172,76 @@ def test_duplicate_refuses_a_side_longer_than_any_factory_side(
     assert result.exit_code == 1
     assert "longest factory side measured" in result.output
     assert drive.write_count == 0
+
+
+def test_refresh_keeps_the_rebuilt_image_and_writes_it_back(
+    single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    drive = attach(monkeypatch, single_side)
+    output = tmp_path / "refreshed.fds"
+
+    # Act
+    result = runner.invoke(app, ["refresh", "-o", str(output), "--yes"])
+
+    # Assert
+    assert result.exit_code == 0, result.output
+    assert output.read_bytes() == single_side.read_bytes()
+    assert "verified True" in result.stdout
+    assert drive.write_count == 1
+
+
+def test_refresh_of_a_block_that_never_settles_writes_nothing(
+    single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    drive = attach(monkeypatch, single_side, FaultPlan(bad_crc_blocks=frozenset({1})))
+    output = tmp_path / "refreshed.fds"
+
+    # Act
+    result = runner.invoke(
+        app, ["refresh", "-o", str(output), "--passes", "1", "--retries", "0", "--yes"]
+    )
+
+    # Assert
+    assert result.exit_code == 1
+    assert "side 0 block 1 never read clean and the vote could not rebuild it" in result.output
+    assert drive.write_count == 0
+    assert not output.exists()
+
+
+def test_refresh_whose_readback_differs_exits_with_the_blocks(
+    single_side: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    disk, _, _, _ = common.decode_image(single_side)
+    drive = LeavesTheLastBlock(disk)
+    monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.open_fdsstick", lambda: drive)
+
+    # Act
+    result = runner.invoke(app, ["refresh", "-o", str(tmp_path / "out.fds"), "--yes"])
+
+    # Assert
+    assert result.exit_code == 1
+    assert "verified False" in result.stdout
+
+
+class HealsOnWrite(SimulatedDrive):
+    def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+        super().write_side(side, blocks)
+        self._plan = FaultPlan()
+
+
+def test_refresh_names_the_blocks_the_vote_rebuilt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    drive = HealsOnWrite(disk_with_a_file(), plan=FaultPlan(bad_crc_blocks=frozenset({3})))
+    monkeypatch.setattr("fdstoolkit.cli.hardware_cmds.open_fdsstick", lambda: drive)
+
+    # Act
+    result = runner.invoke(app, ["refresh", "-o", str(tmp_path / "out.fds"), "--yes"])
+
+    # Assert
+    assert result.exit_code == 0, result.output
+    assert "side 0 block 3: recovered by a pulse vote" in result.stdout

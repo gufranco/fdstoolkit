@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Final
 
 import pytest
-from drive_double import SimulatedDrive
+from drive_double import FaultPlan, SimulatedDrive
 from fastapi.testclient import TestClient
 from hardware_routes_kit import ONE, ONE_SIDE, SETTLE, disk_of, long_image, run, serve
 
@@ -123,3 +123,50 @@ def answer_when_asked(app: FastAPI, client: TestClient, job_id: str) -> str:
     prompt = str(client.get(f"/api/jobs/{job_id}").json()["prompt"])
     client.post(f"/api/jobs/{job_id}/answer", json={"yes": True})
     return prompt
+
+
+def test_a_refresh_job_offers_the_rebuilt_image(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    drive = serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE)))
+
+    # Act
+    job = run(app, client, "/api/jobs/refresh", {"confirm": True})
+
+    # Assert
+    assert job["state"] == JobState.DONE
+    assert job["result"]["ok"].value is True
+    assert job["result"]["file"]["name"] == "refreshed.fds"
+    assert str(job["result"]["headline"]).startswith("the disk reads back as rebuilt")
+    assert drive.write_count == 1
+
+
+def test_a_refresh_job_whose_readback_differs_says_how_many_blocks(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    serve(monkeypatch, LeavesTheLastBlock(disk_of(ONE_SIDE)))
+
+    # Act
+    job = run(app, client, "/api/jobs/refresh", {"confirm": True})
+
+    # Assert
+    assert job["result"]["ok"].value is False
+    assert job["result"]["rows"][0]["block"] == 2
+
+
+def test_a_refresh_job_that_cannot_settle_fails_and_writes_nothing(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    plan = FaultPlan(bad_crc_blocks=frozenset({1}))
+    drive = serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE), plan=plan))
+
+    # Act
+    job = run(app, client, "/api/jobs/refresh", {"confirm": True, "passes": 1, "retries": 0})
+
+    # Assert
+    assert job["state"] == JobState.FAILED
+    assert "never read clean" in str(job["error"])
+    assert drive.write_count == 0

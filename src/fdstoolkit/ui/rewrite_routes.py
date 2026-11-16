@@ -6,14 +6,15 @@ from typing import TYPE_CHECKING, Final
 from fastapi import Request  # noqa: TC002
 
 from fdstoolkit.hardware.duplicate import duplicate, duplicate_lines
+from fdstoolkit.hardware.refresh import RefreshPlan, refresh_disk
 from fdstoolkit.hardware.session import LongSideError
 from fdstoolkit.hardware.writing import refuse_long_sides
 from fdstoolkit.quality.surface_disks import erased_disk
-from fdstoolkit.ui.hardware_routes import confirmed, start_drive_job, write_reported
+from fdstoolkit.ui.hardware_routes import Backup, confirmed, start_drive_job, write_reported
 from fdstoolkit.ui.history_schemas import CopyView, DuplicateResult
-from fdstoolkit.ui.rewrite_schemas import DuplicateSpec, EraseSpec
+from fdstoolkit.ui.rewrite_schemas import DuplicateSpec, EraseSpec, RefreshSpec
 from fdstoolkit.ui.schemas import JobView, ReportedFile
-from fdstoolkit.ui.shared import UNPROCESSABLE, decode_payload, refuse
+from fdstoolkit.ui.shared import UNPROCESSABLE, decode_payload, encoded_file, refuse
 
 if TYPE_CHECKING:
     from fdstoolkit.core.disk import Disk
@@ -66,3 +67,39 @@ def duplicate_job(spec: DuplicateSpec, request: Request) -> JobView:
         refuse(str(error), status=UNPROCESSABLE)
     work = partial(_duplicate, spec, disk)
     return start_drive_job(request, "duplicate", writes=True, work=work)
+
+
+REFRESHED_NAME: Final = "refreshed.fds"
+
+
+def _refresh(spec: RefreshSpec, drive: FdsStick, controls: Controls) -> ReportedFile:
+    backup = Backup(controls)
+    kept: list[Disk] = []
+    plan = RefreshPlan(
+        sides=spec.sides,
+        passes=spec.passes,
+        retries=spec.retries,
+        ask=controls.ask,
+        keep=kept.append,
+        backup=backup.keep,
+        progress=controls.step,
+    )
+    report = refresh_disk(drive, plan)
+    for line in (*report.lines, *report.write.notes):
+        controls.step(line)
+    rows: list[dict[str, object]] = [
+        {"side": side, "block": block, "finding": text}
+        for side, block, text in report.write.findings
+    ]
+    headline = (
+        f"the disk reads back as rebuilt, on this drive, grade {report.write.grade}"
+        if report.write.verified
+        else f"{len(report.write.mismatched_blocks)} block(s) did not read back as written"
+    )
+    image = encoded_file(REFRESHED_NAME, kept[0])
+    return ReportedFile(headline=headline, file=image, rows=rows, ok=report.write.verified)
+
+
+def refresh_job(spec: RefreshSpec, request: Request) -> JobView:
+    confirmed("refreshing a disk", confirm=spec.confirm)
+    return start_drive_job(request, "refresh", writes=True, work=partial(_refresh, spec))

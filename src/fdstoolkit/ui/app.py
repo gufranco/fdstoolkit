@@ -153,6 +153,7 @@ ROUTE_FOR_COMMAND: Final[dict[str, str]] = {
     "rescue": "/api/jobs/rescue",
     "erase": "/api/jobs/erase",
     "duplicate": "/api/jobs/duplicate",
+    "refresh": "/api/jobs/refresh",
 }
 
 
@@ -380,6 +381,7 @@ def _register_hardware(app: FastAPI) -> None:
     app.add_api_route("/api/jobs/rescue", rescue_routes.rescue_job, methods=["POST"])
     app.add_api_route("/api/jobs/erase", rewrite_routes.erase_job, methods=["POST"])
     app.add_api_route("/api/jobs/duplicate", rewrite_routes.duplicate_job, methods=["POST"])
+    app.add_api_route("/api/jobs/refresh", rewrite_routes.refresh_job, methods=["POST"])
     app.add_api_route("/api/jobs/calibrate", hardware_routes.calibrate_job, methods=["POST"])
     app.add_api_route("/api/jobs/current", hardware_routes.current_job, methods=["GET"])
     app.add_api_route("/api/jobs/{job_id}", hardware_routes.job_status, methods=["GET"])

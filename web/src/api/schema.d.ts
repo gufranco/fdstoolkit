@@ -303,6 +303,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh_job_api_jobs_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/rescue": {
         parameters: {
             query?: never;
@@ -925,6 +941,12 @@ export interface components {
             name: string;
             renumber: boolean;
             reveal_hidden: boolean;
+        };
+        RefreshSpec: {
+            confirm: boolean;
+            passes: number;
+            retries: number;
+            sides: number;
         };
         ReportedFile: {
             file: components["schemas"]["FileResult"];
@@ -1604,6 +1626,37 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["EraseSpec"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_job_api_jobs_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshSpec"];
             };
         };
         responses: {

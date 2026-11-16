@@ -392,6 +392,22 @@ test('duplicate asks for each disk and counts the verified copies at phone width
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('refresh asks first, then offers the rebuilt image at phone width', async ({ page }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'refresh');
+  await page.locator('#panel button.run').click();
+
+  // Act
+  await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
+
+  // Assert
+  await expect(page.locator('#panel .output')).toContainText('the disk reads back as rebuilt');
+  await expect(page.getByRole('link', { name: 'Download refreshed.fds' })).toBeVisible();
+  expect(await shortControls(page, '#panel')).toEqual([]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

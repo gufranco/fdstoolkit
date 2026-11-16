@@ -629,6 +629,23 @@ The lines indented by two spaces are progress, printed as each step starts, so a
 <img alt="The write command on the local web page" src="assets/screenshots/write-light.png">
 </picture>
 
+#### `refresh`
+
+```bash
+fdstoolkit refresh -o <out> [--sides N] [--passes N] [--retries N] [--backup <file>] [--yes] [--force]
+```
+
+Brings a weak disk back to what the factory wrote, on the same disk. Each side is read `--passes` times, and every block that failed on every read goes to the pulse vote `dump` runs. If any declared block still has not settled, nothing is written and each such block is named; run `rescue` on that disk instead. Otherwise the disk is rebuilt from what was read, with checksums and sizes recomputed as `rebuild` does, and that image is kept in `-o` before the disk is touched. For two sides on a drive that reads one face at a time, the disk is turned back to side A and its disk information read again to confirm that the right face is down. Then the image is written over the disk, read back and compared, as `write` does, with the disk as it was in `--backup`. A rewrite renews the magnetic strength of every block, which is what a disk whose blocks need re-reads is losing; it does not repair a scratch.
+
+```bash
+fdstoolkit refresh -o refreshed.fds --backup before.fds
+```
+
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/refresh-dark.png">
+<img alt="The refresh command on the local web page" src="assets/screenshots/refresh-light.png">
+</picture>
+
 #### `duplicate`
 
 ```bash

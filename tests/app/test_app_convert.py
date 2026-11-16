@@ -170,7 +170,17 @@ def test_the_device_route_reports_what_the_check_found(client: TestClient) -> No
 
 def test_only_the_commands_that_open_a_drive_are_marked() -> None:
     # Arrange
-    expected = {"calibrate", "dump", "write", "surface", "session", "rescue", "erase", "duplicate"}
+    expected = {
+        "calibrate",
+        "dump",
+        "write",
+        "surface",
+        "session",
+        "rescue",
+        "erase",
+        "duplicate",
+        "refresh",
+    }
 
     # Act
     marked = {form.command for form in forms() if form.needs_hardware}
