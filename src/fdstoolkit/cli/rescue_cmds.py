@@ -66,24 +66,30 @@ def _added(drive: FdsStick, folder: Path, state: RescueState, side: int) -> Resc
     return grown
 
 
-def _stopped(folder: Path, state: RescueState, side: int, message: str) -> typer.Exit:
-    kept = f"{state.reads_of(side)} read(s) of side {side} are kept in {folder}"
+def _stopped(folder: Path, side: int, message: str) -> typer.Exit:
+    kept = f"{_loaded(folder).reads_of(side)} read(s) of side {side} are kept in {folder}"
     return fail(f"{message}; {kept}")
+
+
+def _read_passes(
+    drive: FdsStick, folder: Path, state: RescueState, side: int, passes: int
+) -> RescueState:
+    current = state
+    for _ in range(passes):
+        current = _added(drive, folder, current, side)
+        if side_settled(current, side):
+            break
+    return current
 
 
 def _gathered(folder: Path, state: RescueState, side: int, passes: int) -> RescueState:
     with closing(open_drive()) as drive:
-        current = state
         try:
-            for _ in range(passes):
-                current = _added(drive, folder, current, side)
-                if side_settled(current, side):
-                    break
+            return _read_passes(drive, folder, state, side, passes)
         except KeyboardInterrupt:
-            raise _stopped(folder, current, side, "stopped") from None
+            raise _stopped(folder, side, "stopped") from None
         except HardwareFaultError as error:
-            raise _stopped(folder, current, side, str(error)) from error
-        return current
+            raise _stopped(folder, side, str(error)) from error
 
 
 def rescue(
