@@ -1055,6 +1055,7 @@ export interface components {
             confirm: boolean;
             finish: string;
             passes: number;
+            pattern: string;
             quick: boolean;
             sides: number;
         };

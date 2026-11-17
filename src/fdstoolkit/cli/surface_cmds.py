@@ -12,6 +12,7 @@ from fdstoolkit.cli.hardware_cmds import BackupOption, open_drive, prompter, ste
 from fdstoolkit.hardware.fdsstick import FdsStick
 from fdstoolkit.hardware.ports import HardwareFaultError
 from fdstoolkit.hardware.session import MAX_PASSES, SideFlipError, WriteRefusedError
+from fdstoolkit.quality.checker import CHECKER_ALONE, SurfaceKind, run_checker
 from fdstoolkit.quality.surface import (
     Finish,
     SurfacePlan,
@@ -64,6 +65,31 @@ def _tested(
         raise fail(str(error)) from error
 
 
+PatternOption = Annotated[
+    SurfaceKind,
+    typer.Option("--pattern", help="cycle runs the four patterns; checker writes type 5 blocks"),
+]
+
+
+def _checker(sides: int, backup: Path | None, *, yes: bool) -> None:
+    ask = prompter(yes=yes)
+    keep = writer_for(backup) if backup is not None else _discard
+    with closing(open_drive()) as drive:
+        try:
+            readings = run_checker(
+                drive, sides=sides, confirm=ask, flip=ask, keep=keep, progress=step
+            )
+        except (HardwareFaultError, WriteRefusedError, SideFlipError) as error:
+            raise fail(str(error)) from error
+    for reading in readings:
+        typer.echo(reading.render())
+    raise typer.Exit(code=0 if all(reading.verified for reading in readings) else 1)
+
+
+def _discard(data: bytes) -> None:
+    del data
+
+
 def surface(
     *,
     sides: TestedSidesOption = 1,
@@ -71,8 +97,13 @@ def surface(
     passes: CyclesOption = 1,
     quick: QuickOption = False,
     finish: FinishOption = Finish.LEAVE,
+    pattern: PatternOption = SurfaceKind.CYCLE,
     yes: YesOption = False,
 ) -> None:
+    if pattern is SurfaceKind.CHECKER:
+        if passes != 1 or quick or finish is not Finish.LEAVE:
+            raise fail(CHECKER_ALONE)
+        _checker(sides, backup, yes=yes)
     plan = SurfacePlan(rounds=passes, fill=not quick, finish=finish)
     with closing(open_drive()) as drive:
         report = _tested(drive, sides=sides, ask=prompter(yes=yes), backup=backup, plan=plan)

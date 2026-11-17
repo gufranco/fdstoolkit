@@ -431,6 +431,21 @@ test('a save backed up from the disk is restored onto it at phone width', async 
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test('the checker pattern reads its test block back at phone width', async ({ page }) => {
+  // Arrange
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openCommand(page, 'surface');
+  await page.locator('select[data-field=pattern]').selectOption('checker');
+  await page.locator('#panel button.run').click();
+
+  // Act
+  await page.getByRole('dialog', { name: ERASE_TITLE }).getByRole('button', { name: 'Erase and continue' }).click();
+
+  // Assert
+  await expect(page.locator('#panel .output')).toContainText('pattern bytes read back');
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test('the calibration disk is written only after the trusted drive is confirmed', async ({ page }) => {
   // Arrange
   await page.setViewportSize({ width: 320, height: 700 });

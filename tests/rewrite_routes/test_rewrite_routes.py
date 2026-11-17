@@ -13,6 +13,7 @@ from fdstoolkit.core.blocks import FileKind
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.core.files import extract_files
 from fdstoolkit.edit.files import FileSpec, insert_file
+from fdstoolkit.quality.checker import CHECKER_ALONE, CHECKER_BYTES
 from fdstoolkit.ui.app import create_app
 from fdstoolkit.ui.jobs import JobState
 
@@ -241,3 +242,61 @@ def test_a_restore_of_something_that_is_not_a_save_is_refused(client: TestClient
     # Assert
     assert answer.status_code == UNPROCESSABLE
     assert answer.json()["detail"] == "this is not a save backup that disk-save wrote"
+
+
+def test_a_surface_job_with_the_checker_pattern_reads_it_back(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    serve(monkeypatch, SimulatedDrive(disk_of(ONE_SIDE)))
+    payload: dict[str, object] = {"pattern": "checker", "confirm": True}
+
+    # Act
+    job = run(app, client, "/api/jobs/surface", payload)
+
+    # Assert
+    assert job["state"] == JobState.DONE
+    assert job["result"]["ok"].value is True
+    assert job["result"]["headline"] == f"side 0: all {CHECKER_BYTES} pattern bytes read back"
+    assert job["result"]["file"]["name"] == "before.fds"
+
+
+def test_a_checker_job_that_does_not_read_back_says_so(
+    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    serve(monkeypatch, DropsTheTestBlock(disk_of(ONE_SIDE)))
+
+    # Act
+    job = run(app, client, "/api/jobs/surface", {"pattern": "checker", "confirm": True})
+
+    # Assert
+    assert job["result"]["ok"].value is False
+
+
+def test_a_checker_job_with_cycle_options_is_refused(client: TestClient) -> None:
+    # Arrange
+    payload = {"pattern": "checker", "quick": True, "confirm": True}
+
+    # Act
+    answer = client.post("/api/jobs/surface", json=payload)
+
+    # Assert
+    assert answer.status_code == UNPROCESSABLE
+    assert answer.json()["detail"] == CHECKER_ALONE
+
+
+def test_a_checker_job_needs_a_confirmation(client: TestClient) -> None:
+    # Arrange
+    payload = {"pattern": "checker"}
+
+    # Act
+    answer = client.post("/api/jobs/surface", json=payload)
+
+    # Assert
+    assert answer.status_code == UNPROCESSABLE
+
+
+class DropsTheTestBlock(SimulatedDrive):
+    def write_side(self, side: int, blocks: Sequence[bytes]) -> None:
+        super().write_side(side, blocks[:-1])

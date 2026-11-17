@@ -409,6 +409,7 @@ class SurfaceSpec(BaseModel):
     passes: int = Field(1, ge=1, le=MAX_PASSES)
     quick: bool = False
     finish: str = "leave"
+    pattern: str = "cycle"
     confirm: bool = False
 
 

@@ -11,7 +11,10 @@ from fdstoolkit.hardware.duplicate import duplicate, duplicate_lines
 from fdstoolkit.hardware.refresh import RefreshPlan, refresh_disk
 from fdstoolkit.hardware.session import LongSideError
 from fdstoolkit.hardware.writing import CHANGED_BLOCK, STALE_BLOCK, refuse_long_sides
+from fdstoolkit.quality.checker import CHECKER_ALONE, SurfaceKind, run_checker
+from fdstoolkit.quality.surface import Finish
 from fdstoolkit.quality.surface_disks import erased_disk
+from fdstoolkit.ui import hardware_routes
 from fdstoolkit.ui.hardware_routes import (
     BACKUP_NAME,
     Backup,
@@ -27,7 +30,7 @@ from fdstoolkit.ui.rewrite_schemas import (
     SaveBackupSpec,
     SaveRestoreSpec,
 )
-from fdstoolkit.ui.schemas import JobView, ReportedFile
+from fdstoolkit.ui.schemas import JobView, ReportedFile, SurfaceSpec
 from fdstoolkit.ui.shared import (
     UNPROCESSABLE,
     bytes_of,
@@ -181,3 +184,32 @@ def save_restore_job(spec: SaveRestoreSpec, request: Request) -> JobView:
     return start_drive_job(
         request, "save-restore", writes=True, work=partial(_save_restore, spec, kept)
     )
+
+
+def _checker(spec: SurfaceSpec, drive: FdsStick, controls: Controls) -> ReportedFile:
+    backup = Backup(controls)
+    readings = run_checker(
+        drive,
+        sides=spec.sides,
+        confirm=lambda _: True,
+        flip=controls.ask,
+        keep=backup.keep,
+        progress=controls.step,
+    )
+    rows: list[dict[str, object]] = [
+        {"side": reading.side, "matched": reading.matched, "expected": reading.expected}
+        for reading in readings
+    ]
+    verified = all(reading.verified for reading in readings)
+    headline = "; ".join(reading.render() for reading in readings)
+    file = named_file(BACKUP_NAME, backup.data)
+    return ReportedFile(headline=headline, file=file, rows=rows, ok=verified)
+
+
+def surface_job(spec: SurfaceSpec, request: Request) -> JobView:
+    if spec.pattern != SurfaceKind.CHECKER:
+        return hardware_routes.surface_job(spec, request)
+    confirmed("a surface test", confirm=spec.confirm)
+    if spec.passes != 1 or spec.quick or spec.finish != Finish.LEAVE:
+        refuse(CHECKER_ALONE, status=UNPROCESSABLE)
+    return start_drive_job(request, "surface", writes=True, work=partial(_checker, spec))

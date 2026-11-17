@@ -81,6 +81,7 @@ class SimulatedDrive:
         self.write_count = 0
         self.closed = False
         self._captures: list[Capture] = []
+        self._test_blocks: dict[int, tuple[bytes, ...]] = {}
 
     def close(self) -> None:
         self.closed = True
@@ -106,8 +107,11 @@ class SimulatedDrive:
         cut = values[: regions[block - 1][1]] + bytes(SHORT_GAP) + values[regions[block][0] :]
         return pack_raw03(cut)
 
-    def _capture(self, side: Side, read: int = 1) -> bytes:
-        packed = self._shortened(encode_block_stream([block.payload for block in side.blocks]))
+    def _capture(self, side: Side, read: int = 1, number: int = 0) -> bytes:
+        payloads = [block.payload for block in side.blocks]
+        packed = self._shortened(
+            encode_block_stream([*payloads, *self._test_blocks.get(number, ())])
+        )
         if not self._plan.bad_crc_blocks:
             return packed
         values = bytearray(unpack_raw03(packed))
@@ -166,7 +170,7 @@ class SimulatedDrive:
         target = self._side(side)
         self.read_count += 1
         read = sum(1 for capture in self._captures if capture.side == side) + 1
-        self._captures.append(Capture(side=side, read=read, data=self._capture(target, read)))
+        self._captures.append(Capture(side=side, read=read, data=self._capture(target, read, side)))
         for index, block in enumerate(target.blocks):
             if self._plan.link_lost_after is not None and index >= self._plan.link_lost_after:
                 message = "the device stopped answering"
@@ -183,7 +187,7 @@ class SimulatedDrive:
     def read_raw_side(self, *, what: str, mode: int = 0) -> bytes:
         del what, mode
         self.read_count += 1
-        packed = self._capture(self._side(self._raw_side()))
+        packed = self._capture(self._side(self._raw_side()), number=self._raw_side())
         return counts_of(packed) if self._sends_counts else packed
 
     def _raw_side(self) -> int:
@@ -200,10 +204,16 @@ class SimulatedDrive:
         self.write_count += 1
         if self._plan.writes_do_not_stick or self._disk is None:
             return
+        known = {kind.value for kind in BlockKind}
+        self._test_blocks = {
+            **self._test_blocks,
+            side: tuple(payload for payload in blocks if payload[0] not in known),
+        }
         written = Side(
             blocks=tuple(
                 Block(kind=BlockKind(payload[0]), payload=payload, stored_crc=None)
                 for payload in blocks
+                if payload[0] in known
             ),
             tail=b"",
             capacity=target.capacity,

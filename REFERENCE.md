@@ -710,6 +710,7 @@ copy 3 of 3: verified, grade clean
 
 ```bash
 fdstoolkit surface [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
+fdstoolkit surface --pattern checker [--sides N] [--backup <p>] [--yes]
 ```
 
 Write and read back patterns that exercise every pulse the drive can record, to grade a scratch disk and tell a failing surface apart from a drive out of adjustment.
@@ -812,6 +813,8 @@ grade failed
 ```
 
 Exit status is 0 only when every pattern held and the finish verified.
+
+`--pattern checker` writes what the FMC Disk Card Checker leaves on a side instead: the disk information, an empty file count, then one type 5 test block of the repeating `6D B6 DB` that the [nesdev disk format page](https://www.nesdev.org/wiki/FDS_disk_format) describes, as long as the longest factory side, written inside the factory layout. The read back is decoded past the type 5 mark and compared byte for byte; each side reports how many pattern bytes came back before the first that differs. The side as it was is read first and kept in `--backup`. It takes none of `--passes`, `--quick` or `--finish`, and is refused with them.
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/surface-dark.png">

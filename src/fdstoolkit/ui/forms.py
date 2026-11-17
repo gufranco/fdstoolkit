@@ -11,6 +11,7 @@ from fdstoolkit.cli.common import Family
 from fdstoolkit.core.disk import SIDES_PER_DISK
 from fdstoolkit.core.diskinfo import PROFILES
 from fdstoolkit.drive.monitor import Mode
+from fdstoolkit.quality.checker import SurfaceKind
 from fdstoolkit.quality.surface import Finish
 
 FIELD_KINDS: Final = ("file", "files", "text", "number", "flag", "choice", "auto")
@@ -44,6 +45,7 @@ CHOICES: Final[dict[str, tuple[str, ...]]] = {
     "profile": tuple(sorted(PROFILES)),
     "save_as": ("ips", "ups", "image"),
     "finish": tuple(str(item) for item in Finish),
+    "pattern": tuple(str(item) for item in SurfaceKind),
     "kind": ("program", "character", "nametable"),
     "sides": tuple(str(count) for count in range(1, SIDES_PER_DISK + 1)),
     "action": ("find", "apply", "extract", "blank"),

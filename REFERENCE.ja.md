@@ -710,6 +710,7 @@ copy 3 of 3: verified, grade clean
 
 ```bash
 fdstoolkit surface [--sides N] [--passes N] [--quick] [--finish leave|blank|erase] [--backup <p>] [--yes]
+fdstoolkit surface --pattern checker [--sides N] [--backup <p>] [--yes]
 ```
 
 ドライブが記録できるすべての長さのパルスを書いては読み戻し、不要ディスクの状態を評価します。あわせて、磁性面の劣化とドライブの調整ずれを見分けます。
@@ -807,6 +808,8 @@ grade failed
 ```
 
 すべてのパターンが保持され、かつ終了処理が検証できた場合にのみ終了コード 0 を返します。
+
+`--pattern checker` は、代わりに FMC ディスクカードチェッカーが面に残すものを書きます。ディスク情報、空のファイル数、そして [nesdev のディスク形式のページ](https://www.nesdev.org/wiki/FDS_disk_format) が示す `6D B6 DB` の繰り返しからなる種別 5 のテストブロック 1 つです。長さは最も長い工場出荷の面と同じで、工場出荷時の配置の範囲で書きます。読み戻した内容は種別 5 のマークより先まで解読してバイトごとに比べ、面ごとに、最初に違うバイトまでにいくつのパターンバイトが戻ったかを示します。元の面は先に読み取り `--backup` に残します。`--passes`、`--quick`、`--finish` は受け付けず、指定すると拒否します。
 
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/surface-dark.png">

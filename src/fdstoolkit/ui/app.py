@@ -378,7 +378,7 @@ def _register_analysis(app: FastAPI) -> None:
 def _register_hardware(app: FastAPI) -> None:
     app.add_api_route("/api/jobs/dump", hardware_routes.dump_job, methods=["POST"])
     app.add_api_route("/api/jobs/write", hardware_routes.write_job, methods=["POST"])
-    app.add_api_route("/api/jobs/surface", hardware_routes.surface_job, methods=["POST"])
+    app.add_api_route("/api/jobs/surface", rewrite_routes.surface_job, methods=["POST"])
     app.add_api_route("/api/jobs/session", hardware_routes.session_job, methods=["POST"])
     app.add_api_route("/api/jobs/rescue", rescue_routes.rescue_job, methods=["POST"])
     app.add_api_route("/api/jobs/erase", rewrite_routes.erase_job, methods=["POST"])
