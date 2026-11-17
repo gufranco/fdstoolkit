@@ -137,6 +137,11 @@ class FdsStick:
         self._resyncs: list[tuple[int, int]] = []
         self._pulse: list[PulseFinding] = []
         self._written = False
+        self._track_packets: int | None = None
+
+    @property
+    def track_packets(self) -> int | None:
+        return self._track_packets
 
     @property
     def captures(self) -> tuple[Capture, ...]:
@@ -268,9 +273,11 @@ class FdsStick:
 
     def _write_raw(self, packets: tuple[bytes, ...], blank: tuple[bytes, ...]) -> None:
         self._start(MODE_WRITE)
+        self._track_packets = None
         for index, packet in enumerate((*packets, *blank)):
             if self._delivered(packet):
                 continue
+            self._track_packets = index
             if index < LEAD_IN_PACKETS:
                 raise DriveNotReadyError(index)
             if index < len(packets):

@@ -305,6 +305,29 @@ def test_a_device_that_stops_once_the_disk_has_turned_is_not_a_fault() -> None:
     assert device.finishes == [bytes([ID_FINISH_WRITE, 0x00])]
 
 
+def test_the_packet_where_the_track_ended_is_kept() -> None:
+    # Arrange
+    body = raw_side()[: (LEAD_IN_PACKETS + 5) * WRITE_PAYLOAD]
+    stick = stick_over(FakeFdsStick(accepts_writes=LEAD_IN_PACKETS + 8))
+
+    # Act
+    stick.write_raw_side(body, fill_to=LEAD_IN_PACKETS + 20)
+
+    # Assert
+    assert stick.track_packets == LEAD_IN_PACKETS + 8
+
+
+def test_a_write_the_track_never_cut_short_has_no_track_end() -> None:
+    # Arrange
+    stick = stick_over(FakeFdsStick())
+
+    # Act
+    stick.write_raw_side(bytes(WRITE_PAYLOAD * 4))
+
+    # Assert
+    assert stick.track_packets is None
+
+
 def test_a_device_that_stops_inside_the_image_says_how_much_was_written() -> None:
     # Arrange
     device = FakeFdsStick(accepts_writes=LEAD_IN_PACKETS + 3)
