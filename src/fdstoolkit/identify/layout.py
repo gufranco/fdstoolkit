@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Final
 
 from fdstoolkit.codecs.raw import GAP_VALUE, block_regions, decode_raw03, unpack_detected
+from fdstoolkit.core.blocks import Block, BlockKind, FileHeader
 from fdstoolkit.core.disk import Disk
 from fdstoolkit.drive.captures import Bundle
 from fdstoolkit.drive.recovery import captures_of_another_disk
@@ -30,12 +31,33 @@ class Layout(StrEnum):
     UNSETTLED = "unsettled"
 
 
+REWRITE_UNCONFIRMED: Final = (
+    "a console's save has not been measured yet, so this mark is not confirmed"
+)
+
+
 @dataclass(frozen=True, slots=True)
 class LayoutReading:
     reads: int
     endings: int
     quiet_endings: int
     gap_spread: int | None
+    quiet_blocks: tuple[tuple[int, str], ...] = ()
+
+    @property
+    def rewritten(self) -> tuple[tuple[int, str], ...]:
+        return self.quiet_blocks if self.layout is Layout.DUPLICATED else ()
+
+    def rewritten_note(self) -> str:
+        named = ", ".join(
+            f"block {block} ({name})" if name else f"block {block}"
+            for block, name in self.rewritten
+        )
+        return (
+            f"{named} end with no stray pulses in every read while the rest of the side ends in "
+            "them, the mark of a block written in place after the duplicator, as a game writes "
+            f"its save; {REWRITE_UNCONFIRMED}"
+        )
 
     @property
     def layout(self) -> Layout:
@@ -69,6 +91,7 @@ class LayoutReading:
 class _Marks:
     endings: tuple[int, ...]
     gaps: tuple[int, ...]
+    quiet: frozenset[tuple[int, str]] = frozenset()
 
 
 def _pulses_after(values: bytes, end: int) -> int:
@@ -88,18 +111,35 @@ def _marks(packed: bytes) -> _Marks:
         for index in range(len(regions) - 1)
         if clean[index] and clean[index + 1]
     )
-    return _Marks(endings=endings, gaps=gaps)
+    quiet = frozenset(
+        (index, _file_name(side.blocks, index))
+        for index, ((_, end), ok) in enumerate(zip(regions, clean, strict=True))
+        if ok and _pulses_after(values, end) <= QUIET_PULSES
+    )
+    return _Marks(endings=endings, gaps=gaps, quiet=quiet)
+
+
+def _file_name(blocks: Sequence[Block], index: int) -> str:
+    block, before = blocks[index], blocks[index - 1] if index else None
+    if block.kind is not BlockKind.FILE_DATA or before is None:
+        return ""
+    if before.kind is not BlockKind.FILE_HEADER:
+        return ""
+    return FileHeader.parse(before.payload).name
 
 
 def layout_of(captures: Sequence[bytes]) -> LayoutReading:
     marks = [_marks(packed) for packed in captures]
     endings = [count for mark in marks for count in mark.endings]
     spreads = [max(mark.gaps) - min(mark.gaps) for mark in marks if len(mark.gaps) >= MIN_GAPS]
+    first, *rest = [mark.quiet for mark in marks] or [frozenset[tuple[int, str]]()]
+    shared = first.intersection(*rest)
     return LayoutReading(
         reads=len(captures),
         endings=len(endings),
         quiet_endings=sum(1 for count in endings if count <= QUIET_PULSES),
         gap_spread=max(spreads, default=None),
+        quiet_blocks=tuple(sorted(shared)),
     )
 
 

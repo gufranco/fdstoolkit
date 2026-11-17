@@ -171,3 +171,93 @@ def test_captures_of_another_disk_are_refused() -> None:
 
     # Assert
     assert raised.type is ValueError
+
+
+def saved_side(blocks: list[bytes], rewritten: int) -> bytes:
+    values = bytearray(LEAD_IN)
+    for index, payload in enumerate(blocks):
+        if index:
+            values += bytes(GAP + GAP_STEP * (index % GAP_STEPS))
+        values += block_pulses(payload) + (b"" if index == rewritten else SWITCH_OFF_NOISE)
+    values += bytes(TAIL)
+    return pack_raw03(bytes(values))
+
+
+def test_a_block_ending_clean_on_a_duplicated_side_reads_as_rewritten() -> None:
+    # Arrange
+    blocks = payloads()
+    rewritten = len(blocks) - 1
+    captures = [saved_side(blocks, rewritten), saved_side(blocks, rewritten)]
+
+    # Act
+    reading = layout_of(captures)
+
+    # Assert
+    assert reading.layout is Layout.DUPLICATED
+    assert [block for block, _ in reading.rewritten] == [rewritten]
+    assert reading.rewritten[0][1] != ""
+    assert reading.rewritten_note().endswith(
+        "as a game writes its save; a console's save has not been measured yet, "
+        "so this mark is not confirmed"
+    )
+
+
+def test_a_block_ending_clean_in_only_one_read_is_not_named() -> None:
+    # Arrange
+    blocks = payloads()
+    noisy = side_of(blocks, noise=SWITCH_OFF_NOISE, step=GAP_STEP)
+
+    # Act
+    reading = layout_of([saved_side(blocks, len(blocks) - 1), noisy])
+
+    # Assert
+    assert reading.rewritten == ()
+
+
+def test_a_streamed_side_names_no_rewritten_block() -> None:
+    # Arrange
+    captures = [real_capture()]
+
+    # Act
+    reading = layout_of(captures)
+
+    # Assert
+    assert reading.quiet_blocks
+    assert reading.rewritten == ()
+
+
+def test_a_rewritten_disk_information_block_is_named_by_number_alone() -> None:
+    # Arrange
+    blocks = payloads()
+    captures = [saved_side(blocks, 0)]
+
+    # Act
+    reading = layout_of(captures)
+
+    # Assert
+    assert reading.rewritten == ((0, ""),)
+    assert reading.rewritten_note().startswith("block 0 end with no stray pulses")
+
+
+def test_no_capture_names_no_block() -> None:
+    # Arrange
+    captures: list[bytes] = []
+
+    # Act
+    reading = layout_of(captures)
+
+    # Assert
+    assert reading.quiet_blocks == ()
+
+
+def test_a_data_block_whose_header_was_lost_is_named_by_number_alone() -> None:
+    # Arrange
+    blocks = payloads()
+    without_header = [*blocks[:-2], blocks[-1]]
+    last = len(without_header) - 1
+
+    # Act
+    reading = layout_of([saved_side(without_header, last)])
+
+    # Assert
+    assert reading.rewritten == ((last, ""),)

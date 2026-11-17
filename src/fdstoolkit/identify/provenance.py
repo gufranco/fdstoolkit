@@ -140,6 +140,8 @@ def _layout_notes(fields: Origin, layout: LayoutReading | None) -> tuple[str, ..
         return ()
     if fields is Origin.FACTORY and layout.layout is Layout.STREAMED:
         return (layout.note(), COPIED_FROM_FACTORY)
+    if layout.rewritten:
+        return (layout.note(), layout.rewritten_note())
     return (layout.note(),)
 
 

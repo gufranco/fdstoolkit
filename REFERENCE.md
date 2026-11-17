@@ -80,6 +80,8 @@ Factory, kiosk rewrite, or unknown, per side, with the dates, serial and rewrite
 
 Those fields travel with the data, so a factory image written back to a disk still carries them. `--captures` takes what `dump --raw` kept and judges how each side was physically written. On both sides of a factory disk measured, every block ends in a few stray pulses and the gaps between blocks vary by 18 to 73 bits. Every side the FDSStick wrote, in every layout this toolkit has used, ends every block clean and keeps its gaps within 1 bit. A side whose captures show the second pattern reads as rewritten whatever its fields say, and the report notes when the data came from a factory disk. A side that shows neither pattern clearly, or too few clean blocks, is left to its fields. Captures of another disk are refused. The factory pattern comes from one disk, so another duplicator or year may differ; a side is called rewritten only when it shows both signs, clean endings and gaps within 4 bits.
 
+On a side that reads as the duplicator's, a block that ends with no stray pulses in every read, while the rest end in them, is named as written in place after the factory, the way a game writes its save, with the file it belongs to. The side stays factory. That mark rests on the measured difference between factory blocks and blocks written in one stream; a console's own save has not been captured yet, so the note says it is unconfirmed.
+
 <picture>
 <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/provenance-dark.png">
 <img alt="The provenance command on the local web page" src="assets/screenshots/provenance-light.png">

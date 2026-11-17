@@ -393,3 +393,19 @@ def test_a_side_read_without_captures_has_no_layout() -> None:
 
     # Assert
     assert shown["layout"] is None
+
+
+def test_a_save_written_in_place_is_named_and_the_side_stays_factory() -> None:
+    # Arrange
+    disk = disk_with_info(x1F=bytes([0x61, 0x02, 0x15]))
+    saved = LayoutReading(
+        reads=2, endings=40, quiet_endings=2, gap_spread=73, quiet_blocks=((9, "SAVEDATA"),)
+    )
+
+    # Act
+    report = provenance_of(disk, layouts={0: saved})
+
+    # Assert
+    side = report.sides[0]
+    assert side.origin is Origin.FACTORY
+    assert side.notes[-1].startswith("block 9 (SAVEDATA) end with no stray pulses in every read")
