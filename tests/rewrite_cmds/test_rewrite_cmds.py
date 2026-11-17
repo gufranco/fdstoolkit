@@ -245,3 +245,17 @@ def test_refresh_names_the_blocks_the_vote_rebuilt(
     # Assert
     assert result.exit_code == 0, result.output
     assert "side 0 block 3: recovered by a pulse vote" in result.stdout
+
+
+def test_erase_says_where_the_track_ended(
+    single_side: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    attach(monkeypatch, single_side, FaultPlan(track_packets=568))
+
+    # Act
+    result = runner.invoke(app, ["erase", "--yes"])
+
+    # Assert
+    assert result.exit_code == 0, result.output
+    assert "the track ended after 568 packets" in result.stdout

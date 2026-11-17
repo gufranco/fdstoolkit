@@ -42,6 +42,7 @@ class FaultPlan:
     link_lost_after: int | None = None
     writes_do_not_stick: bool = False
     short_gap_before: int | None = None
+    track_packets: int | None = None
 
 
 def counts_of(packed: bytes) -> bytes:
@@ -89,6 +90,10 @@ class SimulatedDrive:
     @property
     def captures(self) -> tuple[Capture, ...]:
         return tuple(self._captures)
+
+    @property
+    def track_packets(self) -> int | None:
+        return self._plan.track_packets if self.write_count else None
 
     @property
     def resyncs(self) -> tuple[tuple[int, int], ...]:

@@ -46,9 +46,11 @@ ErasedSidesOption = Annotated[
 ]
 
 
-def _print_erase(report: WriteReport) -> None:
+def _print_erase(report: WriteReport, track_packets: int | None) -> None:
     for line in report.lines:
         typer.echo(line)
+    if track_packets is not None:
+        typer.echo(f"the track ended after {track_packets} packets")
     typer.echo(ERASED if report.verified else LEFT_BEHIND)
 
 
@@ -62,7 +64,7 @@ def erase(
     plan = WritePlan(ask=prompter(yes=yes), backup=backup, retries=retries, long_side=False)
     with closing(open_drive()) as drive:
         report = write_disk(drive, erased_disk(sides=sides), plan)
-        _print_erase(report)
+        _print_erase(report, drive.track_packets)
         raise typer.Exit(code=0 if report.verified else 1)
 
 

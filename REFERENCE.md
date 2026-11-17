@@ -551,6 +551,8 @@ fdstoolkit erase [--sides N] [--backup <file>] [--yes] [--retries N]
 
 Leaves a disk holding nothing but the factory fill: the lead-in, then the fill a factory side carries past its last block, to the end of the track. Each side is read first and kept in `--backup`, the confirmation names what is about to be destroyed, and each side is read back afterwards; the command passes only when no block remains. A side written over a longer one keeps no old block past the end, because every write runs to the end of the track. A side that is already empty reads the same as the side erased just before it, so an erase of two sides that were both empty is refused as a disk not turned over; erase such a disk one side at a time.
 
+On the stick, the erase also says after how many packets the track ended. One drive measured 568. Run on a scratch side at several motor speeds, with each speed read off a strobe, that count is the measurement that would show whether track capacity follows motor speed; until it does, the toolkit draws no speed from it.
+
 ```bash
 fdstoolkit erase --sides 2 --backup before.fds
 ```
