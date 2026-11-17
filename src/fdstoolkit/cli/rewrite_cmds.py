@@ -125,16 +125,8 @@ def refresh(
 ) -> None:
     guard_output(output, force=force)
     ask = prompter(yes=yes)
-    plan = RefreshPlan(
-        sides=sides,
-        passes=passes,
-        retries=retries,
-        ask=ask,
-        confirm=ask,
-        keep=_keeper(output),
-        backup=None if backup is None else writer_for(backup),
-        progress=step,
-    )
+    backed = None if backup is None else writer_for(backup)
+    plan = RefreshPlan(sides, passes, retries, ask, _keeper(output), backed, ask, step)
     with closing(open_drive()) as drive:
         try:
             report = refresh_disk(drive, plan)
