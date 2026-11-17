@@ -48,7 +48,7 @@ dev = [
   "pydantic>=2.9.0",
   "httpx2>=2.0.0",
   "yamllint==1.38.0",
-  "faker==40.44.0",
+  "faker==40.54.0",
 ]
 
 [build-system]
