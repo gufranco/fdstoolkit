@@ -40,6 +40,10 @@ UNDECIDED_END: Final = 2
 
 FACTORY_GAP_BITS: Final = range(982, 1056)
 FACTORY_END_GAP_BITS: Final = range(975, 977)
+BLANK_OPENING_BITS: Final = range(
+    WRITE_LEAD_IN_BITS + WRITE_TAIL_GAP_BITS,
+    WRITE_LEAD_IN_BITS + WRITE_TAIL_GAP_BITS + len(FILL_BITS),
+)
 
 
 def _bits_of(data: bytes) -> list[int]:
@@ -179,16 +183,31 @@ def factory_violations(stream: bytes) -> tuple[str, ...]:
         for gap in _gaps(regions)
         if gap not in FACTORY_GAP_BITS
     ]
-    end_gap, rest = _end_run(classes[regions[-1][1] :] if regions else classes)
-    if regions and end_gap not in FACTORY_END_GAP_BITS:
+    if not regions:
+        return _blank_problems(classes)
+    end_gap, rest = _end_run(classes[regions[-1][1] :])
+    if end_gap not in FACTORY_END_GAP_BITS:
         problems.append(_outside("the gap after the last block", end_gap, FACTORY_END_GAP_BITS))
     return (*problems, *_fill_problems(rest))
+
+
+def _blank_problems(classes: bytes) -> tuple[str, ...]:
+    opening = _zeros_from(classes, 0)
+    fill = _fill_problems(classes[opening:])
+    if opening in BLANK_OPENING_BITS:
+        return fill
+    allowed = f"{BLANK_OPENING_BITS.start} to {BLANK_OPENING_BITS.stop - 1}"
+    message = (
+        f"a side with no block opens with {opening} zero bits, where the lead-in and the gap "
+        f"after a last block make {allowed}"
+    )
+    return (message, *fill)
 
 
 def _fill_problems(rest: bytes) -> tuple[str, ...]:
     fill = encode_bits([*FILL_START_BITS, *FILL_BITS * len(rest)])
     decided = len(rest) - UNDECIDED_END
-    if rest[:decided] != fill[:decided]:
+    if not rest or rest[:decided] != fill[:decided]:
         return ("the end of the track is not the factory fill",)
     return ()
 

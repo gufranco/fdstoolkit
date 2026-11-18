@@ -180,7 +180,14 @@ gaps of 982 to 1,055 bits between blocks, a run of 975 or 976 bits after the
 last block, and the factory fill to the end of the track. `factory_violations`
 in `codecs/write_stream.py` checks a stream against those ranges, and a test
 runs every kind of side through the encoder and fails the build on any
-violation. A change that moves a write outside them is not done. The first
+violation. A change that moves a write outside them is not done. No factory
+side without blocks has been measured, so an erased side is held to the one
+shape those ranges imply, the side with its blocks taken out: from its first
+bit, the 18,000-bit lead-in plus the 976-bit gap after a last block, 18,976 to
+18,978 zero bits once aligned, then the factory fill to the end. A stray pulse
+in that run, or a side that never reaches the fill, is a violation. Whether
+another drive and a console read that shape as blank is still to be checked on
+hardware. The first
 block's position is judged as an average over writes, never by one read: the
 drive turns ready at a point that moves by hundreds of bits each time it spins
 up, on factory disks too, and the stick holds the first packet until ready,

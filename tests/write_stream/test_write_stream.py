@@ -370,10 +370,46 @@ def test_an_erased_side_is_a_lead_in_then_the_factory_fill() -> None:
 
 def test_an_erased_side_ending_in_anything_but_the_fill_breaks_the_layout() -> None:
     # Arrange
-    stream = stream_of([0] * 20000 + [0, 1] * 300)
+    stream = stream_of([0] * (FACTORY_LEAD_IN + FACTORY_TAIL) + [0, 1] * 300)
 
     # Act
     problems = factory_violations(stream)
 
     # Assert
     assert problems == ("the end of the track is not the factory fill",)
+
+
+def opening_problem(run: int) -> str:
+    return (
+        f"a side with no block opens with {run} zero bits, where the lead-in and the gap "
+        "after a last block make 18976 to 18978"
+    )
+
+
+def test_an_erased_side_that_never_reaches_the_fill_breaks_the_layout() -> None:
+    # Arrange
+    stream = stream_of([0] * WRITE_PACKET_BYTES * 4 * 20)
+
+    # Act
+    problems = factory_violations(stream)
+
+    # Assert
+    assert problems == (
+        opening_problem(20400),
+        "the end of the track is not the factory fill",
+    )
+
+
+def test_a_stray_pulse_in_the_lead_in_of_an_erased_side_breaks_the_layout() -> None:
+    # Arrange
+    bits = written_bits(encode_write_stream([]))
+    bits[5000] = 1
+
+    # Act
+    problems = factory_violations(stream_of(bits))
+
+    # Assert
+    assert problems == (
+        opening_problem(5000),
+        "the end of the track is not the factory fill",
+    )
