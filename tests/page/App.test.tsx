@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../web/src/App';
@@ -25,6 +25,13 @@ describe('App', () => {
 });
 
 describe('mount', () => {
+  afterEach(async () => {
+    const entry = await import('../../web/src/main');
+    act(() => {
+      entry.root.unmount();
+    });
+  });
+
   it('renders the page into the root element', async () => {
     // Arrange
     serve();
